@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { skinFamily } from '../../Core/personality.js'
 
 // los hijos se pasan como argumentos estáticos: la `key` de props solo provoca colisiones entre hermanos
-const noKey = ({ key, ...p }) => p
+const noKey = (props) => { const { key, ...p } = props || {}; return p }
 const grp = (props, ...children) => h('group', noKey(props), ...children)
 const msh = (props) => h('mesh', noKey(props))
 
