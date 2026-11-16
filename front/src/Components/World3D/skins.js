@@ -2,8 +2,10 @@ import { createElement as h } from 'react'
 import * as THREE from 'three'
 import { skinFamily } from '../../Core/personality.js'
 
-const grp = (props, ...children) => h('group', props, ...children)
-const msh = (props) => h('mesh', props)
+// los hijos se pasan como argumentos estáticos: la `key` de props solo provoca colisiones entre hermanos
+const noKey = ({ key, ...p }) => p
+const grp = (props, ...children) => h('group', noKey(props), ...children)
+const msh = (props) => h('mesh', noKey(props))
 
 // ═══════════════════════════ PRNG Y HASH DEL GENOMA ═══════════════════════════
 
