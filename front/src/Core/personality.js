@@ -74,3 +74,23 @@ export const FACES = {
   asustada: { eye: 1.35, brow: -0.7, mouth: -0.9, blush: 0, sweat: 1, bounce: 1.2, emoji: '😱' },
 }
 
+// Familias de skin por arquetipo dominante (5 rasgos × alto/bajo).
+export const SKIN_FAMILIES = {
+  'valentia:1': { id: 'pirata', name: 'Pirata', emoji: '🏴‍☠️' },
+  'valentia:0': { id: 'miedosa', name: 'Conejito temblón', emoji: '🐰' },
+  'curiosidad:1': { id: 'maga', name: 'Maga', emoji: '🧙' },
+  'curiosidad:0': { id: 'rutinaria', name: 'Boina clásica', emoji: '🥐' },
+  'apetito:1': { id: 'zombi', name: 'Zombi glotona', emoji: '🧟' },
+  'apetito:0': { id: 'ascetica', name: 'Monje zen', emoji: '😇' },
+  'sociabilidad:1': { id: 'gatita', name: 'Gatita', emoji: '🐱' },
+  'sociabilidad:0': { id: 'solitaria', name: 'Encapuchada', emoji: '🕶️' },
+  'animo:1': { id: 'alegre', name: 'Estrellita', emoji: '🌟' },
+  'animo:0': { id: 'elfa', name: 'Elfa gruñona', emoji: '🧝' },
+}
+
+export function skinFamily(genomeOrArch) {
+  const a = genomeOrArch?.traits ? archetype(genomeOrArch) : genomeOrArch
+  const k = `${a?.key ?? 'animo'}:${a?.hi ? 1 : 0}`
+  return SKIN_FAMILIES[k] ?? SKIN_FAMILIES['animo:1']
+}
+

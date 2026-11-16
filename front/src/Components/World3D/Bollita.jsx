@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { BALL_R } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
+import { buildSkin, getBodyTexture, SkinAccessory, SkinMouth } from './skins.js'
 
 const m4 = new THREE.Matrix4()
 const tq = new THREE.Quaternion()
@@ -48,6 +49,8 @@ export default function Bollita({ b, sim, selected, onSelect }) {
   const oriented = useRef(false)
   const g = b.genome.traits
   const color = useMemo(() => bodyColor(b.genome), [b])
+  const skin = useMemo(() => buildSkin(b.genome, b.arch), [b.genome, b.arch])
+  const bodyTex = useMemo(() => getBodyTexture(skin), [skin])
   const r = BALL_R * (0.86 + g.apetito * 0.14) // las glotonas son más gorditas, sin pasar de lo que cabe en el tubo (BALL_R)
   const eyeSize = 0.18 + g.sociabilidad * 0.08
   const phase0 = b.id * 1.7
@@ -130,11 +133,13 @@ export default function Bollita({ b, sim, selected, onSelect }) {
 
     // cara: parpadeo, cejas, boca, rubor, sudor y pupilas
     const blink = (t * 0.9 + phase0) % 4 < 0.12 ? 0.1 : 1
-    for (const e of [eyeL, eyeR]) e.current.scale.set(1, Math.max(0.08, c.eye * blink), 0.5)
-    browL.current.rotation.z = -c.brow; browR.current.rotation.z = c.brow
+    eyeL.current.scale.set(skin.eyeScaleX * skin.eyeAsym[0], Math.max(0.08, c.eye * blink) * skin.eyeScaleY * skin.eyeAsym[0], 0.5)
+    eyeR.current.scale.set(skin.eyeScaleX * skin.eyeAsym[1], Math.max(0.08, c.eye * blink) * skin.eyeScaleY * skin.eyeAsym[1], 0.5)
+    browL.current.rotation.z = -c.brow - skin.browBaseTilt
+    browR.current.rotation.z = c.brow + skin.browBaseTilt
     browL.current.position.y = browR.current.position.y = 0.5 + (c.eye - 1) * 0.15
-    mouth.current.scale.set(1, c.mouth, 1)
-    for (const m of blush.current.children) m.material.opacity = c.blush * 0.7
+    mouth.current.scale.set(skin.mouthWidth, c.mouth, 1)
+    for (const m of blush.current.children) m.material.opacity = Math.min(0.9, c.blush * 0.7 * skin.blushBoost)
     sweat.current.visible = c.sweat > 0.5
     pupils.current.position.set(0, c.eye < 0.5 ? -0.03 : 0, 0.07)
 
@@ -146,7 +151,7 @@ export default function Bollita({ b, sim, selected, onSelect }) {
     <group ref={root} onClick={(e) => (e.stopPropagation(), onSelect(b))} onPointerOver={() => (document.body.style.cursor = 'pointer')} onPointerOut={() => (document.body.style.cursor = '')}>
       {/* zona de clic generosa; sin sombra */}
       <mesh><sphereGeometry args={[r * 2.2, 8, 6]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>
-      <mesh scale={r} castShadow><sphereGeometry args={[1, 28, 20]} /><meshStandardMaterial color={color} roughness={0.35} /></mesh>
+      <mesh scale={r} castShadow><sphereGeometry args={[1, 28, 20]} /><meshStandardMaterial map={bodyTex} roughness={0.35} /></mesh>
       <group scale={r}>
         {[-1, 1].map((sg) => (
           <group key={sg}>
@@ -154,24 +159,32 @@ export default function Bollita({ b, sim, selected, onSelect }) {
               <sphereGeometry args={[eyeSize + 0.07, 14, 12]} /><meshBasicMaterial color="#ffffff" />
             </mesh>
             <mesh ref={sg < 0 ? browL : browR} position={[sg * 0.36, 0.5, 0.86]}>
-              <boxGeometry args={[0.34, 0.06, 0.06]} /><meshBasicMaterial color="#2a2140" />
+              <boxGeometry args={[0.34, skin.browThick, 0.06]} /><meshBasicMaterial color={skin.browColor} />
             </mesh>
           </group>
         ))}
         <group ref={pupils}>
-          {[-1, 1].map((sg) => <mesh key={sg} position={[sg * 0.36, 0.2, 0.99]}><sphereGeometry args={[0.07, 8, 8]} /><meshBasicMaterial color="#1a1030" /></mesh>)}
+          {[-1, 1].map((sg) => (
+            <group key={sg} position={[sg * 0.36, 0.2, 0.99]}>
+              <mesh><sphereGeometry args={[skin.pupilSize, 8, 8]} /><meshBasicMaterial color={skin.pupilColor} /></mesh>
+              {skin.hasCatchlight && (
+                <mesh position={[0.022, 0.025, skin.pupilSize * 0.75]}><sphereGeometry args={[skin.pupilSize * 0.32, 6, 6]} /><meshBasicMaterial color="#ffffff" /></mesh>
+              )}
+            </group>
+          ))}
         </group>
         <group position={[0, -0.2, 0.93]} ref={mouth}>
-          <mesh rotation={[0, 0, Math.PI]}><torusGeometry args={[0.2, 0.035, 6, 16, Math.PI]} /><meshBasicMaterial color="#2a1030" /></mesh>
+          <SkinMouth mouthType={skin.mouthType} />
         </group>
         <group ref={blush}>
           {[-1, 1].map((sg) => (
             <mesh key={sg} position={[sg * 0.6, -0.02, 0.78]} rotation={[0, sg * 0.75, 0]}>
-              <circleGeometry args={[0.13, 12]} /><meshBasicMaterial color="#ff6f91" transparent opacity={0} depthWrite={false} />
+              <circleGeometry args={[0.13, 12]} /><meshBasicMaterial color={skin.blushColor} transparent opacity={0} depthWrite={false} />
             </mesh>
           ))}
         </group>
         <mesh ref={sweat} position={[0.72, 0.62, 0.5]}><sphereGeometry args={[0.09, 8, 8]} /><meshBasicMaterial color="#7fd8ff" /></mesh>
+        <SkinAccessory skin={skin} />
       </group>
       <mesh ref={ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} visible={false}>
         <torusGeometry args={[r * 1.3, 0.012, 6, 32]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.55} toneMapped={false} />
