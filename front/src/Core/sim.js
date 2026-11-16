@@ -12,6 +12,7 @@
 //   phase, timer (segundos restantes estimados), dur (duración estimada de la fase)
 //   speed: velocidad actual (unidades/s); roll: ángulo (rad) de balanceo dentro del tubo, 0 = abajo;
 //   mood, thought { text, emoji, until }, react, log[], flags
+//   visitedRoutes { [route.idx]: count }, plannedRoute, plan { destino, ruta, razon }
 //   Dónde está / a dónde va (lo que no aplica vale null):
 //     node:  nodo en el que está (durante el viaje, el de origen)   vert: vértice de la ciudad
 //     dest:  destino elegido en el nodo
@@ -46,7 +47,16 @@ const FRIC = 0.3
 const VMAX = 30
 const ROLL_K = 40 // muelle que lleva la bollita hacia donde la empujan gravedad y centrífuga
 const ROLL_C = 5 // amortiguación: oscila un par de veces y se asienta
-const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo'] // obstáculos que merecen comentario
+const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo', 'geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada'] // obstáculos que merecen comentario
+const FALLBACK_VOICES = {
+  geiser: ['¡Al chorro del géiser!', '¡Arriba voy!'],
+  erupcion: ['¡Erupción! ¡A volar!', '¡El cráter me lanza!'],
+  turbina: ['¡Viento de lado!', '¡Qué impulso!'],
+  hielo_resbaloso: ['¡Qué rápido patina!', '¡A toda velocidad!'],
+  pantano: ['Uy, qué pegajoso…', 'Me frena el pantano…'],
+  portal: ['¡Salto espacial!', '¡Teletransporte!'],
+  cascada: ['¡Por la cascada!', '¡Agua va!'],
+}
 const Y = new THREE.Vector3(0, 1, 0)
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x))
 const mean = (arr, f) => arr.reduce((s, x) => s + f(x), 0) / arr.length
@@ -122,7 +132,8 @@ export class Sim {
       name: `${NAMES[Math.floor(this.rng() * NAMES.length)]} ${gen > 1 ? 'G' + gen : ''}`.trim(),
       phase: 'born', timer: 0.8, dur: 0.8, bornAt: this.t,
       dest: null, way: null, route: null, seg: null, segT: 0, walk: null,
-      visited: [node.idx], log: [], flags: {},
+      visited: [node.idx], visitedRoutes: {}, plannedRoute: null, nextDest: null, plan: null,
+      log: [], flags: {},
       pos: node.pos.clone().addScaledVector(up, NODE_R + BALL_R),
       dir: new THREE.Vector3().crossVectors(up, Math.abs(up.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : Y).normalize(), up,
       // estado del balanceo en el tubo: `wall` va del eje a la bollita, `off` es su distancia al eje
@@ -138,7 +149,13 @@ export class Sim {
   }
 
   say(b, event, ctx = {}) {
-    const v = voice(b, event, ctx, this.rng)
+    let v
+    try {
+      v = voice(b, event, ctx, this.rng)
+    } catch {
+      const fb = FALLBACK_VOICES[event] || ['¡Guau!']
+      v = { text: fb[Math.floor(this.rng() * fb.length)], emoji: KINDS[event]?.emoji || '✨' }
+    }
     b.thought = { ...v, until: this.t + 3.5 }
     b.log.unshift({ t: Math.round(b.age), ...v })
     if (b.log.length > 30) b.log.pop()
@@ -261,7 +278,12 @@ export class Sim {
       const sc = g.prefs[s.idx] * 0.8 + t.apetito * gain * 3 + this.rng() * (0.2 + t.curiosidad) * 0.9
       if (sc > bs) { bs = sc; best = s }
     }
-    b.dest = best; b.way = b.route = b.seg = null
+    b.dest = best; b.way = b.route = b.seg = b.plannedRoute = null
+    b.plan = {
+      destino: best.name,
+      ruta: this.world.nodes[b.node].name,
+      razon: best.kind === 'energia' && b.e < 55 ? 'busco energía' : 'quiero puntos',
+    }
     this.walkTo(b, best.vert, 'toDest')
   }
 
@@ -276,21 +298,88 @@ export class Sim {
     b.phase = 'at'; b.dur = b.timer = 1.5 + (1 - b.genome.traits.apetito) * 1.5
   }
 
-  goWay(b) {
-    const g = b.genome; const t = g.traits
-    let best = null; let bs = -Infinity
-    for (const L of this.world.waysFrom[b.node]) {
-      const cost = this.eta(b, L) * (DRAIN_E + TRAVEL_E * L.theme.ecost)
-      const sc = g.ways[L.idx] * 0.8
-        + t.curiosidad * (b.visited.includes(L.to) ? 0 : 0.6)
-        + t.valentia * L.theme.risk * 0.7
-        - (b.e - cost < 10 ? 3 : 0)
-        + this.rng() * 0.3
-      if (sc > bs) { bs = sc; best = L }
+  // Conteo de compañeras por way, ruta y nodo para evaluar sociabilidad.
+  peerCounts(self) {
+    const byWay = new Map(); const byRoute = new Map(); const byNode = new Map()
+    for (const o of this.bollitas) {
+      if (o === self || o.phase === 'dying' || o.phase === 'gone') continue
+      if (o.way) byWay.set(o.way.idx, (byWay.get(o.way.idx) || 0) + 1)
+      if (o.route) byRoute.set(o.route.idx, (byRoute.get(o.route.idx) || 0) + 1)
+      const n = o.phase === 'travel' && o.way ? o.way.to : o.node
+      byNode.set(n, (byNode.get(n) || 0) + 1)
     }
-    b.way = best
-    this.walkTo(b, this.world.nodes[b.node].portTo[best.to].out, 'toPort')
-    this.say(b, 'camino', { c: best.theme.name, n: this.world.nodes[best.to].name })
+    return { byWay, byRoute, byNode }
+  }
+
+  // Utilidad anticipada de recorrer `route` de `way` y visitar `nextDest` al llegar.
+  planUtility(b, way, route, nextDest, peers, halfFactor = 1) {
+    const g = b.genome; const t = g.traits
+    const obs = route.segments.slice(1, -1)
+    const avgSpeedK = obs.reduce((s, o) => s + (o.speedK ?? 1), 0) / Math.max(1, obs.length)
+    const eta = (route.length * halfFactor) / (this.cruise(b) * avgSpeedK + 4)
+    const costE = eta * (DRAIN_E + TRAVEL_E * way.theme.ecost)
+    const circuitP = (eta * way.theme.pps * PPS_K) / 10
+
+    const remE = b.e - costE
+    const hunger = clamp((55 - b.e) / 55, 0, 1)
+    const needP = clamp((65 - b.p) / 65, 0, 1)
+    const destE = nextDest ? (nextDest.de * (0.35 + hunger * 1.6) * (0.4 + t.apetito)) / 22 : 0
+    const destP = nextDest ? (nextDest.dp * (0.45 + needP * 1.3)) / 22 : 0
+    const survival = remE < 8 ? -4.5 : remE < 18 ? -1.5 : 0
+
+    const riskLevel = (way.theme.risk + (route.profile?.thrill ?? 0.5)) * 0.5
+    const riskScore = (t.valentia - 0.45) * riskLevel * 1.8 - (b.p < 28 ? riskLevel * 0.8 : 0)
+
+    const seenRoute = b.visitedRoutes[route.idx] || 0
+    const noveltyNode = b.visited.includes(way.to) ? 0 : 0.45
+    const curiosityScore = t.curiosidad * ((1 / (1 + seenRoute)) * 1.15 + noveltyNode)
+
+    const peerCount = (peers.byWay.get(way.idx) || 0) * 0.5 + (peers.byRoute.get(route.idx) || 0) + (peers.byNode.get(way.to) || 0) * 0.4
+    const socialScore = (t.sociabilidad - 0.45) * Math.min(3, peerCount) * 0.7
+
+    const sp = route.profile?.speed
+    const moodScore = (t.animo - 0.5) * (sp === 'rapida' ? 0.65 : sp === 'lenta' ? -0.4 : 0.35)
+    const geneScore = g.ways[way.idx] * 0.45 + g.routes[route.idx] * 0.45 + (nextDest ? g.prefs[nextDest.idx] * 0.45 : 0)
+    const noise = this.rng() * (0.16 + t.curiosidad * 0.28)
+
+    const total = circuitP + destE + destP + survival + riskScore + curiosityScore + socialScore + moodScore + geneScore + noise
+
+    let razon = 'explorar circuito'
+    if (destE >= 0.75 && hunger > 0.35) razon = 'busco energía'
+    else if (curiosityScore >= 0.7 && seenRoute === 0) razon = 'ruta inexplorada'
+    else if (socialScore >= 0.4) razon = 'seguir al grupo'
+    else if (socialScore <= -0.35 && peerCount === 0) razon = 'evitar multitudes'
+    else if (riskScore >= 0.45) razon = 'busco adrenalina'
+    else if (riskLevel < 0.42 && t.valentia < 0.45) razon = 'camino seguro'
+    else if (destP >= 0.55) razon = 'quiero puntos'
+    else if (sp === 'rapida') razon = 'me apetece velocidad'
+
+    return { total, razon }
+  }
+
+  goWay(b) {
+    const peers = this.peerCounts(b)
+    let best = null; let bs = -Infinity
+    for (const way of this.world.waysFrom[b.node]) {
+      const dests = this.world.nodes[way.to].destinos
+      for (const route of way.routes) {
+        for (const nextDest of dests) {
+          const u = this.planUtility(b, way, route, nextDest, peers, 1)
+          if (u.total > bs) { bs = u.total; best = { way, route, nextDest, razon: u.razon } }
+        }
+      }
+    }
+    b.way = best.way
+    b.plannedRoute = best.route
+    b.nextDest = best.nextDest
+    const destNode = this.world.nodes[best.way.to]
+    b.plan = {
+      destino: `${destNode.name} · ${best.nextDest.name}`,
+      ruta: `${best.way.theme.name} · Ruta ${best.route.name}`,
+      razon: best.razon,
+    }
+    this.walkTo(b, this.world.nodes[b.node].portTo[best.way.to].out, 'toPort')
+    this.say(b, 'camino', { c: best.way.theme.name, n: destNode.name })
   }
 
   // ───────────── circuito: rodar por los tubos ─────────────
@@ -298,23 +387,42 @@ export class Sim {
 
   enterSeg(b, seg) {
     if (b.phase !== 'travel') { b.phase = 'travel'; b.dur = b.timer = this.eta(b, b.way); b.snap = 0.3; b.prevT.set(0, 0, 0) }
+    const prevRoute = b.route
     b.seg = seg; b.segT = 0
-    if (seg.route >= 0) b.route = b.way.routes[seg.route]
-    b.speed = Math.max(b.speed, seg.boost, this.cruise(b))
+    if (seg.route >= 0) {
+      b.route = b.way.routes[seg.route]
+      if (b.route !== prevRoute) b.visitedRoutes[b.route.idx] = (b.visitedRoutes[b.route.idx] || 0) + 1
+    }
+    b.speed = Math.max(b.speed, seg.boost, this.cruise(b) * (seg.speedK ?? 1))
     if (WOW.includes(seg.kind)) this.say(b, seg.kind)
   }
 
-  // En cada bifurcación: genes de ruta y de obstáculo, valentía ante el riesgo y un punto de curiosidad.
+  // En cada bifurcación (fork/cross): evalúa la utilidad del tramo restante hasta llegar al destino planeado.
   pickNext(b) {
-    const g = b.genome; const t = g.traits; const way = b.way
-    let best = null; let bs = -Infinity
+    if (b.seg.next.length === 1) return b.way.segments[b.seg.next[0]]
+    const g = b.genome; const way = b.way
+    const peers = this.peerCounts(b)
+    const halfFactor = b.seg.kind === 'salida' ? 1 : 0.5
+    let best = null; let bestRoute = null; let bestRazon = null; let bs = -Infinity
     for (const i of b.seg.next) {
       const o = way.segments[i]
-      const sc = (o.route < 0 ? 0 : g.routes[way.routes[o.route].idx] * 0.8
-        + mean(o.tramo, (k) => g.kinds[OBSTACLES.indexOf(k)]) * 0.6
-        + t.valentia * mean(o.tramo, (k) => KINDS[k].risk) * 0.6)
-        + this.rng() * (0.15 + t.curiosidad * 0.6)
-      if (sc > bs) { bs = sc; best = o }
+      if (o.route < 0) {
+        if (0 > bs) { bs = 0; best = o }
+        continue
+      }
+      const rt = way.routes[o.route]
+      const u = this.planUtility(b, way, rt, b.nextDest, peers, halfFactor)
+      const kindPref = mean(o.tramo, (k) => g.kinds[OBSTACLES.indexOf(k)]) * 0.5
+      const planBonus = b.plannedRoute === rt ? 0.35 : 0
+      const sc = u.total + kindPref + planBonus
+      if (sc > bs) { bs = sc; best = o; bestRoute = rt; bestRazon = u.razon }
+    }
+    if (bestRoute && bestRoute !== b.plannedRoute) {
+      b.plannedRoute = bestRoute
+      if (b.plan) {
+        b.plan.ruta = `${way.theme.name} · Ruta ${bestRoute.name}`
+        b.plan.razon = bestRazon
+      }
     }
     return best
   }
@@ -336,7 +444,9 @@ export class Sim {
 
     // velocidad: la gravedad acelera al bajar y frena al subir; el tubo roza, el aire no
     b.speed += (-GRAV * T.y - FRIC * s.drag * b.speed) * dt
-    b.speed = clamp(b.speed, this.cruise(b) * (s.kind === 'embudo' ? 0.6 : 1), VMAX)
+    const minV = this.cruise(b) * clamp(s.kind === 'embudo' ? 0.6 : (s.speedK ?? 1), 0.45, 1.8)
+    const maxV = VMAX * (s.kind === 'portal' ? 1.35 : s.kind === 'hielo_resbaloso' ? 1.2 : 1)
+    b.speed = clamp(b.speed, minV, maxV)
 
     // balanceo: la bollita busca el punto de la pared hacia el que la aprietan gravedad y centrífuga
     const w = b.wall
@@ -345,6 +455,10 @@ export class Sim {
     w.normalize()
     const down = tmp.copy(Y).addScaledVector(T, -T.y).negate() // gravedad proyectada en la sección del tubo
     const push = tmp2.copy(down).multiplyScalar(GRAV)
+    if (s.kind === 'turbina') {
+      const lat = new THREE.Vector3().crossVectors(T, Y)
+      if (lat.lengthSq() > 1e-4) push.addScaledVector(lat.normalize(), 20 * Math.sin(b.segT * Math.PI * 2))
+    }
     if (b.prevT.lengthSq() > 0 && !s.air) {
       // curvatura ≈ ΔT/Δs; acotada para que el quiebro de una unión no la lance
       const kv = b.prevT.sub(T).multiplyScalar(b.speed / dt) // = -(dT/ds)·v²

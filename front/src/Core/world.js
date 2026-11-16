@@ -35,15 +35,18 @@
 //   En `fork` y en `cross` la bollita elige ruta, así que puede cambiar de ruta a mitad de circuito.
 //
 // route = { idx (global), r (local), name 'A'|'B'|'C', way, segments[6] (salida, 4 obstáculos, llegada),
-//           kinds[4] (los obstáculos, todos distintos), length }
+//           kinds[4] (los obstáculos, todos distintos), length,
+//           profile: { speed: 'rapida'|'media'|'lenta', thrill: 0..1, label } }
 //
 // segment = {
 //   idx (global), i (índice en way.segments), way, route (r local, o -1 si es compartido),
 //   kind (clave de KINDS), name, emoji,
 //   curve (THREE.CatmullRomCurve3; curve.getPoint(1) de uno == getPoint(0) de cada `next`),
 //   length, radius (radio interior del tubo de cristal),
-//   air (true: va por el aire, SIN tubo: trampolin, canon, caida),
+//   air (true: va por el aire, SIN tubo: trampolin, canon, caida, geiser, erupcion, portal),
 //   boost (velocidad mínima con la que sale disparada al entrar), drag (multiplicador de rozamiento),
+//   speedK (multiplicador de velocidad del tramo: >1 rápido, <1 lento),
+//   event (string con la clave del evento o null),
 //   risk (0..1), next[] (índices `i` de los tramos siguientes; [] en la llegada),
 //   tramo[] (kinds del medio-recorrido de ruta al que pertenece; lo usa la sim para decidir)
 // }
@@ -90,35 +93,41 @@ export const THEMES = [
 // coil: escala de hélices, rizos y embudos; turns: vueltas extra; radius: radio del tubo;
 // fav: obstáculos que el tema reparte primero.
 export const PARAMS = {
-  sombrio: { n: 3, bow: 36, arch: -16, spread: 21, phase: 0.4, coil: 0.8, turns: 1, radius: 1.15, fav: ['caida', 'embudo', 'sacacorchos', 'canon'] },
-  bosque: { n: 2, bow: 34, arch: 8, spread: 23, phase: 1.2, coil: 1.35, turns: 1, radius: 1.5, fav: ['espiral', 'cascada', 'zigzag', 'rampa'] },
-  mar: { n: 3, bow: 38, arch: 0, spread: 23, phase: 2.2, coil: 1.1, turns: 0, radius: 1.35, fav: ['cascada', 'embudo', 'rizo', 'trampolin'] },
-  desierto: { n: 2, bow: 40, arch: 18, spread: 20, phase: 0, coil: 1, turns: 0, radius: 1.4, fav: ['caida', 'espiral', 'canon', 'rampa'] },
-  hielo: { n: 3, bow: 35, arch: -9, spread: 23, phase: 3, coil: 0.9, turns: 2, radius: 1.2, fav: ['cascada', 'espiral', 'zigzag', 'sacacorchos'] },
-  volcan: { n: 3, bow: 34, arch: 26, spread: 20, phase: 1.6, coil: 1.2, turns: 1, radius: 1.3, fav: ['caida', 'espiral', 'canon', 'rizo'] },
-  cristal: { n: 2, bow: 37, arch: 6, spread: 21, phase: 0.8, coil: 0.75, turns: 2, radius: 1.1, fav: ['espiral', 'embudo', 'rizo', 'sacacorchos'] },
-  nubes: { n: 3, bow: 39, arch: 20, spread: 23, phase: 2.6, coil: 1.3, turns: 0, radius: 1.6, fav: ['embudo', 'caida', 'trampolin', 'canon'] },
-  neon: { n: 3, bow: 34, arch: 5, spread: 21, phase: 3.6, coil: 1, turns: 1, radius: 1.25, fav: ['caida', 'cascada', 'rizo', 'zigzag'] },
-  jardin: { n: 2, bow: 34, arch: 11, spread: 23, phase: 1.9, coil: 1.15, turns: 0, radius: 1.45, fav: ['cascada', 'espiral', 'rampa', 'trampolin'] },
+  sombrio: { n: 3, bow: 36, arch: -16, spread: 21, phase: 0.4, coil: 0.8, turns: 1, radius: 1.15, fav: ['pantano', 'erupcion', 'caida', 'embudo', 'sacacorchos'] },
+  bosque: { n: 2, bow: 34, arch: 8, spread: 23, phase: 1.2, coil: 1.35, turns: 1, radius: 1.5, fav: ['pantano', 'cascada', 'espiral', 'zigzag', 'rampa'] },
+  mar: { n: 3, bow: 38, arch: 0, spread: 23, phase: 2.2, coil: 1.1, turns: 0, radius: 1.35, fav: ['cascada', 'geiser', 'embudo', 'rizo', 'trampolin'] },
+  desierto: { n: 2, bow: 40, arch: 18, spread: 20, phase: 0, coil: 1, turns: 0, radius: 1.4, fav: ['turbina', 'caida', 'espiral', 'canon', 'rampa'] },
+  hielo: { n: 3, bow: 35, arch: -9, spread: 23, phase: 3, coil: 0.9, turns: 2, radius: 1.2, fav: ['hielo_resbaloso', 'cascada', 'espiral', 'zigzag', 'sacacorchos'] },
+  volcan: { n: 3, bow: 34, arch: 26, spread: 20, phase: 1.6, coil: 1.2, turns: 1, radius: 1.3, fav: ['erupcion', 'canon', 'caida', 'espiral', 'rizo'] },
+  cristal: { n: 2, bow: 37, arch: 6, spread: 21, phase: 0.8, coil: 0.75, turns: 2, radius: 1.1, fav: ['portal', 'hielo_resbaloso', 'espiral', 'embudo', 'sacacorchos'] },
+  nubes: { n: 3, bow: 39, arch: 20, spread: 23, phase: 2.6, coil: 1.3, turns: 0, radius: 1.6, fav: ['geiser', 'turbina', 'embudo', 'caida', 'trampolin'] },
+  neon: { n: 3, bow: 34, arch: 5, spread: 21, phase: 3.6, coil: 1, turns: 1, radius: 1.25, fav: ['portal', 'turbina', 'caida', 'cascada', 'rizo'] },
+  jardin: { n: 2, bow: 34, arch: 11, spread: 23, phase: 1.9, coil: 1.15, turns: 0, radius: 1.45, fav: ['cascada', 'geiser', 'pantano', 'espiral', 'trampolin'] },
 }
 
 // w: cuánta cuerda ocupa. drop: desnivel que necesita (obstáculos de gravedad).
-// boost/drag/risk/air: ver el contrato (segment).
+// boost/drag/speedK/event/risk/air: ver el contrato (segment).
 export const KINDS = {
-  salida: { name: 'Lanzadera', emoji: '🚀', boost: 12, drag: 1, risk: 0.2 },
-  llegada: { name: 'Llegada', emoji: '🏁', boost: 0, drag: 1.5, risk: 0 },
-  rampa: { name: 'Rampa', emoji: '🛝', w: 1, boost: 0, drag: 1, risk: 0.1 },
-  zigzag: { name: 'Zigzag', emoji: '〰️', w: 1.2, boost: 0, drag: 1.3, risk: 0.3 },
-  rizo: { name: 'Rizo', emoji: '➰', w: 1.1, boost: 15, drag: 0.6, risk: 0.8 },
-  sacacorchos: { name: 'Sacacorchos', emoji: '🧬', w: 1.1, boost: 9, drag: 1, risk: 0.5 },
-  trampolin: { name: 'Trampolín', emoji: '🤸', w: 1.2, boost: 13, drag: 0, risk: 0.7, air: true },
-  canon: { name: 'Cañón', emoji: '💥', w: 1.7, boost: 26, drag: 0, risk: 1, air: true },
-  espiral: { name: 'Espiral', emoji: '🌀', w: 0.8, boost: 0, drag: 0.8, risk: 0.5, drop: 12 },
-  caida: { name: 'Caída libre', emoji: '🪂', w: 0.6, boost: 0, drag: 0, risk: 0.9, drop: 13, air: true },
-  cascada: { name: 'Cascada', emoji: '🪜', w: 1, boost: 0, drag: 1.2, risk: 0.4, drop: 10 },
-  embudo: { name: 'Embudo', emoji: '🌪️', w: 0.7, boost: 0, drag: 4, risk: 0.5, drop: 9 },
+  salida: { name: 'Lanzadera', emoji: '🚀', boost: 12, drag: 1, speedK: 1.2, risk: 0.2 },
+  llegada: { name: 'Llegada', emoji: '🏁', boost: 0, drag: 1.5, speedK: 0.9, risk: 0 },
+  rampa: { name: 'Rampa', emoji: '🛝', w: 1, boost: 0, drag: 1, speedK: 1.05, risk: 0.1 },
+  zigzag: { name: 'Zigzag', emoji: '〰️', w: 1.2, boost: 0, drag: 1.3, speedK: 0.85, risk: 0.3 },
+  rizo: { name: 'Rizo', emoji: '➰', w: 1.1, boost: 15, drag: 0.6, speedK: 1.3, risk: 0.8 },
+  sacacorchos: { name: 'Sacacorchos', emoji: '🧬', w: 1.1, boost: 9, drag: 1, speedK: 1.1, risk: 0.5 },
+  trampolin: { name: 'Trampolín', emoji: '🤸', w: 1.2, boost: 13, drag: 0, speedK: 1.25, risk: 0.7, air: true },
+  canon: { name: 'Cañón', emoji: '💥', w: 1.7, boost: 26, drag: 0, speedK: 1.55, risk: 1, air: true },
+  turbina: { name: 'Turbina', emoji: '💨', w: 1.1, boost: 18, drag: 0.5, speedK: 1.35, risk: 0.6, event: true },
+  hielo_resbaloso: { name: 'Hielo resbaloso', emoji: '🧊', w: 1.4, boost: 10, drag: 0.15, speedK: 1.65, risk: 0.45, event: true },
+  pantano: { name: 'Pantano', emoji: '🫧', w: 1.2, boost: 0, drag: 3.2, speedK: 0.52, risk: 0.2, event: true },
+  portal: { name: 'Portal', emoji: '🌀', w: 0.65, boost: 30, drag: 0, speedK: 2.0, risk: 0.65, air: true, event: true },
+  geiser: { name: 'Géiser', emoji: '⛲', w: 1.1, boost: 22, drag: 0, speedK: 1.35, risk: 0.75, air: true, event: true },
+  erupcion: { name: 'Erupción', emoji: '🌋', w: 1.3, boost: 28, drag: 0, speedK: 1.45, risk: 0.95, air: true, event: true },
+  espiral: { name: 'Espiral', emoji: '🌀', w: 0.8, boost: 0, drag: 0.8, speedK: 1.0, risk: 0.5, drop: 12 },
+  caida: { name: 'Caída libre', emoji: '🪂', w: 0.6, boost: 0, drag: 0, speedK: 1.45, risk: 0.9, drop: 13, air: true },
+  cascada: { name: 'Cascada', emoji: '🪜', w: 1, boost: 0, drag: 1.1, speedK: 1.15, risk: 0.4, drop: 10, event: true },
+  embudo: { name: 'Embudo', emoji: '🌪️', w: 0.7, boost: 0, drag: 4, speedK: 0.65, risk: 0.5, drop: 9 },
 }
-const FLEX = ['rampa', 'zigzag', 'rizo', 'sacacorchos', 'trampolin', 'canon'] // unen dos puntos cualesquiera
+const FLEX = ['rampa', 'zigzag', 'rizo', 'sacacorchos', 'trampolin', 'canon', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'geiser', 'erupcion'] // unen dos puntos cualesquiera
 const GRAV = ['espiral', 'caida', 'cascada', 'embudo'] // necesitan bajar
 // Orden de los genes `kinds` del genoma.
 export const OBSTACLES = [...FLEX, ...GRAV]
@@ -338,6 +347,30 @@ const SHAPES = {
   // dos botes
   trampolin: (A, B) => { const { C, L } = basis(A, B); const h = 2.5 + L * 0.15; return Array.from({ length: 15 }, (_, i) => at(A, C, (i + 1) / 16, Y, h * Math.abs(Math.sin(((i + 1) / 16) * TAU)))) },
   canon: (A, B) => { const { C, L } = basis(A, B); return Array.from({ length: 9 }, (_, i) => at(A, C, (i + 1) / 10, Y, L * 1.2 * ((i + 1) / 10) * (1 - (i + 1) / 10))) },
+  turbina: (A, B, P) => {
+    const { C, u, v } = basis(A, B); const amp = 3.2 * P.coil
+    return Array.from({ length: 7 }, (_, i) => { const t = (i + 1) / 8; return at(A, C, t, u, amp * Math.sin(t * Math.PI * 1.5), v, 1.1 * Math.sin(t * Math.PI)) })
+  },
+  hielo_resbaloso: (A, B, P) => {
+    const { C, u, v } = basis(A, B)
+    return [at(A, C, 0.25, u, 1.7 * P.coil, v, -0.7), at(A, C, 0.5, u, 0, v, -1.4), at(A, C, 0.75, u, -1.7 * P.coil, v, -0.7)]
+  },
+  pantano: (A, B) => {
+    const { C, u, v } = basis(A, B)
+    return [1, 2, 3, 4, 5].map((i) => { const t = i / 6; return at(A, C, t, v, -1.3 * Math.sin(t * Math.PI), u, i % 2 ? 1.2 : -1.2) })
+  },
+  portal: (A, B) => {
+    const { C, v } = basis(A, B)
+    return [at(A, C, 0.35, v, 0.9), at(A, C, 0.65, v, 0.9)]
+  },
+  geiser: (A, B) => {
+    const { C, L } = basis(A, B); const h = Math.min(9.5, 3.8 + L * 0.22)
+    return Array.from({ length: 9 }, (_, i) => { const t = (i + 1) / 10; return at(A, C, Math.pow(t, 1.35), Y, h * Math.sin(Math.PI * Math.pow(t, 0.55))) })
+  },
+  erupcion: (A, B) => {
+    const { C, L, u } = basis(A, B); const h = Math.min(11, 4.5 + L * 0.26)
+    return Array.from({ length: 9 }, (_, i) => { const t = (i + 1) / 10; return at(A, C, t, Y, h * 4 * t * (1 - t), u, Math.sin(t * Math.PI) * 1.4) })
+  },
 }
 SHAPES.salida = SHAPES.llegada = () => []
 
@@ -406,7 +439,7 @@ function placeWay(world, circuit, from, to, placed) {
     return { minTube, minNode, minHub }
   }
 
-  for (const bowExtra of [0, 14, 28, 42]) {
+  for (const bowExtra of [0, 14, 28, 42, 56]) {
     for (let k = 0; k < N_ANG; k++) {
       const theta = (baseTheta + (k / N_ANG) * TAU) % TAU
       const cand = buildWay(world, circuit, from, to, theta, bowExtra, false)
@@ -414,7 +447,7 @@ function placeWay(world, circuit, from, to, placed) {
       if (!coarse) continue
       const res = coarse.minTube >= 1.5 && coarse.minNode >= 0 ? evalCand(cand, 28) : coarse
       if (!res) continue
-      const score = Math.min(res.minTube, res.minNode + 1, res.minHub * 0.2)
+      const score = res.minTube < 2.0 ? res.minTube - 10 : Math.min(res.minTube, res.minNode + 1, res.minHub * 0.2)
       if (score > bestScore) { bestScore = score; best = { theta, bowExtra } }
       if (res.minTube >= 2.8 && res.minNode >= 1.0 && res.minHub >= 15) {
         const w = buildWay(world, circuit, from, to, theta, bowExtra, true)
@@ -460,7 +493,8 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
     const K = KINDS[kind]
     const s = {
       idx: commit ? world.segments.length : -1, i: way.segments.length, way, route, kind, name: K.name, emoji: K.emoji,
-      curve, length: curve.getLength(), radius: P.radius, air: !!K.air, boost: K.boost, drag: K.drag, risk: K.risk,
+      curve, length: curve.getLength(), radius: P.radius, air: !!K.air, boost: K.boost, drag: K.drag,
+      speedK: K.speedK ?? 1, event: K.event ? kind : null, risk: K.risk,
       next: [], tramo,
     }
     way.segments.push(s)
@@ -469,14 +503,48 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   }
   const launch = seg('salida', shape('salida', S, hubs[0], P, nS, hubT[0], wrapMid(a, nS, hubs[0])), -1, [])
 
-  // se reparten sin repetir dentro de una ruta: primero los favoritos del tema
-  const deck = (all) => [...P.fav.filter((k) => all.includes(k)), ...shuffle(all.filter((k) => !P.fav.includes(k)), rng)]
-  const grav = deck(GRAV); const flex = deck(FLEX)
+  // Reparto por identidad de ruta (A rápida/arriesgada, B lenta/segura, C espectacular) y tema.
+  const usedInWay = new Set()
+  const usedEventMixes = new Set()
+  const pickKind = (pool, role, usedInRoute, needEvent = false, rot = 0) => {
+    const cands = pool.filter((k) => !usedInRoute.has(k))
+    const list = cands.length ? cands : pool
+    let best = list[0]; let bestScore = -Infinity
+    for (let idx = 0; idx < list.length; idx++) {
+      const k = list[(idx + rot) % list.length]
+      const K = KINDS[k]; const sk = K.speedK ?? 1
+      let sc = (P.fav.includes(k) ? 0.9 : 0) + (usedInWay.has(k) ? -1.8 : 0.8) + rng() * 0.9
+      if (needEvent && K.event) sc += 2.2
+      if (role === 'rapida') sc += (sk - 1) * 2.5 + K.risk * 1.1 + (sk < 0.9 ? -2.5 : 0)
+      else if (role === 'lenta') sc += (1.15 - sk) * 2.6 + (0.6 - K.risk) * 1.3 + (sk > 1.45 ? -2.5 : 0)
+      else sc += (K.event ? 0.7 : 0.4) + K.risk * 0.7 + (K.air ? 0.5 : 0)
+      if (sc > bestScore) { bestScore = sc; best = k }
+    }
+    usedInRoute.add(best); usedInWay.add(best)
+    return best
+  }
+
   const heads = [[], []]; const tails = [[], []]
   for (let r = 0; r < P.n; r++) {
+    const role = r === 0 ? 'rapida' : r === 1 ? 'lenta' : 'media'
+    const usedInRoute = new Set()
+    const pairs = []
+    for (let h = 0; h < 2; h++) {
+      const g = pickKind(GRAV, role, usedInRoute, h === 0 && role === 'media', circuit.idx + r + h)
+      const f = pickKind(FLEX, role, usedInRoute, h === 0, circuit.idx * 3 + r + h)
+      pairs.push([g, f])
+    }
+    // Garantizar que las rutas de un mismo way no repitan exactamente la misma mezcla de eventos
+    const mixKey = () => pairs.flat().filter((k) => KINDS[k].event).sort().join(',')
+    if (usedEventMixes.has(mixKey())) {
+      const alt = FLEX.find((k) => KINDS[k].event && !usedInRoute.has(k))
+      if (alt) { pairs[1][1] = alt; usedInRoute.add(alt); usedInWay.add(alt) }
+    }
+    usedEventMixes.add(mixKey())
+
     const own = []
     for (let h = 0; h < 2; h++) {
-      const A = hubs[h]; const B = hubs[h + 1]; const g = grav[(2 * r + h) % grav.length]; const f = flex[(2 * r + h) % flex.length]
+      const A = hubs[h]; const B = hubs[h + 1]; const [g, f] = pairs[h]
       const kinds = rng() < 0.5 ? [g, f] : [f, g]
       const frac = clamp(KINDS[kinds[0]].w / (KINDS[g].w + KINDS[f].w), 0.36, 0.64)
       // las rutas se abren alrededor del eje y en la segunda mitad giran: se trenzan
@@ -500,7 +568,18 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       s0.next = [s1.i]
       heads[h].push(s0); tails[h].push(s1); own.push(s0, s1)
     }
-    way.routes.push({ idx: world.routes.length + r, r, name: 'ABC'[r], way, segments: own, kinds: own.map((s) => s.kind), length: 0 })
+    const avgSpeedK = own.reduce((sum, s) => sum + s.speedK, 0) / own.length
+    const avgRisk = own.reduce((sum, s) => sum + s.risk, 0) / own.length
+    const hasAir = own.some((s) => s.air)
+    const thrill = clamp(Number((avgRisk * 0.65 + (hasAir ? 0.18 : 0) + Math.max(0, avgSpeedK - 1) * 0.3).toFixed(2)), 0, 1)
+    const speed = role === 'rapida' ? 'rapida' : role === 'lenta' ? 'lenta' : (avgSpeedK >= 1.18 ? 'rapida' : avgSpeedK <= 0.96 ? 'lenta' : 'media')
+    const label = speed === 'rapida' ? (thrill >= 0.55 ? 'Veloz y arriesgada' : 'Rápida')
+      : speed === 'lenta' ? (thrill <= 0.42 ? 'Lenta y segura' : 'Tranquila')
+      : (thrill >= 0.45 ? 'Espectacular' : 'Equilibrada')
+    way.routes.push({
+      idx: world.routes.length + r, r, name: 'ABC'[r], way, segments: own, kinds: own.map((s) => s.kind),
+      length: 0, profile: { speed, thrill, label },
+    })
   }
   const landing = seg('llegada', shape('llegada', hubs[2], E, P, hubT[2], nE.clone().negate(), wrapMid(b, nE, hubs[2])), -1, [])
   launch.next = heads[0].map((s) => s.i)
