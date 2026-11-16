@@ -14,6 +14,10 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .velocidad button { background: none; border: 0; border-radius: 6px; padding: 4px 8px; min-width: 30px; opacity: 0.6; }
 .velocidad button:hover { opacity: 1; }
 .velocidad button[aria-pressed="true"] { background: var(--on); opacity: 1; }
+.cine-btn { display: inline-flex; align-items: center; gap: 5px; pointer-events: auto; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 11px; opacity: 0.78; transition: background 0.15s, opacity 0.15s; }
+.cine-btn:hover { opacity: 1; }
+.cine-btn[aria-pressed="true"] { background: var(--on); border-color: rgba(138, 167, 255, 0.6); opacity: 1; }
+.cine-btn kbd { font: inherit; font-size: 10px; padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: var(--dim); }
 
 /* lista de bollitas: puntos de color, el nombre aparece al pasar el cursor */
 .puntos { z-index: 100; position: absolute; left: 0; right: 0; bottom: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 0 12px; pointer-events: none; }
