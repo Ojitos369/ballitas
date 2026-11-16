@@ -356,6 +356,178 @@ export function buildSkin(genome, arch) {
   }
 }
 
+// ═══════════════════════════ TEXTURAS CHIBI CON FALLBACK ═══════════════════════════
+
+function makeCanvasTex(size, drawFn) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  drawFn(ctx, size)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.needsUpdate = true
+  return tex
+}
+
+function createChibiFallbacks() {
+  const eye = makeCanvasTex(64, (ctx, s) => {
+    const cx = s / 2; const cy = s / 2; const r = s * 0.44
+    const g = ctx.createRadialGradient(cx, cy * 0.85, r * 0.15, cx, cy, r)
+    g.addColorStop(0, '#ffffff')
+    g.addColorStop(0.55, '#e2e8f0')
+    g.addColorStop(1, '#94a3b8')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.fill()
+  })
+
+  const sparkle = makeCanvasTex(64, (ctx, s) => {
+    const cx = s / 2; const cy = s / 2
+    ctx.clearRect(0, 0, s, s)
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * 0.45)
+    g.addColorStop(0, 'rgba(255,255,255,1)')
+    g.addColorStop(0.4, 'rgba(255,255,255,0.75)')
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4
+      const rad = i % 2 === 0 ? s * 0.44 : s * 0.12
+      const x = cx + Math.cos(ang) * rad
+      const y = cy + Math.sin(ang) * rad
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    ctx.fill()
+  })
+
+  const blush = makeCanvasTex(64, (ctx, s) => {
+    const cx = s / 2; const cy = s / 2
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, s * 0.45)
+    g.addColorStop(0, 'rgba(255,130,165,0.95)')
+    g.addColorStop(0.65, 'rgba(255,145,175,0.45)')
+    g.addColorStop(1, 'rgba(255,145,175,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.ellipse(cx, cy, s * 0.46, s * 0.32, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'
+    ctx.lineWidth = 2.5
+    ctx.lineCap = 'round'
+    for (const dx of [-8, 0, 8]) {
+      ctx.beginPath()
+      ctx.moveTo(cx + dx - 3, cy + 5)
+      ctx.lineTo(cx + dx + 3, cy - 5)
+      ctx.stroke()
+    }
+  })
+
+  const star = makeCanvasTex(64, (ctx, s) => {
+    const cx = s / 2; const cy = s / 2
+    ctx.fillStyle = '#fde047'
+    ctx.strokeStyle = '#f59e0b'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    for (let i = 0; i < 10; i++) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5
+      const rad = i % 2 === 0 ? s * 0.4 : s * 0.18
+      const x = cx + Math.cos(ang) * rad
+      const y = cy + Math.sin(ang) * rad
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+  })
+
+  return { eye, sparkle, blush, star }
+}
+
+let chibiTexCache = null
+const chibiFiles = {
+  eye: 'tex/chibi_eye.png',
+  sparkle: 'tex/chibi_sparkle.png',
+  blush: 'tex/chibi_blush.png',
+  star: 'tex/chibi_star.png',
+}
+
+export function getChibiTextures() {
+  if (chibiTexCache) return chibiTexCache
+  chibiTexCache = createChibiFallbacks()
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) ? import.meta.env.BASE_URL : '/'
+  const loader = new THREE.TextureLoader()
+  for (const [k, rel] of Object.entries(chibiFiles)) {
+    loader.load(
+      base + rel,
+      (loaded) => {
+        loaded.colorSpace = THREE.SRGBColorSpace
+        const target = chibiTexCache[k]
+        if (target && loaded.image) {
+          target.image = loaded.image
+          target.needsUpdate = true
+        }
+      },
+      undefined,
+      () => { /* fallback procedural ya activo */ },
+    )
+  }
+  return chibiTexCache
+}
+
+const emoTexCache = new Map()
+export function getEmotionTexture(kind) {
+  if (kind === 'star') return getChibiTextures().star
+  if (emoTexCache.has(kind)) return emoTexCache.get(kind)
+
+  const tex = makeCanvasTex(64, (ctx, s) => {
+    const cx = s / 2; const cy = s / 2
+    if (kind === 'heart') {
+      ctx.fillStyle = '#ff5d8f'
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(cx, cy + 16)
+      ctx.bezierCurveTo(cx - 24, cy + 2, cx - 22, cy - 18, cx, cy - 6)
+      ctx.bezierCurveTo(cx + 22, cy - 18, cx + 24, cy + 2, cx, cy + 16)
+      ctx.fill()
+      ctx.stroke()
+    } else if (kind === 'drop') {
+      ctx.fillStyle = '#60a5fa'
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(cx, cy - 20)
+      ctx.bezierCurveTo(cx + 18, cy + 2, cx + 16, cy + 20, cx, cy + 20)
+      ctx.bezierCurveTo(cx - 16, cy + 20, cx - 18, cy + 2, cx, cy - 20)
+      ctx.fill()
+      ctx.stroke()
+    } else if (kind === 'exclaim') {
+      ctx.fillStyle = '#facc15'
+      ctx.strokeStyle = '#78350f'
+      ctx.lineWidth = 4
+      ctx.font = 'bold 44px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.strokeText('!', cx, cy + 2)
+      ctx.fillText('!', cx, cy + 2)
+    } else if (kind === 'question') {
+      ctx.fillStyle = '#c084fc'
+      ctx.strokeStyle = '#3b0764'
+      ctx.lineWidth = 4
+      ctx.font = 'bold 40px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.strokeText('¿?', cx, cy + 2)
+      ctx.fillText('¿?', cx, cy + 2)
+    }
+  })
+  emoTexCache.set(kind, tex)
+  return tex
+}
+
 // ═══════════════════════════ BOCAS PROCEDURALES ═══════════════════════════
 
 export function SkinMouth({ mouthType }) {
@@ -363,14 +535,14 @@ export function SkinMouth({ mouthType }) {
   const mWhite = getMat('#f8fafc', 0.35, 0)
 
   if (mouthType === 'w') {
-    return grp(null,
+    return grp({ scale: 0.78 },
       msh({ geometry: GEO.torusArc, material: mDark, position: [-0.095, 0.02, 0], rotation: [0, 0, Math.PI], scale: [0.1, 0.1, 0.16] }),
       msh({ geometry: GEO.torusArc, material: mDark, position: [0.095, 0.02, 0], rotation: [0, 0, Math.PI], scale: [0.1, 0.1, 0.16] }),
     )
   }
 
   if (mouthType === 'zigzag') {
-    return grp(null,
+    return grp({ scale: 0.76 },
       ...[-0.14, -0.045, 0.045, 0.14].map((x, i) =>
         msh({
           key: i,
@@ -385,14 +557,14 @@ export function SkinMouth({ mouthType }) {
   }
 
   if (mouthType === 'dientes') {
-    return grp(null,
+    return grp({ scale: 0.78 },
       msh({ geometry: GEO.torusArc, material: mDark, rotation: [0, 0, Math.PI], scale: [0.21, 0.18, 0.2] }),
       msh({ geometry: GEO.cone, material: mWhite, position: [-0.09, -0.02, 0.01], rotation: [0, 0, Math.PI], scale: [0.042, 0.08, 0.03] }),
       msh({ geometry: GEO.cone, material: mWhite, position: [0.09, -0.02, 0.01], rotation: [0, 0, Math.PI], scale: [0.042, 0.08, 0.03] }),
     )
   }
 
-  return msh({ geometry: GEO.torusArc, material: mDark, rotation: [0, 0, Math.PI], scale: [0.2, 0.2, 0.2] })
+  return msh({ geometry: GEO.torusArc, material: mDark, rotation: [0, 0, Math.PI], scale: [0.15, 0.15, 0.16] })
 }
 
 // ═══════════════════════════ ACCESORIOS POR FAMILIA ═══════════════════════════
@@ -550,8 +722,8 @@ export function SkinAccessory({ skin }) {
     // ═══════════════ DETALLES FACIALES PROCEDURALES ═══════════════
 
     skin.hasPatch && grp(null,
-      msh({ geometry: GEO.cyl, material: mDark, position: [patchSide * 0.36, 0.2, 0.97], rotation: [Math.PI / 2, 0, 0], scale: [0.22, 0.04, 0.22] }),
-      msh({ geometry: GEO.box, material: mDark, position: [patchSide * 0.15, 0.44, 0.86], rotation: [0.2, 0, patchSide * 0.55], scale: [0.85, 0.045, 0.04] }),
+      msh({ geometry: GEO.cyl, material: mDark, position: [patchSide * 0.36, 0.14, 0.97], rotation: [Math.PI / 2, 0, 0], scale: [0.24, 0.04, 0.24] }),
+      msh({ geometry: GEO.box, material: mDark, position: [patchSide * 0.15, 0.4, 0.86], rotation: [0.2, 0, patchSide * 0.55], scale: [0.85, 0.045, 0.04] }),
     ),
 
     skin.hasScar && grp({ position: [skin.scarSide * 0.56, -0.05, 0.8], rotation: [0, skin.scarSide * 0.55, -skin.scarSide * 0.4] },

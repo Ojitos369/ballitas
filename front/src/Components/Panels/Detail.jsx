@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { colorDe } from './Hud.jsx'
 import { buildSkin, PATTERN_LABEL } from '../World3D/skins.js'
+import { obtenerGlobo } from '../../Core/dialogos.js'
 
 const TRAITS = [['valentia', 'Valentía'], ['curiosidad', 'Curiosidad'], ['apetito', 'Apetito'], ['sociabilidad', 'Sociabilidad'], ['animo', 'Ánimo'], ['velocidad', 'Rapidez']]
 
@@ -73,7 +74,7 @@ function SkinThumb({ skin, bodyCss }) {
 export default function Detail({ b, sim, follow, onFollow, onClose }) {
   const ida = b.phase === 'gone' || b.phase === 'dying'
   const lugar = ida ? '' : donde(b, sim)
-  const idea = b.thought ?? b.log?.[0]
+  const idea = obtenerGlobo(b, sim) ?? b.thought ?? b.log?.[0]
   const fav = gustos(b, sim)
   const skin = useMemo(() => buildSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyCss = colorDe(b)
