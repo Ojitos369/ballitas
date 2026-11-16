@@ -1,0 +1,8 @@
+﻿*__pycache__*
+*node_modules*
+*dist*
+*.env*
+logs/*
+*.pnpm-store*
+!/back/media/dist/.gitkeep
+
