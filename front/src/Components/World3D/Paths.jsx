@@ -439,7 +439,7 @@ function createTubeMat(id, focusU) {
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-        float focusGlow = mix(0.18, 1.0, uFocus);
+        float focusGlow = mix(0.08, 1.0, uFocus);
         vec3 tubeViewDir = normalize(vViewPosition);
         float tubeFresnel = pow(1.0 - abs(dot(normalize(normal), tubeViewDir)), 2.4);
         vec2 flowUv = vec2(fract(vTubeUv.x * 0.45 - uTime * 0.75), fract(vTubeUv.y * 2.0));
@@ -452,11 +452,13 @@ function createTubeMat(id, focusU) {
       )
       .replace(
         '#include <dithering_fragment>',
-        `gl_FragColor.a = clamp(gl_FragColor.a + tubeFresnel * 0.32 + flowMask * 0.5 + baseGrime * 0.12, 0.0, 0.92) * mix(0.18, 1.0, uFocus);
+        `float tubeLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+        gl_FragColor.rgb = mix(vec3(tubeLum), gl_FragColor.rgb, mix(0.25, 1.0, uFocus)) * mix(0.28, 1.0, uFocus);
+        gl_FragColor.a = clamp(gl_FragColor.a + tubeFresnel * 0.32 + flowMask * 0.5 + baseGrime * 0.12, 0.0, 0.92) * mix(0.15, 1.0, uFocus);
         #include <dithering_fragment>`
       )
   }
-  m.customProgramCacheKey = () => 'tube-flow-focus-v2'
+  m.customProgramCacheKey = () => 'tube-flow-focus-v3'
   return m
 }
 
@@ -472,17 +474,42 @@ function createRailMat(focusU) {
       .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uFocus;\nvarying vec2 vRailUv;')
       .replace(
         '#include <opaque_fragment>',
-        `float railPulse = pow(sin(vRailUv.x * 1.6 - uTime * 3.6) * 0.5 + 0.5, 4.0);
-        outgoingLight *= (1.0 + railPulse * 0.72) * mix(0.25, 1.0, uFocus);
-        diffuseColor.a *= mix(0.18, 1.0, uFocus);
+        `float railPulse = pow(sin(vRailUv.x * 1.6 - uTime * 3.6) * 0.5 + 0.5, 4.0) * uFocus;
+        vec3 railLit = outgoingLight * (1.0 + railPulse * 0.72);
+        float railLum = dot(railLit, vec3(0.299, 0.587, 0.114));
+        outgoingLight = mix(vec3(railLum), railLit, mix(0.25, 1.0, uFocus)) * mix(0.18, 1.0, uFocus);
+        diffuseColor.a *= mix(0.14, 1.0, uFocus);
         #include <opaque_fragment>`
       )
   }
-  m.customProgramCacheKey = () => 'rail-pulse-focus-v2'
+  m.customProgramCacheKey = () => 'rail-pulse-focus-v3'
   return m
 }
 
-function createSignMat() {
+function withFocusFade(mat, focusU, minAlpha = 0.16, minBright = 0.25, minSat = 0.25) {
+  mat.transparent = true
+  const prevCompile = mat.onBeforeCompile
+  const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
+  const focusParams = { value: new THREE.Vector3(minAlpha, minBright, minSat) }
+  mat.onBeforeCompile = (shader, renderer) => {
+    if (prevCompile) prevCompile(shader, renderer)
+    shader.uniforms.uFocus = focusU
+    shader.uniforms.uFocusParams = focusParams
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uFocus;\nuniform vec3 uFocusParams;')
+      .replace(
+        '#include <opaque_fragment>',
+        `#include <opaque_fragment>
+        float _fLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+        gl_FragColor.rgb = mix(vec3(_fLum), gl_FragColor.rgb, mix(uFocusParams.z, 1.0, uFocus)) * mix(uFocusParams.y, 1.0, uFocus);
+        gl_FragColor.a *= mix(uFocusParams.x, 1.0, uFocus);`
+      )
+  }
+  mat.customProgramCacheKey = () => `${prevKey ? `${prevKey}|` : ''}focus-fade-v1`
+  return mat
+}
+
+function createSignMat(focusU) {
   const m = new THREE.MeshBasicMaterial({ map: getSignAtlasTex(), side: THREE.DoubleSide, transparent: true, alphaTest: 0.1 })
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -493,10 +520,10 @@ function createSignMat() {
       .replace('#include <map_fragment>', 'vec4 sampledDiffuseColor = texture2D( map, vSignUv );\ndiffuseColor *= sampledDiffuseColor;')
   }
   m.customProgramCacheKey = () => 'sign-atlas-v2'
-  return m
+  return withFocusFade(m, focusU, 0.16, 0.28, 0.25)
 }
 
-function createPartsMat(id) {
+function createPartsMat(id, focusU) {
   const { c, s, vy = 0, vx = 0.15, amp = 0.5, freq = 1.4, a = 0.6, glow = 1.25 } = VISUALS[id].parts
   const m = new THREE.PointsMaterial({
     color: hot(c, glow),
@@ -532,7 +559,7 @@ function createPartsMat(id) {
       )
   }
   m.customProgramCacheKey = () => 'parts-motion-v1'
-  return m
+  return withFocusFade(m, focusU, 0.15, 0.2, 0.25)
 }
 
 // Shader único y barato para todas las partículas de eventos (géiser, erupción, cascada, turbina, hielo, pantano, portal).
@@ -614,9 +641,12 @@ const FX_FRAG = /* glsl */ `
 
   void main() {
     vec4 tex = texture2D(uTex, gl_PointCoord);
-    float a = tex.a * vAlpha * mix(0.15, 1.0, uFocus);
+    float a = tex.a * vAlpha * mix(0.14, 1.0, uFocus);
     if (a < 0.02) discard;
-    gl_FragColor = vec4(vColor * tex.rgb * mix(0.35, 1.0, uFocus), a);
+    vec3 col = vColor * tex.rgb;
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, mix(0.25, 1.0, uFocus)) * mix(0.22, 1.0, uFocus);
+    gl_FragColor = vec4(col, a);
   }
 `
 
@@ -641,7 +671,7 @@ function createWayMaterials(id, focusU) {
   return {
     tube: createTubeMat(id, focusU),
     rail: createRailMat(focusU),
-    glass: new THREE.MeshPhysicalMaterial({
+    glass: withFocusFade(new THREE.MeshPhysicalMaterial({
       color: V.glass,
       normalMap: texNormal(id),
       normalScale: new THREE.Vector2(0.25, 0.25),
@@ -652,12 +682,12 @@ function createWayMaterials(id, focusU) {
       envMapIntensity: 1.5,
       depthWrite: false,
       side: THREE.DoubleSide,
-    }),
-    deco: new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.12, flatShading: true }),
-    decoA: new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }),
-    glow: new THREE.MeshBasicMaterial({ toneMapped: false }),
-    sign: createSignMat(),
-    dots: new THREE.PointsMaterial({
+    }), focusU, 0.18, 0.25, 0.25),
+    deco: withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.12, flatShading: true }), focusU, 0.16, 0.28, 0.25),
+    decoA: withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }), focusU, 0.16, 0.28, 0.25),
+    glow: withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.18, 0.25),
+    sign: createSignMat(focusU),
+    dots: withFocusFade(new THREE.PointsMaterial({
       color: hot(V.rail, 1.25),
       map: getSparkleTex(),
       size: 0.13,
@@ -667,9 +697,8 @@ function createWayMaterials(id, focusU) {
       alphaTest: 0.02,
       depthWrite: false,
       toneMapped: false,
-    }),
-    parts: createPartsMat(id),
-    basePartsA: V.parts.a ?? 0.6,
+    }), focusU, 0.16, 0.2, 0.25),
+    parts: createPartsMat(id, focusU),
     fx: {
       spray: createEventFxMat('spray', focusU),
       smoke: createEventFxMat('smoke', focusU),
@@ -1373,24 +1402,14 @@ function Way({ way, focused }) {
 
   useFrame((_, dt) => {
     const target = focused ? 1 : 0
-    const f = THREE.MathUtils.damp(focusU.value, target, 6.5, Math.min(dt, 0.1))
+    const f = THREE.MathUtils.damp(focusU.value, target, 11, Math.min(dt, 0.1))
     focusU.value = f
 
-    mats.glass.opacity = THREE.MathUtils.lerp(0.05, 0.24, f)
-    mats.dots.opacity = THREE.MathUtils.lerp(0.05, 0.28, f)
-    mats.parts.opacity = THREE.MathUtils.lerp(0.1, mats.basePartsA, f)
-    mats.decoA.opacity = THREE.MathUtils.lerp(0.14, 0.85, f)
-    mats.sign.opacity = THREE.MathUtils.lerp(0.18, 1.0, f)
-
-    const isDim = f < 0.98
-    mats.deco.transparent = isDim
-    mats.deco.depthWrite = !isDim
-    mats.deco.opacity = THREE.MathUtils.lerp(0.2, 1.0, f)
-    mats.deco.color.setScalar(THREE.MathUtils.lerp(0.45, 1.0, f))
-
-    mats.glow.transparent = isDim
-    mats.glow.opacity = THREE.MathUtils.lerp(0.18, 1.0, f)
-    mats.glow.color.setScalar(THREE.MathUtils.lerp(0.28, 1.0, f))
+    const writeDepth = f >= 0.98
+    mats.deco.depthWrite = writeDepth
+    mats.glow.depthWrite = writeDepth
+    mats.rail.depthWrite = writeDepth
+    mats.sign.depthWrite = writeDepth
   })
 
   return (
@@ -1439,7 +1458,15 @@ export default function Paths({ world, focusWay = null }) {
         const active = focusWay == null || c.ways.some((w) => w.idx === focusWay)
         return (
           <Html key={c.idx} position={c.mid.clone().add(new THREE.Vector3(0, 2.4, 0))} center distanceFactor={22} zIndexRange={[5, 0]}>
-            <div className="tag" style={{ borderColor: VISUALS[c.theme.id].rail, opacity: active ? 1 : 0.22, transition: 'opacity 0.35s ease' }}>
+            <div
+              className="tag"
+              style={{
+                borderColor: VISUALS[c.theme.id].rail,
+                opacity: active ? 1 : 0.16,
+                filter: active ? 'none' : 'saturate(0.3) brightness(0.65)',
+                transition: 'opacity 0.25s ease, filter 0.25s ease',
+              }}
+            >
               {c.theme.emoji} {c.theme.name.replace('Camino ', '')}
             </div>
           </Html>
