@@ -248,13 +248,18 @@ function CameraRig({ mundo, selected, follow, pov, cine }) {
       if (entrando) {
         off.copy(camera.position).sub(c.target)
         const d = off.length()
-        const nd = THREE.MathUtils.damp(d, SEGUIR_DIST, 4, h)
-        camera.position.copy(c.target).addScaledVector(off, nd / d)
-        if (nd - SEGUIR_DIST < 0.2) modo.current = 'siguiendo'
+        if (d > 1e-4) {
+          const nd = THREE.MathUtils.damp(d, SEGUIR_DIST, 4, h)
+          camera.position.copy(c.target).addScaledVector(off, nd / d)
+          if (nd - SEGUIR_DIST < 0.2) modo.current = 'siguiendo'
+        } else {
+          camera.position.copy(c.target).addScaledVector(VISTA_DIR, SEGUIR_DIST)
+          modo.current = 'siguiendo'
+        }
       } else if (cine && !userActive.current && selected.dir && performance.now() - lastTouch.current > 1200) {
         // Deriva suave detrás de la bollita con leve balanceo lateral sin pelear con OrbitControls
         off.copy(camera.position).sub(c.target)
-        const dist = off.length()
+        const dist = Math.max(off.length(), SEGUIR_DIST)
         sideVec.crossVectors(selected.dir, Y_AXIS)
         if (sideVec.lengthSq() < 1e-4) sideVec.set(1, 0, 0)
         else sideVec.normalize()
@@ -266,7 +271,9 @@ function CameraRig({ mundo, selected, follow, pov, cine }) {
           .addScaledVector(sideVec, sway)
           .normalize()
           .multiplyScalar(dist)
-        off.lerp(desiredOff, 1 - Math.exp(-1.2 * h)).setLength(dist)
+        off.lerp(desiredOff, 1 - Math.exp(-1.2 * h))
+        if (off.lengthSq() > 1e-6) off.setLength(dist)
+        else off.copy(desiredOff)
         camera.position.copy(c.target).add(off)
       }
     } else if (modo.current !== 'libre') {
@@ -281,10 +288,12 @@ function CameraRig({ mundo, selected, follow, pov, cine }) {
       off.copy(camera.position).sub(c.target)
       off.applyAxisAngle(Y_AXIS, 0.09 * h)
       const dist = off.length()
-      const driftY = Math.sin(cineClock.current * 0.24) * 0.045 * h * dist
-      off.y = THREE.MathUtils.clamp(off.y + driftY, -dist * 0.55, dist * 0.72)
-      off.setLength(dist)
-      camera.position.copy(c.target).add(off)
+      if (dist > 1e-4) {
+        const driftY = Math.sin(cineClock.current * 0.24) * 0.045 * h * dist
+        off.y = THREE.MathUtils.clamp(off.y + driftY, -dist * 0.55, dist * 0.72)
+        off.setLength(dist)
+        camera.position.copy(c.target).add(off)
+      }
     }
 
     let projDirty = false
