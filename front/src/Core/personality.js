@@ -94,3 +94,16 @@ export function skinFamily(genomeOrArch) {
   return SKIN_FAMILIES[k] ?? SKIN_FAMILIES['animo:1']
 }
 
+export const PLAN_REASONS = {
+  'busco energía': '⚡',
+  'quiero puntos': '⭐',
+  'ruta inexplorada': '🧭',
+  'seguir al grupo': '🤝',
+  'evitar multitudes': '🫧',
+  'busco adrenalina': '🔥',
+  'camino seguro': '🛡️',
+  'me apetece velocidad': '💨',
+  'explorar circuito': '🗺️',
+}
+
+

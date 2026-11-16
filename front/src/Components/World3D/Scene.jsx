@@ -317,6 +317,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, cine = f
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
+  const focusWay = selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null
 
   return (
     <Canvas
@@ -365,7 +366,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, cine = f
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} />
+      <Paths world={sim.world} focusWay={focusWay} />
       {bollitas.map((b) => (
         <Bollita key={b.id} b={b} sim={sim} selected={selected === b} onSelect={onSelect} />
       ))}

@@ -138,3 +138,48 @@ test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN
   assert.ok(sim.stats.mejorEdad > 120, 'una bollita adaptada vive minutos')
   assert.ok(kinds.size >= OBSTACLES.length, 'recorren todo tipo de obstáculo')
 })
+
+test('perfiles, eventos por ruta y segment.speedK/event', () => {
+  const speeds = new Set()
+  const validEvents = new Set(['geiser', 'erupcion', 'cascada', 'turbina', 'hielo_resbaloso', 'pantano', 'portal'])
+  for (const w of world.ways) {
+    const eventMixes = new Set()
+    for (const r of w.routes) {
+      assert.ok(r.profile && ['rapida', 'media', 'lenta'].includes(r.profile.speed))
+      assert.ok(r.profile.thrill >= 0 && r.profile.thrill <= 1)
+      assert.ok(typeof r.profile.label === 'string' && r.profile.label.length > 0)
+      speeds.add(r.profile.speed)
+      const mix = r.segments.map((s) => s.event).filter(Boolean).sort().join(',')
+      assert.ok(mix.length > 0, `ruta ${w.id}/${r.name} sin eventos`)
+      assert.ok(!eventMixes.has(mix), `mezcla de eventos repetida en ${w.id}: ${mix}`)
+      eventMixes.add(mix)
+      for (const s of r.segments) {
+        assert.ok(typeof s.speedK === 'number' && s.speedK > 0)
+        assert.ok(s.event === null || validEvents.has(s.event))
+      }
+    }
+  }
+  assert.ok(speeds.has('rapida') && speeds.has('lenta'), 'hay rutas rápidas y lentas')
+})
+
+test('planeación anticipada: b.plan, memoria de rutas y sensibilidad a energía/curiosidad', () => {
+  const sim = new Sim({ rng: mulberry32(42) })
+  for (let i = 0; i < 400; i++) sim.tick(0.1)
+  const withPlan = sim.bollitas.filter((b) => b.plan && b.plan.destino && b.plan.ruta && b.plan.razon)
+  assert.ok(withPlan.length >= 5, 'las bollitas generan b.plan con destino, ruta y razon')
+  const anyVisited = sim.bollitas.some((b) => Object.keys(b.visitedRoutes).length > 0)
+  assert.ok(anyVisited, 'las bollitas registran memoria de rutas visitadas')
+
+  // Una bollita con hambre prefiere destinos de energía en la utilidad
+  const b = sim.bollitas[0]
+  b.e = 12
+  b.genome.traits.apetito = 0.95
+  const way = sim.world.waysFrom[b.node][0]
+  const dests = sim.world.nodes[way.to].destinos
+  const dEnergia = dests.find((d) => d.kind === 'energia')
+  const dPuntos = dests.find((d) => d.kind === 'puntos')
+  const peers = sim.peerCounts(b)
+  const uE = sim.planUtility(b, way, way.routes[0], dEnergia, peers, 1)
+  const uP = sim.planUtility(b, way, way.routes[0], dPuntos, peers, 1)
+  assert.ok(uE.total > uP.total, 'con poca energía prefiere destino de energía')
+})
