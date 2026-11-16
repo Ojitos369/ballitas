@@ -6,3 +6,4 @@ logs/*
 *.pnpm-store*
 !/back/media/dist/.gitkeep
 
+.build-tmp/

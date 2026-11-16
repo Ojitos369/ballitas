@@ -3,7 +3,7 @@ const SPEEDS = [[0, '⏸', 'Pausa'], [1, '1×', 'Velocidad normal'], [3, '3×', 
 // Mismo tono que el cuerpo 3D de la bollita.
 export const colorDe = (b) => `hsl(${Math.round(b.genome.hue * 360)} 75% 60%)`
 
-export default function Hud({ sim, speed, setSpeed, selected, onSelect }) {
+export default function Hud({ sim, speed, setSpeed, selected, onSelect, cine, onToggleCine }) {
   const vivas = sim.bollitas.filter((b) => b.phase !== 'dying' && b.phase !== 'gone')
   const gen = Math.max(0, ...vivas.map((b) => b.gen))
   return (
@@ -16,6 +16,15 @@ export default function Hud({ sim, speed, setSpeed, selected, onSelect }) {
             <button key={v} aria-label={a} aria-pressed={speed === v} onClick={() => setSpeed(v)}>{l}</button>
           ))}
         </div>
+        <button
+          className="cine-btn"
+          aria-pressed={cine}
+          onClick={onToggleCine}
+          title="Modo cine (tecla C)"
+          aria-label="Modo cine (tecla C)"
+        >
+          🎬 Cine <kbd>C</kbd>
+        </button>
       </header>
       <nav className="puntos" aria-label="Bollitas">
         {vivas.map((b) => (
