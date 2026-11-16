@@ -18,6 +18,18 @@ test('nodos: 5 esferas, 4 puertos, 3-8 destinos sobre la red de carreteras', () 
       for (const q of n.ports) assert.equal(cityPath(n, n.destinos[0].vert, q.out).at(-1), q.out)
     }
     assert.equal(new Set(n.destinos.map((d) => d.vert)).size, n.destinos.length)
+    assert.ok(n.terminals.length >= 8)
+    const termVerts = new Set(n.terminals.map((t) => t.vert))
+    assert.equal(termVerts.size, n.terminals.length)
+    for (const d of n.destinos) assert.ok(!termVerts.has(d.vert), 'terminal no puede ser destino')
+    for (let i = 0; i < n.terminals.length; i++) {
+      const t1 = n.terminals[i]
+      assert.ok((t1.kind === 'out' && t1.way.from === n.idx && t1.way.to === t1.to) || (t1.kind === 'in' && t1.way.to === n.idx && t1.way.from === t1.to))
+      for (let j = i + 1; j < n.terminals.length; j++) {
+        const ang = t1.dir.angleTo(n.terminals[j].dir)
+        assert.ok(ang >= 0.44, `terminales muy juntos en ${n.name}: ${ang.toFixed(3)} rad`)
+      }
+    }
   }
   world.destinos.forEach((s) => assert.ok(s.kind === 'puntos' ? s.dp > 0 && s.de < 0 : s.de > 0 && s.dp < 0))
 })
@@ -60,6 +72,52 @@ test('tramos: continuos, del puerto de salida al de entrada, sin atravesar nodos
     }
     for (const r of w.routes) assert.ok(r.segments.every((s, i) => i === 0 || r.segments[i - 1].next.includes(s.i)))
   }
+})
+
+test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y sin atravesar nodos ajenos', () => {
+  const STEPS = 28
+  const waySamples = world.ways.map((w) => {
+    const pts = []
+    for (const s of w.segments) {
+      for (let k = 0; k <= STEPS; k++) {
+        const u = k / STEPS
+        if (s.kind === 'salida' && u * s.length < 12) continue
+        if (s.kind === 'llegada' && (1 - u) * s.length < 12) continue
+        pts.push({ p: s.curve.getPointAt(u), r: s.radius, s })
+      }
+    }
+    return pts
+  })
+
+  let minClearance = Infinity
+  let minPair = ''
+  for (let i = 0; i < world.ways.length; i++) {
+    const w1 = world.ways[i]
+    for (const n of world.nodes) {
+      if (n.idx === w1.from || n.idx === w1.to) continue
+      for (const s of w1.segments) {
+        for (const p of s.curve.getSpacedPoints(30)) {
+          const d = p.distanceTo(n.pos)
+          assert.ok(d > NODE_R + 3, `${w1.id} ${s.kind} cerca de nodo ajeno ${n.name}: ${d.toFixed(2)}`)
+        }
+      }
+    }
+    for (let j = i + 1; j < world.ways.length; j++) {
+      const w2 = world.ways[j]
+      for (const h1 of w1.junctions) {
+        for (const h2 of w2.junctions) {
+          assert.ok(h1.pos.distanceTo(h2.pos) >= 10, `hubs cercanos ${w1.id} y ${w2.id}`)
+        }
+      }
+      for (const a of waySamples[i]) {
+        for (const b of waySamples[j]) {
+          const c = a.p.distanceTo(b.p) - (a.r + b.r)
+          if (c < minClearance) { minClearance = c; minPair = `${w1.id}/${a.s.kind} vs ${w2.id}/${b.s.kind}` }
+        }
+      }
+    }
+  }
+  assert.ok(minClearance >= 2.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 2.0 (${minPair})`)
 })
 
 test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN', () => {

@@ -14,6 +14,8 @@
 //   ports[4]:   { to (idx del otro nodo), dir (normal hacia ese nodo), in, out (índices de verts),
 //                 wayIn, wayOut (way que llega a `in` / que sale de `out`) }
 //   portTo[j]:  el puerto que mira al nodo j (hueco en el índice propio)
+//   terminals[]: { vert (índice en node.verts), kind: 'out'|'in', way (way que sale/llega),
+//                  to (idx del otro nodo), dir, pos }  (8+ por nodo, repartidos por toda la esfera)
 //   destinos[]: los destinos (edificios) de este nodo
 //   hop[a][b]:  siguiente vértice del camino más corto a -> b (ver cityPath)
 // }
@@ -88,16 +90,16 @@ export const THEMES = [
 // coil: escala de hélices, rizos y embudos; turns: vueltas extra; radius: radio del tubo;
 // fav: obstáculos que el tema reparte primero.
 export const PARAMS = {
-  sombrio: { n: 3, bow: 18, arch: -14, spread: 10, phase: 0.4, coil: 0.8, turns: 1, radius: 1.15, fav: ['caida', 'embudo', 'sacacorchos', 'canon'] },
-  bosque: { n: 2, bow: 16, arch: 6, spread: 11, phase: 1.2, coil: 1.35, turns: 1, radius: 1.5, fav: ['espiral', 'cascada', 'zigzag', 'rampa'] },
-  mar: { n: 3, bow: 20, arch: 0, spread: 11, phase: 2.2, coil: 1.1, turns: 0, radius: 1.35, fav: ['cascada', 'embudo', 'rizo', 'trampolin'] },
-  desierto: { n: 2, bow: 22, arch: 16, spread: 9, phase: 0, coil: 1, turns: 0, radius: 1.4, fav: ['caida', 'espiral', 'canon', 'rampa'] },
-  hielo: { n: 3, bow: 17, arch: -7, spread: 11, phase: 3, coil: 0.9, turns: 2, radius: 1.2, fav: ['cascada', 'espiral', 'zigzag', 'sacacorchos'] },
-  volcan: { n: 3, bow: 16, arch: 24, spread: 9, phase: 1.6, coil: 1.2, turns: 1, radius: 1.3, fav: ['caida', 'espiral', 'canon', 'rizo'] },
-  cristal: { n: 2, bow: 19, arch: 4, spread: 10, phase: 0.8, coil: 0.75, turns: 2, radius: 1.1, fav: ['espiral', 'embudo', 'rizo', 'sacacorchos'] },
-  nubes: { n: 3, bow: 21, arch: 18, spread: 11, phase: 2.6, coil: 1.3, turns: 0, radius: 1.6, fav: ['embudo', 'caida', 'trampolin', 'canon'] },
-  neon: { n: 3, bow: 16, arch: 3, spread: 10, phase: 3.6, coil: 1, turns: 1, radius: 1.25, fav: ['caida', 'cascada', 'rizo', 'zigzag'] },
-  jardin: { n: 2, bow: 16, arch: 9, spread: 11, phase: 1.9, coil: 1.15, turns: 0, radius: 1.45, fav: ['cascada', 'espiral', 'rampa', 'trampolin'] },
+  sombrio: { n: 3, bow: 36, arch: -16, spread: 21, phase: 0.4, coil: 0.8, turns: 1, radius: 1.15, fav: ['caida', 'embudo', 'sacacorchos', 'canon'] },
+  bosque: { n: 2, bow: 34, arch: 8, spread: 23, phase: 1.2, coil: 1.35, turns: 1, radius: 1.5, fav: ['espiral', 'cascada', 'zigzag', 'rampa'] },
+  mar: { n: 3, bow: 38, arch: 0, spread: 23, phase: 2.2, coil: 1.1, turns: 0, radius: 1.35, fav: ['cascada', 'embudo', 'rizo', 'trampolin'] },
+  desierto: { n: 2, bow: 40, arch: 18, spread: 20, phase: 0, coil: 1, turns: 0, radius: 1.4, fav: ['caida', 'espiral', 'canon', 'rampa'] },
+  hielo: { n: 3, bow: 35, arch: -9, spread: 23, phase: 3, coil: 0.9, turns: 2, radius: 1.2, fav: ['cascada', 'espiral', 'zigzag', 'sacacorchos'] },
+  volcan: { n: 3, bow: 34, arch: 26, spread: 20, phase: 1.6, coil: 1.2, turns: 1, radius: 1.3, fav: ['caida', 'espiral', 'canon', 'rizo'] },
+  cristal: { n: 2, bow: 37, arch: 6, spread: 21, phase: 0.8, coil: 0.75, turns: 2, radius: 1.1, fav: ['espiral', 'embudo', 'rizo', 'sacacorchos'] },
+  nubes: { n: 3, bow: 39, arch: 20, spread: 23, phase: 2.6, coil: 1.3, turns: 0, radius: 1.6, fav: ['embudo', 'caida', 'trampolin', 'canon'] },
+  neon: { n: 3, bow: 34, arch: 5, spread: 21, phase: 3.6, coil: 1, turns: 1, radius: 1.25, fav: ['caida', 'cascada', 'rizo', 'zigzag'] },
+  jardin: { n: 2, bow: 34, arch: 11, spread: 23, phase: 1.9, coil: 1.15, turns: 0, radius: 1.45, fav: ['cascada', 'espiral', 'rampa', 'trampolin'] },
 }
 
 // w: cuánta cuerda ocupa. drop: desnivel que necesita (obstáculos de gravedad).
@@ -129,10 +131,10 @@ const DEST_NAMES = {
 // Boceto del usuario: uno al centro y cuatro alrededor (arriba, abajo, izquierda, derecha), no coplanares.
 const NODE_DEFS = [
   { name: 'Eco', color: '#c77dff', pos: [0, 0, 0], n: 8, bias: 0.5 },
-  { name: 'Cima', color: '#6bcb77', pos: [7, 52, -20], n: 3, bias: 0.35 },
-  { name: 'Delta', color: '#4d96ff', pos: [-5, -50, 23], n: 5, bias: 0.5 },
-  { name: 'Alba', color: '#ffb347', pos: [-56, 6, 16], n: 4, bias: 0.5 },
-  { name: 'Brasa', color: '#ff6b6b', pos: [58, -7, -13], n: 6, bias: 0.65 },
+  { name: 'Cima', color: '#6bcb77', pos: [10, 76, -32], n: 3, bias: 0.35 },
+  { name: 'Delta', color: '#4d96ff', pos: [-8, -74, 34], n: 5, bias: 0.5 },
+  { name: 'Alba', color: '#ffb347', pos: [-82, 10, 26], n: 4, bias: 0.5 },
+  { name: 'Brasa', color: '#ff6b6b', pos: [84, -10, -22], n: 6, bias: 0.65 },
 ]
 
 const ri = (rng, a, b) => Math.round(a + rng() * (b - a))
@@ -167,17 +169,20 @@ export function frameAt(curve, u, out = {}) {
   return out
 }
 
+const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un nodo
+
 export function buildWorld(seed = 369) {
   const rng = mulberry32(seed)
   const world = { nodes: [], destinos: [], circuits: [], ways: [], waysFrom: [], routes: [], segments: [] }
   NODE_DEFS.forEach((d, idx) => world.nodes.push({ idx, name: d.name, color: d.color, pos: new THREE.Vector3(...d.pos), radius: NODE_R }))
   world.nodes.forEach((node) => buildCity(world, node, NODE_DEFS[node.idx], rng))
   world.waysFrom = world.nodes.map(() => [])
+  const placed = []
   for (let a = 0; a < world.nodes.length; a++) {
     for (let b = a + 1; b < world.nodes.length; b++) {
       const c = { idx: world.circuits.length, a, b, theme: THEMES[world.circuits.length % THEMES.length], ways: [] }
       world.circuits.push(c)
-      c.ways.push(buildWay(world, c, a, b), buildWay(world, c, b, a))
+      c.ways.push(placeWay(world, c, a, b, placed), placeWay(world, c, b, a, placed))
       c.mid = c.ways[0].junctions[1].pos.clone().lerp(c.ways[1].junctions[1].pos, 0.5)
     }
   }
@@ -187,26 +192,55 @@ export function buildWorld(seed = 369) {
 // ───────────────────────── ciudad sobre la esfera ─────────────────────────
 function buildCity(world, node, def, rng) {
   const dirs = []
-  node.ports = []; node.portTo = []
+  node.ports = []; node.portTo = []; node.terminals = []
+  // Piscina de direcciones Fibonacci sobre toda la esfera para repartir terminales
+  const M = 36; const rot0 = rng() * TAU; const pool = []
+  for (let i = 0; i < M; i++) {
+    const y = 1 - (2 * (i + 0.5)) / M; const r = Math.sqrt(1 - y * y); const a = i * Math.PI * (3 - Math.sqrt(5)) + rot0
+    pool.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r))
+  }
+  const pickTerminal = (biasDir) => {
+    for (const minAng of [0.68, TERM_MIN_ANG]) {
+      const minDot = Math.cos(minAng)
+      const cands = pool.filter((d) => dirs.every((u) => u.dot(d) < minDot))
+      if (!cands.length) continue
+      const weights = cands.map((d) => {
+        const dot = d.dot(biasDir)
+        return Math.pow(Math.max(0.05, (dot + 1) * 0.5), 3) * (dot > -0.25 ? 4 : 1)
+      })
+      const total = weights.reduce((s, w) => s + w, 0)
+      let r = rng() * total
+      for (let i = 0; i < cands.length; i++) {
+        r -= weights[i]
+        if (r <= 0) return dirs.push(cands[i].clone()) - 1
+      }
+      return dirs.push(cands[cands.length - 1].clone()) - 1
+    }
+    return dirs.push(biasDir.clone()) - 1
+  }
+  const pendingTerms = []
   for (const o of world.nodes) {
     if (o === node) continue
     const dir = o.pos.clone().sub(node.pos).normalize()
-    // la salida a un lado y la entrada al otro: así ida y vuelta nunca se cruzan
-    const s = new THREE.Vector3().crossVectors(dir, Y).normalize()
-    const out = dirs.push(dir.clone().addScaledVector(s, PORT_K).normalize()) - 1
-    const inn = dirs.push(dir.clone().addScaledVector(s, -PORT_K).normalize()) - 1
+    const out = pickTerminal(dir)
+    const inn = pickTerminal(dir)
     node.portTo[o.idx] = { to: o.idx, dir, in: inn, out, wayIn: null, wayOut: null }
     node.ports.push(node.portTo[o.idx])
+    pendingTerms.push({ vert: out, kind: 'out', to: o.idx }, { vert: inn, kind: 'in', to: o.idx })
   }
   const nPort = dirs.length
-  // resto de cruces: espiral de Fibonacci (reparto uniforme), sin pisar los puertos
-  const N = 26; const rot = rng() * TAU
+  // resto de cruces: espiral de Fibonacci (reparto uniforme), sin pisar los terminales
+  const N = 28; const rot = rng() * TAU
   for (let i = 0; i < N; i++) {
     const y = 1 - (2 * (i + 0.5)) / N; const r = Math.sqrt(1 - y * y); const a = i * Math.PI * (3 - Math.sqrt(5)) + rot
     const d = new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r)
-    if (dirs.every((q) => q.dot(d) < 0.95)) dirs.push(d)
+    if (dirs.every((q) => q.dot(d) < 0.94)) dirs.push(d)
   }
   node.verts = dirs.map((dir) => ({ dir, pos: node.pos.clone().addScaledVector(dir, NODE_R) }))
+  node.terminals = pendingTerms.map((t) => ({
+    vert: t.vert, kind: t.kind, way: null, to: t.to,
+    dir: node.verts[t.vert].dir, pos: node.verts[t.vert].pos,
+  }))
 
   node.roads = []
   const adj = dirs.map(() => [])
@@ -310,10 +344,11 @@ SHAPES.salida = SHAPES.llegada = () => []
 const TENSION = { zigzag: 0.25, cascada: 0.2 } // esquinas marcadas; el resto, centrípeta (sin rebasar)
 const ownsStart = (k) => KINDS[k].air || k === 'embudo' // su arranque lo dicta la forma, no el vecino
 
-function shape(kind, A, B, P, Ta, Tb) {
+function shape(kind, A, B, P, Ta, Tb, midPt = null) {
   const lead = Math.min(2.5, A.distanceTo(B) * 0.15); const air = KINDS[kind].air
   const pts = [A]
   if (Ta && !ownsStart(kind)) pts.push(at(A, Ta, lead))
+  if (midPt) pts.push(midPt)
   pts.push(...SHAPES[kind](A, B, P))
   if (Tb && !air) pts.push(at(B, Tb, -lead))
   pts.push(B)
@@ -321,20 +356,99 @@ function shape(kind, A, B, P, Ta, Tb) {
   return new THREE.CatmullRomCurve3(pts, false, t ? 'catmullrom' : 'centripetal', t)
 }
 
+// Punto de rodeo para salida/llegada si la normal del terminal apunta lejos del hub.
+function wrapMid(node, dir, target) {
+  const toTarget = target.clone().sub(node.pos).normalize()
+  if (dir.dot(toTarget) >= 0.35) return null
+  return node.pos.clone().addScaledVector(slerpDir(dir, toTarget, 0.55), NODE_R + 5.5)
+}
+
+function sampleWayPoints(way, steps = 14) {
+  const pts = []
+  for (const s of way.segments) {
+    for (let k = 0; k <= steps; k++) {
+      const u = k / steps
+      const trim = (s.kind === 'salida' && u * s.length < 12) || (s.kind === 'llegada' && (1 - u) * s.length < 12)
+      pts.push({ p: s.curve.getPointAt(u), r: s.radius, kind: s.kind, trim })
+    }
+  }
+  return pts
+}
+
+function placeWay(world, circuit, from, to, placed) {
+  const a = world.nodes[from]; const b = world.nodes[to]
+  const others = world.nodes.filter((o) => o !== a && o !== b)
+  const baseTheta = ((circuit.idx * 0.6180339887 + (from < to ? 0 : 0.5)) % 1) * TAU
+  const N_ANG = 24
+  let best = null; let bestScore = -Infinity
+
+  const evalCand = (cand, steps) => {
+    const pts = sampleWayPoints(cand, steps)
+    let minNode = Infinity
+    for (const pt of pts) {
+      for (const o of others) minNode = Math.min(minNode, pt.p.distanceTo(o.pos) - (NODE_R + 3))
+      if (pt.kind !== 'salida' && pt.p.distanceTo(a.pos) <= NODE_R + pt.r) return null
+      if (pt.kind !== 'llegada' && pt.p.distanceTo(b.pos) <= NODE_R + pt.r) return null
+      if (pt.kind === 'salida' && pt.p.distanceTo(a.pos) <= NODE_R - 0.005) return null
+      if (pt.kind === 'llegada' && pt.p.distanceTo(b.pos) <= NODE_R - 0.005) return null
+    }
+    let minTube = Infinity; let minHub = Infinity
+    for (const prev of placed) {
+      for (const h1 of cand.junctions) for (const h2 of prev.hubs) minHub = Math.min(minHub, h1.pos.distanceTo(h2.pos))
+      for (const pt of pts) {
+        if (pt.trim) continue
+        for (const q of prev.pts) {
+          if (q.trim) continue
+          minTube = Math.min(minTube, pt.p.distanceTo(q.p) - (pt.r + q.r))
+        }
+      }
+    }
+    return { minTube, minNode, minHub }
+  }
+
+  for (const bowExtra of [0, 14, 28, 42]) {
+    for (let k = 0; k < N_ANG; k++) {
+      const theta = (baseTheta + (k / N_ANG) * TAU) % TAU
+      const cand = buildWay(world, circuit, from, to, theta, bowExtra, false)
+      const coarse = evalCand(cand, 12)
+      if (!coarse) continue
+      const res = coarse.minTube >= 1.5 && coarse.minNode >= 0 ? evalCand(cand, 28) : coarse
+      if (!res) continue
+      const score = Math.min(res.minTube, res.minNode + 1, res.minHub * 0.2)
+      if (score > bestScore) { bestScore = score; best = { theta, bowExtra } }
+      if (res.minTube >= 2.8 && res.minNode >= 1.0 && res.minHub >= 15) {
+        const w = buildWay(world, circuit, from, to, theta, bowExtra, true)
+        placed.push({ pts: sampleWayPoints(w, 28), hubs: w.junctions })
+        return w
+      }
+    }
+  }
+  const chosen = best || { theta: baseTheta, bowExtra: 0 }
+  const w = buildWay(world, circuit, from, to, chosen.theta, chosen.bowExtra, true)
+  placed.push({ pts: sampleWayPoints(w, 28), hubs: w.junctions })
+  return w
+}
+
 // ───────────────────────── un sentido de un circuito ─────────────────────────
-function buildWay(world, circuit, from, to) {
+function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = true) {
   const { nodes } = world
   const a = nodes[from]; const b = nodes[to]; const theme = circuit.theme; const P = PARAMS[theme.id]
   const rng = mulberry32(7000 + circuit.idx * 31 + (from < to ? 0 : 1))
   const pOut = a.portTo[to]; const pIn = b.portTo[from]
   const S = a.verts[pOut.out].pos; const nS = a.verts[pOut.out].dir
   const E = b.verts[pIn.in].pos; const nE = b.verts[pIn.in].dir
-  const { C, u: n1, v: n2 } = basis(S, E)
+  const { C, u, v } = basis(S, E)
+  const ct = Math.cos(theta); const st = Math.sin(theta)
+  const n1 = u.clone().multiplyScalar(ct).addScaledVector(v, st)
+  const n2 = v.clone().multiplyScalar(ct).addScaledVector(u, -st)
   // si la recta pasa junto a otro nodo (pares opuestos y el del centro), la panza crece para rodearlo
   const near = Math.min(...nodes.filter((o) => o !== a && o !== b).map((o) => new THREE.Line3(S, E).closestPointToPoint(o.pos, true, new THREE.Vector3()).distanceTo(o.pos)))
-  const bow = P.bow + (near < 20 ? 14 : 0)
-  const J = (s) => at(S, C, s, n1, bow * Math.sin(Math.PI * s), n2, P.arch * Math.sin(Math.PI * s))
-  const stops = [0.17, 0.5, 0.83]
+  const bow = P.bow + (near < 38 ? 28 : 0) + bowExtra
+  const J = (s) => {
+    const f = Math.pow(Math.sin(Math.PI * s), 0.72)
+    return at(S, C, s, n1, bow * f, n2, P.arch * f)
+  }
+  const stops = [0.2, 0.5, 0.8]
   const hubs = stops.map(J)
   const hubT = stops.map((s) => J(s + 0.02).sub(J(s - 0.02)).normalize())
 
@@ -345,14 +459,15 @@ function buildWay(world, circuit, from, to) {
   const seg = (kind, curve, route, tramo) => {
     const K = KINDS[kind]
     const s = {
-      idx: world.segments.length, i: way.segments.length, way, route, kind, name: K.name, emoji: K.emoji,
+      idx: commit ? world.segments.length : -1, i: way.segments.length, way, route, kind, name: K.name, emoji: K.emoji,
       curve, length: curve.getLength(), radius: P.radius, air: !!K.air, boost: K.boost, drag: K.drag, risk: K.risk,
       next: [], tramo,
     }
-    way.segments.push(s); world.segments.push(s)
+    way.segments.push(s)
+    if (commit) world.segments.push(s)
     return s
   }
-  const launch = seg('salida', shape('salida', S, hubs[0], P, nS, hubT[0]), -1, [])
+  const launch = seg('salida', shape('salida', S, hubs[0], P, nS, hubT[0], wrapMid(a, nS, hubs[0])), -1, [])
 
   // se reparten sin repetir dentro de una ruta: primero los favoritos del tema
   const deck = (all) => [...P.fav.filter((k) => all.includes(k)), ...shuffle(all.filter((k) => !P.fav.includes(k)), rng)]
@@ -387,17 +502,23 @@ function buildWay(world, circuit, from, to) {
     }
     way.routes.push({ idx: world.routes.length + r, r, name: 'ABC'[r], way, segments: own, kinds: own.map((s) => s.kind), length: 0 })
   }
-  const landing = seg('llegada', shape('llegada', hubs[2], E, P, hubT[2], nE.clone().negate()), -1, [])
+  const landing = seg('llegada', shape('llegada', hubs[2], E, P, hubT[2], nE.clone().negate(), wrapMid(b, nE, hubs[2])), -1, [])
   launch.next = heads[0].map((s) => s.i)
   tails[0].forEach((s) => { s.next = heads[1].map((x) => x.i) })
   tails[1].forEach((s) => { s.next = [landing.i] })
   for (const rt of way.routes) {
     rt.segments = [launch, ...rt.segments, landing]
     rt.length = rt.segments.reduce((sum, s) => sum + s.length, 0)
-    world.routes.push(rt)
+    if (commit) world.routes.push(rt)
   }
   way.length = way.routes.reduce((sum, rt) => sum + rt.length, 0) / way.routes.length
-  pOut.wayOut = way; pIn.wayIn = way
-  world.ways.push(way); world.waysFrom[from].push(way)
+  if (commit) {
+    pOut.wayOut = way; pIn.wayIn = way
+    const tOut = a.terminals.find((t) => t.kind === 'out' && t.to === to)
+    const tIn = b.terminals.find((t) => t.kind === 'in' && t.to === from)
+    if (tOut) tOut.way = way
+    if (tIn) tIn.way = way
+    world.ways.push(way); world.waysFrom[from].push(way)
+  }
   return way
 }
