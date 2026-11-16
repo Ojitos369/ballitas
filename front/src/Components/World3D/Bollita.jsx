@@ -4,6 +4,7 @@ import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { BALL_R } from '../../Core/world.js'
+import { terminalPulse } from './Nodes.jsx'
 
 const m4 = new THREE.Matrix4()
 const tq = new THREE.Quaternion()
@@ -15,11 +16,34 @@ export function bodyColor(g) {
   return new THREE.Color().setHSL(g.hue, 0.75, 0.6)
 }
 
+function findTerminalVert(node, way, kind) {
+  if (!node || !way) return null
+  if (Array.isArray(node.terminals) && node.terminals.length > 0) {
+    const t = node.terminals.find((x) => x.kind === kind && x.way === way)
+      || node.terminals.find((x) => x.kind === kind && x.to === (kind === 'out' ? way.to : way.from))
+    if (t) return t.vert
+  }
+  const p = node.portTo?.[kind === 'out' ? way.to : way.from]
+  return p ? p[kind] : null
+}
+
+function pulseTerminal(nodeIdx, vertIdx, kind, power, t) {
+  if (nodeIdx == null || vertIdx == null) return
+  const key = `${nodeIdx}:${vertIdx}:${kind}`
+  const prev = terminalPulse.get(key)
+  if (prev) {
+    if (t - prev.at > 0.1 || power > prev.power) { prev.power = power; prev.at = t }
+  } else {
+    terminalPulse.set(key, { power, at: t })
+  }
+}
+
 // Una bollita 3D con cara. Lee su estado de `sim` en cada frame; no guarda nada de la sim en React.
 export default function Bollita({ b, sim, selected, onSelect }) {
   const root = useRef(); const eyeL = useRef(); const eyeR = useRef()
   const browL = useRef(); const browR = useRef(); const mouth = useRef()
   const blush = useRef(); const sweat = useRef(); const ring = useRef(); const pupils = useRef()
+  const flash = useRef()
   const cur = useRef({ eye: 1, brow: 0, mouth: 0.5, blush: 0, sweat: 0, bounce: 1 })
   const oriented = useRef(false)
   const g = b.genome.traits
@@ -37,10 +61,51 @@ export default function Bollita({ b, sim, selected, onSelect }) {
     const c = cur.current
     for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce']) c[key] += (F[key] - c[key]) * k
 
-    // escala: nacer (con rebote), vivir (squash & stretch) y morir (encoge girando)
+    // escala: nacer (con rebote), salir de lanzadera (pop + destello), entrar en compuerta, y morir
     let s = 1
+    let flashP = 0
     if (b.phase === 'born') { const x = 1 - b.timer / b.dur; s = x * (1 + Math.sin(x * Math.PI) * 0.35) }
     if (b.phase === 'dying') s = Math.max(0, b.timer / 1.4)
+    if (b.phase === 'toPort' && b.way) {
+      const node = sim.world.nodes[b.node]
+      const vert = findTerminalVert(node, b.way, 'out')
+      if (vert != null && b.pos.distanceToSquared(node.verts[vert].pos) < 18) {
+        pulseTerminal(b.node, vert, 'out', 1, t)
+      }
+    }
+    if (b.phase === 'travel' && b.seg) {
+      if (b.seg.kind === 'salida' && b.segT < 0.35) {
+        const vert = findTerminalVert(sim.world.nodes[b.way.from], b.way, 'out')
+        pulseTerminal(b.way.from, vert, 'out', 1, t)
+        if (b.segT < 0.22) {
+          const p = b.segT / 0.22
+          s = 0.45 + 0.55 * p + Math.sin(p * Math.PI) * 0.28
+        }
+        if (b.segT < 0.18) flashP = 1 - b.segT / 0.18
+      } else if (b.seg.kind === 'llegada' && b.segT > 0.5) {
+        const vert = findTerminalVert(sim.world.nodes[b.way.to], b.way, 'in')
+        pulseTerminal(b.way.to, vert, 'in', 1, t)
+        if (b.segT > 0.72) {
+          const p = (b.segT - 0.72) / 0.28
+          s = Math.max(0.25, 1 - p * 0.75)
+        }
+      }
+    }
+    if (b.phase === 'toDest' && b.snap > 0) {
+      const p = 1 - Math.min(1, b.snap / 0.3)
+      s = 0.4 + 0.6 * p
+      if (b.walk?.i === 0) pulseTerminal(b.node, b.vert, 'in', 0.8, t)
+    }
+
+    if (flash.current) {
+      flash.current.visible = flashP > 0.01
+      if (flashP > 0.01) {
+        const fs = r * (1.2 + (1 - flashP) * 2.2)
+        flash.current.scale.setScalar(fs)
+        flash.current.material.opacity = flashP * 0.75
+      }
+    }
+
     const bob = Math.sin(t * 4 * c.bounce + phase0)
     // se estira a lo largo del avance con la velocidad; parada, respira
     const along = b.speed > 0.5 ? 1 + Math.min(b.speed / 40, 0.3) : 1 + bob * 0.06 * c.bounce
@@ -110,6 +175,10 @@ export default function Bollita({ b, sim, selected, onSelect }) {
       </group>
       <mesh ref={ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} visible={false}>
         <torusGeometry args={[r * 1.3, 0.012, 6, 32]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.55} toneMapped={false} />
+      </mesh>
+      <mesh ref={flash} visible={false}>
+        <sphereGeometry args={[1, 12, 10]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
       </mesh>
       {(selected || talking) && (
         <Html position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 140 }}>
