@@ -1,11 +1,11 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
 import { BALL_R } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
+import WorldHtml from './WorldHtml.jsx'
 import {
   buildSkin,
   getBodyTexture,
@@ -505,13 +505,13 @@ export default function Bollita({ b, sim, selected, onSelect }) {
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
       {(selected || talking) && (
-        <Html position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
+        <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
           <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 155, fontSize: 11 }}>
             {selected && <b>{b.name}</b>}
             {talking && <span>{liveThought.emoji} {liveThought.text}</span>}
             {selected && !talking && <span>{FACES[b.mood]?.emoji} {b.mood}</span>}
           </div>
-        </Html>
+        </WorldHtml>
       )}
     </group>
   )

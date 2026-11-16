@@ -1,6 +1,7 @@
 import { createElement as h } from 'react'
 import * as THREE from 'three'
 import { skinFamily } from '../../Core/personality.js'
+import { applyLoadedImage } from './texUtils.js'
 
 // los hijos se pasan como argumentos estáticos: la `key` de props solo provoca colisiones entre hermanos
 const noKey = (props) => { const { key, ...p } = props || {}; return p }
@@ -372,7 +373,7 @@ function makeCanvasTex(size, drawFn) {
 }
 
 function createChibiFallbacks() {
-  const eye = makeCanvasTex(64, (ctx, s) => {
+  const eye = makeCanvasTex(128, (ctx, s) => {
     const cx = s / 2; const cy = s / 2; const r = s * 0.44
     const g = ctx.createRadialGradient(cx, cy * 0.85, r * 0.15, cx, cy, r)
     g.addColorStop(0, '#ffffff')
@@ -384,7 +385,7 @@ function createChibiFallbacks() {
     ctx.fill()
   })
 
-  const sparkle = makeCanvasTex(64, (ctx, s) => {
+  const sparkle = makeCanvasTex(128, (ctx, s) => {
     const cx = s / 2; const cy = s / 2
     ctx.clearRect(0, 0, s, s)
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * 0.45)
@@ -405,9 +406,10 @@ function createChibiFallbacks() {
     ctx.fill()
   })
 
-  const blush = makeCanvasTex(64, (ctx, s) => {
+  const blush = makeCanvasTex(128, (ctx, s) => {
     const cx = s / 2; const cy = s / 2
-    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, s * 0.45)
+    const k = s / 64
+    const g = ctx.createRadialGradient(cx, cy, 2 * k, cx, cy, s * 0.45)
     g.addColorStop(0, 'rgba(255,130,165,0.95)')
     g.addColorStop(0.65, 'rgba(255,145,175,0.45)')
     g.addColorStop(1, 'rgba(255,145,175,0)')
@@ -416,21 +418,21 @@ function createChibiFallbacks() {
     ctx.ellipse(cx, cy, s * 0.46, s * 0.32, 0, 0, Math.PI * 2)
     ctx.fill()
     ctx.strokeStyle = 'rgba(255,255,255,0.45)'
-    ctx.lineWidth = 2.5
+    ctx.lineWidth = 2.5 * k
     ctx.lineCap = 'round'
-    for (const dx of [-8, 0, 8]) {
+    for (const dx of [-8 * k, 0, 8 * k]) {
       ctx.beginPath()
-      ctx.moveTo(cx + dx - 3, cy + 5)
-      ctx.lineTo(cx + dx + 3, cy - 5)
+      ctx.moveTo(cx + dx - 3 * k, cy + 5 * k)
+      ctx.lineTo(cx + dx + 3 * k, cy - 5 * k)
       ctx.stroke()
     }
   })
 
-  const star = makeCanvasTex(64, (ctx, s) => {
+  const star = makeCanvasTex(128, (ctx, s) => {
     const cx = s / 2; const cy = s / 2
     ctx.fillStyle = '#fde047'
     ctx.strokeStyle = '#f59e0b'
-    ctx.lineWidth = 3
+    ctx.lineWidth = 3 * (s / 64)
     ctx.beginPath()
     for (let i = 0; i < 10; i++) {
       const ang = -Math.PI / 2 + (i * Math.PI) / 5
@@ -465,11 +467,10 @@ export function getChibiTextures() {
     loader.load(
       base + rel,
       (loaded) => {
-        loaded.colorSpace = THREE.SRGBColorSpace
         const target = chibiTexCache[k]
-        if (target && loaded.image) {
-          target.image = loaded.image
-          target.needsUpdate = true
+        if (target && loaded?.image) {
+          target.colorSpace = THREE.SRGBColorSpace
+          applyLoadedImage(target, loaded.image)
         }
       },
       undefined,

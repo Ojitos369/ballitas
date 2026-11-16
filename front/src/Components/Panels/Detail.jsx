@@ -100,7 +100,7 @@ export default function Detail({ b, sim, follow, onFollow, onClose }) {
         <summary>más</summary>
         <h3>Personalidad</h3>
         {TRAITS.map(([k, l]) => <Barra key={k} label={l} v={b.genome.traits[k] ?? 0} color="#8aa7ff" />)}
-        {fav.length > 0 && <><h3>Le gusta</h3>{fav.map((t) => <p key={t} className="linea">{t}</p>)}</>}
+        {fav.length > 0 && <><h3>Le gusta</h3>{fav.map((t, i) => <p key={`${i}-${t}`} className="linea">{t}</p>)}</>}
         <h3>Pensamientos</h3>
         <ul className="diario">{(b.log ?? []).slice(0, 8).map((l, i) => <li key={i}><em>{l.t}s</em> {l.emoji} {l.text}</li>)}</ul>
       </details>

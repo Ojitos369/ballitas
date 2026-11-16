@@ -1,10 +1,11 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mulberry32 } from '../../Core/world.js'
 import { VISUALS } from './themes.js'
+import WorldHtml from './WorldHtml.jsx'
+import { applyLoadedImage } from './texUtils.js'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -46,9 +47,7 @@ function loadTex(filename, { srgb = false, repeat = [1, 1], clamp = false, makeF
     texLoader.load(
       BASE_TEX + filename,
       (loaded) => {
-        if (!loaded?.image) return
-        tex.image = loaded.image
-        tex.needsUpdate = true
+        applyLoadedImage(tex, loaded?.image)
       },
       undefined,
       () => { /* conserva el fallback procedural */ }
@@ -111,9 +110,10 @@ function getSparkleTex() {
 function getFxSprayTex() {
   return loadTex('fx_spray.png', {
     clamp: true,
-    makeFallback: () => makeCanvas(64, 64, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(128, 128, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h)
-      const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 28)
+      const cx = w * 0.5; const cy = h * 0.5
+      const g = ctx.createRadialGradient(cx, cy, w * 0.03, cx, cy, w * 0.44)
       g.addColorStop(0, 'rgba(255,255,255,0.95)')
       g.addColorStop(0.45, 'rgba(220,245,255,0.55)')
       g.addColorStop(1, 'rgba(200,240,255,0)')
@@ -126,10 +126,11 @@ function getFxSprayTex() {
 function getFxSmokeTex() {
   return loadTex('fx_smoke.png', {
     clamp: true,
-    makeFallback: () => makeCanvas(64, 64, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(128, 128, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h)
+      const k = w / 64
       for (const [cx, cy, rad, a] of [[32, 34, 24, 0.45], [24, 28, 16, 0.35], [40, 28, 16, 0.35]]) {
-        const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad)
+        const g = ctx.createRadialGradient(cx * k, cy * k, 2 * k, cx * k, cy * k, rad * k)
         g.addColorStop(0, `rgba(255,255,255,${a})`)
         g.addColorStop(1, 'rgba(255,255,255,0)')
         ctx.fillStyle = g
@@ -142,9 +143,10 @@ function getFxSmokeTex() {
 function getFxEmberTex() {
   return loadTex('fx_ember.png', {
     clamp: true,
-    makeFallback: () => makeCanvas(64, 64, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(128, 128, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h)
-      const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 28)
+      const cx = w * 0.5; const cy = h * 0.5
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.44)
       g.addColorStop(0, 'rgba(255,255,240,1)')
       g.addColorStop(0.28, 'rgba(255,190,90,0.9)')
       g.addColorStop(0.65, 'rgba(255,90,20,0.4)')
@@ -158,14 +160,15 @@ function getFxEmberTex() {
 function getFxFoamTex() {
   return loadTex('fx_foam.png', {
     clamp: true,
-    makeFallback: () => makeCanvas(64, 64, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(128, 128, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h)
+      const k = w / 64
       ctx.strokeStyle = 'rgba(255,255,255,0.85)'
-      ctx.lineWidth = 3
+      ctx.lineWidth = 3 * k
       ctx.beginPath()
-      ctx.arc(32, 32, 20, 0, TAU)
+      ctx.arc(32 * k, 32 * k, 20 * k, 0, TAU)
       ctx.stroke()
-      const g = ctx.createRadialGradient(26, 26, 1, 32, 32, 22)
+      const g = ctx.createRadialGradient(26 * k, 26 * k, k, 32 * k, 32 * k, 22 * k)
       g.addColorStop(0, 'rgba(255,255,255,0.7)')
       g.addColorStop(0.7, 'rgba(255,255,255,0.18)')
       g.addColorStop(1, 'rgba(255,255,255,0)')
@@ -178,9 +181,10 @@ function getFxFoamTex() {
 function getFxRingTex() {
   return loadTex('fx_ring.png', {
     clamp: true,
-    makeFallback: () => makeCanvas(64, 64, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(128, 128, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h)
-      const g = ctx.createRadialGradient(32, 32, 12, 32, 32, 28)
+      const cx = w * 0.5; const cy = h * 0.5
+      const g = ctx.createRadialGradient(cx, cy, w * 0.19, cx, cy, w * 0.44)
       g.addColorStop(0, 'rgba(255,255,255,0)')
       g.addColorStop(0.45, 'rgba(255,255,255,0.95)')
       g.addColorStop(0.75, 'rgba(255,255,255,0.45)')
@@ -209,7 +213,7 @@ function texNormal(id) {
   return loadTex(`${id}_normal.png`, {
     srgb: false,
     repeat: [1, 2],
-    makeFallback: () => makeCanvas(256, 256, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(512, 512, (ctx, w, h) => {
       const rng = mulberry32(seedFromId(id) + 17)
       const hf = new Float32Array(w * h)
       for (let i = 0; i < 42; i++) {
@@ -269,7 +273,7 @@ function texAlbedo(id) {
   return loadTex(`${id}_albedo.png`, {
     srgb: true,
     repeat: [1, 2],
-    makeFallback: () => makeCanvas(256, 256, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(512, 512, (ctx, w, h) => {
       const V = VISUALS[id]
       const rng = mulberry32(seedFromId(id) + 31)
       ctx.fillStyle = '#eef4ff'
@@ -293,7 +297,7 @@ function texEmissive(id) {
   return loadTex(`${id}_emissive.png`, {
     srgb: true,
     repeat: [1, 2],
-    makeFallback: () => makeCanvas(256, 256, (ctx, w, h) => {
+    makeFallback: () => makeCanvas(512, 512, (ctx, w, h) => {
       const V = VISUALS[id]
       const rng = mulberry32(seedFromId(id) + 73)
       ctx.fillStyle = '#000000'
@@ -430,7 +434,7 @@ function createTubeMat(id, focusU) {
     shader.uniforms.uGlassColor = { value: new THREE.Color(V.glass) }
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vTubeUv;\nvarying vec3 vTubeWorldNormal;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTubeUv = uv;\nvTubeWorldNormal = normalize(mat3(modelMatrix) * objectNormal);')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTubeUv = uv;\nvec3 wTubeNorm = mat3(modelMatrix) * objectNormal;\nvTubeWorldNormal = length(wTubeNorm) > 1e-5 ? normalize(wTubeNorm) : vec3(0.0, 1.0, 0.0);')
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -440,8 +444,9 @@ function createTubeMat(id, focusU) {
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float focusGlow = mix(0.18, 1.0, uFocus);
-        vec3 tubeViewDir = normalize(vViewPosition);
-        float tubeFresnel = pow(1.0 - abs(dot(normalize(normal), tubeViewDir)), 2.4);
+        vec3 tubeViewDir = length(vViewPosition) > 1e-5 ? normalize(vViewPosition) : vec3(0.0, 0.0, 1.0);
+        vec3 tubeNorm = length(normal) > 1e-5 ? normalize(normal) : vec3(0.0, 1.0, 0.0);
+        float tubeFresnel = pow(max(1e-4, 1.0 - abs(dot(tubeNorm, tubeViewDir))), 2.4);
         vec2 flowUv = vec2(fract(vTubeUv.x * 0.45 - uTime * 0.75), fract(vTubeUv.y * 2.0));
         vec4 flowTex = texture2D(uFlowMap, flowUv);
         float wavePulse = smoothstep(0.55, 1.0, sin(vTubeUv.x * 1.4 - uTime * 3.2) * 0.5 + 0.5);
@@ -472,7 +477,7 @@ function createRailMat(focusU) {
       .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uFocus;\nvarying vec2 vRailUv;')
       .replace(
         '#include <opaque_fragment>',
-        `float railPulse = pow(sin(vRailUv.x * 1.6 - uTime * 3.6) * 0.5 + 0.5, 4.0);
+        `float railPulse = pow(max(1e-4, sin(vRailUv.x * 1.6 - uTime * 3.6) * 0.5 + 0.5), 4.0);
         outgoingLight *= (1.0 + railPulse * 0.72) * mix(0.25, 1.0, uFocus);
         diffuseColor.a *= mix(0.18, 1.0, uFocus);
         #include <opaque_fragment>`
@@ -578,7 +583,7 @@ const FX_VERT = /* glsl */ `
       alpha = sin(life * 3.14159) * 0.8;
     } else if (mode < 4.5) {
       // 4: hielo — brillos centelleantes
-      float tw = pow(sin(uTime * spd + seed * 12.56) * 0.5 + 0.5, 3.0);
+      float tw = pow(max(1e-4, sin(uTime * spd + seed * 12.56) * 0.5 + 0.5), 3.0);
       alpha = 0.15 + tw * 0.85;
       sz *= (0.7 + tw * 0.7);
     } else if (mode < 5.5) {
@@ -592,7 +597,9 @@ const FX_VERT = /* glsl */ `
       float life = fract(uTime * spd + seed);
       float ang = seed * 6.28318 + uTime * 3.2 + life * 4.0;
       float rad = (1.0 - life) * 1.65;
-      vec3 side = normalize(cross(aDir, abs(aDir.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+      vec3 upRef = abs(aDir.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+      vec3 cSide = cross(aDir, upRef);
+      vec3 side = dot(cSide, cSide) > 1e-6 ? normalize(cSide) : vec3(1.0, 0.0, 0.0);
       vec3 bin = cross(aDir, side);
       p += (side * cos(ang) + bin * sin(ang)) * rad;
       alpha = sin(life * 3.14159) * 0.9;
@@ -1438,11 +1445,11 @@ export default function Paths({ world, focusWay = null }) {
       {world.circuits.map((c) => {
         const active = focusWay == null || c.ways.some((w) => w.idx === focusWay)
         return (
-          <Html key={c.idx} position={c.mid.clone().add(new THREE.Vector3(0, 2.4, 0))} center distanceFactor={22} zIndexRange={[5, 0]}>
+          <WorldHtml key={c.idx} position={c.mid.clone().add(new THREE.Vector3(0, 2.4, 0))} center distanceFactor={22} zIndexRange={[5, 0]}>
             <div className="tag" style={{ borderColor: VISUALS[c.theme.id].rail, opacity: active ? 1 : 0.22, transition: 'opacity 0.35s ease' }}>
               {c.theme.emoji} {c.theme.name.replace('Camino ', '')}
             </div>
-          </Html>
+          </WorldHtml>
         )
       })}
     </>

@@ -1,8 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
 import { NODE_R, BALL_R, mulberry32 } from '../../Core/world.js'
+import WorldHtml from './WorldHtml.jsx'
+import { applyLoadedImage } from './texUtils.js'
 
 const U = BALL_R * 2 // unidad de la ciudad: una bollita de ancho
 const ROAD_W = U * 1.15
@@ -58,8 +59,7 @@ function loadTexWithFallback(filename, fallbackFn, { srgb = false, repeatX = 1, 
   texLoader.load(
     `${base}tex/${filename}`,
     (loaded) => {
-      tex.image = loaded.image
-      tex.needsUpdate = true
+      applyLoadedImage(tex, loaded?.image)
     },
     undefined,
     () => { /* mantiene el fallback procedural sin errores */ },
@@ -70,7 +70,7 @@ function loadTexWithFallback(filename, fallbackFn, { srgb = false, repeatX = 1, 
 function getTextures() {
   const buildingAlbedo = loadTexWithFallback(
     'building_albedo.png',
-    () => makeCanvas(128, (g, s) => {
+    () => makeCanvas(512, (g, s) => {
       g.fillStyle = '#8b92a8'
       g.fillRect(0, 0, s, s)
       const rng = mulberry32(11)
@@ -90,7 +90,7 @@ function getTextures() {
 
   const buildingNormal = loadTexWithFallback(
     'building_normal.png',
-    () => makeCanvas(128, (g, s) => {
+    () => makeCanvas(512, (g, s) => {
       g.fillStyle = 'rgb(128,128,255)'
       g.fillRect(0, 0, s, s)
       for (let y = 0; y < s; y += 16) {
@@ -108,7 +108,7 @@ function getTextures() {
 
   const buildingEmissive = loadTexWithFallback(
     'building_emissive.png',
-    () => makeCanvas(128, (g, s) => {
+    () => makeCanvas(512, (g, s) => {
       g.fillStyle = '#000000'
       g.fillRect(0, 0, s, s)
       const rng = mulberry32(5)
@@ -126,7 +126,7 @@ function getTextures() {
 
   const hullNormal = loadTexWithFallback(
     'hull_normal.png',
-    () => makeCanvas(128, (g, s) => {
+    () => makeCanvas(512, (g, s) => {
       g.fillStyle = 'rgb(128,128,255)'
       g.fillRect(0, 0, s, s)
       g.strokeStyle = 'rgb(96,96,230)'
@@ -150,7 +150,7 @@ function getTextures() {
 
   const asphalt = loadTexWithFallback(
     'asphalt.png',
-    () => makeCanvas(128, (g, s) => {
+    () => makeCanvas(512, (g, s) => {
       g.fillStyle = '#222638'
       g.fillRect(0, 0, s, s)
       const rng = mulberry32(42)
@@ -171,7 +171,7 @@ function getTextures() {
 
   const asphaltNormal = loadTexWithFallback(
     'asphalt_normal.png',
-    () => makeCanvas(128, (g, s) => {
+    () => makeCanvas(512, (g, s) => {
       g.fillStyle = 'rgb(128,128,255)'
       g.fillRect(0, 0, s, s)
       const rng = mulberry32(99)
@@ -485,9 +485,9 @@ function Destino({ d, base, tex }) {
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.65} toneMapped={false} />
       </mesh>
       {hover && (
-        <Html center position={[0, 3.2, 0]} distanceFactor={14} zIndexRange={[5, 0]}>
+        <WorldHtml center position={[0, 3.2, 0]} distanceFactor={14} zIndexRange={[5, 0]}>
           <div className="tag tip">{d.name} · {txt(d.dp)} ⭐ · {txt(d.de)} ⚡</div>
-        </Html>
+        </WorldHtml>
       )}
     </group>
   )
@@ -707,9 +707,9 @@ function Planet({ node, world, tex }) {
       {city.terminals.map((t, i) => (
         <Terminal key={`${t.kind}-${t.to}-${t.vert}-${i}`} node={node} term={t} color={world.nodes[t.to].color} tex={tex} />
       ))}
-      <Html center position={[0, NODE_R + 3.5, 0]} distanceFactor={20} zIndexRange={[5, 0]}>
+      <WorldHtml center position={[0, NODE_R + 3.5, 0]} distanceFactor={20} zIndexRange={[5, 0]}>
         <div className="tag node" style={{ borderColor: node.color }}>{node.name}</div>
-      </Html>
+      </WorldHtml>
     </group>
   )
 }
