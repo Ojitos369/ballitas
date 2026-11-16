@@ -32,7 +32,8 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .cabecera { display: flex; align-items: center; gap: 6px; }
 .cabecera h2 { margin: 0; flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seguir { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 11px; white-space: nowrap; }
-.seguir[aria-pressed="true"] { background: var(--on); }
+.seguir[aria-pressed="true"] { background: var(--on); border-color: rgba(138, 167, 255, 0.6); }
+.pov-btn { padding: 3px 8px; }
 .cerrar { background: none; border: 0; padding: 0 4px; color: var(--dim); font-size: 18px; line-height: 1; }
 .tarjeta .sub { margin: 2px 0 6px; color: var(--dim); font-size: 11px; }
 .tarjeta .aviso { margin: 4px 0; color: #ff8a8a; }

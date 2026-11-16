@@ -71,7 +71,7 @@ function SkinThumb({ skin, bodyCss }) {
   )
 }
 
-export default function Detail({ b, sim, follow, onFollow, onClose }) {
+export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }) {
   const ida = b.phase === 'gone' || b.phase === 'dying'
   const lugar = ida ? '' : donde(b, sim)
   const idea = obtenerGlobo(b, sim) ?? b.thought ?? b.log?.[0]
@@ -83,7 +83,10 @@ export default function Detail({ b, sim, follow, onFollow, onClose }) {
       <div className="cabecera">
         <span className="punto" style={{ background: bodyCss }} />
         <h2>{b.name}</h2>
-        {!ida && <button className="seguir" aria-pressed={follow} onClick={onFollow}>{follow ? '↩ Salir' : '👁 Seguir'}</button>}
+        {!ida && <>
+          <button className="seguir" aria-pressed={follow} onClick={onFollow}>{follow ? '↩ Salir' : '👁 Seguir'}</button>
+          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista frontal (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
+        </>}
         <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
       </div>
       <p className="sub">{b.arch?.title} · {b.mood} · gen {b.gen} · {Math.round(b.age)}s</p>

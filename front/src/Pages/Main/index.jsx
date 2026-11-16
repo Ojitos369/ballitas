@@ -11,6 +11,7 @@ export default function Main() {
   const [speed, setSpeed] = useState(1)
   const [selected, setSelected] = useState(null)
   const [follow, setFollow] = useState(false)
+  const [pov, setPov] = useState(false)
   const [cine, setCine] = useState(false)
   const [, setTick] = useState(0)
 
@@ -20,10 +21,11 @@ export default function Main() {
     return () => clearInterval(id)
   }, [])
 
-  // Atajo de teclado: tecla C alterna el modo cine.
+  // Atajo de teclado: tecla C alterna el modo cine; Esc sale de POV.
   useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'Escape') { setPov(false); return }
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key === 'c' || e.key === 'C') setCine((v) => !v)
@@ -32,15 +34,22 @@ export default function Main() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const select = (b) => { setSelected(b); if (!b) setFollow(false) }
-  // Si la bollita seguida muere, se vuelve sola a la vista general.
+  const select = (b) => {
+    if (b !== selected) setPov(false)
+    setSelected(b)
+    if (!b) setFollow(false)
+  }
+  const toggleFollow = () => setFollow((v) => { const next = !v; if (next) setPov(false); return next })
+  const togglePov = () => setPov((v) => { const next = !v; if (next) setFollow(false); return next })
+  // Si la bollita seguida o en POV muere, se vuelve sola a la vista general.
   if (follow && selected && selected.phase === 'gone') setFollow(false)
+  if (pov && selected && selected.phase === 'gone') setPov(false)
 
   return (
     <div className="app">
-      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} cine={cine} onSelect={select} />
+      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} onSelect={select} />
       <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} cine={cine} onToggleCine={() => setCine((v) => !v)} />
-      {selected && <Detail b={selected} sim={sim} follow={follow} onFollow={() => setFollow((v) => !v)} onClose={() => select(null)} />}
+      {selected && <Detail b={selected} sim={sim} follow={follow} pov={pov} onFollow={toggleFollow} onPov={togglePov} onClose={() => select(null)} />}
     </div>
   )
 }

@@ -123,7 +123,7 @@ function resolveExpression(b, g) {
 }
 
 // Una bollita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Bollita({ b, sim, selected, onSelect }) {
+export default function Bollita({ b, sim, selected, pov = false, onSelect }) {
   const root = useRef(); const bodyGroup = useRef()
   const eyeL = useRef(); const eyeR = useRef()
   const browL = useRef(); const browR = useRef(); const mouth = useRef()
@@ -370,7 +370,7 @@ export default function Bollita({ b, sim, selected, onSelect }) {
     }
 
     if (emoSprite.current) {
-      if (t < es.until) {
+      if (t < es.until && !pov) {
         const p = (t - es.start) / (es.until - es.start)
         emoSprite.current.visible = true
         emoSprite.current.position.set(0, r * (1.45 + p * 0.55), 0)
@@ -388,7 +388,7 @@ export default function Bollita({ b, sim, selected, onSelect }) {
       actualizarDialogoVivo(b, sim, dialogState.current)
     }
 
-    if (ring.current) { ring.current.visible = selected; ring.current.rotation.z = t * 2 }
+    if (ring.current) { ring.current.visible = selected && !pov; ring.current.rotation.z = t * 2 }
   })
 
   const liveThought = obtenerGlobo(b, sim)
@@ -403,7 +403,7 @@ export default function Bollita({ b, sim, selected, onSelect }) {
     >
       {/* zona de clic generosa; sin sombra */}
       <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} />
-      <group ref={bodyGroup} scale={r}>
+      <group ref={bodyGroup} scale={r} visible={!pov}>
         <mesh geometry={SHARED_GEO.body} castShadow>
           <meshStandardMaterial map={bodyTex} roughness={0.32} />
         </mesh>
@@ -504,7 +504,7 @@ export default function Bollita({ b, sim, selected, onSelect }) {
       <mesh ref={ring} geometry={SHARED_GEO.ring} material={mats.ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} scale={r} visible={false} />
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
-      {(selected || talking) && (
+      {(selected || talking) && !pov && (
         <Html position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
           <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 155, fontSize: 11 }}>
             {selected && <b>{b.name}</b>}

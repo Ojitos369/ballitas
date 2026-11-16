@@ -18,6 +18,9 @@ import Bollita from './Bollita.jsx'
 
 const STEP = 0.05
 const FOV = 50
+const POV_FOV = 75
+const NEAR_DEFAULT = 0.1
+const NEAR_POV = 0.05
 const SEGUIR_DIST = 5 // distancia inicial al seguir a una bollita
 const MIN_DIST = 1.2
 const VISTA_DIR = new THREE.Vector3(0.55, 0.45, 0.7).normalize()
@@ -29,6 +32,13 @@ const off = new THREE.Vector3()
 const lookAhead = new THREE.Vector3()
 const desiredOff = new THREE.Vector3()
 const sideVec = new THREE.Vector3()
+const povEye = new THREE.Vector3()
+const povFwd = new THREE.Vector3()
+const povRight = new THREE.Vector3()
+const povOrthoUp = new THREE.Vector3()
+const povTargetUp = new THREE.Vector3()
+const povMat = new THREE.Matrix4()
+const povTargetQuat = new THREE.Quaternion()
 
 const NEBULA_VERT = /* glsl */ `
   varying vec3 vDir;
@@ -130,14 +140,18 @@ function NebulaDome({ r }) {
 }
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
-function CameraRig({ mundo, selected, follow, cine }) {
+function CameraRig({ mundo, selected, follow, pov, cine }) {
   const controls = useRef()
   const camera = useThree((s) => s.camera)
-  const modo = useRef('libre') // libre | entrando | siguiendo | volviendo
+  const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
   const ultima = useRef(null)
   const userActive = useRef(false)
   const lastTouch = useRef(0)
   const cineClock = useRef(0)
+  const povQuat = useRef(new THREE.Quaternion())
+  const povUp = useRef(new THREE.Vector3(0, 1, 0))
+  const povInit = useRef(false)
+  const povActive = Boolean(pov && selected && selected.phase !== 'gone')
 
   // Posición de la vista general: encaja el mundo también en pantallas verticales.
   const casa = () => {
@@ -158,7 +172,57 @@ function CameraRig({ mundo, selected, follow, cine }) {
     cineClock.current += h
 
     let targetFov = FOV
-    if (follow && selected && selected.phase !== 'gone') {
+    let targetNear = NEAR_DEFAULT
+    if (povActive) {
+      targetFov = POV_FOV
+      targetNear = NEAR_POV
+      if (modo.current !== 'pov' || ultima.current !== selected) {
+        modo.current = 'pov'
+        ultima.current = selected
+        povInit.current = false
+      }
+
+      if (selected.dir && selected.dir.lengthSq() > 1e-6) {
+        povFwd.copy(selected.dir).normalize()
+      } else {
+        povFwd.set(0, 0, 1)
+      }
+
+      // Up interpolado para evitar roll brusco en rizos/embudos
+      if (selected.up && selected.up.lengthSq() > 1e-6) {
+        const upWeight = selected.phase === 'travel' ? 0.3 : 0.65
+        povTargetUp.copy(Y_AXIS).multiplyScalar(1 - upWeight).addScaledVector(selected.up, upWeight)
+        if (povTargetUp.lengthSq() < 1e-4) povTargetUp.copy(Y_AXIS)
+        else povTargetUp.normalize()
+      } else {
+        povTargetUp.copy(Y_AXIS)
+      }
+
+      if (!povInit.current) {
+        povUp.current.copy(povTargetUp)
+        povQuat.current.copy(camera.quaternion)
+        povInit.current = true
+      } else {
+        povUp.current.lerp(povTargetUp, 1 - Math.exp(-3.5 * h)).normalize()
+      }
+
+      povRight.crossVectors(povFwd, povUp.current)
+      if (povRight.lengthSq() < 1e-4) {
+        povRight.crossVectors(povFwd, Math.abs(povFwd.y) > 0.9 ? sideVec.set(1, 0, 0) : Y_AXIS)
+      }
+      povRight.normalize()
+      povOrthoUp.crossVectors(povRight, povFwd).normalize()
+      povMat.makeBasis(povRight, povOrthoUp, sideVec.copy(povFwd).negate())
+      povTargetQuat.setFromRotationMatrix(povMat)
+      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-10 * h))
+      camera.quaternion.copy(povQuat.current)
+
+      const upShift = selected.phase === 'travel' ? -0.06 : 0.08
+      povEye.copy(selected.pos).addScaledVector(povFwd, 0.14)
+      if (selected.up) povEye.addScaledVector(selected.up, upShift)
+      camera.position.lerp(povEye, 1 - Math.exp(-18 * h))
+      c.target.copy(povEye).addScaledVector(povFwd, 2)
+    } else if (follow && selected && selected.phase !== 'gone') {
       if (modo.current !== 'siguiendo' || ultima.current !== selected) modo.current = 'entrando'
       ultima.current = selected
       const entrando = modo.current === 'entrando'
@@ -223,10 +287,16 @@ function CameraRig({ mundo, selected, follow, cine }) {
       camera.position.copy(c.target).add(off)
     }
 
+    let projDirty = false
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov = THREE.MathUtils.damp(camera.fov, targetFov, 4.5, h)
-      camera.updateProjectionMatrix()
+      projDirty = true
     }
+    if (Math.abs(camera.near - targetNear) > 0.001) {
+      camera.near = targetNear
+      projDirty = true
+    }
+    if (projDirty) camera.updateProjectionMatrix()
   })
 
   // Si el usuario toma el control en plena transición, la transición se corta (no se le pelea la cámara).
@@ -243,6 +313,7 @@ function CameraRig({ mundo, selected, follow, cine }) {
   return (
     <OrbitControls
       ref={controls}
+      enabled={!povActive}
       makeDefault
       enableDamping
       dampingFactor={0.08}
@@ -313,7 +384,7 @@ function PostFX({ dofOn }) {
   )
 }
 
-export default function Scene({ sim, bollitas, speed, selected, follow, cine = false, onSelect }) {
+export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, onSelect }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
@@ -368,9 +439,9 @@ export default function Scene({ sim, bollitas, speed, selected, follow, cine = f
       <Nodes world={sim.world} />
       <Paths world={sim.world} focusWay={focusWay} />
       {bollitas.map((b) => (
-        <Bollita key={b.id} b={b} sim={sim} selected={selected === b} onSelect={onSelect} />
+        <Bollita key={b.id} b={b} sim={sim} selected={selected === b} pov={pov && selected === b} onSelect={onSelect} />
       ))}
-      <CameraRig mundo={mundo} selected={selected} follow={follow} cine={cine} />
+      <CameraRig mundo={mundo} selected={selected} follow={follow} pov={pov} cine={cine} />
       <PostFX dofOn={dofOn} />
     </Canvas>
   )
