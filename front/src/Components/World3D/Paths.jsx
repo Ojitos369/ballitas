@@ -1325,8 +1325,8 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
 
   return (
     <group>
-      {/* Tubo de cristal: visible de lejos, casi invisible por dentro (techo libre para ver el circuito) */}
-      {d.tube && <mesh geometry={d.tube} material={mats.tube} onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(way) } : undefined} />}
+      {/* El tubo solo informa el recorrido en el mapa lejano; los circuitos son abiertos en Camino. */}
+      {d.tube && focused === false && !nearActive && <mesh geometry={d.tube} material={mats.tube} onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(way) } : undefined} />}
 
       {/* Capa EXTERIOR: tira de neón de lejos; pilones y flora (modelos) bajo demanda, siempre fuera del tubo */}
       <group ref={extGroupRef}>
