@@ -118,7 +118,7 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .tramos { list-style: none; margin: 0; padding: 0; }
 .tramos li { padding: 5px 0; border-bottom: 1px solid var(--line); }
 .bollitas-camino button { font-size: 10px; }
-.vista-bollita { top: auto; bottom: 44px; }
+.vista-bollita { top: auto; bottom: 62px; }
 @media (max-width: 620px) {
   .vistas-tabs { top: 42px; width: calc(100% - 16px); justify-content: center; }
   .vistas-tabs button { gap: 3px; padding: 6px; font-size: 10px; }

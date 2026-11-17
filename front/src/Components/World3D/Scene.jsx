@@ -850,7 +850,7 @@ function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   )
 }
 
-export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', focusWay = null, activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
+export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')

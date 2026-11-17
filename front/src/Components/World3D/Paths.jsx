@@ -4254,7 +4254,7 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
                 transition: 'opacity 0.25s ease, filter 0.25s ease',
                 ...(onPickWay ? { pointerEvents: 'auto', cursor: 'pointer' } : null),
               }}
-              onClick={onPickWay ? () => onPickWay(c.ways[0]) : undefined}
+              onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(c.ways[0]) } : undefined}
             >
               {c.theme.emoji} {c.theme.name.replace('Camino ', '')}
             </div>
