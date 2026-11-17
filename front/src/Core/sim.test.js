@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Sim, POP } from './sim.js'
-import { mulberry32, cityPath, NODE_R, OBSTACLES } from './world.js'
+import { Sim, POP, TIME_SCALE } from './sim.js'
+import { mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE } from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
 
@@ -74,15 +74,16 @@ test('tramos: continuos, del puerto de salida al de entrada, sin atravesar nodos
   }
 })
 
-test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y sin atravesar nodos ajenos', () => {
+test('separación 3D: tubos de ways distintos >= 4.0 (fuera de 18u de nodos) y sin atravesar nodos ajenos', () => {
   const STEPS = 28
+  const TRIM = 18
   const waySamples = world.ways.map((w) => {
     const pts = []
     for (const s of w.segments) {
       for (let k = 0; k <= STEPS; k++) {
         const u = k / STEPS
-        if (s.kind === 'salida' && u * s.length < 12) continue
-        if (s.kind === 'llegada' && (1 - u) * s.length < 12) continue
+        if (s.kind === 'salida' && u * s.length < TRIM) continue
+        if (s.kind === 'llegada' && (1 - u) * s.length < TRIM) continue
         pts.push({ p: s.curve.getPointAt(u), r: s.radius, s })
       }
     }
@@ -98,7 +99,7 @@ test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y s
       for (const s of w1.segments) {
         for (const p of s.curve.getSpacedPoints(30)) {
           const d = p.distanceTo(n.pos)
-          assert.ok(d > NODE_R + 3, `${w1.id} ${s.kind} cerca de nodo ajeno ${n.name}: ${d.toFixed(2)}`)
+          assert.ok(d > NODE_R + 6, `${w1.id} ${s.kind} cerca de nodo ajeno ${n.name}: ${d.toFixed(2)}`)
         }
       }
     }
@@ -106,7 +107,7 @@ test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y s
       const w2 = world.ways[j]
       for (const h1 of w1.junctions) {
         for (const h2 of w2.junctions) {
-          assert.ok(h1.pos.distanceTo(h2.pos) >= 10, `hubs cercanos ${w1.id} y ${w2.id}`)
+          assert.ok(h1.pos.distanceTo(h2.pos) >= 24, `hubs cercanos ${w1.id} y ${w2.id}`)
         }
       }
       for (const a of waySamples[i]) {
@@ -117,7 +118,7 @@ test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y s
       }
     }
   }
-  assert.ok(minClearance >= 2.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 2.0 (${minPair})`)
+  assert.ok(minClearance >= 4.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 4.0 (${minPair})`)
 })
 
 test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN', () => {
@@ -182,4 +183,41 @@ test('planeación anticipada: b.plan, memoria de rutas y sensibilidad a energía
   const uE = sim.planUtility(b, way, way.routes[0], dEnergia, peers, 1)
   const uP = sim.planUtility(b, way, way.routes[0], dPuntos, peers, 1)
   assert.ok(uE.total > uP.total, 'con poca energía prefiere destino de energía')
+})
+
+test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiempos de viaje 2-3x', () => {
+  assert.ok(WORLD_SCALE >= 2.5 && WORLD_SCALE <= 3.0)
+  assert.ok(TUBE_SCALE >= 1.6 && TUBE_SCALE <= 2.0)
+  assert.ok(TIME_SCALE >= 2.0 && TIME_SCALE <= 3.0)
+  for (let i = 0; i < world.nodes.length; i++) {
+    for (let j = i + 1; j < world.nodes.length; j++) {
+      const d = world.nodes[i].pos.distanceTo(world.nodes[j].pos)
+      assert.ok(d >= 200, `nodos muy cerca: ${d.toFixed(1)}`)
+    }
+  }
+  for (const r of world.routes) {
+    assert.equal(r.kinds.length, 6, '3 obstáculos por mitad')
+    assert.equal(r.segments.length, 8)
+    assert.ok(r.segments[2].event && r.segments[5].event, 'evento al centro de cada mitad')
+    assert.ok(r.segments[1].radius / BALL_R >= 3.8, 'tubo amplio respecto a la bollita')
+  }
+
+  // Medir duración real de viaje por circuito y supervivencia energética
+  const sim = new Sim({ rng: mulberry32(19) })
+  const entered = new Map()
+  const durations = []
+  for (let i = 0; i < 3000; i++) {
+    for (const b of sim.bollitas) {
+      if (b.phase === 'travel' && !entered.has(b.id)) entered.set(b.id, sim.t)
+      else if (b.phase !== 'travel' && b.phase !== 'dying' && b.phase !== 'gone' && entered.has(b.id)) {
+        durations.push(sim.t - entered.get(b.id))
+        entered.delete(b.id)
+      }
+      if (b.phase === 'dying' || b.phase === 'gone') entered.delete(b.id)
+    }
+    sim.tick(0.1)
+  }
+  assert.ok(durations.length >= 10, `pocos viajes completados: ${durations.length}`)
+  const avgDur = durations.reduce((s, d) => s + d, 0) / durations.length
+  assert.ok(avgDur >= 25 && avgDur <= 65, `duración media de viaje fuera de rango 2-3x: ${avgDur.toFixed(1)}s`)
 })

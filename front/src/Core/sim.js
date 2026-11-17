@@ -2,7 +2,12 @@
 // Sin React ni render: la UI sólo lee `sim.bollitas` y llama `sim.tick(dt)`.
 //
 // ═══════════════════════════ CONTRATO: BOLLITA ═══════════════════════════
-// (la forma del mundo está al inicio de world.js)
+// (la forma del mundo y WORLD_SCALE/TUBE_SCALE están al inicio de world.js)
+// Escala temporal:
+//   TIME_SCALE (2.5): factor objetivo de duración de viaje por circuito (~2-3x más tiempo para
+//                     disfrutar cada tramo). Los costos por segundo (DRAIN_E, DRAIN_P, PPS_K) y por
+//                     unidad de longitud (TRAVEL_E_LEN), así como FRIC/VMAX, están calibrados para
+//                     caminos largos sin agotar energía ni romper la selección natural.
 // b = {
 //   id, name, gen, arch { key, hi, title }, genome, p, e (0..100), age, visits, score, cause, bornAt,
 //   genome: { traits { valentia, curiosidad, apetito, sociabilidad, animo, velocidad }, hue,
@@ -34,17 +39,19 @@ import { buildWorld, cityPath, slerpDir, NODE_R, BALL_R, OBSTACLES, KINDS } from
 import { voice, moodOf, archetype } from './personality.js'
 
 export const POP = 10
+export const TIME_SCALE = 2.5
 const TRAITS = ['valentia', 'curiosidad', 'apetito', 'sociabilidad', 'animo', 'velocidad']
 const GENES = ['prefs', 'ways', 'routes', 'kinds']
-// Equilibrio: un ciclo destino + viaje dura ~35 s y sólo rinde un destino, así que el desgaste es lento.
-const DRAIN_E = 0.42 // energía/s siempre
-const DRAIN_P = 0.43 // puntos/s siempre
-const TRAVEL_E = 0.2 // energía/s extra rodando (× ecost del tema)
-const PPS_K = 0.35 // escala de los puntos/s del tema
+// Equilibrio: un ciclo destino + viaje dura ~60-65 s (el viaje ~2.5x más largo) y sólo rinde un destino.
+const DRAIN_E = 0.22 // energía/s siempre
+const DRAIN_P = 0.25 // puntos/s siempre
+const TRAVEL_E_LEN = 0.0055 // energía por unidad de distancia recorrida en tubo (× ecost del tema)
+const PPS_K = 0.35 / TIME_SCALE // escala de los puntos/s del tema
 // Física del tubo
-const GRAV = 16
-const FRIC = 0.3
-const VMAX = 30
+const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
+const GRAV = 24
+const FRIC = 0.14
+const VMAX = 48
 const ROLL_K = 40 // muelle que lleva la bollita hacia donde la empujan gravedad y centrífuga
 const ROLL_C = 5 // amortiguación: oscila un par de veces y se asienta
 const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo', 'geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada'] // obstáculos que merecen comentario
@@ -316,8 +323,9 @@ export class Sim {
     const g = b.genome; const t = g.traits
     const obs = route.segments.slice(1, -1)
     const avgSpeedK = obs.reduce((s, o) => s + (o.speedK ?? 1), 0) / Math.max(1, obs.length)
-    const eta = (route.length * halfFactor) / (this.cruise(b) * avgSpeedK + 4)
-    const costE = eta * (DRAIN_E + TRAVEL_E * way.theme.ecost)
+    const len = route.length * halfFactor
+    const eta = len / (this.cruise(b) * TUBE_SPEED_K * avgSpeedK + 8)
+    const costE = eta * DRAIN_E + len * TRAVEL_E_LEN * way.theme.ecost
     const circuitP = (eta * way.theme.pps * PPS_K) / 10
 
     const remE = b.e - costE
@@ -383,7 +391,7 @@ export class Sim {
   }
 
   // ───────────── circuito: rodar por los tubos ─────────────
-  eta(b, way) { return way.length / (this.cruise(b) + 4) }
+  eta(b, way) { return way.length / (this.cruise(b) * TUBE_SPEED_K + 8) }
 
   enterSeg(b, seg) {
     if (b.phase !== 'travel') { b.phase = 'travel'; b.dur = b.timer = this.eta(b, b.way); b.snap = 0.3; b.prevT.set(0, 0, 0) }
@@ -393,7 +401,7 @@ export class Sim {
       b.route = b.way.routes[seg.route]
       if (b.route !== prevRoute) b.visitedRoutes[b.route.idx] = (b.visitedRoutes[b.route.idx] || 0) + 1
     }
-    b.speed = Math.max(b.speed, seg.boost, this.cruise(b) * (seg.speedK ?? 1))
+    b.speed = Math.max(b.speed, seg.boost * 1.35, this.cruise(b) * TUBE_SPEED_K * (seg.speedK ?? 1))
     if (WOW.includes(seg.kind)) this.say(b, seg.kind)
   }
 
@@ -430,7 +438,7 @@ export class Sim {
   travelStep(b, dt) {
     const L = b.way
     let s = b.seg
-    b.e -= TRAVEL_E * L.theme.ecost * dt
+    b.e -= TRAVEL_E_LEN * L.theme.ecost * b.speed * dt
     b.p += L.theme.pps * PPS_K * dt
 
     b.segT += (b.speed * dt) / s.length
@@ -444,7 +452,7 @@ export class Sim {
 
     // velocidad: la gravedad acelera al bajar y frena al subir; el tubo roza, el aire no
     b.speed += (-GRAV * T.y - FRIC * s.drag * b.speed) * dt
-    const minV = this.cruise(b) * clamp(s.kind === 'embudo' ? 0.6 : (s.speedK ?? 1), 0.45, 1.8)
+    const minV = this.cruise(b) * TUBE_SPEED_K * clamp(s.kind === 'embudo' ? 0.6 : (s.speedK ?? 1), 0.45, 1.8)
     const maxV = VMAX * (s.kind === 'portal' ? 1.35 : s.kind === 'hielo_resbaloso' ? 1.2 : 1)
     b.speed = clamp(b.speed, minV, maxV)
 
