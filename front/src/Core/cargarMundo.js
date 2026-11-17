@@ -20,5 +20,6 @@ export function cargarMundo(seed = 369, onProgress = () => {}) {
       worker.terminate(); resolve('worker')
     }
     worker.onerror = () => { worker.terminate(); resolve('directo') } // el hilo principal calcula como antes
+    worker.postMessage({ seed })
   })
 }
