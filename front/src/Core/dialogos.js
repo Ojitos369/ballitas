@@ -16,7 +16,7 @@ export const EMOJI_EVENTO = {
   salida: '🚀',
   llegada: '🏁',
   rampa: '🛝',
-  zigzag: '〰️',
+  horquilla: '↩️',
   rizo: '➰',
   sacacorchos: '🧬',
   trampolin: '🤸',
@@ -39,7 +39,7 @@ export const EMOJI_EVENTO = {
   plan: '💡',
 }
 
-const EVENT_LINES = {
+export const EVENT_LINES = {
   nace: [
     '¡Hola, mundo redondo!',
     'Acabo de rodar hasta aquí.',
@@ -162,11 +162,11 @@ const EVENT_LINES = {
     '¡Tornillo cósmico a toda velocidad!',
     '¡Izquierda, derecha, vuelta!',
   ],
-  zigzag: [
-    '¡Zas, zas, de lado a lado!',
-    '¡Curva cerrada! ¡Y otra!',
-    '¡Esquivando como profesional!',
-    '¡Bamboleo de esquina a esquina!',
+  horquilla: [
+    '¡Horquilla! ¡Media vuelta!',
+    '¡Curva cerrada, a frenar!',
+    '¡Me pego a la pared en la vuelta!',
+    '¡Qué curvón!',
   ],
   rampa: [
     '¡Deslizamiento suave!',
@@ -252,7 +252,7 @@ const EVENT_LINES = {
 }
 
 // Líneas con personalidad propia según familia de skin
-const SKIN_LINES = {
+export const SKIN_LINES = {
   pirata: {
     _idle: ['¡Arrr, a por el tesoro!', '¡Viento en popa, grumete!'],
     canon: ['¡Al abordaje por los aires!', '¡Disparo de cañón pirata!'],

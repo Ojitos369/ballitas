@@ -1,6 +1,6 @@
 // Personalidad y expresividad: rasgos del genoma -> arquetipo, voz, estado de ánimo y gestos de la cara.
 
-const TRAIT_LABEL = {
+export const TRAIT_LABEL = {
   valentia: ['Miedosa', 'Valiente'],
   curiosidad: ['Rutinaria', 'Curiosa'],
   apetito: ['Ascética', 'Glotona'],
@@ -9,7 +9,7 @@ const TRAIT_LABEL = {
 }
 
 // Prefijo de voz por rasgo dominante: [bajo, alto]
-const TONE = {
+export const TONE = {
   valentia: ['Ay… ', '¡Sin miedo! '],
   curiosidad: ['Mmh. ', 'Ooh, '],
   apetito: ['Meh. ', 'Ñam, '],
@@ -17,7 +17,7 @@ const TONE = {
   animo: ['Tsk. ', '¡Yupi! '],
 }
 
-const BASE = {
+export const BASE = {
   nace: ['¡Hola, mundo!', 'Acabo de rodar hasta aquí.'],
   llega: ['Llegué a {n}.', 'Así que esto es {n}.'],
   ganaP: ['Conseguí puntos en {s}.', '¡{s} suma!'],

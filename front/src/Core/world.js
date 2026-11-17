@@ -22,7 +22,16 @@
 //                 wayIn, wayOut (way que llega a `in` / que sale de `out`) }
 //   portTo[j]:  el puerto que mira al nodo j (hueco en el índice propio)
 //   terminals[]: { vert (índice en node.verts), kind: 'out'|'in', way (way que sale/llega),
-//                  to (idx del otro nodo), dir, pos }  (8+ por nodo, repartidos por toda la esfera)
+//                  to (idx del otro nodo), dir, pos,  (8+ por nodo, repartidos por toda la esfera)
+//                  gate: tipo de boca. Salidas ('out'): OUT_GATES = 'arco_salida' | 'parrilla_semaforo' |
+//                    'tunel_rampa' | 'lanzadera_aros' | 'puente_banderas'. Llegadas ('in'): IN_GATES =
+//                    'meta_cuadros' | 'embudo_llegada' | 'portal_llegada' | 'arco_meta' | 'tunel_frenado'.
+//                    Nunca coinciden entrada y salida; varían entre caminos (también en way.gates {out, in}
+//                    y en segment.gate de la salida/llegada).
+//                  approach: { kind: 'parrilla' (recta de salida) | 'recta_meta' (recta final), len (u),
+//                    dir (unitario, sale del planeta a lo largo de la recta) }. La recta ocupa los primeros
+//                    `len` de la salida (GRID_LEN) o los últimos de la llegada (FINISH_LEN); la puerta va en
+//                    la boca (pos) y la meta/semáforo al final de la recta. }
 //   destinos[]: los destinos (edificios) de este nodo
 //   hop[a][b]:  siguiente vértice del camino más corto a -> b (ver cityPath)
 // }
@@ -59,6 +68,10 @@
 //   tramo[] (kinds del medio-recorrido de ruta al que pertenece; lo usa la sim para decidir)
 // }
 //   Continuidad: posición siempre; tangente también salvo al salir de un tramo `air` o entrar a un embudo.
+//   Trazado tipo circuito: los obstáculos de pista (rampa, horquilla, turbina, hielo_resbaloso, pantano,
+//   cascada) se componen con piezas (PLANS): rectas largas y curvas de radio constante con entrada y salida
+//   de curvatura progresiva (clotoide); ruta rápida = curvas abiertas, lenta = cerradas y con más relieve,
+//   espectacular = peraltes fuertes y saltos. Hélices, embudo y rizo entran/salen sin quiebros.
 //
 // ─── CARRILES SOBRE LA PARED (la pista es un riel 3D pegado al interior del tubo) ───
 //   segment.lanes[2-4] = { id (0..3, mismo id = mismo ángulo en todo el way), angle (0..2π alrededor
@@ -80,9 +93,19 @@
 //   wallFrame(seg, angle, u, rho?) y laneFrame(seg, laneId, u) -> { pos (centro de la ballita a `rho`
 //     del eje; por defecto radius - BALL_R, 0 en `air`), wall (punto del cristal), axis, dir (eje->pared),
 //     tangent, up (apunta al eje: la gravedad de la ballita es hacia su pared), side (= tangent × up), angle }
+//     wallFrame es el marco "crudo" del tubo. laneFrame es la SUPERFICIE del carril: su `pos` incluye el
+//     relieve (rho = radius - BALL_R - laneRelief), y `tangent`/`up` son la tangente y la normal reales de la
+//     superficie (relieve, vaivén y peralte incluidos); añade `relief` (altura en ese punto).
+//   Peralte: laneAngle ya incluye el giro del carril hacia la pared exterior en las curvas (0 en los
+//     extremos del tramo, para que las uniones sigan continuas). segmentCurvature(seg, u) -> { k, out }.
+//   Relieve: laneRelief(seg, laneId, u) -> altura (u de mundo, de la pared hacia el eje, 0..0.45·(radius -
+//     BALL_R), 0 en los extremos): firme base, lomas, badenes, rampa antes de cada mecanismo (cresta en
+//     switch.u y caída corta: la ballita despega) y saltos extra en la ruta espectacular.
+//     reliefSlope(seg, laneId, u) -> d(altura)/d(longitud). Los tramos `air` no tienen relieve.
 //
 // Helpers: frameAt(curve, u), cityPath(node, a, b), slerpDir(a, b, t, out), mulberry32(seed),
-//          wallFrame, laneFrame, laneAngle, nearestLane, lowestLane, angDiff.
+//          wallFrame, laneFrame, laneAngle, laneRelief, reliefSlope, segmentCurvature, nearestLane,
+//          lowestLane, angDiff. Constantes: GRID_LEN, FINISH_LEN, OUT_GATES, IN_GATES.
 // Catálogos de mecanismos: MECHANISMS (física, riesgo y recompensa), THEME_MECHS (los de cada mini
 // mundo, con nombre temático: tronco-rampa, liana-tirolina, erupción...), LANE_NAMES.
 // La forma de cada ballita y sus fases están documentadas al inicio de sim.js.
@@ -136,10 +159,10 @@ const scaleParam = ({ bow, arch, spread, radius, ...rest }) => ({
 })
 export const PARAMS = {
   sombrio: scaleParam({ n: 3, bow: 36, arch: -16, spread: 21, phase: 0.4, coil: 0.8, turns: 1, radius: 1.15, fav: ['pantano', 'erupcion', 'caida', 'embudo', 'sacacorchos'] }),
-  bosque: scaleParam({ n: 2, bow: 34, arch: 8, spread: 23, phase: 1.2, coil: 1.35, turns: 1, radius: 1.5, fav: ['pantano', 'cascada', 'espiral', 'zigzag', 'rampa'] }),
+  bosque: scaleParam({ n: 2, bow: 34, arch: 8, spread: 23, phase: 1.2, coil: 1.35, turns: 1, radius: 1.5, fav: ['pantano', 'cascada', 'espiral', 'horquilla', 'rampa'] }),
   mar: scaleParam({ n: 3, bow: 38, arch: 0, spread: 23, phase: 2.2, coil: 1.1, turns: 0, radius: 1.35, fav: ['cascada', 'geiser', 'embudo', 'rizo', 'trampolin'] }),
   desierto: scaleParam({ n: 2, bow: 40, arch: 18, spread: 20, phase: 0, coil: 1, turns: 0, radius: 1.4, fav: ['turbina', 'caida', 'espiral', 'canon', 'rampa'] }),
-  hielo: scaleParam({ n: 3, bow: 35, arch: -9, spread: 23, phase: 3, coil: 0.9, turns: 2, radius: 1.2, fav: ['hielo_resbaloso', 'cascada', 'espiral', 'zigzag', 'sacacorchos'] }),
+  hielo: scaleParam({ n: 3, bow: 35, arch: -9, spread: 23, phase: 3, coil: 0.9, turns: 2, radius: 1.2, fav: ['hielo_resbaloso', 'cascada', 'espiral', 'horquilla', 'sacacorchos'] }),
   volcan: scaleParam({ n: 3, bow: 34, arch: 26, spread: 20, phase: 1.6, coil: 1.2, turns: 1, radius: 1.3, fav: ['erupcion', 'canon', 'caida', 'espiral', 'rizo'] }),
   cristal: scaleParam({ n: 2, bow: 37, arch: 6, spread: 21, phase: 0.8, coil: 0.75, turns: 2, radius: 1.1, fav: ['portal', 'hielo_resbaloso', 'espiral', 'embudo', 'sacacorchos'] }),
   nubes: scaleParam({ n: 3, bow: 39, arch: 20, spread: 23, phase: 2.6, coil: 1.3, turns: 0, radius: 1.6, fav: ['geiser', 'turbina', 'embudo', 'caida', 'trampolin'] }),
@@ -153,7 +176,7 @@ export const KINDS = {
   salida: { name: 'Lanzadera', emoji: '🚀', boost: 14, drag: 1, speedK: 1.2, risk: 0.2 },
   llegada: { name: 'Llegada', emoji: '🏁', boost: 0, drag: 1.5, speedK: 0.9, risk: 0 },
   rampa: { name: 'Rampa', emoji: '🛝', w: 1, boost: 0, drag: 1, speedK: 1.05, risk: 0.1 },
-  zigzag: { name: 'Zigzag', emoji: '〰️', w: 1.2, boost: 0, drag: 1.3, speedK: 0.85, risk: 0.3 },
+  horquilla: { name: 'Horquilla', emoji: '↩️', w: 1.2, boost: 0, drag: 1.2, speedK: 0.85, risk: 0.3 },
   rizo: { name: 'Rizo', emoji: '➰', w: 1.1, boost: 17, drag: 0.6, speedK: 1.3, risk: 0.8 },
   sacacorchos: { name: 'Sacacorchos', emoji: '🧬', w: 1.1, boost: 11, drag: 1, speedK: 1.1, risk: 0.5 },
   trampolin: { name: 'Trampolín', emoji: '🤸', w: 1.2, boost: 15, drag: 0, speedK: 1.25, risk: 0.7, air: true },
@@ -206,7 +229,7 @@ export const THEME_MECHS = {
 }
 export const LANE_NAMES = ['suelo', 'pared derecha', 'techo', 'pared izquierda']
 
-const FLEX = ['rampa', 'zigzag', 'rizo', 'sacacorchos', 'trampolin', 'canon', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'geiser', 'erupcion'] // unen dos puntos cualesquiera
+const FLEX = ['rampa', 'horquilla', 'rizo', 'sacacorchos', 'trampolin', 'canon', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'geiser', 'erupcion'] // unen dos puntos cualesquiera
 const GRAV = ['espiral', 'caida', 'cascada', 'embudo'] // necesitan bajar
 // Orden de los genes `kinds` del genoma.
 export const OBSTACLES = [...FLEX, ...GRAV]
@@ -377,13 +400,58 @@ export function segmentTangent(seg, u, out = new THREE.Vector3()) {
 }
 
 const laneOf = (seg, id) => seg.lanes?.find((l) => l.id === id) || seg.lanes?.[0] || null
+const lerpArr = (arr, u) => {
+  const n = arr.length - 1; const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * n; const i = Math.min(n - 1, Math.floor(f))
+  return arr[i] + (arr[i + 1] - arr[i]) * (f - i)
+}
+// Ángulo del carril: vaivén propio + peralte (en curva el carril sube hacia la pared exterior).
 export function laneAngle(seg, laneId, u) {
   const l = laneOf(seg, laneId)
-  return l ? l.angle + l.offset * Math.sin(Math.PI * clamp(u, 0, 1)) : 0
+  if (!l) return 0
+  const a = l.angle + l.offset * Math.sin(Math.PI * clamp(u, 0, 1))
+  const bk = seg._bank
+  if (!bk) return a
+  const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y)
+  return m < 1e-6 ? a : a + m * Math.sin(angDiff(a, Math.atan2(y, x)))
 }
+// Altura del relieve del carril (unidades de mundo, de la pared hacia el eje) en `u`. 0 en los extremos.
+export function laneRelief(seg, laneId, u) {
+  const arr = seg._relief?.h.get(laneOf(seg, laneId)?.id)
+  return arr ? lerpArr(arr, u) : 0
+}
+// Pendiente del relieve: d(altura)/d(longitud de arco).
+export function reliefSlope(seg, laneId, u) {
+  const r = seg._relief; const arr = r?.h.get(laneOf(seg, laneId)?.id)
+  if (!arr) return 0
+  const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * r.n; const i = Math.min(r.n - 1, Math.floor(f))
+  return ((arr[i + 1] - arr[i]) * r.n) / seg.length
+}
+// Curvatura del eje en `u`: k (1/u) y `out`, ángulo (convención de carriles) que apunta hacia fuera de la curva.
+export function segmentCurvature(seg, u) {
+  const c = seg._curv
+  if (!c) return { k: 0, out: 0 }
+  const x = lerpArr(c.x, u); const y = lerpArr(c.y, u)
+  return { k: Math.hypot(x, y), out: Math.atan2(-y, -x) }
+}
+const LF_A = {}; const LF_B = {}
 export function laneFrame(seg, laneId, u, out = {}) {
-  wallFrame(seg, laneAngle(seg, laneId, u), u, undefined, out)
+  u = Number.isFinite(u) ? clamp(u, 0, 1) : 0
+  const rhoAt = (x) => (seg.air ? 0 : seg.radius - BALL_R - laneRelief(seg, laneId, x))
+  wallFrame(seg, laneAngle(seg, laneId, u), u, rhoAt(u), out)
+  if (!seg.air) {
+    // tangente y normal reales de la superficie (relieve, vaivén y peralte incluidos)
+    const du = Math.min(0.01, 0.4 / seg.length); const u0 = Math.max(0, u - du); const u1 = Math.min(1, u + du)
+    const p0 = wallFrame(seg, laneAngle(seg, laneId, u0), u0, rhoAt(u0), LF_A).pos
+    const p1 = wallFrame(seg, laneAngle(seg, laneId, u1), u1, rhoAt(u1), LF_B).pos
+    const T = FRAME_TMP.subVectors(p1, p0)
+    if (T.lengthSq() > 1e-10) {
+      out.tangent.copy(T.normalize())
+      out.up.addScaledVector(out.tangent, -out.up.dot(out.tangent)).normalize()
+      out.side.crossVectors(out.tangent, out.up).normalize()
+    }
+  }
   out.lane = laneOf(seg, laneId)
+  out.relief = seg.air ? 0 : laneRelief(seg, laneId, u)
   return out
 }
 // Carril del tramo más cercano a un ángulo (así un carril que acaba sigue por el vecino).
@@ -403,6 +471,89 @@ export function lowestLane(seg, u) {
     if (d > bd) { bd = d; best = l.id }
   }
   return best
+}
+
+// ───────────────────────── relieve y peralte de los carriles ─────────────────────────
+const ROLES = ['rapida', 'lenta', 'media']
+const BANK_GAIN = { rapida: 14, lenta: 16, media: 24, shared: 10 } // peralte (rad) por unidad de curvatura (1/u)
+const BANK_MAX = 0.55; const BANK_RATE = 0.025 // rad máx. y rad por unidad de longitud
+// lomas (+) y badenes (-) por carril: cuántas y de qué altura; jumps: rampas de salto extra
+const RELIEF = {
+  rapida: { n: [1, 2], h: [0.1, 0.22], jumps: 0 },
+  lenta: { n: [3, 5], h: [0.15, 0.4], jumps: 0 },
+  media: { n: [2, 3], h: [0.15, 0.32], jumps: 2 },
+  shared: { n: [1, 2], h: [0.08, 0.18], jumps: 0 },
+}
+const RELIEF_BASE = 0.15 // altura base del firme (así caben los badenes sin atravesar el cristal)
+const KICK_DROP = 0.9 // largo (u) de la caída tras la cresta de una rampa: ahí la ballita despega
+
+// Curvatura suavizada, peralte y relieve de un tramo de tubo. Usa los marcos ya cacheados.
+function buildSurface(s, rng) {
+  s._curv = s._bank = s._relief = null
+  if (s.air) return
+  ensureFrames(s)
+  const { n, T, D } = s._fr; const ds = s.length / n
+  const kx = new Float32Array(n + 1); const ky = new Float32Array(n + 1)
+  const t = new THREE.Vector3(); const d = new THREE.Vector3(); const k = new THREE.Vector3(); const b = new THREE.Vector3(); const t0 = new THREE.Vector3()
+  for (let i = 0; i <= n; i++) {
+    const i0 = Math.max(0, i - 1); const i1 = Math.min(n, i + 1)
+    t0.fromArray(T, i0 * 3); k.fromArray(T, i1 * 3).sub(t0).divideScalar((i1 - i0) * ds)
+    t.fromArray(T, i * 3); d.fromArray(D, i * 3); b.crossVectors(t, d)
+    kx[i] = k.dot(d); ky[i] = k.dot(b)
+  }
+  // media móvil de ~4 u: la curvatura del spline no tiembla
+  const box = (a, w) => {
+    const pre = new Float64Array(a.length + 1); for (let i = 0; i < a.length; i++) pre[i + 1] = pre[i] + a[i]
+    return a.map((_, i) => { const lo = Math.max(0, i - w); const hi = Math.min(a.length - 1, i + w); return (pre[hi + 1] - pre[lo]) / (hi - lo + 1) })
+  }
+  const w = Math.max(1, Math.round(2 / ds)); const cx = box(kx, w); const cy = box(ky, w)
+  s._curv = { x: cx, y: cy }
+  const role = s.route >= 0 ? ROLES[s.route] : 'shared'
+  // peralte hacia fuera de la curva, acotado y con ritmo limitado; nulo en los extremos (uniones)
+  const g = BANK_GAIN[role]; const bx = cx.map((x) => -x * g); const by = cy.map((y) => -y * g)
+  const step = BANK_RATE * ds
+  const pinMag = () => {
+    const m = bx.map((x, i) => Math.min(BANK_MAX, Math.hypot(x, by[i])))
+    m[0] = 0
+    for (let i = 1; i <= n; i++) m[i] = Math.min(m[i], m[i - 1] + step)
+    m[n] = 0
+    for (let i = n - 1; i >= 0; i--) m[i] = Math.min(m[i], m[i + 1] + step)
+    for (let i = 0; i <= n; i++) { const h = Math.hypot(bx[i], by[i]); const f = h > 1e-9 ? m[i] / h : 0; bx[i] *= f; by[i] *= f }
+  }
+  pinMag()
+  // también el cambio de dirección del peralte va a ritmo limitado (al salir de hélices gira rápido)
+  for (const dir of [1, -1]) {
+    for (let i = dir > 0 ? 1 : n - 1; dir > 0 ? i <= n : i >= 0; i += dir) {
+      const dx = bx[i] - bx[i - dir]; const dy = by[i] - by[i - dir]; const l = Math.hypot(dx, dy)
+      if (l > step) { bx[i] = bx[i - dir] + (dx * step) / l; by[i] = by[i - dir] + (dy * step) / l }
+    }
+  }
+  pinMag()
+  s._bank = { x: bx, y: by }
+  // relieve por carril: lomas, badenes, rampa antes de cada mecanismo y saltos en la ruta espectacular
+  const R = RELIEF[role]; const L = s.length; const hMax = 0.45 * (s.radius - BALL_R)
+  const nr = clamp(Math.ceil(L / 0.5), 32, 2400)
+  s._relief = { n: nr, h: new Map() }
+  for (const lane of s.lanes) {
+    const feats = []
+    for (let j = ri(rng, R.n[0], R.n[1]); j > 0; j--) {
+      feats.push({ c: (0.12 + rng() * 0.76) * L, w: 3 + rng() * 5, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * (rng() < 0.35 ? -1 : 1) })
+    }
+    // [cresta, altura, subida]: una rampa por estación (varios mecanismos en la misma u comparten rampa)
+    const kicks = [...new Set((s.switchesByLane?.get(lane.id) || []).map((sw) => sw.u))].map((u) => [u * L, 0.3, 5])
+    for (let j = 0; j < R.jumps; j++) kicks.push([(0.2 + rng() * 0.6) * L, 0.5, 7])
+    const arr = new Float32Array(nr + 1)
+    for (let i = 0; i <= nr; i++) {
+      const x = (i / nr) * L; let h = RELIEF_BASE
+      for (const f of feats) { const q = Math.abs(x - f.c) / f.w; if (q < 1) h += f.h * Math.cos((q * Math.PI) / 2) ** 2 }
+      for (const [p, kh, up] of kicks) {
+        if (x > p - up && x <= p) h += kh * smooth01((x - p + up) / up)
+        else if (x > p && x < p + KICK_DROP) h += kh * (1 - (x - p) / KICK_DROP)
+      }
+      arr[i] = clamp(h, 0, hMax) * smooth01(x / 6) * smooth01((L - x) / 6)
+    }
+    s._relief.h.set(lane.id, arr)
+  }
 }
 
 // Carriles y mecanismos de un way (rng propio: no altera la generación de las rutas).
@@ -454,6 +605,8 @@ function buildLanes(way) {
     // opciones de ese carril, ya ordenadas por posición.
     s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id).sort((a, b) => a.u - b.u)]))
   })
+  const srng = mulberry32(91000 + way.idx * 37)
+  for (const s of way.segments) buildSurface(s, srng)
 }
 
 const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un nodo
@@ -590,54 +743,111 @@ const at = (A, C, t, ...offs) => {
   for (let i = 0; i < offs.length; i += 2) p.addScaledVector(offs[i], offs[i + 1])
   return p
 }
-// Hélice alrededor de la cuerda A0->B con radio variable rad(t).
-const coil = (A, B, turns, rad, A0 = A, ease = (t) => t) => {
-  const { u, v } = basis(A, B); const C = B.clone().sub(A0); const n = Math.ceil(turns * 10); const pts = []
+// Hélice alrededor de la cuerda A0->B con radio variable rad(t). Con `spin`, el giro avanza en
+// proporción al radio: entra y sale abriéndose suave, sin tornillo de radio cero.
+const coil = (A, B, turns, rad, A0 = A, ease = (t) => t, spin = false) => {
+  const { u, v } = basis(A, B); const C = B.clone().sub(A0); const n = Math.ceil(turns * 16); const pts = []
+  const cum = [0]
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + (spin ? rad((i - 0.5) / n) : 1))
   for (let i = 1; i < n; i++) {
-    const t = i / n; const a = t * turns * TAU
+    const t = i / n; const a = (cum[i] / cum[n]) * turns * TAU
     pts.push(at(A0, C, ease(t), u, Math.cos(a) * rad(t), v, Math.sin(a) * rad(t)))
   }
   return pts
 }
-const bump = (t) => Math.min(1, 5 * t, 5 * (1 - t)) // el radio nace y muere en la cuerda
+const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x) }
+const bump = (t) => smooth01(Math.min(1, 4 * t, 4 * (1 - t))) // el radio nace y muere en la cuerda, sin quiebros
+
+// ───────────────────────── piezas de pista (trazado tipo circuito) ─────────────────────────
+// Plan de un obstáculo "de pista": lista de piezas [giro (rad, + a la izquierda), largo relativo];
+// giro 0 = recta. Cada curva tiene radio constante con rampas de curvatura de entrada y salida
+// (clotoide): nunca hay cambios de dirección cortos y alternados.
+const PLANS = {
+  rampa: [[0, 1.4], [0.45, 1.3], [0, 0.6], [-0.45, 1.3], [0, 1.4]], // curva y contracurva abiertas
+  horquilla: [[0, 0.7], [0.9, 0.8], [0, 0.3], [-1.8, 1.5], [0, 0.3], [0.9, 0.8], [0, 0.7]], // vuelta cerrada
+  turbina: [[0, 2.2], [0.5, 2.4], [0, 0.4], [-0.5, 2.4], [0, 2.2]], // recta larga y barrido rápido
+  hielo_resbaloso: [[0, 3], [0.4, 2], [0, 1], [-0.4, 2], [0, 3]], // rectas largas y curva peraltada
+  pantano: [[0, 0.6], [0.8, 1], [0, 0.5], [-1.6, 1.6], [0, 0.5], [0.8, 1], [0, 0.6]], // curvas lentas
+  cascada: [[0, 1], [0.6, 3], [0, 0.6], [-0.6, 3], [0, 1]], // gran curva en bajada
+}
+const ROLE_TURN = { rapida: 0.7, lenta: 1.25, media: 1 } // rápida: curvas abiertas; lenta: cerradas
+const ROLE_HILL = { rapida: 0.015, lenta: 0.05, media: 0.035 } // subidas/bajadas suaves (× cuerda)
+
+// Puntos de paso de un obstáculo de pista entre A y B. El rumbo arranca en Ta y acaba en Tb; el
+// trazado se escala para caer justo en B y se limita su desvío lateral (no invade otras rutas).
+function trackPts(kind, A, B, Ta, Tb, opt) {
+  const rng = opt.rng || Math.random
+  const { L, c, u, v } = basis(A, B)
+  const roll = (rng() - 0.5) * 0.7 // parte de la curva se vuelve subida/bajada
+  const side = u.clone().multiplyScalar(Math.cos(roll)).addScaledVector(v, Math.sin(roll))
+  const up = new THREE.Vector3().crossVectors(side, c)
+  const kT = (ROLE_TURN[opt.role] ?? 1) * (0.85 + rng() * 0.3) * (rng() < 0.5 ? -1 : 1)
+  const pieces = PLANS[kind].map(([turn, len]) => [turn * kT, len * (0.8 + rng() * 0.4)])
+  const head = (T) => (T ? clamp(Math.atan2(T.dot(side), T.dot(c)), -1.2, 1.2) : 0)
+  const psi0 = head(Ta); const psi1 = head(Tb)
+  const S = pieces.reduce((s, p) => s + p[1], 0)
+  const kappa = (s) => {
+    let acc = 0
+    for (const [turn, len] of pieces) {
+      if (s < acc + len) { const x = (s - acc) / len; return turn ? (turn / (0.75 * len)) * Math.min(1, x / 0.25, (1 - x) / 0.25) : 0 }
+      acc += len
+    }
+    return 0
+  }
+  const M = 240; const ds = S / M; const xs = new Float32Array(M + 1); const ys = new Float32Array(M + 1)
+  const hill = (ROLE_HILL[opt.role] ?? 0.02) * L * (rng() < 0.5 ? -1 : 1)
+  let scale = 1; let kx = 1
+  for (let pass = 0; pass < 4; pass++) {
+    let psiPlan = 0; let x = 0; let y = 0
+    for (let i = 0; i <= M; i++) {
+      xs[i] = x; ys[i] = y
+      const psi = psiPlan * scale + psi0 + (psi1 - psi0) * smooth01(i / M)
+      psiPlan += kappa((i + 0.5) * ds) * ds
+      x += Math.cos(psi) * ds; y += Math.sin(psi) * ds
+    }
+    kx = L / Math.max(xs[M], 1e-3)
+    let ymax = 0
+    for (let i = 0; i <= M; i++) ymax = Math.max(ymax, Math.abs((ys[i] - ys[M] * smooth01(i / M)) * kx))
+    const lim = 0.12 * L
+    if (xs[M] > 0.35 * S && ymax <= lim) break
+    scale *= Math.min(0.8, lim / Math.max(ymax, 1e-3))
+  }
+  // pendiente vertical de los extremos: la tangente 3D casa con Ta/Tb sin puntos de enlace; la
+  // transición sólo ocupa el 18% de cada punta (no infla el tramo entero)
+  const TAUE = 0.18; const G = (x) => (x < 1 ? x - (x * x) / 2 : 0.5) // curvatura de un solo signo en cada punta
+  const slope = (T) => (T ? clamp(T.dot(up) / Math.max(0.2, Math.hypot(T.dot(c), T.dot(side))), -2, 2) : 0)
+  const m0 = slope(Ta); const m1 = slope(Tb)
+  const n = clamp(Math.round(L / 2.5), 12, 120); const pts = []
+  for (let j = 1; j < n; j++) {
+    const i = Math.round((j / n) * M); const t = i / M; const along = xs[i] * kx; const tx = along / L
+    const y = (ys[i] - ys[M] * smooth01(t)) * kx
+    const z = hill * Math.sin(Math.PI * t) + L * TAUE * (m0 * G(tx / TAUE) - m1 * G((1 - tx) / TAUE) - (m0 * tx - m1 * (1 - tx)) / 2)
+    pts.push(A.clone().addScaledVector(c, along).addScaledVector(side, y).addScaledVector(up, z))
+  }
+  return pts
+}
+
+// Puntos interiores de una Bézier cúbica de P0 (rumbo T0) a P1 (rumbo T1): una sola curva amplia.
+function bezierPts(P0, T0, P1, T1) {
+  const d = P0.distanceTo(P1); const k = d * 0.42; const n = clamp(Math.round(d / 2.5), 4, 80); const pts = []
+  const c1 = at(P0, T0, k); const c2 = at(P1, T1, -k)
+  for (let i = 1; i < n; i++) {
+    const t = i / n; const s = 1 - t
+    pts.push(P0.clone().multiplyScalar(s * s * s).addScaledVector(c1, 3 * s * s * t).addScaledVector(c2, 3 * s * t * t).addScaledVector(P1, t * t * t))
+  }
+  return pts
+}
 
 const SHAPES = {
-  rampa: (A, B) => { const { C, L, u, v } = basis(A, B); return [at(A, C, 0.33, u, L * 0.1, v, -L * 0.05), at(A, C, 0.67, u, -L * 0.1, v, -L * 0.05)] },
-  zigzag: (A, B, P) => { const { C, u } = basis(A, B); return [1, 2, 3, 4, 5, 6].map((i) => at(A, C, i / 7, u, (i % 2 ? 2.6 : -2.6) * WORLD_SCALE * P.coil)) },
-  espiral: (A, B, P) => coil(A, B, 2 + P.turns, (t) => 3.2 * WORLD_SCALE * P.coil * bump(t)),
-  sacacorchos: (A, B, P) => coil(A, B, 3 + P.turns, (t) => (P.radius * 1.85 + 1.2) * bump(t)),
+  espiral: (A, B, P) => coil(A, B, 2 + P.turns, (t) => 3.2 * WORLD_SCALE * P.coil * bump(t), A, undefined, true),
+  sacacorchos: (A, B, P) => coil(A, B, 3 + P.turns, (t) => (P.radius * 1.85 + 1.2) * bump(t), A, undefined, true),
   // remolino que se cierra: empieza en el borde del cono (A) y acaba en su vértice (B)
   embudo: (A, B, P) => { const R = 4.0 * WORLD_SCALE * P.coil; return coil(A, B, 3, (t) => R * (1 - t), at(A, basis(A, B).u, -R), (t) => t * t) },
-  rizo: (A, B, P) => {
-    const { C, L, c, u, v } = basis(A, B); const r = Math.min(3.4 * WORLD_SCALE * P.coil, L * 0.3); const sh = P.radius * 2.4
-    const pts = [at(A, C, 0.3, u, -sh / 2)]
-    // círculo vertical; se desplaza de lado lo justo para que el tubo no se corte a sí mismo
-    for (let k = 0; k <= 12; k++) { const a = (k / 12) * TAU; pts.push(at(A, C, 0.5, c, r * Math.sin(a), v, r * (1 - Math.cos(a)), u, sh * (k / 12 - 0.5))) }
-    return [...pts, at(A, C, 0.7, u, sh / 2)]
-  },
-  cascada: (A, B) => {
-    const { C } = basis(A, B); const k = 5; const pts = []
-    const step = (h, y) => new THREE.Vector3(A.x + C.x * h, A.y + C.y * y, A.z + C.z * h)
-    for (let i = 0; i < k; i++) { pts.push(step((i + 0.75) / k, (i + 0.08) / k)); if (i < k - 1) pts.push(step((i + 1) / k, (i + 1) / k)) }
-    return pts
-  },
   // tiro horizontal: parábola de caída libre
   caida: (A, B) => { const { C } = basis(A, B); return [1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(A.x + C.x * (i / 8), A.y + C.y * (i / 8) ** 2, A.z + C.z * (i / 8))) },
-  // dos botes
-  trampolin: (A, B) => { const { C, L } = basis(A, B); const h = 2.5 * WORLD_SCALE + L * 0.15; return Array.from({ length: 15 }, (_, i) => at(A, C, (i + 1) / 16, Y, h * Math.abs(Math.sin(((i + 1) / 16) * TAU)))) },
+  // un salto largo (un solo arco: sin botes alternados)
+  trampolin: (A, B) => { const { C, L } = basis(A, B); const h = 2.5 * WORLD_SCALE + L * 0.15; return Array.from({ length: 11 }, (_, i) => at(A, C, (i + 1) / 12, Y, h * Math.sin(((i + 1) / 12) * Math.PI))) },
   canon: (A, B) => { const { C, L } = basis(A, B); return Array.from({ length: 9 }, (_, i) => at(A, C, (i + 1) / 10, Y, L * 1.0 * ((i + 1) / 10) * (1 - (i + 1) / 10))) },
-  turbina: (A, B, P) => {
-    const { C, u, v } = basis(A, B); const amp = 2.8 * WORLD_SCALE * P.coil
-    return Array.from({ length: 7 }, (_, i) => { const t = (i + 1) / 8; return at(A, C, t, u, amp * Math.sin(t * Math.PI * 1.5), v, 1.1 * WORLD_SCALE * Math.sin(t * Math.PI)) })
-  },
-  hielo_resbaloso: (A, B, P) => {
-    const { C, u, v } = basis(A, B)
-    return [at(A, C, 0.25, u, 1.7 * WORLD_SCALE * P.coil, v, -0.7 * WORLD_SCALE), at(A, C, 0.5, u, 0, v, -1.4 * WORLD_SCALE), at(A, C, 0.75, u, -1.7 * WORLD_SCALE * P.coil, v, -0.7 * WORLD_SCALE)]
-  },
-  pantano: (A, B) => {
-    const { C, u, v } = basis(A, B)
-    return [1, 2, 3, 4, 5].map((i) => { const t = i / 6; return at(A, C, t, v, -1.3 * WORLD_SCALE * Math.sin(t * Math.PI), u, (i % 2 ? 1.2 : -1.2) * WORLD_SCALE) })
-  },
   portal: (A, B) => {
     const { C, v } = basis(A, B)
     return [at(A, C, 0.35, v, 0.9 * WORLD_SCALE), at(A, C, 0.65, v, 0.9 * WORLD_SCALE)]
@@ -653,26 +863,60 @@ const SHAPES = {
 }
 SHAPES.salida = SHAPES.llegada = () => []
 
-const TENSION = { zigzag: 0.25, cascada: 0.2 } // esquinas marcadas; el resto, centrípeta (sin rebasar)
+export const OUT_GATES = ['arco_salida', 'parrilla_semaforo', 'tunel_rampa', 'lanzadera_aros', 'puente_banderas']
+export const IN_GATES = ['meta_cuadros', 'embudo_llegada', 'portal_llegada', 'arco_meta', 'tunel_frenado']
 const ownsStart = (k) => KINDS[k].air || k === 'embudo' // su arranque lo dicta la forma, no el vecino
+export const GRID_LEN = 14 // recta de parrilla de la salida, en unidades de mundo
+export const FINISH_LEN = 10 // recta final de meta de la llegada
 
-function shape(kind, A, B, P, Ta, Tb, midPt = null) {
+function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   const lead = Math.min(2.5 * WORLD_SCALE, A.distanceTo(B) * 0.15); const air = KINDS[kind].air
+  const cr = (pts) => new THREE.CatmullRomCurve3(pts, false, 'centripetal')
+  if (PLANS[kind]) return cr([A, ...trackPts(kind, A, B, Ta, Tb, opt), B])
+  if (kind === 'rizo') {
+    // curva de entrada, círculo vertical (desplazado de lado lo justo para no cortarse) y curva de salida
+    const { C, L, c, u, v } = basis(A, B); const r = Math.min(3.4 * WORLD_SCALE * P.coil, L * 0.3); const sh = P.radius * 2.4
+    const loop = []
+    for (let k = 0; k <= 24; k++) { const a = (k / 24) * TAU; loop.push(at(A, C, 0.5, c, r * Math.sin(a), v, r * (1 - Math.cos(a)), u, sh * (k / 24 - 0.5))) }
+    const tIn = c.clone().addScaledVector(u, sh / (TAU * r)).normalize()
+    return cr([A, ...bezierPts(A, Ta || c, loop[0], tIn), ...loop, ...bezierPts(loop[24], tIn, B, Tb || c), B])
+  }
+  if (kind === 'salida' || kind === 'llegada') {
+    // salida: recta de parrilla que sale del planeta y una sola curva amplia hasta la unión;
+    // llegada: curva amplia y recta final de meta que entra al planeta
+    const out = kind === 'salida'
+    const G0 = out ? at(A, Ta, GRID_LEN) : A; const G1 = out ? B : at(B, Tb, -FINISH_LEN)
+    const T0 = out ? Ta : Ta.clone().normalize(); const T1 = Tb.clone().normalize()
+    const pts = out ? [A, at(A, Ta, GRID_LEN * 0.5), G0] : [A]
+    let P0 = G0; let D0 = T0
+    for (const W of midPt ? [midPt, G1] : [G1]) {
+      const D1 = W === G1 ? T1 : G1.clone().sub(P0).normalize()
+      pts.push(...bezierPts(P0, D0, W, D1)); pts.push(W.clone()); P0 = W; D0 = D1
+    }
+    if (!out) pts.push(at(B, Tb, -FINISH_LEN * 0.5), B)
+    return cr(pts)
+  }
+  const leadA = Ta && !ownsStart(kind); const leadB = Tb && !air
+  // la forma sin sus puntas (dentro del enlace); se une a A y B con una curva Bézier que respeta Ta/Tb
+  const body = SHAPES[kind](A, B, P).filter((p) => !(leadA && p.distanceTo(A) < lead * 1.1) && !(leadB && p.distanceTo(B) < lead * 1.1))
+  const dirOf = (p, q) => q.clone().sub(p).normalize()
   const pts = [A]
-  if (Ta && !ownsStart(kind)) pts.push(at(A, Ta, lead))
   if (midPt) pts.push(midPt)
-  pts.push(...SHAPES[kind](A, B, P))
-  if (Tb && !air) pts.push(at(B, Tb, -lead))
+  if (leadA && body.length >= 2) pts.push(...bezierPts(A, Ta, body[0], dirOf(body[0], body[1])))
+  else if (leadA) pts.push(at(A, Ta, lead))
+  pts.push(...body)
+  const nb = body.length
+  if (leadB && nb >= 2) pts.push(...bezierPts(body[nb - 1], dirOf(body[nb - 2], body[nb - 1]), B, Tb))
+  else if (leadB) pts.push(at(B, Tb, -lead))
   pts.push(B)
-  const t = TENSION[kind]
-  return new THREE.CatmullRomCurve3(pts, false, t ? 'catmullrom' : 'centripetal', t)
+  return new THREE.CatmullRomCurve3(pts, false, 'centripetal')
 }
 
 // Punto de rodeo para salida/llegada si la normal del terminal apunta lejos del hub.
 function wrapMid(node, dir, target) {
   const toTarget = target.clone().sub(node.pos).normalize()
   if (dir.dot(toTarget) >= 0.35) return null
-  return node.pos.clone().addScaledVector(slerpDir(dir, toTarget, 0.55), NODE_R + 7.0)
+  return node.pos.clone().addScaledVector(slerpDir(dir, toTarget, 0.55), NODE_R + GRID_LEN + 3)
 }
 
 function sampleWayPoints(way, steps = 14) {
@@ -746,25 +990,26 @@ function placeWay(world, circuit, from, to, placed) {
     return { minTube, minNode, minHub }
   }
 
-  for (const bowExtra of [-12, 0, 10, 20, 32, 46, 62, 80, 100].map((x) => x * WORLD_SCALE)) {
+  // más pasadas (ángulos intermedios y otra semilla de trazado) sólo si la anterior no encontró hueco
+  for (const [half, salt] of [[0, 0], [0.5, 1], [0.25, 2]]) for (const bowExtra of bestScore >= 2.5 ? [] : [-12, 0, 10, 20, 32, 46, 62, 80, 100].map((x) => x * WORLD_SCALE)) {
     for (let k = 0; k < N_ANG; k++) {
-      const theta = (baseTheta + (k / N_ANG) * TAU) % TAU
-      const cand = buildWay(world, circuit, from, to, theta, bowExtra, false)
+      const theta = (baseTheta + ((k + half) / N_ANG) * TAU) % TAU
+      const cand = buildWay(world, circuit, from, to, theta, bowExtra, false, salt)
       const coarse = evalCand(cand, 14)
       if (!coarse) continue
       const res = coarse.minTube >= 2.5 && coarse.minNode >= 0 ? evalCand(cand, 28) : coarse
       if (!res) continue
       const score = res.minTube < 4.0 ? res.minTube - 10 : Math.min(res.minTube, res.minNode + 1, res.minHub * 0.2)
-      if (score > bestScore) { bestScore = score; best = { theta, bowExtra } }
+      if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt } }
       if (res.minTube >= 4.8 && res.minNode >= 1.5 && res.minHub >= 24) {
-        const w = buildWay(world, circuit, from, to, theta, bowExtra, true)
+        const w = buildWay(world, circuit, from, to, theta, bowExtra, true, salt)
         indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
         return w
       }
     }
   }
-  const chosen = best || { theta: baseTheta, bowExtra: 0 }
-  const w = buildWay(world, circuit, from, to, chosen.theta, chosen.bowExtra, true)
+  const chosen = best || { theta: baseTheta, bowExtra: 0, salt: 0 }
+  const w = buildWay(world, circuit, from, to, chosen.theta, chosen.bowExtra, true, chosen.salt)
   indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
   return w
 }
@@ -775,7 +1020,7 @@ const EVENT_FLEX = FLEX.filter((k) => KINDS[k].event)
 const EVENT_ALL = OBSTACLES.filter((k) => KINDS[k].event)
 
 // ───────────────────────── un sentido de un circuito ─────────────────────────
-function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = true) {
+function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = true, salt = 0) {
   const { nodes } = world
   const a = nodes[from]; const b = nodes[to]; const theme = circuit.theme; const P = PARAMS[theme.id]
   const rng = mulberry32(7000 + circuit.idx * 31 + (from < to ? 0 : 1))
@@ -813,7 +1058,10 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
     if (commit) world.segments.push(s)
     return s
   }
-  const launch = seg('salida', shape('salida', S, hubs[0], P, nS, hubT[0], wrapMid(a, nS, hubs[0])), -1, [])
+  // rectas de parrilla/meta: salen del planeta inclinadas hacia su unión (las bocas vecinas divergen)
+  const gridDir = (n, target, from, k) => { const t = target.clone().sub(from); t.addScaledVector(n, -t.dot(n)); return n.clone().addScaledVector(t.normalize(), k).normalize() }
+  const tilt = [0.5, 0.2, 0.8][salt]; const gOut = gridDir(nS, hubs[0], S, tilt); const gIn = gridDir(nE, hubs[2], E, tilt)
+  const launch = seg('salida', shape('salida', S, hubs[0], P, gOut, hubT[0], wrapMid(a, nS, hubs[0])), -1, [])
 
   // Reparto por identidad de ruta (A rápida/arriesgada, B lenta/segura, C espectacular) y tema.
   // Cada mitad sigue el ritmo: [tramo de entrada, evento, salida].
@@ -906,7 +1154,9 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
           if ((needPrev && !cs[m - 1]) || (needNext && !cs[m + 1])) continue
           const Ta = m === 0 ? hubT[h] : ownsStart(kinds[m]) ? null : (KINDS[kinds[m - 1]].air ? cs[m - 1].getTangent(1) : Tbase[m - 1])
           const Tb = m === 2 ? hubT[h + 1] : ownsStart(kinds[m + 1]) ? cs[m + 1].getTangent(0) : Tbase[m]
-          cs[m] = shape(kinds[m], pts[m], pts[m + 1], P, Ta, Tb)
+          // semilla propia por way, ruta y tramo: cada camino traza sus curvas a su manera
+          const trk = { role, rng: mulberry32(7700 + salt * 1009 + circuit.idx * 97 + (from < to ? 0 : 53) + r * 11 + h * 5 + m) }
+          cs[m] = shape(kinds[m], pts[m], pts[m + 1], P, Ta, Tb, null, trk)
         }
       }
       const s0 = seg(k0, cs[0], r, kinds)
@@ -928,7 +1178,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       length: 0, profile: { speed, thrill, label },
     })
   }
-  const landing = seg('llegada', shape('llegada', hubs[2], E, P, hubT[2], nE.clone().negate(), wrapMid(b, nE, hubs[2])), -1, [])
+  const landing = seg('llegada', shape('llegada', hubs[2], E, P, hubT[2], gIn.clone().negate(), wrapMid(b, nE, hubs[2])), -1, [])
   launch.next = heads[0].map((s) => s.i)
   tails[0].forEach((s) => { s.next = heads[1].map((x) => x.i) })
   tails[1].forEach((s) => { s.next = [landing.i] })
@@ -950,8 +1200,11 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
     pOut.wayOut = way; pIn.wayIn = way
     const tOut = a.terminals.find((t) => t.kind === 'out' && t.to === to)
     const tIn = b.terminals.find((t) => t.kind === 'in' && t.to === from)
-    if (tOut) tOut.way = way
-    if (tIn) tIn.way = way
+    // bocas: tipo de puerta distinto en salida y llegada, y variado entre caminos
+    way.gates = { out: OUT_GATES[(way.idx + from) % OUT_GATES.length], in: IN_GATES[(way.idx * 2 + to) % IN_GATES.length] }
+    launch.gate = way.gates.out; landing.gate = way.gates.in
+    if (tOut) Object.assign(tOut, { way, gate: way.gates.out, approach: { kind: 'parrilla', len: GRID_LEN, dir: gOut } })
+    if (tIn) Object.assign(tIn, { way, gate: way.gates.in, approach: { kind: 'recta_meta', len: FINISH_LEN, dir: gIn } })
     world.ways.push(way); world.waysFrom[from].push(way)
   }
   return way

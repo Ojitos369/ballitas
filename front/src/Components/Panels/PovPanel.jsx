@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { usePanelMin } from './Detail.jsx'
 
 const JOY_MAX_R = 32
 const JOY_DEADZONE = 0.18 // zona muerta amplia: sin deriva al soltar a medias
@@ -40,6 +41,7 @@ export default function PovPanel({
   const padRef = useRef(null)
   const knobRef = useRef(null)
   const joyPointerId = useRef(null)
+  const [min, toggleMin] = usePanelMin('pov')
 
   const setKnob = (dx, dy, nx, ny) => {
     if (knobRef.current) {
@@ -120,6 +122,16 @@ export default function PovPanel({
           <button
             type="button"
             className="pov-action"
+            aria-expanded={!min}
+            onClick={toggleMin}
+            title={min ? 'Mostrar controles' : 'Minimizar controles'}
+          >
+            {min ? '🎥 ▸' : '◂'}
+          </button>
+          {!min && <>
+          <button
+            type="button"
+            className="pov-action"
             onClick={onCenter}
             title="Centrar mirada al frente (R)"
           >
@@ -144,9 +156,10 @@ export default function PovPanel({
             🧭 {gyroActive ? 'Giro ON' : 'Giroscopio'}
           </button>
           <button type="button" className="pov-action" aria-label="Salir de POV (Esc)" title="Salir de POV (Esc)" onClick={onExitPov}>✕</button>
+          </>}
         </div>
 
-        {gyroNote && <p className="pov-status">{gyroNote}</p>}
+        {gyroNote && !min && <p className="pov-status">{gyroNote}</p>}
 
       </section>
 

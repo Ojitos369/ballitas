@@ -5,7 +5,8 @@ import { voice } from './personality.js'
 import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
   mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
-  MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff,
+  MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff, segmentTangent,
+  laneRelief, reliefSlope, OUT_GATES, IN_GATES,
 } from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
@@ -251,12 +252,13 @@ test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y t
         for (let k = 0; k <= 120; k++) {
           const u = k / 120
           const F = laneFrame(s, l.id, u)
+          F.axisT = segmentTangent(s, u)
           assert.ok(Math.abs(F.up.length() - 1) < 1e-6 && Math.abs(F.up.dot(F.tangent)) < 1e-6)
           assert.ok(Math.abs(F.wall.distanceTo(F.axis) - s.radius) < 1e-6)
-          assert.ok(Math.abs(F.pos.distanceTo(F.axis) - (s.air ? 0 : s.radius - BALL_R)) < 1e-6)
+          assert.ok(Math.abs(F.pos.distanceTo(F.axis) - (s.air ? 0 : s.radius - BALL_R - F.relief)) < 1e-6)
           if (!s.air) assert.ok(F.up.dot(F.axis.clone().sub(F.pos)) > 0, 'up apunta al eje')
           if (prev) {
-            const turn = prev.tangent.angleTo(F.tangent)
+            const turn = prev.axisT.angleTo(F.axisT) // giro del eje (la tangente de la superficie incluye el relieve)
             const frameTurn = prev.dir.angleTo(F.dir)
             assert.ok(frameTurn <= turn * 1.3 + 0.1,`${w.id} ${s.kind} carril ${l.id}: salto del marco en u=${u.toFixed(3)} (marco=${frameTurn.toFixed(3)}, tangente=${turn.toFixed(3)})`)
           }
@@ -386,12 +388,13 @@ test('los eventos críticos no usan líneas ociosas de la personalidad', () => {
   assert.match(result.text, /Adi[oó]s|apago|Buenas noches|pr[oó]xima generaci[oó]n/)
 })
 
-test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, usa y falla mecanismos', () => {
+test('ballita en carril: pegada al firme, sin atravesar el cristal ni salir del carril, continua, usa y falla mecanismos', () => {
   const sim = new Sim({ rng: mulberry32(5) })
   const DT = 0.02
   const prev = new Map()
   const used = new Set()
   let starts = 0; let fails = 0; let tube = 0; let glued = 0; let ceiling = 0
+  let flights = 0; let impacts = 0; let edges = 0; let climbSlow = 0
   for (let i = 0; i < 6000; i++) {
     sim.tick(DT)
     for (const b of sim.ballitas) {
@@ -409,7 +412,18 @@ test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, 
           assert.ok(d + BALL_R <= s.radius + 1e-3, `atraviesa el cristal en ${s.kind}: ${(d + BALL_R).toFixed(3)} > ${s.radius}`)
           if (!b.sw) {
             tube++
-            if (Math.abs(d - (s.radius - BALL_R)) < 0.1) glued++
+            const h = laneRelief(s, b.lane, b.segT)
+            const R = s.radius - BALL_R
+            // nunca por debajo del firme (relieve) cuando ya va pegada a su pared
+            if (b.rail >= R - 1e-3) assert.ok(d <= R - h + 1e-6, `bajo el firme en ${s.kind}: ${d.toFixed(3)} > ${(R - h).toFixed(3)}`)
+            // nunca sale del carril: el desvío lateral queda dentro de sus bordes
+            const lane = s.lanes.find((l) => l.id === b.lane)
+            assert.ok(Math.abs(b.lat) <= lane.width / 2 + 1e-9, `se sale del carril: ${b.lat.toFixed(3)}`)
+            if (b.onLane) assert.ok(Math.abs(angDiff(b.ang, laneAngle(s, b.lane, b.segT) + b.lat / R)) < 1e-6, 'fuera de la canaleta')
+            if (!b.airborne && Math.abs(d - (R - h)) < 0.1) glued++
+            if (b.airborne && !(p && p.airborne)) flights++
+            if (b.edge) edges++
+            if (b.slope > 0.15 && p && p.seg === s && b.speed < p.speed) climbSlow++
             if (Math.abs(angDiff(b.ang, Math.PI)) < 0.6) ceiling++
           }
         }
@@ -418,16 +432,83 @@ test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, 
         assert.ok(Math.abs(angDiff(p.ang, b.ang)) < 1.5, `salto de ángulo ${angDiff(p.ang, b.ang).toFixed(3)} en ${s.kind}`)
         assert.ok(Math.abs(p.off - b.off) < 1, `salto radial ${p.off} -> ${b.off} (${p.seg.kind} -> ${s.kind})`)
         // (en esquinas cerradas el punto de la pared barre más rápido que el eje: se excluyen)
-        if (p.seg === s && p.snap <= 0 && b.snap <= 0 && !['embudo', 'cascada', 'zigzag'].includes(s.kind)) {
+        if (p.seg === s && p.snap <= 0 && b.snap <= 0 && !['embudo', 'cascada', 'horquilla'].includes(s.kind)) {
           assert.ok(p.pos.distanceTo(b.pos) < 4.5,`salto de posición ${p.pos.distanceTo(b.pos).toFixed(3)} en ${s.kind}`)
         }
       }
-      prev.set(b.id, { way: b.way, seg: s, ang: b.ang, off: b.off, snap: b.snap, pos: b.pos.clone(), sw: b.sw, failed: !!b.sw?.failed })
+      if (b.impact > 0.2 && !(p && p.impact > 0.2)) impacts++
+      assert.ok(Number.isFinite(b.hy + b.vy + b.lat + b.latV + b.slope + b.impact) && b.impact >= 0 && b.impact <= 1)
+      prev.set(b.id, { way: b.way, seg: s, ang: b.ang, off: b.off, snap: b.snap, pos: b.pos.clone(), sw: b.sw, failed: !!b.sw?.failed, airborne: b.airborne, impact: b.impact, speed: b.speed })
     }
   }
-  assert.ok(tube > 0 && glued / tube > 0.75, `pegada a la pared sólo ${(100 * glued / tube).toFixed(1)}% del tiempo`)
+  assert.ok(tube > 0 && glued / tube > 0.75, `pegada al firme sólo ${(100 * glued / tube).toFixed(1)}% del tiempo`)
+  assert.ok(flights >= 5, `pocos despegues en crestas/saltos: ${flights}`)
+  assert.ok(impacts >= 5, `pocos aterrizajes/choques: ${impacts}`)
+  assert.ok(edges > 0, 'alguna vez roza el borde del carril en una curva')
+  assert.ok(climbSlow > 0, 'cuesta arriba pierde velocidad')
   assert.ok(starts >= 20, `pocos cambios de carril: ${starts}`)
   assert.ok(used.size >= 6, `pocos tipos de mecanismo: ${[...used].join(',')}`)
   assert.ok(fails >= 1, 'algún mecanismo falla')
   assert.ok(ceiling > 0, 'alguna vez rueda por el techo')
+})
+
+test('trazado tipo circuito: sin cambios de signo de curvatura de alta frecuencia', () => {
+  // cuenta, por cada 100 u, cuántas veces la curvatura (|k| > 1/120) invierte su dirección
+  const flipsOf = (s) => {
+    const n = Math.max(8, Math.ceil(s.length / 1.5)); const pts = s.curve.getSpacedPoints(n)
+    let last = null; let f = 0
+    for (let i = 1; i < n; i++) {
+      const t1 = pts[i].clone().sub(pts[i - 1]); const t2 = pts[i + 1].clone().sub(pts[i])
+      const ds = (t1.length() + t2.length()) / 2
+      const k = t2.normalize().sub(t1.normalize()).divideScalar(ds)
+      if (k.length() < 1 / 120) continue
+      k.normalize()
+      if (last && last.dot(k) < -0.2) f++
+      last = k
+    }
+    return f
+  }
+  for (const w of world.ways) {
+    let F = 0; let L = 0
+    for (const s of w.segments) { F += flipsOf(s); L += s.length }
+    assert.ok((100 * F) / L <= 1.5, `${w.id}: ${((100 * F) / L).toFixed(2)} cambios de signo de curvatura cada 100 u`)
+  }
+  assert.ok(!OBSTACLES.includes('zigzag'), 'ya no hay obstáculo zigzag')
+})
+
+test('relieve: continuo, finito, dentro del tubo y nulo en las uniones', () => {
+  for (const s of world.segments) {
+    for (const l of s.lanes) {
+      if (s.air) { assert.equal(laneRelief(s, l.id, 0.5), 0); continue }
+      const hMax = 0.45 * (s.radius - BALL_R)
+      assert.ok(laneRelief(s, l.id, 0) < 1e-9 && laneRelief(s, l.id, 1) < 1e-9, `${s.way.id} ${s.kind}: relieve en la unión`)
+      const N = Math.max(200, Math.ceil(s.length / 0.25)); let prev = 0
+      for (let k = 0; k <= N; k++) {
+        const u = k / N; const h = laneRelief(s, l.id, u)
+        assert.ok(Number.isFinite(h) && h >= 0 && h <= hMax + 1e-5, `${s.way.id} ${s.kind}: relieve fuera de rango ${h}`)
+        assert.ok(Number.isFinite(reliefSlope(s, l.id, u)))
+        // continuo: entre muestras a 0.25 u no salta más que la caída más brusca de una rampa
+        if (k) assert.ok(Math.abs(h - prev) <= (s.length / N) * 0.9 + 1e-6, `${s.way.id} ${s.kind}: relieve discontinuo en u=${u.toFixed(3)}`)
+        prev = h
+      }
+    }
+  }
+})
+
+test('bocas: puerta de salida y de llegada distintas, legibles y variadas entre caminos', () => {
+  const outs = new Set(); const ins = new Set()
+  for (const w of world.ways) {
+    assert.ok(OUT_GATES.includes(w.gates.out) && IN_GATES.includes(w.gates.in) && w.gates.out !== w.gates.in)
+    assert.equal(w.segments[0].gate, w.gates.out)
+    assert.equal(w.segments.find((s) => !s.next.length).gate, w.gates.in)
+    outs.add(w.gates.out); ins.add(w.gates.in)
+  }
+  for (const n of world.nodes) {
+    for (const t of n.terminals) {
+      assert.ok((t.kind === 'out' ? OUT_GATES : IN_GATES).includes(t.gate), `${n.name}: puerta ${t.gate} en boca ${t.kind}`)
+      assert.equal(t.gate, t.kind === 'out' ? t.way.gates.out : t.way.gates.in)
+      assert.ok(t.approach.len > 0 && Math.abs(t.approach.dir.length() - 1) < 1e-6 && t.approach.dir.dot(t.dir) > 0.3, 'la recta sale del planeta')
+    }
+  }
+  assert.ok(outs.size >= 4 && ins.size >= 4, 'tipos de boca variados')
 })
