@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
-import { BALL_R, wallFrame } from '../../Core/world.js'
+import { BALL_R, laneFrame, laneRelief, wallFrame } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
 import WorldHtml from './WorldHtml.jsx'
 import {
@@ -30,6 +30,24 @@ const vTmp = new THREE.Vector3()
 const frameFwd = new THREE.Vector3()
 const prevDirMap = new WeakMap()
 const smooth01 = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c) }
+const LANE_F = {}; const SHADOW_F = {}
+const Y_UP = new THREE.Vector3(0, 1, 0)
+
+// Sombra de contacto: disco suave pegado a la pista bajo la ballita (compartido por todas).
+const SHADOW_GEO = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2)
+const SHADOW_MAT = (() => {
+  const c = typeof document !== 'undefined' ? document.createElement('canvas') : null
+  let map = null
+  if (c) {
+    c.width = c.height = 64
+    const x = c.getContext('2d')
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32)
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)')
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64)
+    map = new THREE.CanvasTexture(c)
+  }
+  return new THREE.MeshBasicMaterial({ color: '#000000', alphaMap: map, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+})()
 
 // Expresiones chibi extendidas (heredan FACES y añaden emociones por evento/situación)
 const CHIBI_FACES = {
@@ -182,7 +200,8 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
   const emoState = useRef({ kind: null, until: 0, start: 0, lastSeg: null, lastPhase: null })
   const microState = useRef({ nextWink: 5 + (b.id % 6), winkUntil: 0, nextBlep: 7 + (b.id % 5), blepUntil: 0 })
   // carril: aterrizaje (squash), inclinación en curvas y voltereta al cambiar de pared
-  const laneFx = useRef({ squash: 0, lean: 0, up: new THREE.Vector3(0, 1, 0), prevT: new THREE.Vector3(), hasPrev: false, hadSw: false, wasAir: false })
+  const laneFx = useRef({ squash: 0, lean: 0, air: 0, pitch: 0, up: new THREE.Vector3(0, 1, 0), prevT: new THREE.Vector3(), hasPrev: false, hadSw: false, wasAir: false })
+  const shadow = useRef()
 
   const g = b.genome.traits
   const color = useMemo(() => bodyColor(b.genome), [b])
@@ -242,6 +261,9 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
     depthWrite: false,
     toneMapped: false,
   }), [color])
+
+  const shadowMat = useMemo(() => SHADOW_MAT.clone(), []) // clon: opacidad propia, mismo alphaMap
+  useEffect(() => () => shadowMat.dispose(), [shadowMat])
 
   const [nearCam, setNearCam] = useState(false)
   const nearCamRef = useRef(false)
@@ -346,7 +368,10 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
     let flip = 0
     const sw = b.phase === 'travel' ? b.sw : null
     if (b.phase === 'travel' && b.seg?.lanes) {
-      const F = wallFrame(b.seg, b.ang ?? 0, b.segT, b.off ?? 0)
+      // Apoyada en su carril: normal y tangente reales de la superficie (relieve, vaivén y peralte);
+      // en vuelo o en un mecanismo, el marco crudo del tubo en su ángulo actual.
+      const onSurf = !sw && !b.airborne && b.onLane !== false && !b.seg.air
+      const F = onSurf ? laneFrame(b.seg, b.lane, b.segT, LANE_F) : wallFrame(b.seg, b.ang ?? 0, b.segT, b.off ?? 0)
       // suavizado del up: girar con la pared sin marear
       if (fx.hasPrev) fx.up.lerp(F.up, k)
       else fx.up.copy(F.up)
@@ -380,17 +405,38 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
       fx.wasAir = false
       fx.lean *= 1 - k
     }
-    fx.squash = Math.max(0, fx.squash - cdt * 3.2)
-    if (bodyGroup.current) bodyGroup.current.rotation.set(flip, 0, fx.lean)
+    const travelling = b.phase === 'travel' && b.seg
+    fx.squash = Math.max(0, fx.squash - cdt * 3.2, travelling ? (b.impact ?? 0) : 0) // aplasta al aterrizar / chocar
+    fx.air += ((travelling && b.airborne && !sw ? 1 : 0) - fx.air) * k // se estira en el aire
+    // se inclina con la pendiente: hacia delante al subir (esfuerzo), hacia atrás al bajar
+    const pitchT = travelling && !sw ? THREE.MathUtils.clamp((b.slope ?? 0) * 0.6, -0.32, 0.32) : 0
+    fx.pitch += (pitchT - fx.pitch) * k
+    if (bodyGroup.current) bodyGroup.current.rotation.set(flip + fx.pitch, 0, fx.lean)
 
     // 3b. Squash & stretch elástico chibi
     const bob = Math.sin(t * 4.5 * c.bounce + phase0)
     const vs = s * tubeScale
     const speedStretch = b.speed > 0.5 ? 1 + Math.min(b.speed / 36, 0.32) : 1 + bob * 0.075 * c.bounce
     const side = 1 / Math.sqrt(speedStretch)
-    const sqY = 1 - 0.3 * fx.squash
-    const sqXZ = 1 + 0.15 * fx.squash
+    const sqY = (1 - 0.32 * fx.squash) * (1 + 0.2 * fx.air)
+    const sqXZ = (1 + 0.16 * fx.squash) * (1 - 0.08 * fx.air)
     root.current.scale.set(vs * side * sqXZ, vs * side * sqY, vs * speedStretch * sqXZ)
+
+    // 3c. Sombra de contacto sobre la pista (se encoge y aclara con la altura del salto)
+    if (shadow.current) {
+      const seg = b.seg
+      const showSh = travelling && !seg.air && !pov && extFactor < 0.96 && !(sw && sw.style !== 'pared')
+      shadow.current.visible = showSh
+      if (showSh) {
+        const rel = laneRelief(seg, b.lane, b.segT)
+        const h = Math.max(0, (b.hy ?? rel) - rel)
+        const f = wallFrame(seg, b.ang ?? 0, b.segT, seg.radius - rel - 0.03, SHADOW_F)
+        shadow.current.position.copy(f.pos)
+        shadow.current.quaternion.setFromUnitVectors(Y_UP, f.up)
+        shadow.current.scale.setScalar(r * tubeScale * (1.05 + h * 0.35) * s)
+        shadow.current.material.opacity = 0.5 * (1 - smooth01(h / 2.2))
+      }
+    }
 
     const hop = b.phase === 'at' ? Math.abs(bob) * 0.14 * c.bounce : 0
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
@@ -782,6 +828,7 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
         </WorldHtml>
       )}
     </group>
+    <mesh ref={shadow} geometry={SHADOW_GEO} material={shadowMat} visible={false} raycast={() => null} renderOrder={1} />
     <group ref={orbGroupRef} visible={false}>
       <mesh
         ref={extOrbRef}

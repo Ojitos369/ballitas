@@ -924,7 +924,7 @@ function LaneSwitchMechanisms({ way }) {
           const headPos = f0.pos.clone().addScaledVector(f0.up, 0.92)
           list.push({ seg, u: sw.u, kind: sw.kind || 'rampa', f0, f1, len, qBridge, qFrom, qTo, qHead, headPos, hasBridge: sw.from !== sw.to })
         }
-      } else if (seg.kind === 'rampa' || seg.kind === 'zigzag' || seg.kind === 'turbina' || seg.kind === 'espiral') {
+      } else if (seg.kind === 'rampa' || seg.kind === 'horquilla' || seg.kind === 'turbina' || seg.kind === 'espiral') {
         const lanes = lanesOf(seg)
         const id0 = lanes[0]?.id ?? 0
         const f0 = laneFrame(seg, id0, 0.44)
