@@ -207,7 +207,7 @@ function SimDriver({ sim, speed }) {
 // Centro y radio del mundo a partir de los nodos: de aquí salen el encuadre, los límites de zoom y el fondo.
 function medirMundo(nodes) {
   const s = new THREE.Box3().setFromPoints(nodes.map((n) => n.pos)).getBoundingSphere(new THREE.Sphere())
-  return { center: s.center, r: Math.max(s.radius, 1) * 1.3 }
+  return { center: s.center, r: Math.max(s.radius, 1) * 1.55 } // los nodos van sobre la esfera; los caminos abultan la cáscara hasta ~1.5x
 }
 
 // Capa de fondo con parallax: sigue a la cámara en fracción `follow` (1 = infinito, no se desplaza;
