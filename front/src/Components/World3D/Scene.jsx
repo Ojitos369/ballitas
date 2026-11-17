@@ -1235,7 +1235,7 @@ function PostFX({ dofOn, selected, highQuality }) {
         bokehScale={0.75}
         resolutionScale={0.5}
       />
-      <Bloom mipmapBlur luminanceThreshold={1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
+      <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} radius={0.75} intensity={highQuality ? 0.85 : 0.7} />
       <ChromaticAberration offset={highQuality ? CA_ON : CA_OFF} radialModulation modulationOffset={0.35} />
       <Vignette eskil={false} offset={0.22} darkness={highQuality ? 0.48 : 0.45} />
       <Noise opacity={highQuality ? 0.025 : 0} />
