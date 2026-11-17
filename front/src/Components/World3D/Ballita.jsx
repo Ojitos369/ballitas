@@ -159,7 +159,7 @@ function resolveExpression(b, g) {
 }
 
 // Una ballita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Ballita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
+export default function Ballita({ b, sim, selected, pov = false, follow = false, povMode = false, worldRadius = 110, onSelect }) {
   // El cursor 'pointer' no debe quedarse pegado si la ballita muere o entra POV bajo el puntero.
   useEffect(() => {
     if (pov || povMode) document.body.style.cursor = ''
@@ -417,7 +417,7 @@ export default function Ballita({ b, sim, selected, pov = false, povMode = false
         extHaloMat.opacity = extFactor * 0.86
       }
     }
-    if (ring.current) { ring.current.visible = selected && !pov; if (selected && !pov) ring.current.rotation.z = t * 2 }
+    if (ring.current) { const on = selected && !pov && !follow; ring.current.visible = on; if (on) ring.current.rotation.z = t * 2 } // sin anillo al seguir: vista limpia
     if (!bodyVisible && !selected) {
       if (emoSprite.current) emoSprite.current.visible = false
       return

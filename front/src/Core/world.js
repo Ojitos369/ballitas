@@ -7,7 +7,7 @@
 //                      amplitudes y caídas (`drop`) de obstáculos.
 //   TUBE_SCALE  (1.8): factor del radio de los tubos (`P.radius`); `BALL_R` queda fijo (0.5)
 //                      para dejar espacio interior a pórticos, gradas y decoración.
-//   TIME_SCALE  (2.5): definido en sim.js; escala objetivo del tiempo de viaje por circuito y
+//   TIME_SCALE  (4.5): definido en sim.js; escala objetivo del tiempo de viaje por circuito y
 //                      de las tasas de desgaste/puntos para compensar caminos más largos.
 // buildWorld(seed) es determinista y devuelve:
 //

@@ -52,7 +52,7 @@ export default function Main() {
         w = selected.way
         enterWay(w, Math.max(0, w.routes.indexOf(selected.route)))
       }
-      if (!w) { setVista('camino'); return }
+      if (!w) { w = sim.world.ways[0]; if (!w) return; enterWay(w) } // sin camino elegido: el primero, sin carteles de ayuda
     }
     if (id === 'ballita') {
       let b = selected
@@ -115,7 +115,7 @@ export default function Main() {
       {showStats && <StatsHud stats={stats} />}
       <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBallita={followBallita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       <ViewTabs vista={vista} goVista={goVista} sim={sim} way={activeWay} routeIndex={routeIndex} setRouteIndex={(i) => { setRouteIndex(i); setSeek(null) }}
-        selected={selected} punto={punto} paused={caminoPaused} setPaused={setCaminoPaused} caminoSpeed={caminoSpeed} setCaminoSpeed={setCaminoSpeed}
+        paused={caminoPaused} setPaused={setCaminoPaused} caminoSpeed={caminoSpeed} setCaminoSpeed={setCaminoSpeed}
         seekTo={(i) => setSeek({ i, k: performance.now() })} onFollow={followBallita} progressRef={progressRef} />
       {selected && vista !== 'camino' && (
         <Detail b={selected} sim={sim} follow={follow} pov={pov}

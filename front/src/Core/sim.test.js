@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Sim, POP, TIME_SCALE } from './sim.js'
+import { Sim, POP, TIME_SCALE, TRAVEL_SLOW } from './sim.js'
 import { voice } from './personality.js'
 import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
@@ -129,7 +129,8 @@ test('separación 3D: tubos de ways distintos >= 4.0 (fuera de 18u de nodos) y s
 test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN', () => {
   const sim = new Sim({ rng: mulberry32(7) })
   const kinds = new Set()
-  for (let i = 0; i < 6000; i++) {
+  // el viaje va en cámara lenta (TRAVEL_SLOW): 10 min de simulación equivalen a ~18 min reales
+  for (let i = 0; i < Math.round(6000 / TRAVEL_SLOW); i++) {
     sim.tick(0.1)
     assert.ok(sim.ballitas.length <= POP)
     for (const b of sim.ballitas) {
@@ -193,7 +194,7 @@ test('planeación anticipada: b.plan, memoria de rutas y sensibilidad a energía
 test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiempos de viaje 2-3x', () => {
   assert.ok(WORLD_SCALE >= 2.5 && WORLD_SCALE <= 3.0)
   assert.ok(TUBE_SCALE >= 1.6 && TUBE_SCALE <= 2.0)
-  assert.ok(TIME_SCALE >= 2.0 && TIME_SCALE <= 3.0)
+  assert.ok(TIME_SCALE >= 4.0 && TIME_SCALE <= 5.0)
   for (let i = 0; i < world.nodes.length; i++) {
     for (let j = i + 1; j < world.nodes.length; j++) {
       const d = world.nodes[i].pos.distanceTo(world.nodes[j].pos)
@@ -224,7 +225,7 @@ test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiem
   }
   assert.ok(durations.length >= 10, `pocos viajes completados: ${durations.length}`)
   const avgDur = durations.reduce((s, d) => s + d, 0) / durations.length
-  assert.ok(avgDur >= 25 && avgDur <= 65, `duración media de viaje fuera de rango 2-3x: ${avgDur.toFixed(1)}s`)
+  assert.ok(avgDur >= 45 && avgDur <= 117, `duración media de viaje fuera de rango 2-3x: ${avgDur.toFixed(1)}s`)
 })
 
 test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y todos conectan', () => {
