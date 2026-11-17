@@ -28,6 +28,14 @@ const EXPECTED = [
   'pylon',
   'clamp',
   'pod',
+  'palm',
+  'pyramid',
+  'tomb',
+  'house',
+  'torii',
+  'monolith',
+  'cloud',
+  'arch_mech',
 ]
 
 const MAX_TRIS = 4000
