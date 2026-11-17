@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
@@ -230,6 +230,20 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
     toneMapped: false,
   }), [color])
 
+  const [nearCam, setNearCam] = useState(false)
+  const nearCamRef = useRef(false)
+
+  useEffect(() => () => {
+    bodyMat.dispose()
+    blushMat.dispose()
+    irisMat.dispose()
+    browMat.dispose()
+    flashMat.dispose()
+    emoMat.dispose()
+    extOrbMat.dispose()
+    extHaloMat.dispose()
+  }, [bodyMat, blushMat, irisMat, browMat, flashMat, emoMat, extOrbMat, extHaloMat])
+
   const r = BALL_R * (0.86 + g.apetito * 0.14)
   const eyeSize = 0.255 + g.sociabilidad * 0.065
   const irisR = Math.max(0.18, eyeSize * 0.78)
@@ -243,12 +257,24 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
     const k = 1 - Math.exp(-9 * cdt)
     const t = clock.elapsedTime
 
-    // 1. Expresión viva según evento y situación
+    const rIntro = r * 14 + worldRadius * 0.12
+    const rExter = r * 24 + worldRadius * 0.36
+    const camDist = camera.position.distanceTo(b.pos)
+    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
+    const nextNear = nearCamRef.current ? camDist < 42 : camDist < 36
+    if (nextNear !== nearCamRef.current) {
+      nearCamRef.current = nextNear
+      setNearCam(nextNear)
+    }
+
+    // 1. Expresión viva según evento y situación (solo si el cuerpo es visible o está seleccionada)
     const F = resolveExpression(b, g)
     const c = cur.current
-    for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce', 'sparkle']) {
-      const target = F[key] ?? 0
-      c[key] += (target - c[key]) * k
+    if (extFactor < 0.96 || selected) {
+      for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce', 'sparkle']) {
+        const target = F[key] ?? 0
+        c[key] += (target - c[key]) * k
+      }
     }
 
     // 2. Tamaño dentro de tubos (~0.55x) con transición suave
@@ -356,6 +382,33 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
     const hop = b.phase === 'at' ? Math.abs(bob) * 0.14 * c.bounce : 0
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
     root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
+
+    // Si la bollita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
+    const bodyVisible = !pov && extFactor < 0.96
+    if (bodyGroup.current) bodyGroup.current.visible = bodyVisible
+    if (orbGroupRef.current) {
+      const showOrb = extFactor > 0.015 && s > 0.02
+      orbGroupRef.current.visible = showOrb
+      if (showOrb) {
+        orbGroupRef.current.position.copy(b.pos)
+        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
+        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
+        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
+        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
+        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
+        if (extHaloRef.current) {
+          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
+          extHaloRef.current.scale.set(haloS, haloS, 1)
+        }
+        extOrbMat.opacity = extFactor * 0.96
+        extHaloMat.opacity = extFactor * 0.86
+      }
+    }
+    if (ring.current) { ring.current.visible = selected && !pov; if (selected && !pov) ring.current.rotation.z = t * 2 }
+    if (!bodyVisible && !selected) {
+      if (emoSprite.current) emoSprite.current.visible = false
+      return
+    }
 
     // 4. Orientación suave
     vy.copy(upV)
@@ -536,33 +589,6 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
       dialogState.current.nextCheck = t + 0.12
       actualizarDialogoVivo(b, sim, dialogState.current)
     }
-
-    if (ring.current) { ring.current.visible = selected && !pov; ring.current.rotation.z = t * 2 }
-
-    // 10. LOD exterior: orbe luminoso visible a distancia dentro de los tubos y en planetas
-    const camDist = camera.position.distanceTo(root.current.position)
-    const rIntro = r * 14 + worldRadius * 0.12
-    const rExter = r * 24 + worldRadius * 0.36
-    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
-    if (bodyGroup.current) bodyGroup.current.visible = !pov && extFactor < 0.96
-    if (orbGroupRef.current) {
-      const showOrb = extFactor > 0.015 && s > 0.02
-      orbGroupRef.current.visible = showOrb
-      if (showOrb) {
-        orbGroupRef.current.position.copy(b.pos)
-        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
-        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
-        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
-        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
-        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
-        if (extHaloRef.current) {
-          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
-          extHaloRef.current.scale.set(haloS, haloS, 1)
-        }
-        extOrbMat.opacity = extFactor * 0.96
-        extHaloMat.opacity = extFactor * 0.86
-      }
-    }
   })
 
   const liveThought = obtenerGlobo(b, sim)
@@ -734,7 +760,7 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
       <mesh ref={ring} geometry={SHARED_GEO.ring} material={mats.ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} scale={r} visible={false} />
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
-      {(selected || talking) && !pov && (
+      {(selected || (talking && nearCam)) && !pov && (
         <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
           <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 155, fontSize: 11 }}>
             {selected && <b>{b.name}</b>}

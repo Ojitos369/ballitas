@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage,
   Instanced, Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas,
-  laneFrame, laneGap, lanesOf, makePlacement, mulberry32, placeAlong,
+  laneFrame, laneGap, lanesOf, makePlacement, markShared, mulberry32, placeAlong,
   placeAlongInto, routeInfo, scatter, segPath, switchesOf,
 } from './base.jsx'
 
@@ -91,35 +91,35 @@ function makeMushroomCapGeo() {
   }
   pts.push(new THREE.Vector2(0.32, 0.02))
   pts.push(new THREE.Vector2(0.14, 0.0))
-  return new THREE.LatheGeometry(pts, 20)
+  return new THREE.LatheGeometry(pts, 12)
 }
 
 function makePineGeo() {
-  const trunk = paintPart(new THREE.CylinderGeometry(0.08, 0.13, 0.36, 12), '#5c3a21', { t: [0, 0.18, 0] })
-  const c1 = paintPart(new THREE.SphereGeometry(0.42, 16, 12), '#2e7d32', { t: [0, 0.46, 0], s: [1, 0.85, 1], shade: 0.25 })
-  const c2 = paintPart(new THREE.SphereGeometry(0.33, 16, 12), '#3fa34d', { t: [0, 0.74, 0], s: [1, 0.9, 1], shade: 0.25 })
-  const c3 = paintPart(new THREE.SphereGeometry(0.22, 14, 10), '#62c45e', { t: [0, 0.98, 0], s: [1, 1.05, 1], shade: 0.25 })
+  const trunk = paintPart(new THREE.CylinderGeometry(0.08, 0.13, 0.36, 8), '#5c3a21', { t: [0, 0.18, 0] })
+  const c1 = paintPart(new THREE.SphereGeometry(0.42, 10, 8), '#2e7d32', { t: [0, 0.46, 0], s: [1, 0.85, 1], shade: 0.25 })
+  const c2 = paintPart(new THREE.SphereGeometry(0.33, 10, 8), '#3fa34d', { t: [0, 0.74, 0], s: [1, 0.9, 1], shade: 0.25 })
+  const c3 = paintPart(new THREE.SphereGeometry(0.22, 8, 6), '#62c45e', { t: [0, 0.98, 0], s: [1, 1.05, 1], shade: 0.25 })
   return mergePainted([trunk, c1, c2, c3])
 }
 
 function makeOakGeo() {
-  const trunk = paintPart(new THREE.CapsuleGeometry(0.09, 0.42, 6, 12), '#6b442a', { t: [0, 0.26, 0] })
-  const b1 = paintPart(new THREE.CapsuleGeometry(0.05, 0.22, 5, 10), '#6b442a', { t: [0.12, 0.48, 0], r: [0, 0, -0.55] })
-  const b2 = paintPart(new THREE.CapsuleGeometry(0.05, 0.22, 5, 10), '#6b442a', { t: [-0.12, 0.48, 0.06], r: [0.25, 0, 0.5] })
-  const k1 = paintPart(new THREE.SphereGeometry(0.34, 16, 12), '#3c9646', { t: [0, 0.72, 0], shade: 0.2 })
-  const k2 = paintPart(new THREE.SphereGeometry(0.25, 14, 10), '#58b956', { t: [0.2, 0.62, 0.08], shade: 0.2 })
-  const k3 = paintPart(new THREE.SphereGeometry(0.25, 14, 10), '#4aa84d', { t: [-0.2, 0.64, -0.06], shade: 0.2 })
-  const k4 = paintPart(new THREE.SphereGeometry(0.22, 14, 10), '#7ad968', { t: [0, 0.92, 0.04], shade: 0.2 })
+  const trunk = paintPart(new THREE.CapsuleGeometry(0.09, 0.42, 4, 8), '#6b442a', { t: [0, 0.26, 0] })
+  const b1 = paintPart(new THREE.CapsuleGeometry(0.05, 0.22, 4, 6), '#6b442a', { t: [0.12, 0.48, 0], r: [0, 0, -0.55] })
+  const b2 = paintPart(new THREE.CapsuleGeometry(0.05, 0.22, 4, 6), '#6b442a', { t: [-0.12, 0.48, 0.06], r: [0.25, 0, 0.5] })
+  const k1 = paintPart(new THREE.SphereGeometry(0.34, 10, 8), '#3c9646', { t: [0, 0.72, 0], shade: 0.2 })
+  const k2 = paintPart(new THREE.SphereGeometry(0.25, 8, 6), '#58b956', { t: [0.2, 0.62, 0.08], shade: 0.2 })
+  const k3 = paintPart(new THREE.SphereGeometry(0.25, 8, 6), '#4aa84d', { t: [-0.2, 0.64, -0.06], shade: 0.2 })
+  const k4 = paintPart(new THREE.SphereGeometry(0.22, 8, 6), '#7ad968', { t: [0, 0.92, 0.04], shade: 0.2 })
   return mergePainted([trunk, b1, b2, k1, k2, k3, k4])
 }
 
 function makeTreeHouseSolidGeo() {
-  const body = paintPart(new THREE.CylinderGeometry(0.34, 0.4, 0.44, 18), '#7a4d2c', { t: [0, 0.22, 0], shade: 0.2 })
-  const roof = paintPart(new THREE.ConeGeometry(0.48, 0.36, 20), '#2f8239', { t: [0, 0.6, 0], shade: 0.25 })
-  const rim = paintPart(new THREE.TorusGeometry(0.42, 0.05, 10, 22), '#4caf50', { t: [0, 0.44, 0], r: [Math.PI / 2, 0, 0] })
-  const door = paintPart(new THREE.CapsuleGeometry(0.09, 0.12, 6, 10), '#4e2f1a', { t: [0, 0.14, 0.34], s: [1, 1, 0.4] })
-  const chim = paintPart(new THREE.CylinderGeometry(0.05, 0.06, 0.22, 10), '#5d4037', { t: [0.18, 0.68, -0.1] })
-  const porch = paintPart(new THREE.CylinderGeometry(0.46, 0.46, 0.04, 18), '#9b6b43', { t: [0, 0.02, 0] })
+  const body = paintPart(new THREE.CylinderGeometry(0.34, 0.4, 0.44, 10), '#7a4d2c', { t: [0, 0.22, 0], shade: 0.2 })
+  const roof = paintPart(new THREE.ConeGeometry(0.48, 0.36, 10), '#2f8239', { t: [0, 0.6, 0], shade: 0.25 })
+  const rim = paintPart(new THREE.TorusGeometry(0.42, 0.05, 6, 14), '#4caf50', { t: [0, 0.44, 0], r: [Math.PI / 2, 0, 0] })
+  const door = paintPart(new THREE.CapsuleGeometry(0.09, 0.12, 4, 6), '#4e2f1a', { t: [0, 0.14, 0.34], s: [1, 1, 0.4] })
+  const chim = paintPart(new THREE.CylinderGeometry(0.05, 0.06, 0.22, 6), '#5d4037', { t: [0.18, 0.68, -0.1] })
+  const porch = paintPart(new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10), '#9b6b43', { t: [0, 0.02, 0] })
   return mergePainted([porch, body, roof, rim, door, chim])
 }
 
@@ -242,8 +242,8 @@ function makeGateGeo() {
 }
 
 function makeRockMossGeo() {
-  const rock = paintPart(new THREE.SphereGeometry(0.38, 16, 12), '#68706e', { t: [0, 0.14, 0], s: [1.2, 0.75, 1.0] })
-  const moss = paintPart(new THREE.SphereGeometry(0.32, 14, 10), '#4ca64c', { t: [0.02, 0.25, 0], s: [1.15, 0.5, 0.92] })
+  const rock = paintPart(new THREE.SphereGeometry(0.38, 10, 8), '#68706e', { t: [0, 0.14, 0], s: [1.2, 0.75, 1.0] })
+  const moss = paintPart(new THREE.SphereGeometry(0.32, 8, 6), '#4ca64c', { t: [0.02, 0.25, 0], s: [1.15, 0.5, 0.92] })
   return mergePainted([rock, moss])
 }
 
@@ -388,6 +388,8 @@ function getAssets() {
     swBridge: new THREE.MeshStandardMaterial({ color: '#7a5230', roughness: 0.7, emissive: '#2b4018', emissiveIntensity: 0.22 }),
     swGlow: new THREE.MeshBasicMaterial({ color: new THREE.Color('#b6ff5a').multiplyScalar(1.45), toneMapped: false }),
   }
+  markShared(Object.values(geo))
+  markShared(Object.values(mat))
   CACHE = { geo, mat }
   return CACHE
 }
@@ -1054,18 +1056,18 @@ export default function Vida({ way, detail }) {
     const calmSegs = solidSegs.filter((s) => s.speedK <= 0.9 || s.kind === 'pantano' || s.kind === 'llegada')
 
     // Densidad alta y pareja sobre la superficie del terreno (respetando cauce >= 0.50 rad)
-    const pines = scatterOnTerrain(way, 320, rng, { angle: [-Math.PI * 0.52, Math.PI * 0.52], clear: BALL_R * 1.4, scale: [0.52, 0.88] })
-    const oaks = scatterOnTerrain(way, 165, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.45, scale: [0.52, 0.84] })
-    const houses = scatterOnTerrain(way, 36, rng, {
+    const pines = scatterOnTerrain(way, 140, rng, { angle: [-Math.PI * 0.52, Math.PI * 0.52], clear: BALL_R * 1.4, scale: [0.52, 0.88] })
+    const oaks = scatterOnTerrain(way, 80, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.45, scale: [0.52, 0.84] })
+    const houses = scatterOnTerrain(way, 24, rng, {
       segments: villageSegs.length ? villageSegs : solidSegs,
       angle: [-Math.PI * 0.48, Math.PI * 0.48], clear: BALL_R * 1.5, scale: [0.65, 0.88],
     })
-    const rocks = scatterOnTerrain(way, 200, rng, { angle: [-Math.PI * 0.52, Math.PI * 0.52], clear: BALL_R * 1.25, scale: [0.42, 0.78] })
+    const rocks = scatterOnTerrain(way, 90, rng, { angle: [-Math.PI * 0.52, Math.PI * 0.52], clear: BALL_R * 1.25, scale: [0.42, 0.78] })
     const mushCols = ['#e53935', '#ff7043', '#ffb74d', '#9cff6b']
-    const mushrooms = scatterOnTerrain(way, 220, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.2, scale: [0.36, 0.65] })
+    const mushrooms = scatterOnTerrain(way, 100, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.2, scale: [0.36, 0.65] })
       .map((it) => ({ ...it, color: mushCols[Math.floor(it.rnd * mushCols.length)] }))
-    const vines = scatter(way, 200, rng, { angle: [Math.PI * 0.78, Math.PI * 1.22], clear: 0.2, scale: [0.5, 0.88] })
-    const owls = scatterOnTerrain(way, 40, rng, {
+    const vines = scatter(way, 90, rng, { angle: [Math.PI * 0.78, Math.PI * 1.22], clear: 0.2, scale: [0.5, 0.88] })
+    const owls = scatterOnTerrain(way, 24, rng, {
       segments: calmSegs.length ? calmSegs : solidSegs,
       angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.3, scale: [0.32, 0.42],
     })
@@ -1208,7 +1210,7 @@ export default function Vida({ way, detail }) {
       <Instanced geo={geo.houseWin} mat={mat.winGlow} items={layout.houses} />
       <Instanced geo={geo.lanternBulb} mat={mat.glowWarm} items={layout.lanternBulbs} />
       <Instanced geo={geo.gate} mat={mat.solid} items={layout.gates} />
-      <FireflySwarm way={way} count={260} />
+      <FireflySwarm way={way} count={110} />
 
       {/* Mecanismos de cambio de carril */}
       <LaneSwitchMechanisms way={way} />
@@ -1230,9 +1232,9 @@ export default function Vida({ way, detail }) {
         <SleepyOwls way={way} items={layout.owls} />
         <ForestSpectators way={way} items={layout.spectators} screens={layout.screens} />
 
-        <TerrainCritter way={way} segments={foxSegs.length ? foxSegs : null} count={18} geo={geo.fox} mat={mat.critter} scale={0.32} speed={0.95} angle={0.58} spread={0.14} hop={0.28} seed={11} />
-        <TerrainCritter way={way} segments={deerSegs} count={16} geo={geo.deer} mat={mat.critter} scale={0.34} speed={0.55} angle={-0.58} spread={0.14} hop={0.22} seed={23} />
-        <TerrainCritter way={way} segments={deerSegs} count={22} geo={geo.squirrel} mat={mat.critter} scale={0.24} speed={1.35} angle={0.78} spread={0.18} hop={0.32} seed={37} />
+        <TerrainCritter way={way} segments={foxSegs.length ? foxSegs : null} count={10} geo={geo.fox} mat={mat.critter} scale={0.32} speed={0.95} angle={0.58} spread={0.14} hop={0.28} seed={11} />
+        <TerrainCritter way={way} segments={deerSegs} count={10} geo={geo.deer} mat={mat.critter} scale={0.34} speed={0.55} angle={-0.58} spread={0.14} hop={0.22} seed={23} />
+        <TerrainCritter way={way} segments={deerSegs} count={12} geo={geo.squirrel} mat={mat.critter} scale={0.24} speed={1.35} angle={0.78} spread={0.18} hop={0.32} seed={37} />
 
         {layout.heroSigns.map((hs) => (
           <Billboard key={hs.key} text={hs.text} style={{ ...ESTILO_BOSQUE, sub: hs.sub }} height={0.38} position={hs.pos} quat={hs.quat} />

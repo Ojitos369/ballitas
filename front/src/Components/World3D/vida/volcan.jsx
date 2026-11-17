@@ -6,8 +6,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   BALL_R, Billboard, CartelesDeRuta, Critter, EventStage, Instanced,
   Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame,
-  laneGap, makePlacement, maxHeight, mulberry32, placeAlong, placeAlongInto,
-  routeInfo, scatter, segFrames, segPath, switchesOf,
+  laneGap, makePlacement, markShared, maxHeight, mulberry32, placeAlong, placeAlongInto,
+  routeInfo, scatter, segFrames, segPath, switchesOf, useAutoDispose, useWayBounds,
 } from './base.jsx'
 
 const Y = new THREE.Vector3(0, 1, 0)
@@ -62,13 +62,13 @@ let GEOS = null
 function getGeos() {
   if (GEOS) return GEOS
 
-  const sph16 = new THREE.SphereGeometry(1, 16, 12)
-  const sph12 = new THREE.SphereGeometry(1, 12, 10)
-  const cap12 = new THREE.CapsuleGeometry(1, 1, 8, 12)
-  const cyl16 = new THREE.CylinderGeometry(1, 1, 1, 16)
+  const sph16 = new THREE.SphereGeometry(1, 10, 8)
+  const sph12 = new THREE.SphereGeometry(1, 8, 6)
+  const cap12 = new THREE.CapsuleGeometry(1, 1, 4, 6)
+  const cyl16 = new THREE.CylinderGeometry(1, 1, 1, 10)
   const cyl6 = new THREE.CylinderGeometry(1, 1, 1, 6)
-  const cone16 = new THREE.ConeGeometry(1, 1, 16)
-  const tor16 = new THREE.TorusGeometry(1, 0.075, 12, 28)
+  const cone16 = new THREE.ConeGeometry(1, 1, 10)
+  const tor16 = new THREE.TorusGeometry(1, 0.075, 6, 16)
 
   // 1. Dragón pequeño chibi (panza dorada, cuernitos, alas suaves, ojos brillantes)
   const dragon = mergePainted([
@@ -185,7 +185,7 @@ function getGeos() {
   const pennant = mergePainted([
     bakePart(cone16, '#ffffff', 0, -0.14, 0, Math.PI, 0, 0, 0.14, 0.28, 0.03),
   ])
-  const orb = new THREE.SphereGeometry(1, 14, 10)
+  const orb = new THREE.SphereGeometry(1, 8, 6)
   const meteor = mergePainted([
     bakePart(sph12, '#ffe8b3', 0, 0, 0, 0, 0, 0, 0.14, 0.14, 0.32),
     bakePart(cone16, '#ff4d1a', 0, 0, -0.46, -Math.PI / 2, 0, 0, 0.10, 0.56, 0.10),
@@ -194,12 +194,13 @@ function getGeos() {
     bakePart(cyl6, '#3b2b30', 0, 0, 0, 0, 0, 0, 0.32, 0.55, 0.32),
     bakePart(cyl6, '#ff6a2b', 0, 0.28, 0, 0, 0, 0, 0.26, 0.04, 0.26),
   ])
+  cyl6.dispose()
 
-  GEOS = {
+  GEOS = markShared({
     dragon, golem, salamander, forger, volcano, forge, crystal, basalt,
     stand, lamp, fence, pennant, orb, meteor, hexPillar,
     sph16, sph12, cap12, cyl16, cone16, tor16,
-  }
+  })
   return GEOS
 }
 
@@ -252,7 +253,7 @@ function getMats() {
     return tex
   })()
 
-  MATS = {
+  MATS = markShared({
     clay: new THREE.MeshStandardMaterial({
       vertexColors: true, roughness: 0.48, metalness: 0.1, emissive: '#421208', emissiveIntensity: 0.28,
     }),
@@ -286,7 +287,7 @@ function getMats() {
     geyserCol: new THREE.MeshBasicMaterial({
       color: '#ff7b29', transparent: true, opacity: 0.78, depthWrite: false, toneMapped: false,
     }),
-  }
+  })
   return MATS
 }
 
@@ -475,6 +476,8 @@ function FinishFireworks({ seg }) {
     if (!mesh) return
     for (let i = 0; i < N; i++) mesh.setColorAt(i, _tmpC.set(dirs[i].col))
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2.5)
+    mesh.frustumCulled = true
   }, [dirs])
 
   useFrame(({ clock }, dt) => {
@@ -507,7 +510,7 @@ function FinishFireworks({ seg }) {
       <mesh geometry={G.cyl16} material={M.obsidian} position={[archW, yBase + colH * 0.5, 0]} scale={[0.1, colH, 0.1]} />
       <mesh geometry={G.tor16} material={M.glowGold} position={[0, archH * 0.84, 0]} scale={[archW * 0.94, 0.46, 0.46]} />
       <Billboard text="🏁 META DEL VOLCÁN" style={ESTILO_META} height={0.28} position={[0, archH * 0.94, 0.12]} />
-      <instancedMesh ref={sparksRef} args={[G.orb, M.glowWhite, N]} frustumCulled={false} />
+      <instancedMesh ref={sparksRef} args={[G.orb, M.glowWhite, N]} />
     </group>
   )
 }
@@ -553,6 +556,9 @@ function LaneSwitchMechanisms({ way }) {
   const padsRef = useRef()
   const ringsRef = useRef()
   const jetsRef = useRef()
+  useWayBounds(padsRef, way)
+  useWayBounds(ringsRef, way)
+  useWayBounds(jetsRef, way)
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -597,9 +603,9 @@ function LaneSwitchMechanisms({ way }) {
   if (!mechanisms.length) return null
   return (
     <group>
-      <instancedMesh ref={padsRef} args={[G.cyl16, M.bronze, mechanisms.length]} frustumCulled={false} />
-      <instancedMesh ref={ringsRef} args={[G.tor16, M.glowLava, mechanisms.length]} frustumCulled={false} />
-      <instancedMesh ref={jetsRef} args={[G.cap12, M.glowGold, mechanisms.length]} frustumCulled={false} />
+      <instancedMesh ref={padsRef} args={[G.cyl16, M.bronze, mechanisms.length]} />
+      <instancedMesh ref={ringsRef} args={[G.tor16, M.glowLava, mechanisms.length]} />
+      <instancedMesh ref={jetsRef} args={[G.cap12, M.glowGold, mechanisms.length]} />
     </group>
   )
 }
@@ -676,6 +682,7 @@ function VolcanoMusicalGeyserStage({ seg, stage, G, M }) {
   const bridgeRefs = useRef([])
   const geyserRefs = useRef([])
   const magmaMat = useMemo(() => M.magmaFall.clone(), [M])
+  useAutoDispose(magmaMat)
   const bridgePls = useMemo(() => [0.22, 0.34, 0.46, 0.58, 0.70, 0.82].map((u) => placeAlong(seg, u, 0, 0)), [seg])
   const geyserPls = useMemo(() => [0.24, 0.38, 0.52, 0.66, 0.80].map((u, i) => placeAlong(seg, u, 0.02, (i % 2 === 0 ? 1 : -1) * 0.74)), [seg])
   const fallPl = useMemo(() => placeAlong(seg, 0.52, 0, 0), [seg])
@@ -808,6 +815,7 @@ function VolcanoAirRings({ way }) {
     return out
   }, [way])
   const meshRef = useRef()
+  useWayBounds(meshRef, way)
   useFrame(({ clock }) => {
     const m = meshRef.current
     if (!m || !rings.length) return
@@ -824,7 +832,7 @@ function VolcanoAirRings({ way }) {
     m.instanceMatrix.needsUpdate = true
   })
   if (!rings.length) return null
-  return <instancedMesh ref={meshRef} args={[G.tor16, M.glowLava, rings.length]} frustumCulled={false} />
+  return <instancedMesh ref={meshRef} args={[G.tor16, M.glowLava, rings.length]} />
 }
 
 // ═══════════════════════════ CRIATURAS ESPECIALES ANIMADAS ═══════════════════════════
@@ -845,6 +853,7 @@ function SkyDragons({ way }) {
     }))
   }, [path, way.idx])
   const meshRef = useRef()
+  useWayBounds(meshRef, way)
   const loc = useMemo(() => ({}), [])
 
   useFrame(({ clock }, dt) => {
@@ -881,7 +890,7 @@ function SkyDragons({ way }) {
   })
 
   if (!path.total) return null
-  return <instancedMesh ref={meshRef} args={[G.dragon, M.clay, count]} frustumCulled={false} />
+  return <instancedMesh ref={meshRef} args={[G.dragon, M.clay, count]} />
 }
 
 // Gradas con golems que hacen ola + durmientes termales + chispas perseguidas por salamandras
@@ -919,6 +928,9 @@ function VolcanoCrowdAndBehavior({ way, standItems }) {
   const crowdRef = useRef()
   const sleepRef = useRef()
   const wispRef = useRef()
+  useWayBounds(crowdRef, way)
+  useWayBounds(sleepRef, way)
+  useWayBounds(wispRef, way)
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -978,9 +990,9 @@ function VolcanoCrowdAndBehavior({ way, standItems }) {
 
   return (
     <group>
-      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.golem, M.clay, crowd.length]} frustumCulled={false} />}
-      {sleepers.length > 0 && <instancedMesh ref={sleepRef} args={[G.golem, M.clay, sleepers.length]} frustumCulled={false} />}
-      {emberWisps.length > 0 && <instancedMesh ref={wispRef} args={[G.orb, M.glowGold, emberWisps.length]} frustumCulled={false} />}
+      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.golem, M.clay, crowd.length]} />}
+      {sleepers.length > 0 && <instancedMesh ref={sleepRef} args={[G.golem, M.clay, sleepers.length]} />}
+      {emberWisps.length > 0 && <instancedMesh ref={wispRef} args={[G.orb, M.glowGold, emberWisps.length]} />}
     </group>
   )
 }
@@ -995,22 +1007,25 @@ function VolcanoSkyPhenomena({ way, detail }) {
       const rt = way.routes[seg.route]
       const sp = rt?.profile?.speed
       const colors = sp === 'rapida' ? ['#6b1f14', '#160914'] : sp === 'lenta' ? ['#5a2420', '#181026'] : ['#7a2614', '#1c0b1a']
-      return { key: seg.i, geo: buildSkyGeo(seg, { radial: 28, colors }) }
+      return { key: seg.i, geo: buildSkyGeo(seg, { radial: 14, colors }) }
     })
   }, [way])
+  const skyGeoList = useMemo(() => skyGeos.map((s) => s.geo), [skyGeos])
+  useAutoDispose(skyGeoList)
 
   const skyMat = useMemo(() => new THREE.MeshBasicMaterial({
     vertexColors: true, side: THREE.FrontSide, transparent: true, opacity: 0.25, depthWrite: false, fog: false,
   }), [])
+  useAutoDispose(skyMat)
 
   const redMoons = useMemo(() => scatter(way, 10, mulberry32(way.idx * 431 + 7), {
     angle: [Math.PI * 0.82, Math.PI * 1.18], clear: 0, offset: [0.18, 0.26], scale: [0.16, 0.25],
   }), [way])
-  const emberStars = useMemo(() => scatter(way, 70, mulberry32(way.idx * 467 + 13), {
+  const emberStars = useMemo(() => scatter(way, 42, mulberry32(way.idx * 467 + 13), {
     angle: [Math.PI * 0.62, Math.PI * 1.38], clear: 0, offset: [0.1, 0.2], scale: [0.028, 0.052],
   }), [way])
 
-  const meteorsN = 24
+  const meteorsN = 14
   const meteors = useMemo(() => {
     const rng = mulberry32(way.idx * 631 + 17)
     return Array.from({ length: meteorsN }, () => ({
@@ -1022,7 +1037,7 @@ function VolcanoSkyPhenomena({ way, detail }) {
     }))
   }, [path, way.idx])
 
-  const ashN = 56
+  const ashN = 36
   const ash = useMemo(() => {
     const rng = mulberry32(way.idx * 919 + 29)
     return Array.from({ length: ashN }, () => ({
@@ -1036,6 +1051,8 @@ function VolcanoSkyPhenomena({ way, detail }) {
 
   const meteorRef = useRef()
   const ashRef = useRef()
+  useWayBounds(meteorRef, way)
+  useWayBounds(ashRef, way)
   const loc = useMemo(() => ({}), [])
 
   useFrame(({ clock }, dt) => {
@@ -1086,8 +1103,8 @@ function VolcanoSkyPhenomena({ way, detail }) {
       {skyGeos.map(({ key, geo }) => <mesh key={key} geometry={geo} material={skyMat} />)}
       <Instanced geo={G.orb} mat={M.glowLava} items={redMoons} />
       <Instanced geo={G.orb} mat={M.glowGold} items={emberStars} />
-      {path.total > 0 && <instancedMesh ref={meteorRef} args={[G.meteor, M.glowWhite, meteorsN]} frustumCulled={false} />}
-      {path.total > 0 && <instancedMesh ref={ashRef} args={[G.orb, M.ash, ashN]} frustumCulled={false} />}
+      {path.total > 0 && <instancedMesh ref={meteorRef} args={[G.meteor, M.glowWhite, meteorsN]} />}
+      {path.total > 0 && <instancedMesh ref={ashRef} args={[G.orb, M.ash, ashN]} />}
     </group>
   )
 }
@@ -1095,11 +1112,13 @@ function VolcanoSkyPhenomena({ way, detail }) {
 // ═══════════════════════════ CRISTALES REACTIVOS A LA BOLLITA ═══════════════════════════
 function ReactiveMagmaCrystals({ way }) {
   const G = getGeos()
-  const beacons = useMemo(() => scatter(way, 38, mulberry32(way.idx * 899 + 41), {
+  const beacons = useMemo(() => scatter(way, 30, mulberry32(way.idx * 899 + 41), {
     angle: [-0.95, 0.95], clear: BALL_R * 0.72, offset: [0.42, 0.62], scale: [0.09, 0.14],
   }), [way])
   const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), [])
+  useAutoDispose(mat)
   const meshRef = useRef()
+  useWayBounds(meshRef, way)
 
   useFrame(({ clock }) => {
     const m = meshRef.current
@@ -1129,7 +1148,7 @@ function ReactiveMagmaCrystals({ way }) {
   })
 
   if (!beacons.length) return null
-  return <instancedMesh ref={meshRef} args={[G.orb, mat, beacons.length]} frustumCulled={false} />
+  return <instancedMesh ref={meshRef} args={[G.orb, mat, beacons.length]} />
 }
 
 // ═══════════════════════════ TERRENO Y MINI MAPA POR TRAMO ═══════════════════════════
@@ -1156,8 +1175,8 @@ export default function Vida({ way, detail }) {
         buildTerrainGeo(seg, {
           arc: Math.PI * 0.50,
           maxH,
-          radial: 52,
-          along: Math.ceil(seg.length * 3.0),
+          radial: 22,
+          along: Math.ceil(seg.length * 1.3),
           colors,
           height: (u, a) => volcanoHillHeight(seg, u, a),
         }),
@@ -1173,12 +1192,15 @@ export default function Vida({ way, detail }) {
         checkers.push(buildCheckerStripGeo(seg, 0.86))
       }
     }
-    return {
-      terrain: terrains.length ? mergeGeometries(terrains, false) : null,
-      curb: curbs.length ? mergeGeometries(curbs, false) : null,
-      checker: checkers.length ? mergeGeometries(checkers, false) : null,
-    }
+    const terrain = terrains.length ? mergeGeometries(terrains, false) : null
+    const curb = curbs.length ? mergeGeometries(curbs, false) : null
+    const checker = checkers.length ? mergeGeometries(checkers, false) : null
+    for (const g of terrains) g.dispose()
+    for (const g of curbs) g.dispose()
+    for (const g of checkers) g.dispose()
+    return { terrain, curb, checker }
   }, [info])
+  useAutoDispose(trackParts)
 
   const props = useMemo(() => {
     const rng = mulberry32(way.idx * 2063 + 57)
@@ -1186,20 +1208,20 @@ export default function Vida({ way, detail }) {
     const fastSegs = info.segments.filter((s) => !s.air && info.routes[s.route]?.profile?.speed === 'rapida').map((s) => s.seg)
     const slowSegs = info.segments.filter((s) => !s.air && info.routes[s.route]?.profile?.speed === 'lenta').map((s) => s.seg)
 
-    const volcanoes = seatOnTerrain(scatter(way, 42, rng, {
+    const volcanoes = seatOnTerrain(scatter(way, 28, rng, {
       angle: [-1.32, 1.32], clear: BALL_R * 0.88, offset: [0.02, 0.06], scale: [0.46, 0.82],
     }))
-    const crystals = seatOnTerrain(scatter(way, 90, rng, {
+    const crystals = seatOnTerrain(scatter(way, 56, rng, {
       angle: [-1.25, 1.25], clear: BALL_R * 0.7, offset: [0.02, 0.06], scale: [0.40, 0.74],
     }))
-    const forges = seatOnTerrain(scatter(way, 30, rng, {
+    const forges = seatOnTerrain(scatter(way, 22, rng, {
       segments: fastSegs.length ? fastSegs : solid,
       angle: [-1.1, 1.1], clear: BALL_R * 0.85, offset: [0.02, 0.05], scale: [0.42, 0.70],
     }))
-    const basalts = seatOnTerrain(scatter(way, 95, rng, {
+    const basalts = seatOnTerrain(scatter(way, 56, rng, {
       angle: [-1.35, 1.35], clear: BALL_R * 0.68, offset: [0.0, 0.05], scale: [0.32, 0.60],
     }))
-    const forgers = seatOnTerrain(scatter(way, 20, rng, {
+    const forgers = seatOnTerrain(scatter(way, 14, rng, {
       segments: slowSegs.length ? slowSegs : solid,
       angle: [-1.05, 1.05], clear: BALL_R * 0.78, offset: [0.04, 0.08], scale: [0.24, 0.30],
     }))
@@ -1318,9 +1340,9 @@ export default function Vida({ way, detail }) {
       {eventEls}
       <VolcanoAirRings way={way} />
 
-      <Critter way={way} segments={route0Segs} count={16} geo={G.golem} mat={M.clay} scale={0.23} speed={0.8} offset={0.22} angle={0.62} spread={0.14} hop={0.28} seed={101} />
-      <Critter way={way} segments={route1Segs ?? route0Segs} count={16} geo={G.salamander} mat={M.clay} scale={0.21} speed={0.95} offset={0.20} angle={-0.60} spread={0.14} hop={0.32} seed={202} />
-      <Critter way={way} segments={route2Segs ?? route0Segs} count={16} geo={G.dragon} mat={M.clay} scale={0.23} speed={1.1} offset={0.20} angle={0.56} spread={0.14} hop={0.35} seed={303} />
+      <Critter way={way} segments={route0Segs} count={10} geo={G.golem} mat={M.clay} scale={0.23} speed={0.8} offset={0.22} angle={0.62} spread={0.14} hop={0.28} seed={101} />
+      <Critter way={way} segments={route1Segs ?? route0Segs} count={10} geo={G.salamander} mat={M.clay} scale={0.21} speed={0.95} offset={0.20} angle={-0.60} spread={0.14} hop={0.32} seed={202} />
+      <Critter way={way} segments={route2Segs ?? route0Segs} count={10} geo={G.dragon} mat={M.clay} scale={0.23} speed={1.1} offset={0.20} angle={0.56} spread={0.14} hop={0.35} seed={303} />
       <SkyDragons way={way} />
       <VolcanoCrowdAndBehavior way={way} standItems={props.stands} />
       <ReactiveMagmaCrystals way={way} />

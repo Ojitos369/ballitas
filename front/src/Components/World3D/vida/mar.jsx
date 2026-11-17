@@ -3,19 +3,43 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
   CartelesDeRuta, Critter, EventStage, Instanced, buildSkyGeo, buildTerrainGeo, laneFrame,
-  mulberry32, placeAlong, routeInfo, Soundless,
+  markShared, mulberry32, placeAlong, routeInfo, Soundless, useAutoDispose,
 } from './base.jsx'
 
 const STYLE = { color: '#e8fcff', bg: 'rgba(5,39,64,0.94)', border: '#52e5ef' }
-const bodyGeo = new THREE.SphereGeometry(1, 16, 12)
-const fishGeo = new THREE.SphereGeometry(1, 16, 12).scale(0.78, 0.62, 1.22)
-const reefGeo = new THREE.DodecahedronGeometry(1, 1)
-const shellMat = new THREE.MeshStandardMaterial({ color: '#54d9d1', roughness: 0.38, metalness: 0.12 })
-const reefMat = new THREE.MeshStandardMaterial({ color: '#ff8d78', roughness: 0.72 })
-const glowMat = new THREE.MeshBasicMaterial({ color: '#70ffff', toneMapped: false })
-const sandMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide })
-const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.62, depthWrite: false })
-const ringGeo = new THREE.TorusGeometry(0.34, 0.055, 8, 24)
+const bodyGeo = markShared(new THREE.SphereGeometry(1, 10, 8))
+const fishGeo = markShared(new THREE.SphereGeometry(1, 10, 8).scale(0.78, 0.62, 1.22))
+const reefGeo = markShared(new THREE.DodecahedronGeometry(1, 0))
+const ringGeo = markShared(new THREE.TorusGeometry(0.34, 0.055, 6, 16))
+const outerRingGeo = markShared(new THREE.TorusGeometry(0.52, 0.035, 6, 16))
+const beaconSphereGeo = markShared(new THREE.SphereGeometry(0.12, 8, 6))
+const shellMat = markShared(new THREE.MeshStandardMaterial({ color: '#54d9d1', roughness: 0.38, metalness: 0.12 }))
+const reefMat = markShared(new THREE.MeshStandardMaterial({ color: '#ff8d78', roughness: 0.72 }))
+const glowMat = markShared(new THREE.MeshBasicMaterial({ color: '#70ffff', toneMapped: false }))
+const sandMat = markShared(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide }))
+const skyMat = markShared(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.62, depthWrite: false }))
+const beaconRingMats = [
+  markShared(new THREE.MeshStandardMaterial({ color: '#9cfaff', emissive: '#17464c' })),
+  markShared(new THREE.MeshStandardMaterial({ color: '#ff8d78', emissive: '#17464c' })),
+]
+const diverMatCache = new Map()
+const seaLifeMatCache = new Map()
+function getDiverMat(color) {
+  let m = diverMatCache.get(color)
+  if (!m) {
+    m = markShared(new THREE.MeshStandardMaterial({ color, roughness: 0.38, emissive: color, emissiveIntensity: 0.12 }))
+    diverMatCache.set(color, m)
+  }
+  return m
+}
+function getSeaLifeMat(color) {
+  let m = seaLifeMatCache.get(color)
+  if (!m) {
+    m = markShared(new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: 0.22 }))
+    seaLifeMatCache.set(color, m)
+  }
+  return m
+}
 const ROUTE_PALETTES = [
   { low: '#09536a', high: '#4fd5c0', accent: '#57f2ec', sky: ['#063d61', '#26c9d2'], critter: '#ffd480' },
   { low: '#174b69', high: '#ff9d79', accent: '#ffb583', sky: ['#12496c', '#ff9c88'], critter: '#fff0a6' },
@@ -25,7 +49,17 @@ const ROUTE_PALETTES = [
 function EventBeacon({ segment, variant, stage }) {
   const ring = useRef()
   const glow = useRef()
-  useFrame(({ clock }, dt) => {
+  const glowOrbMat = useMemo(
+    () => new THREE.MeshBasicMaterial({
+      color: variant === 0 ? '#68edff' : variant === 1 ? '#ff9d79' : '#ffe989',
+      transparent: true,
+      opacity: 0.5,
+      toneMapped: false,
+    }),
+    [variant],
+  )
+  useAutoDispose(glowOrbMat)
+  useFrame(({ clock }) => {
     const t = clock.elapsedTime
     if (ring.current) {
       ring.current.rotation.z = t * (variant === 0 ? 1.1 : -0.8)
@@ -36,14 +70,14 @@ function EventBeacon({ segment, variant, stage }) {
     }
     if (glow.current) glow.current.material.opacity = 0.36 + Math.sin(t * (variant + 2.5)) * 0.22
   })
-  const u = variant === 0 ? 0.18 : variant === 1 ? 0.52 : 0.82
-  const p = placeAlong(segment, u, 0.42, 0.12)
+  const p = useMemo(() => {
+    const u = variant === 0 ? 0.18 : variant === 1 ? 0.52 : 0.82
+    return placeAlong(segment, u, 0.42, 0.12)
+  }, [segment, variant])
   return <group position={p.pos} quaternion={p.quat}>
     <mesh ref={ring} geometry={ringGeo} material={glowMat} position={[0, 0.25, 0]} />
-    <mesh ref={glow} position={[0, 0.72, 0]}>
-      <sphereGeometry args={[0.12, 12, 10]} /><meshBasicMaterial color={variant === 0 ? '#68edff' : variant === 1 ? '#ff9d79' : '#ffe989'} transparent opacity={0.5} toneMapped={false} />
-    </mesh>
-    <mesh position={[0, 0.12, 0]}><torusGeometry args={[0.52, 0.035, 8, 24]} /><meshStandardMaterial color={variant === 1 ? '#ff8d78' : '#9cfaff'} emissive="#17464c" /></mesh>
+    <mesh ref={glow} geometry={beaconSphereGeo} material={glowOrbMat} position={[0, 0.72, 0]} />
+    <mesh geometry={outerRingGeo} material={beaconRingMats[variant === 1 ? 1 : 0]} position={[0, 0.12, 0]} />
   </group>
 }
 
@@ -84,14 +118,16 @@ function RouteDiorama({ way, route, routeIndex }) {
       return { seg, terrain, sky, coral, bubbles, anchors }
     })
   }, [way, routeIndex, segments, palette])
+  const contentGeos = useMemo(() => content.flatMap((c) => [c.terrain, c.sky]), [content])
+  useAutoDispose(contentGeos)
   const eventSeg = useMemo(() => segments.find((s) => s.event)?.seg ?? segments[Math.floor(segments.length * 0.55)]?.seg, [segments])
   const creatureGeo = bodyGeo
   const seaSegments = useMemo(() => segments.map((s) => s.seg), [segments])
   const renderEvent = useMemo(() => (stage) => <EventBeacon segment={eventSeg} variant={routeIndex} stage={stage} />, [eventSeg, routeIndex])
   return <group name={`mar-ruta-${routeIndex}`}>
     {content.map((c, i) => <group key={c.seg.i}>
-      <mesh geometry={c.terrain} material={sandMat} frustumCulled={false} />
-      <mesh geometry={c.sky} material={skyMat} frustumCulled={false} />
+      <mesh geometry={c.terrain} material={sandMat} />
+      <mesh geometry={c.sky} material={skyMat} />
       <Instanced geo={reefGeo} mat={reefMat} items={c.coral} />
       <Instanced geo={bodyGeo} mat={glowMat} items={c.bubbles} />
       <Instanced geo={bodyGeo} mat={shellMat} items={c.anchors} />
@@ -105,17 +141,17 @@ function RouteDiorama({ way, route, routeIndex }) {
 
 function DiverPod({ seg, color }) {
   const group = useRef()
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.38, emissive: color, emissiveIntensity: 0.12 }), [color])
+  const mat = useMemo(() => getDiverMat(color), [color])
   const p = useMemo(() => placeAlong(seg, 0.72, 0.18, -1.22), [seg])
   useFrame(({ clock }) => { if (group.current) group.current.position.y = p.pos.y + Math.sin(clock.elapsedTime * 1.6 + seg.i) * 0.04 })
   return <group ref={group} position={p.pos} quaternion={p.quat}>
-    <mesh material={mat} scale={[0.1, 0.075, 0.15]}><sphereGeometry args={[1, 14, 10]} /></mesh>
-    <mesh position={[0, 0.075, 0.06]} material={glowMat} scale={0.025}><sphereGeometry args={[1, 10, 8]} /></mesh>
+    <mesh geometry={bodyGeo} material={mat} scale={[0.1, 0.075, 0.15]} />
+    <mesh geometry={bodyGeo} position={[0, 0.075, 0.06]} material={glowMat} scale={0.025} />
   </group>
 }
 
 function SeaLife({ segments, routeIndex, geo, color }) {
-  const mats = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: 0.22 }), [color])
+  const mats = useMemo(() => getSeaLifeMat(color), [color])
   const routeSegments = useMemo(() => segments, [segments])
   const items = useMemo(() => {
     // Instanced silhouettes are the LOD-zero schools; local bobbing makes them read as living fauna.

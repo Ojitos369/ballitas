@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced,
   Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame, laneGap,
-  makePlacement, mulberry32, placeAlong, placeAlongInto, routeInfo,
+  makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo,
   scatter, segFrames, segPath, sampleFrameInto, makeFrame, switchesOf, useInstanced,
 } from './base.jsx'
 
@@ -57,14 +57,14 @@ function mergeParts(parts) {
 // ───────────────────────── Elenco Chibi y Vehículos Neón ─────────────────────────
 function buildChibiRobotGeos() {
   // Cuerpo tintable por instanceColor (cápsula suave + cabeza redonda + antenita + bracitos + patitas)
-  const torso = new THREE.CapsuleGeometry(0.28, 0.22, 8, 16).translate(0, 0.34, 0)
-  const head = new THREE.SphereGeometry(0.32, 18, 14).scale(1.08, 0.94, 0.96).translate(0, 0.72, 0)
-  const ant = new THREE.CylinderGeometry(0.025, 0.03, 0.18, 8).translate(0, 1.06, 0)
-  const bulb = new THREE.SphereGeometry(0.065, 10, 8).translate(0, 1.17, 0)
-  const armL = new THREE.CapsuleGeometry(0.08, 0.14, 6, 10).rotateZ(0.45).translate(-0.34, 0.36, 0.04)
-  const armR = new THREE.CapsuleGeometry(0.08, 0.14, 6, 10).rotateZ(-0.45).translate(0.34, 0.36, 0.04)
-  const footL = new THREE.SphereGeometry(0.11, 10, 8).scale(1, 0.65, 1.25).translate(-0.15, 0.06, 0.05)
-  const footR = new THREE.SphereGeometry(0.11, 10, 8).scale(1, 0.65, 1.25).translate(0.15, 0.06, 0.05)
+  const torso = new THREE.CapsuleGeometry(0.28, 0.22, 4, 8).translate(0, 0.34, 0)
+  const head = new THREE.SphereGeometry(0.32, 10, 8).scale(1.08, 0.94, 0.96).translate(0, 0.72, 0)
+  const ant = new THREE.CylinderGeometry(0.025, 0.03, 0.18, 6).translate(0, 1.06, 0)
+  const bulb = new THREE.SphereGeometry(0.065, 8, 6).translate(0, 1.17, 0)
+  const armL = new THREE.CapsuleGeometry(0.08, 0.14, 4, 6).rotateZ(0.45).translate(-0.34, 0.36, 0.04)
+  const armR = new THREE.CapsuleGeometry(0.08, 0.14, 4, 6).rotateZ(-0.45).translate(0.34, 0.36, 0.04)
+  const footL = new THREE.SphereGeometry(0.11, 8, 6).scale(1, 0.65, 1.25).translate(-0.15, 0.06, 0.05)
+  const footR = new THREE.SphereGeometry(0.11, 8, 6).scale(1, 0.65, 1.25).translate(0.15, 0.06, 0.05)
   const body = mergeParts([
     prepGeo(torso, '#d8e4ff', '#ffffff'),
     prepGeo(head, '#eef4ff', '#ffffff'),
@@ -204,7 +204,7 @@ function getGeos() {
   if (G_CACHE) return G_CACHE
   const robot = buildChibiRobotGeos()
   const drone = buildChibiDroneGeos()
-  G_CACHE = {
+  G_CACHE = markShared({
     robotBody: robot.body, robotFace: robot.face,
     droneBody: drone.body, droneRotor: drone.rotor,
     train: buildLightTrainGeo(),
@@ -216,19 +216,19 @@ function getGeos() {
     barrier: buildBarrierGeo(),
     flag: buildFlagGeo(),
     djBooth: buildDjBoothGeo(),
-    sphere: new THREE.SphereGeometry(1, 14, 12),
-    torus: new THREE.TorusGeometry(1, 0.026, 12, 34),
-    arch: new THREE.TorusGeometry(1, 0.042, 12, 28, Math.PI),
-    capsule: new THREE.CapsuleGeometry(0.5, 1.0, 8, 14),
-    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1.0, 14),
-  }
+    sphere: new THREE.SphereGeometry(1, 10, 8),
+    torus: new THREE.TorusGeometry(1, 0.026, 6, 18),
+    arch: new THREE.TorusGeometry(1, 0.042, 6, 18, Math.PI),
+    capsule: new THREE.CapsuleGeometry(0.5, 1.0, 4, 8),
+    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1.0, 10),
+  })
   return G_CACHE
 }
 
 let M_CACHE = null
 function getMats() {
   if (M_CACHE) return M_CACHE
-  M_CACHE = {
+  M_CACHE = markShared({
     terrain: new THREE.MeshStandardMaterial({
       vertexColors: true, roughness: 0.65, metalness: 0.32,
       emissive: '#0e1d47', emissiveIntensity: 0.34, side: THREE.DoubleSide,
@@ -245,7 +245,7 @@ function getMats() {
     laserGate: new THREE.MeshBasicMaterial({ color: '#ff3df2', transparent: true, opacity: 0.82, depthWrite: false, toneMapped: false }),
     halo: new THREE.MeshBasicMaterial({ color: '#2bffe8', transparent: true, opacity: 0.18, depthWrite: false, toneMapped: false }),
     towerMetal: new THREE.MeshStandardMaterial({ color: '#243059', roughness: 0.35, metalness: 0.72, emissive: '#2bffe8', emissiveIntensity: 0.35 }),
-  }
+  })
   return M_CACHE
 }
 
@@ -273,7 +273,8 @@ function getCheckerTex(c1 = '#2bffe8', c2 = '#160c2e') {
     tex.anisotropy = 4
   }
   tex.needsUpdate = true
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+  markShared(tex)
+  const mat = markShared(new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }))
   texMap.set(key, mat)
   return mat
 }
@@ -305,7 +306,8 @@ function getCurbTexMat(label, bg = '#120d2e', stripe = '#ff3df2', fg = '#2bffe8'
     tex.anisotropy = 4
   }
   tex.needsUpdate = true
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false })
+  markShared(tex)
+  const mat = markShared(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false }))
   texMap.set(key, mat)
   return mat
 }
@@ -337,7 +339,8 @@ function getGridSkyTexMat() {
     tex.repeat.set(8, 3)
   }
   tex.needsUpdate = true
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, toneMapped: false })
+  markShared(tex)
+  const mat = markShared(new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }))
   texMap.set(key, mat)
   return mat
 }
@@ -478,14 +481,14 @@ function NeonTerrainAndSky({ way, detail }) {
       terrains.push(buildTerrainGeo(s, {
         arc: Math.PI * 0.62,
         maxH: s.radius * 0.29,
-        radial: 24,
-        along: Math.min(160, Math.ceil(s.length * 1.1)),
+        radial: 18,
+        along: Math.min(120, Math.ceil(s.length * 1.0)),
         height: (u, a) => neonHeight(s, u, a),
         colors,
       }))
       skies.push(buildSkyGeo(s, {
-        radial: 16,
-        along: Math.min(80, Math.ceil(s.length * 0.55)),
+        radial: 12,
+        along: Math.min(60, Math.ceil(s.length * 0.5)),
         colors: s.route === 2 ? ['#12082e', '#3c1366'] : ['#090f26', '#1e164a'],
       }))
       grids.push(buildSkyGridDomeGeo(s))
@@ -817,7 +820,7 @@ function NeonDioramaProps({ way }) {
 
   return (
     <group>
-      <Instanced geo={geos.tower} mat={mats.vcSolid} items={built.towers} castShadow />
+      <Instanced geo={geos.tower} mat={mats.vcSolid} items={built.towers} />
       <Instanced geo={geos.lamp} mat={mats.vcSolid} items={built.lamps} />
       <Instanced geo={geos.sphere} mat={mats.halo} items={built.halos} />
       <Instanced geo={geos.tree} mat={mats.vcSolid} items={built.trees} />
@@ -1295,7 +1298,9 @@ function SwitchMechanism({ seg, sw }) {
     const dist = Math.max(dir.length(), 0.25)
     const quat = new THREE.Quaternion().setFromUnitVectors(Y, dir.clone().normalize())
     const qRing = new THREE.Quaternion().setFromUnitVectors(Z, fFrom.tangent)
-    return { fFrom, fTo, mid, dist, quat, qRing }
+    const pFrom = fFrom.pos.clone().addScaledVector(fFrom.up, 0.06)
+    const pTo = fTo.pos.clone().addScaledVector(fTo.up, 0.06)
+    return { pFrom, pTo, mid, dist, quat, qRing }
   }, [seg, sw])
 
   useFrame(({ clock }) => {
@@ -1311,11 +1316,11 @@ function SwitchMechanism({ seg, sw }) {
 
   return (
     <group>
-      <mesh geometry={geos.torus} material={mats.portalCyan} position={anchors.fFrom.pos.clone().addScaledVector(anchors.fFrom.up, 0.06)} quaternion={anchors.qRing} scale={[0.36, 0.36, 0.5]} />
+      <mesh geometry={geos.torus} material={mats.portalCyan} position={anchors.pFrom} quaternion={anchors.qRing} scale={[0.36, 0.36, 0.5]} />
       <group ref={rotRef} position={anchors.mid} quaternion={anchors.quat}>
         <mesh geometry={geos.capsule} material={mats.holoBridge} scale={[0.12, anchors.dist * 0.7, 0.12]} />
       </group>
-      <mesh geometry={geos.torus} material={mats.portalPink} position={anchors.fTo.pos.clone().addScaledVector(anchors.fTo.up, 0.06)} quaternion={anchors.qRing} scale={[0.34, 0.34, 0.5]} />
+      <mesh geometry={geos.torus} material={mats.portalPink} position={anchors.pTo} quaternion={anchors.qRing} scale={[0.34, 0.34, 0.5]} />
     </group>
   )
 }

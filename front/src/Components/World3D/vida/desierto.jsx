@@ -6,8 +6,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   BALL_R, Billboard, CartelesDeRuta, Critter, EventStage, Instanced,
   Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame,
-  laneGap, makePlacement, maxHeight, mulberry32, placeAlong, placeAlongInto,
-  routeInfo, scatter, segFrames, segPath, switchesOf,
+  laneGap, makePlacement, markShared, maxHeight, mulberry32, placeAlong, placeAlongInto,
+  routeInfo, scatter, segFrames, segPath, switchesOf, useAutoDispose, useWayBounds,
 } from './base.jsx'
 
 const X = new THREE.Vector3(1, 0, 0)
@@ -65,13 +65,13 @@ function getGeos() {
   if (GEOS) return GEOS
 
   // Primitivas suaves reutilizables para construir piezas
-  const sph16 = new THREE.SphereGeometry(1, 16, 12)
-  const sph12 = new THREE.SphereGeometry(1, 12, 10)
-  const cap12 = new THREE.CapsuleGeometry(1, 1, 8, 12)
-  const cyl16 = new THREE.CylinderGeometry(1, 1, 1, 16)
-  const cone16 = new THREE.ConeGeometry(1, 1, 16)
+  const sph16 = new THREE.SphereGeometry(1, 10, 8)
+  const sph12 = new THREE.SphereGeometry(1, 8, 6)
+  const cap12 = new THREE.CapsuleGeometry(1, 1, 4, 6)
+  const cyl16 = new THREE.CylinderGeometry(1, 1, 1, 10)
+  const cone16 = new THREE.ConeGeometry(1, 1, 10)
   const cone4 = new THREE.ConeGeometry(1, 1, 4)
-  const tor16 = new THREE.TorusGeometry(1, 0.075, 12, 28)
+  const tor16 = new THREE.TorusGeometry(1, 0.075, 6, 16)
 
   // 1. Camello chibi (orientado hacia +Z, base en y = 0, altura ~1)
   const camel = mergePainted([
@@ -224,22 +224,22 @@ function getGeos() {
   ])
 
   // 15. Escarabajo dorado / luciérnaga / meteorito
-  const orb = new THREE.SphereGeometry(1, 14, 10)
+  const orb = new THREE.SphereGeometry(1, 8, 6)
   const star = mergePainted([
     bakePart(sph12, '#fff7cc', 0, 0, 0, 0, 0, 0, 0.12, 0.12, 0.34),
     bakePart(cone16, '#ffb703', 0, 0, -0.45, -Math.PI / 2, 0, 0, 0.09, 0.55, 0.09),
   ])
 
   // 16. Flor de cactus animable (pétalos para bloom)
-  const petal = new THREE.SphereGeometry(1, 12, 10)
+  const petal = new THREE.SphereGeometry(1, 8, 6)
   petal.scale(0.14, 0.05, 0.26)
   petal.translate(0, 0, 0.16)
 
-  GEOS = {
+  GEOS = markShared({
     camel, snake, scorpion, vulture, spectator, cactus, palm, pyramid, adobe, rock,
     stand, lamp, fence, pennant, orb, star, petal,
     sph16, sph12, cap12, cyl16, cone16, cone4, tor16,
-  }
+  })
   return GEOS
 }
 
@@ -292,7 +292,7 @@ function getMats() {
     return tex
   })()
 
-  MATS = {
+  MATS = markShared({
     clay: new THREE.MeshStandardMaterial({
       vertexColors: true, roughness: 0.48, metalness: 0.06, emissive: '#331c0a', emissiveIntensity: 0.24,
     }),
@@ -323,7 +323,7 @@ function getMats() {
     water: new THREE.MeshBasicMaterial({
       color: '#38d9c0', transparent: true, opacity: 0.68, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
     }),
-  }
+  })
   return MATS
 }
 
@@ -518,6 +518,8 @@ function FinishFireworks({ seg }) {
     if (!mesh) return
     for (let i = 0; i < N; i++) mesh.setColorAt(i, _tmpC.set(dirs[i].col))
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2.5)
+    mesh.frustumCulled = true
   }, [dirs])
 
   useFrame(({ clock }, dt) => {
@@ -550,7 +552,7 @@ function FinishFireworks({ seg }) {
       <mesh geometry={G.cyl16} material={M.brass} position={[archW, yBase + colH * 0.5, 0]} scale={[0.1, colH, 0.1]} />
       <mesh geometry={G.tor16} material={M.glowAmber} position={[0, archH * 0.84, 0]} scale={[archW * 0.94, 0.46, 0.46]} />
       <Billboard text="🏁 META DEL DESIERTO" style={ESTILO_META} height={0.28} position={[0, archH * 0.94, 0.12]} />
-      <instancedMesh ref={sparksRef} args={[G.orb, M.glowWhite, N]} frustumCulled={false} />
+      <instancedMesh ref={sparksRef} args={[G.orb, M.glowWhite, N]} />
     </group>
   )
 }
@@ -614,6 +616,9 @@ function LaneSwitchMechanisms({ way }) {
   const ringsRef = useRef()
   const rotorsRef = useRef()
   const padsRef = useRef()
+  useWayBounds(ringsRef, way)
+  useWayBounds(rotorsRef, way)
+  useWayBounds(padsRef, way)
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -661,9 +666,9 @@ function LaneSwitchMechanisms({ way }) {
   if (!mechanisms.length) return null
   return (
     <group>
-      <instancedMesh ref={padsRef} args={[G.cyl16, M.brass, mechanisms.length]} frustumCulled={false} />
-      <instancedMesh ref={ringsRef} args={[G.tor16, M.glowAmber, mechanisms.length]} frustumCulled={false} />
-      <instancedMesh ref={rotorsRef} args={[G.cap12, M.glowCyan, mechanisms.length]} frustumCulled={false} />
+      <instancedMesh ref={padsRef} args={[G.cyl16, M.brass, mechanisms.length]} />
+      <instancedMesh ref={ringsRef} args={[G.tor16, M.glowAmber, mechanisms.length]} />
+      <instancedMesh ref={rotorsRef} args={[G.cap12, M.glowCyan, mechanisms.length]} />
     </group>
   )
 }
@@ -758,6 +763,7 @@ function DesertOasisSphinxStage({ seg, stage, G, M }) {
     placeAlong(seg, 0.74, 0.04, 0.74),
   ], [seg])
   const waterMat = useMemo(() => M.water.clone(), [M])
+  useAutoDispose(waterMat)
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -896,6 +902,7 @@ function DesertAirRings({ way }) {
     return out
   }, [way])
   const meshRef = useRef()
+  useWayBounds(meshRef, way)
   useFrame(({ clock }) => {
     const m = meshRef.current
     if (!m || !rings.length) return
@@ -912,7 +919,7 @@ function DesertAirRings({ way }) {
     m.instanceMatrix.needsUpdate = true
   })
   if (!rings.length) return null
-  return <instancedMesh ref={meshRef} args={[G.tor16, M.glowAmber, rings.length]} frustumCulled={false} />
+  return <instancedMesh ref={meshRef} args={[G.tor16, M.glowAmber, rings.length]} />
 }
 
 // ═══════════════════════════ CRIATURAS ESPECIALES ANIMADAS ═══════════════════════════
@@ -934,6 +941,7 @@ function SkyVultures({ way }) {
   }, [path, way.idx])
   const items = useMemo(() => state.map(() => ({ pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scale: 0.24 })), [state])
   const meshRef = useRef()
+  useWayBounds(meshRef, way)
   const loc = useMemo(() => ({}), [])
 
   useFrame(({ clock }, dt) => {
@@ -971,7 +979,7 @@ function SkyVultures({ way }) {
   })
 
   if (!path.total) return null
-  return <instancedMesh ref={meshRef} args={[G.vulture, M.clay, items.length]} frustumCulled={false} />
+  return <instancedMesh ref={meshRef} args={[G.vulture, M.clay, items.length]} />
 }
 
 // Espectadores en las gradas que hacen la "ola" cuando pasa la bollita + cazadores de escarabajos + grupo dormido
@@ -1011,6 +1019,9 @@ function LivingCrowdAndBehavior({ way, standItems }) {
   const crowdRef = useRef()
   const sleepRef = useRef()
   const scarabRef = useRef()
+  useWayBounds(crowdRef, way)
+  useWayBounds(sleepRef, way)
+  useWayBounds(scarabRef, way)
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -1073,9 +1084,9 @@ function LivingCrowdAndBehavior({ way, standItems }) {
 
   return (
     <group>
-      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.spectator, M.clay, crowd.length]} frustumCulled={false} />}
-      {sleepers.length > 0 && <instancedMesh ref={sleepRef} args={[G.camel, M.clay, sleepers.length]} frustumCulled={false} />}
-      {scarabs.length > 0 && <instancedMesh ref={scarabRef} args={[G.orb, M.glowAmber, scarabs.length]} frustumCulled={false} />}
+      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.spectator, M.clay, crowd.length]} />}
+      {sleepers.length > 0 && <instancedMesh ref={sleepRef} args={[G.camel, M.clay, sleepers.length]} />}
+      {scarabs.length > 0 && <instancedMesh ref={scarabRef} args={[G.orb, M.glowAmber, scarabs.length]} />}
     </group>
   )
 }
@@ -1090,24 +1101,27 @@ function DesertSkyPhenomena({ way, detail }) {
       const rt = way.routes[seg.route]
       const sp = rt?.profile?.speed
       const colors = sp === 'rapida' ? ['#ff9e44', '#1f2b54'] : sp === 'lenta' ? ['#f5b47a', '#16344c'] : ['#eb9d52', '#1c2445']
-      return { key: seg.i, geo: buildSkyGeo(seg, { radial: 28, colors }) }
+      return { key: seg.i, geo: buildSkyGeo(seg, { radial: 14, colors }) }
     })
   }, [way])
+  const skyGeoList = useMemo(() => skyGeos.map((s) => s.geo), [skyGeos])
+  useAutoDispose(skyGeoList)
 
   const skyMat = useMemo(() => new THREE.MeshBasicMaterial({
     vertexColors: true, side: THREE.FrontSide, transparent: true, opacity: 0.25, depthWrite: false, fog: false,
   }), [])
+  useAutoDispose(skyMat)
 
   // Lunas y estrellas fijas en el techo del diorama
-  const moons = useMemo(() => scatter(way, 12, mulberry32(way.idx * 419 + 5), {
+  const moons = useMemo(() => scatter(way, 10, mulberry32(way.idx * 419 + 5), {
     angle: [Math.PI * 0.82, Math.PI * 1.18], clear: 0, offset: [0.18, 0.26], scale: [0.16, 0.24],
   }), [way])
-  const stars = useMemo(() => scatter(way, 72, mulberry32(way.idx * 443 + 9), {
+  const stars = useMemo(() => scatter(way, 42, mulberry32(way.idx * 443 + 9), {
     angle: [Math.PI * 0.62, Math.PI * 1.38], clear: 0, offset: [0.1, 0.2], scale: [0.028, 0.052],
   }), [way])
 
   // Lluvia de meteoritos animados en el techo
-  const meteorsN = 22
+  const meteorsN = 14
   const meteors = useMemo(() => {
     const rng = mulberry32(way.idx * 613 + 11)
     return Array.from({ length: meteorsN }, () => ({
@@ -1120,7 +1134,7 @@ function DesertSkyPhenomena({ way, detail }) {
   }, [path, way.idx])
 
   // Remolinos / polvo de arena reactivo a la velocidad
-  const dustN = 48
+  const dustN = 32
   const dust = useMemo(() => {
     const rng = mulberry32(way.idx * 907 + 23)
     return Array.from({ length: dustN }, () => ({
@@ -1134,6 +1148,8 @@ function DesertSkyPhenomena({ way, detail }) {
 
   const meteorRef = useRef()
   const dustRef = useRef()
+  useWayBounds(meteorRef, way)
+  useWayBounds(dustRef, way)
   const loc = useMemo(() => ({}), [])
 
   useFrame(({ clock }, dt) => {
@@ -1184,8 +1200,8 @@ function DesertSkyPhenomena({ way, detail }) {
       {skyGeos.map(({ key, geo }) => <mesh key={key} geometry={geo} material={skyMat} />)}
       <Instanced geo={G.orb} mat={M.glowAmber} items={moons} />
       <Instanced geo={G.orb} mat={M.glowWhite} items={stars} />
-      {path.total > 0 && <instancedMesh ref={meteorRef} args={[G.star, M.glowWhite, meteorsN]} frustumCulled={false} />}
-      {path.total > 0 && <instancedMesh ref={dustRef} args={[G.orb, M.sandDust, dustN]} frustumCulled={false} />}
+      {path.total > 0 && <instancedMesh ref={meteorRef} args={[G.star, M.glowWhite, meteorsN]} />}
+      {path.total > 0 && <instancedMesh ref={dustRef} args={[G.orb, M.sandDust, dustN]} />}
     </group>
   )
 }
@@ -1193,11 +1209,13 @@ function DesertSkyPhenomena({ way, detail }) {
 // ═══════════════════════════ BALIZAS REACTIVAS A BOLLITA ═══════════════════════════
 function ReactiveTotemLights({ way }) {
   const G = getGeos()
-  const beacons = useMemo(() => scatter(way, 34, mulberry32(way.idx * 887 + 31), {
+  const beacons = useMemo(() => scatter(way, 28, mulberry32(way.idx * 887 + 31), {
     angle: [-0.92, 0.92], clear: BALL_R * 0.72, offset: [0.42, 0.62], scale: [0.09, 0.14],
   }), [way])
   const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), [])
+  useAutoDispose(mat)
   const meshRef = useRef()
+  useWayBounds(meshRef, way)
 
   useFrame(({ clock }) => {
     const m = meshRef.current
@@ -1230,7 +1248,7 @@ function ReactiveTotemLights({ way }) {
   })
 
   if (!beacons.length) return null
-  return <instancedMesh ref={meshRef} args={[G.orb, mat, beacons.length]} frustumCulled={false} />
+  return <instancedMesh ref={meshRef} args={[G.orb, mat, beacons.length]} />
 }
 
 // ═══════════════════════════ TERRENO Y MINI MAPA POR TRAMO ═══════════════════════════
@@ -1259,8 +1277,8 @@ export default function Vida({ way, detail }) {
         buildTerrainGeo(seg, {
           arc: Math.PI * 0.50,
           maxH,
-          radial: 52,
-          along: Math.ceil(seg.length * 3.0),
+          radial: 22,
+          along: Math.ceil(seg.length * 1.3),
           colors,
           height: (u, a) => desertDuneHeight(seg, u, a),
         }),
@@ -1278,12 +1296,15 @@ export default function Vida({ way, detail }) {
         checkers.push(buildCheckerStripGeo(seg, 0.86))
       }
     }
-    return {
-      terrain: terrains.length ? mergeGeometries(terrains, false) : null,
-      curb: curbs.length ? mergeGeometries(curbs, false) : null,
-      checker: checkers.length ? mergeGeometries(checkers, false) : null,
-    }
+    const terrain = terrains.length ? mergeGeometries(terrains, false) : null
+    const curb = curbs.length ? mergeGeometries(curbs, false) : null
+    const checker = checkers.length ? mergeGeometries(checkers, false) : null
+    for (const g of terrains) g.dispose()
+    for (const g of curbs) g.dispose()
+    for (const g of checkers) g.dispose()
+    return { terrain, curb, checker }
   }, [info])
+  useAutoDispose(trackParts)
 
   // Inventario del mini mapa y capas (primer plano, plano medio, fondo)
   const props = useMemo(() => {
@@ -1292,21 +1313,21 @@ export default function Vida({ way, detail }) {
     const slowSegs = info.segments.filter((s) => !s.air && info.routes[s.route]?.profile?.speed === 'lenta').map((s) => s.seg)
     const fastSegs = info.segments.filter((s) => !s.air && info.routes[s.route]?.profile?.speed === 'rapida').map((s) => s.seg)
 
-    const cacti = seatOnTerrain(scatter(way, 80, rng, {
+    const cacti = seatOnTerrain(scatter(way, 52, rng, {
       angle: [-1.25, 1.25], clear: BALL_R * 0.72, offset: [0.02, 0.06], scale: [0.42, 0.72],
     }))
-    const palms = seatOnTerrain(scatter(way, 42, rng, {
+    const palms = seatOnTerrain(scatter(way, 30, rng, {
       segments: slowSegs.length ? slowSegs : solid,
       angle: [-1.15, 1.15], clear: BALL_R * 0.78, offset: [0.02, 0.06], scale: [0.48, 0.82],
     }))
-    const pyramids = seatOnTerrain(scatter(way, 26, rng, {
+    const pyramids = seatOnTerrain(scatter(way, 20, rng, {
       angle: [-1.35, 1.35], clear: BALL_R * 0.9, offset: [0.02, 0.08], scale: [0.48, 0.86],
     }))
-    const adobes = seatOnTerrain(scatter(way, 32, rng, {
+    const adobes = seatOnTerrain(scatter(way, 22, rng, {
       segments: slowSegs.length ? slowSegs : solid,
       angle: [-1.15, 1.15], clear: BALL_R * 0.85, offset: [0.02, 0.05], scale: [0.42, 0.72],
     }))
-    const rocks = seatOnTerrain(scatter(way, 95, rng, {
+    const rocks = seatOnTerrain(scatter(way, 56, rng, {
       angle: [-1.35, 1.35], clear: BALL_R * 0.68, offset: [0.0, 0.05], scale: [0.32, 0.60],
     }))
     // Gradas del estadio sentadas sobre el terreno de las laderas
@@ -1429,10 +1450,10 @@ export default function Vida({ way, detail }) {
       <DesertAirRings way={way} />
 
       {/* Elenco vivo chibi: camellos, serpientes, escorpiones, buitres, espectadores, durmientes, escarabajos */}
-      <Critter way={way} segments={route0Segs} count={16} geo={G.camel} mat={M.clay} scale={0.25} speed={0.85} offset={0.24} angle={0.62} spread={0.14} hop={0.28} seed={11} />
-      <Critter way={way} segments={route1Segs ?? route0Segs} count={14} geo={G.camel} mat={M.clay} scale={0.23} speed={0.55} offset={0.24} angle={-0.62} spread={0.14} hop={0.24} seed={22} />
-      <Critter way={way} count={18} geo={G.snake} mat={M.clay} scale={0.22} speed={1.05} offset={0.18} angle={0.56} spread={0.12} hop={0.34} seed={33} />
-      <Critter way={way} count={18} geo={G.scorpion} mat={M.clay} scale={0.21} speed={0.95} offset={0.18} angle={-0.56} spread={0.12} hop={0.32} seed={44} />
+      <Critter way={way} segments={route0Segs} count={10} geo={G.camel} mat={M.clay} scale={0.25} speed={0.85} offset={0.24} angle={0.62} spread={0.14} hop={0.28} seed={11} />
+      <Critter way={way} segments={route1Segs ?? route0Segs} count={10} geo={G.camel} mat={M.clay} scale={0.23} speed={0.55} offset={0.24} angle={-0.62} spread={0.14} hop={0.24} seed={22} />
+      <Critter way={way} count={12} geo={G.snake} mat={M.clay} scale={0.22} speed={1.05} offset={0.18} angle={0.56} spread={0.12} hop={0.34} seed={33} />
+      <Critter way={way} count={12} geo={G.scorpion} mat={M.clay} scale={0.21} speed={0.95} offset={0.18} angle={-0.56} spread={0.12} hop={0.32} seed={44} />
       <SkyVultures way={way} />
       <LivingCrowdAndBehavior way={way} standItems={props.stands} />
       <ReactiveTotemLights way={way} />

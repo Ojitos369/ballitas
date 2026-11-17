@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced, Soundless, TAU,
   buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame, laneGap, lanesOf,
-  makePlacement, mulberry32, placeAlong, placeAlongInto, routeInfo, scatter,
+  makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo, scatter,
   segPath, switchesOf,
 } from './base.jsx'
 
@@ -83,21 +83,21 @@ function mergePainted(parts) {
 }
 
 function makeTopiaryGeo() {
-  const pot = paintPart(new THREE.CylinderGeometry(0.16, 0.12, 0.18, 14), '#d9825b', { t: [0, 0.09, 0] })
-  const rim = paintPart(new THREE.TorusGeometry(0.16, 0.03, 8, 18), '#f09e75', { t: [0, 0.18, 0], r: [Math.PI / 2, 0, 0] })
-  const stem = paintPart(new THREE.CylinderGeometry(0.035, 0.045, 0.35, 10), '#5b4636', { t: [0, 0.34, 0] })
-  const b1 = paintPart(new THREE.SphereGeometry(0.24, 16, 12), '#339c44', { t: [0, 0.54, 0], shade: 0.25 })
-  const b2 = paintPart(new THREE.SphereGeometry(0.17, 14, 10), '#4bc25a', { t: [0, 0.8, 0], shade: 0.25 })
-  const bud = paintPart(new THREE.SphereGeometry(0.065, 10, 8), '#ff78b0', { t: [0, 0.99, 0] })
+  const pot = paintPart(new THREE.CylinderGeometry(0.16, 0.12, 0.18, 10), '#d9825b', { t: [0, 0.09, 0] })
+  const rim = paintPart(new THREE.TorusGeometry(0.16, 0.03, 6, 12), '#f09e75', { t: [0, 0.18, 0], r: [Math.PI / 2, 0, 0] })
+  const stem = paintPart(new THREE.CylinderGeometry(0.035, 0.045, 0.35, 8), '#5b4636', { t: [0, 0.34, 0] })
+  const b1 = paintPart(new THREE.SphereGeometry(0.24, 10, 8), '#339c44', { t: [0, 0.54, 0], shade: 0.25 })
+  const b2 = paintPart(new THREE.SphereGeometry(0.17, 8, 6), '#4bc25a', { t: [0, 0.8, 0], shade: 0.25 })
+  const bud = paintPart(new THREE.SphereGeometry(0.065, 8, 6), '#ff78b0', { t: [0, 0.99, 0] })
   return mergePainted([pot, rim, stem, b1, b2, bud])
 }
 
 function makeGardenHouseSolidGeo() {
-  const base = paintPart(new THREE.CylinderGeometry(0.36, 0.4, 0.36, 18), '#fff5ec', { t: [0, 0.18, 0], shade: 0.12 })
-  const roof = paintPart(new THREE.SphereGeometry(0.45, 18, 12, 0, TAU, 0, Math.PI * 0.56), '#ff6fa5', { t: [0, 0.34, 0], s: [1, 0.95, 1], shade: 0.2 })
-  const trim = paintPart(new THREE.TorusGeometry(0.42, 0.04, 10, 22), '#ffd24a', { t: [0, 0.35, 0], r: [Math.PI / 2, 0, 0] })
-  const door = paintPart(new THREE.CapsuleGeometry(0.09, 0.11, 6, 10), '#7a5238', { t: [0, 0.13, 0.35], s: [1, 1, 0.35] })
-  const topBud = paintPart(new THREE.SphereGeometry(0.09, 10, 8), '#ffd24a', { t: [0, 0.78, 0] })
+  const base = paintPart(new THREE.CylinderGeometry(0.36, 0.4, 0.36, 10), '#fff5ec', { t: [0, 0.18, 0], shade: 0.12 })
+  const roof = paintPart(new THREE.SphereGeometry(0.45, 10, 8, 0, TAU, 0, Math.PI * 0.56), '#ff6fa5', { t: [0, 0.34, 0], s: [1, 0.95, 1], shade: 0.2 })
+  const trim = paintPart(new THREE.TorusGeometry(0.42, 0.04, 6, 14), '#ffd24a', { t: [0, 0.35, 0], r: [Math.PI / 2, 0, 0] })
+  const door = paintPart(new THREE.CapsuleGeometry(0.09, 0.11, 4, 6), '#7a5238', { t: [0, 0.13, 0.35], s: [1, 1, 0.35] })
+  const topBud = paintPart(new THREE.SphereGeometry(0.09, 8, 6), '#ffd24a', { t: [0, 0.78, 0] })
   return mergePainted([base, roof, trim, door, topBud])
 }
 
@@ -117,10 +117,10 @@ function makeFlowerStemGeo() {
 
 function makeFlowerHeadGeo() {
   const parts = []
-  parts.push(paintPart(new THREE.SphereGeometry(0.12, 12, 10), '#ffe066', { t: [0, 0.04, 0], s: [1, 0.7, 1] }))
+  parts.push(paintPart(new THREE.SphereGeometry(0.12, 8, 6), '#ffe066', { t: [0, 0.04, 0], s: [1, 0.7, 1] }))
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * TAU
-    parts.push(paintPart(new THREE.SphereGeometry(0.12, 12, 10), '#ffffff', {
+    parts.push(paintPart(new THREE.SphereGeometry(0.12, 8, 6), '#ffffff', {
       t: [Math.cos(a) * 0.16, 0.02, Math.sin(a) * 0.16],
       r: [Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25],
       s: [1.1, 0.42, 0.85],
@@ -386,6 +386,8 @@ function getAssets() {
     swBridge: new THREE.MeshStandardMaterial({ color: '#f8e6f0', roughness: 0.55, emissive: '#6e3456', emissiveIntensity: 0.22 }),
     swGlow: new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff9ccf').multiplyScalar(1.42), toneMapped: false }),
   }
+  markShared(Object.values(geo))
+  markShared(Object.values(mat))
   CACHE = { geo, mat }
   return CACHE
 }
@@ -1118,15 +1120,15 @@ export default function Vida({ way, detail }) {
     const villageSegs = solidSegs.filter((s) => s.kind === 'salida')
     const pondSegs = solidSegs.filter((s) => s.kind === 'pantano' || s.kind === 'cascada' || s.route === 1)
 
-    const topiaries = scatterOnTerrain(way, 240, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.4, scale: [0.52, 0.88] })
-    const houses = scatterOnTerrain(way, 36, rng, {
+    const topiaries = scatterOnTerrain(way, 110, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.4, scale: [0.52, 0.88] })
+    const houses = scatterOnTerrain(way, 24, rng, {
       segments: villageSegs.length ? villageSegs : solidSegs,
       angle: [-Math.PI * 0.48, Math.PI * 0.48], clear: BALL_R * 1.5, scale: [0.65, 0.88],
     })
     const flowerCols = ['#ff6fa5', '#ffd24a', '#b06bff', '#ff8a5c', '#7de2ff']
-    const flowers = scatterOnTerrain(way, 400, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.25, scale: [0.44, 0.8] })
+    const flowers = scatterOnTerrain(way, 160, rng, { angle: [-Math.PI * 0.5, Math.PI * 0.5], clear: BALL_R * 1.25, scale: [0.44, 0.8] })
       .map((it) => ({ ...it, color: flowerCols[Math.floor(it.rnd * flowerCols.length)] }))
-    const lilyFrogs = scatterOnTerrain(way, 60, rng, {
+    const lilyFrogs = scatterOnTerrain(way, 32, rng, {
       segments: pondSegs.length ? pondSegs : solidSegs,
       angle: [-Math.PI * 0.48, Math.PI * 0.48], clear: BALL_R * 1.35, scale: [0.5, 0.72],
     })
@@ -1272,7 +1274,7 @@ export default function Vida({ way, detail }) {
       <Instanced geo={geo.lampBulb} mat={mat.glowWarm} items={layout.lanternBulbs} />
       <Instanced geo={geo.gate} mat={mat.solid} items={layout.gates} />
       <Instanced geo={geo.pergola} mat={mat.solid} items={layout.pergolas} />
-      <PetalSwarm way={way} count={260} />
+      <PetalSwarm way={way} count={110} />
 
       <LaneSwitchMechanisms way={way} />
 
@@ -1289,11 +1291,11 @@ export default function Vida({ way, detail }) {
         <BloomingFlowers way={way} items={layout.flowers} />
         <FrogsOnLilyPads way={way} items={layout.lilyFrogs} />
         <GardenSpectators way={way} items={layout.spectators} screens={layout.screens} />
-        <Butterflies way={way} count={48} />
+        <Butterflies way={way} count={24} />
 
-        <TerrainCritter way={way} segments={gardenSegs.length ? gardenSegs : null} count={18} geo={geo.gnome} mat={mat.critter} scale={0.32} speed={0.55} angle={-0.58} spread={0.14} hop={0.26} seed={17} />
-        <TerrainCritter way={way} segments={allSolidSegs} count={16} geo={geo.gardener} mat={mat.critter} scale={0.33} speed={0.62} angle={0.58} spread={0.14} hop={0.28} seed={31} />
-        <TerrainCritter way={way} segments={allSolidSegs} count={26} geo={geo.bee} mat={mat.critter} scale={0.24} speed={1.2} offset={0.35} angle={0.65} spread={0.34} hop={0.22} seed={47} />
+        <TerrainCritter way={way} segments={gardenSegs.length ? gardenSegs : null} count={10} geo={geo.gnome} mat={mat.critter} scale={0.32} speed={0.55} angle={-0.58} spread={0.14} hop={0.26} seed={17} />
+        <TerrainCritter way={way} segments={allSolidSegs} count={10} geo={geo.gardener} mat={mat.critter} scale={0.33} speed={0.62} angle={0.58} spread={0.14} hop={0.28} seed={31} />
+        <TerrainCritter way={way} segments={allSolidSegs} count={14} geo={geo.bee} mat={mat.critter} scale={0.24} speed={1.2} offset={0.35} angle={0.65} spread={0.34} hop={0.22} seed={47} />
 
         {layout.heroSigns.map((hs) => (
           <Billboard key={hs.key} text={hs.text} style={{ ...ESTILO_JARDIN, sub: hs.sub }} height={0.38} position={hs.pos} quat={hs.quat} />

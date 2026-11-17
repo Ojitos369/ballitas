@@ -16,6 +16,89 @@ export const BALL_R = WORLD.BALL_R ?? 0.5
 export const FILL = 0.6 // fracción máxima de la sección que puede ocupar el mini mundo
 export const mulberry32 = WORLD.mulberry32
 
+/** Marca un recurso (geometría, material o textura) como compartido para que no se libere al desmontar un way. */
+export function markShared(obj) {
+  if (!obj) return obj
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) markShared(obj[i])
+    return obj
+  }
+  if (obj.isBufferGeometry || obj.isMaterial || obj.isTexture) {
+    obj.userData = obj.userData || {}
+    obj.userData.shared = true
+    return obj
+  }
+  if (typeof obj === 'object') {
+    for (const k in obj) {
+      const v = obj[k]
+      if (v && (v.isBufferGeometry || v.isMaterial || v.isTexture)) {
+        v.userData = v.userData || {}
+        v.userData.shared = true
+      }
+    }
+  }
+  return obj
+}
+
+function disposeMaterialAndOwnedMaps(mat) {
+  if (!mat || mat.userData?.shared) return
+  for (const k in mat) {
+    const v = mat[k]
+    if (v && v.isTexture && !v.userData?.shared) v.dispose()
+  }
+  mat.dispose?.()
+}
+
+/** Libera geometrías y materiales NO compartidos dentro de un subárbol Object3D al desmontar. */
+export function disposeObject3D(root) {
+  if (!root) return
+  root.traverse((obj) => {
+    if (obj.geometry && !obj.geometry.userData?.shared) {
+      obj.geometry.dispose?.()
+    }
+    if (obj.material) {
+      if (Array.isArray(obj.material)) {
+        for (let i = 0; i < obj.material.length; i++) disposeMaterialAndOwnedMaps(obj.material[i])
+      } else {
+        disposeMaterialAndOwnedMaps(obj.material)
+      }
+    }
+    obj.dispose?.()
+  })
+}
+
+/** Hook: libera geometrías/materiales/texturas propias (no marcadas shared) al cambiar o desmontar. */
+export function useAutoDispose(resource) {
+  useEffect(() => () => {
+    if (!resource) return
+    if (Array.isArray(resource)) {
+      for (let i = 0; i < resource.length; i++) {
+        const r = resource[i]
+        if (!r || r.userData?.shared) continue
+        if (r.isMaterial) disposeMaterialAndOwnedMaps(r)
+        else r.dispose?.()
+      }
+      return
+    }
+    if (resource.isBufferGeometry || resource.isTexture) {
+      if (!resource.userData?.shared) resource.dispose?.()
+      return
+    }
+    if (resource.isMaterial) {
+      disposeMaterialAndOwnedMaps(resource)
+      return
+    }
+    if (typeof resource === 'object') {
+      for (const k in resource) {
+        const v = resource[k]
+        if (!v || v.userData?.shared) continue
+        if (v.isBufferGeometry || v.isTexture) v.dispose?.()
+        else if (v.isMaterial) disposeMaterialAndOwnedMaps(v)
+      }
+    }
+  }, [resource])
+}
+
 const X = new THREE.Vector3(1, 0, 0)
 const Y = new THREE.Vector3(0, 1, 0)
 
@@ -345,21 +428,24 @@ const IDENT_Q = new THREE.Quaternion()
  * useInstanced(geo, mat, items) -> THREE.InstancedMesh (estable mientras geo/mat/longitud no cambien).
  * items: { pos, quat?, scale? (número | [x,y,z] | Vector3), color? }. Renderízalo con <primitive object={mesh} />.
  */
-export function useInstanced(geo, mat, items) {
+export function useInstanced(geo, mat, items, { dynamic = false } = {}) {
   const cap = Math.max(1, items?.length ?? 0)
   const mesh = useMemo(() => {
     const m = new THREE.InstancedMesh(geo, mat, cap)
-    m.frustumCulled = false
+    m.frustumCulled = !dynamic
     return m
-  }, [geo, mat, cap])
+  }, [geo, mat, cap, dynamic])
   useLayoutEffect(() => {
     const list = items ?? []
     mesh.count = list.length
     for (let i = 0; i < list.length; i++) writeInstance(mesh, i, list[i])
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-    mesh.computeBoundingSphere?.()
-  }, [mesh, items])
+    if (!dynamic && list.length > 0) {
+      if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
+      mesh.computeBoundingSphere?.()
+    }
+  }, [mesh, items, dynamic])
   useEffect(() => () => mesh.dispose(), [mesh])
   return mesh
 }
@@ -374,6 +460,8 @@ export function Instanced({ geo, mat, items, castShadow = false, receiveShadow =
 // ═══════════════════════════ TEXTO EN CANVAS (CACHEADO) ═══════════════════════════
 const textCache = new Map()
 const matCache = new Map()
+const MAX_TEXT_CACHE = 128
+const MAX_MAT_CACHE = 160
 
 /**
  * CanvasText(texto, estilo) -> { texture, aspect, key }  (cacheado por texto + estilo).
@@ -436,6 +524,13 @@ export function CanvasText(texto, estilo = {}) {
   }
   tex.colorSpace = THREE.SRGBColorSpace
   tex.needsUpdate = true
+  markShared(tex)
+  if (textCache.size >= MAX_TEXT_CACHE) {
+    const oldestKey = textCache.keys().next().value
+    const oldest = textCache.get(oldestKey)
+    textCache.delete(oldestKey)
+    oldest?.texture?.dispose?.()
+  }
   const out = { texture: tex, aspect, key }
   textCache.set(key, out)
   return out
@@ -446,16 +541,22 @@ export function textMaterial(ct, { glow = 1 } = {}) {
   const key = `${ct.key}|${glow}`
   let m = matCache.get(key)
   if (!m) {
-    m = new THREE.MeshBasicMaterial({
+    if (matCache.size >= MAX_MAT_CACHE) {
+      const oldestKey = matCache.keys().next().value
+      const oldest = matCache.get(oldestKey)
+      matCache.delete(oldestKey)
+      oldest?.dispose?.()
+    }
+    m = markShared(new THREE.MeshBasicMaterial({
       map: ct.texture, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide, toneMapped: false,
-    })
+    }))
     m.color.setScalar(glow)
     matCache.set(key, m)
   }
   return m
 }
 
-const PLANE_GEO = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0) // base en y = 0
+const PLANE_GEO = markShared(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0)) // base en y = 0
 
 /**
  * <Billboard text style height position quat faceCamera glow />
@@ -501,7 +602,7 @@ export function Critter({
     }))
   }, [path, count, seed, angle, spread, speed, colors, way.idx])
   const items = useMemo(() => state.map((c) => ({ pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scale, color: c.color })), [state, scale])
-  const mesh = useInstanced(geo, mat, items)
+  const mesh = useInstanced(geo, mat, items, { dynamic: true })
   const tmp = useMemo(() => ({ loc: {}, pl: makePlacement(), sc: new THREE.Vector3(), q: new THREE.Quaternion(), flip: new THREE.Quaternion().setFromAxisAngle(Y, Math.PI) }), [])
 
   useFrame((st, dt) => {
@@ -610,12 +711,12 @@ export function buildTerrainGeo(seg, opts = {}) {
   const R = seg.radius
   const V = VISUALS[seg.way?.theme?.id] ?? {}
   const {
-    arc = Math.PI * 0.62, maxH = R * 0.32, radial = 48, along = Math.ceil(seg.length * 3),
+    arc = Math.PI * 0.62, maxH = R * 0.32, radial = 24, along = Math.ceil(seg.length * 1.4),
     height = (u, a) => 0.5 + 0.5 * Math.sin(u * seg.length * 0.9 + a * 3.1) * Math.cos(u * seg.length * 0.37 - a * 1.7),
     colors = [V.arch?.c ?? '#3a3f4a', V.glass ?? '#9fb4d8'],
   } = opts
   const hMax = Math.min(maxH, R * FILL)
-  const nA = radial; const nU = THREE.MathUtils.clamp(along, 8, 400)
+  const nA = Math.min(radial, 28); const nU = THREE.MathUtils.clamp(along, 6, 160)
   const frames = segFrames(seg)
   const fr = makeFrame()
   const pos = new Float32Array((nA + 1) * (nU + 1) * 3)
@@ -659,20 +760,21 @@ export function buildTerrainGeo(seg, opts = {}) {
  * buildSkyGeo(seg, opts) -> BufferGeometry: casquete pegado a la pared (radio R * 0.995) para pintar
  * el "cielo" del mini mundo con un material propio del tema (vertexColors: degradado suelo -> techo).
  */
-export function buildSkyGeo(seg, { radial = 32, along = Math.ceil(seg.length * 1.5), colors = ['#20304a', '#6fa8ff'] } = {}) {
+export function buildSkyGeo(seg, { radial = 16, along = Math.ceil(seg.length * 0.7), colors = ['#20304a', '#6fa8ff'] } = {}) {
   const R = seg.radius * 0.995
-  const nU = THREE.MathUtils.clamp(along, 6, 240)
+  const nR = Math.min(radial, 18)
+  const nU = THREE.MathUtils.clamp(along, 5, 110)
   const frames = segFrames(seg)
   const fr = makeFrame()
-  const pos = new Float32Array((radial + 1) * (nU + 1) * 3)
-  const col = new Float32Array((radial + 1) * (nU + 1) * 3)
+  const pos = new Float32Array((nR + 1) * (nU + 1) * 3)
+  const col = new Float32Array((nR + 1) * (nU + 1) * 3)
   const c0 = new THREE.Color(colors[0]); const c1 = new THREE.Color(colors[1]); const cc = new THREE.Color()
   const dv = new THREE.Vector3()
   let p = 0
   for (let i = 0; i <= nU; i++) {
     sampleFrameInto(frames, i / nU, fr)
-    for (let j = 0; j <= radial; j++) {
-      const a = -Math.PI + (j / radial) * TAU
+    for (let j = 0; j <= nR; j++) {
+      const a = -Math.PI + (j / nR) * TAU
       dv.copy(fr.up).multiplyScalar(-Math.cos(a)).addScaledVector(fr.right, Math.sin(a))
       pos[p] = fr.pos.x + dv.x * R; pos[p + 1] = fr.pos.y + dv.y * R; pos[p + 2] = fr.pos.z + dv.z * R
       cc.copy(c0).lerp(c1, 0.5 - 0.5 * Math.cos(a))
@@ -682,8 +784,8 @@ export function buildSkyGeo(seg, { radial = 32, along = Math.ceil(seg.length * 1
   }
   const idx = []
   for (let i = 0; i < nU; i++) {
-    for (let j = 0; j < radial; j++) {
-      const a = i * (radial + 1) + j; const b = a + radial + 1
+    for (let j = 0; j < nR; j++) {
+      const a = i * (nR + 1) + j; const b = a + nR + 1
       idx.push(a, b, a + 1, b, b + 1, a + 1)
     }
   }
@@ -714,11 +816,11 @@ export class VidaGuard extends Component {
 }
 
 // ═══════════════════════════ EJEMPLO COMÚN: CARTELES DE RUTA ═══════════════════════════
-const POLE_GEO = new THREE.CylinderGeometry(0.025, 0.03, 1, 10).translate(0, 0.5, 0)
+const POLE_GEO = markShared(new THREE.CylinderGeometry(0.025, 0.03, 1, 8).translate(0, 0.5, 0))
 const poleMatCache = new Map()
 function poleMat(hex) {
   let m = poleMatCache.get(hex)
-  if (!m) { m = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.5, metalness: 0.6 }); poleMatCache.set(hex, m) }
+  if (!m) { m = markShared(new THREE.MeshStandardMaterial({ color: hex, roughness: 0.5, metalness: 0.6 })); poleMatCache.set(hex, m) }
   return m
 }
 
@@ -754,4 +856,42 @@ export function CartelesDeRuta({ way, style = {}, angle = 1.0, u = 0.14, height 
       ))}
     </group>
   )
+}
+
+const waySphereCache = new WeakMap()
+
+/** Esfera envolvente en mundo que cubre todos los tramos del way para frustum culling sin popping. */
+export function getWayBoundingSphere(way, margin = 5) {
+  if (!way) return null
+  let sphere = waySphereCache.get(way)
+  if (!sphere) {
+    const box = new THREE.Box3()
+    const segs = way.segments ?? []
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i]
+      if (s.start) box.expandByPoint(s.start)
+      if (s.end) box.expandByPoint(s.end)
+    }
+    sphere = new THREE.Sphere()
+    if (!box.isEmpty()) {
+      box.getBoundingSphere(sphere)
+      sphere.radius += margin
+    } else {
+      sphere.radius = 60
+    }
+    waySphereCache.set(way, sphere)
+  }
+  return sphere
+}
+
+/** Asigna una boundingSphere del way completo a un InstancedMesh dinámico para habilitar frustum culling. */
+export function useWayBounds(ref, way) {
+  useLayoutEffect(() => {
+    const mesh = ref?.current
+    if (!mesh || !way) return
+    const sphere = getWayBoundingSphere(way)
+    if (!sphere) return
+    mesh.boundingSphere = sphere.clone()
+    mesh.frustumCulled = true
+  }, [ref, way])
 }

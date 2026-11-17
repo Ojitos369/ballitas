@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced,
   Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame, laneGap,
-  makePlacement, mulberry32, placeAlong, placeAlongInto, routeInfo,
+  makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo,
   scatter, segFrames, segPath, sampleFrameInto, makeFrame, switchesOf, useInstanced,
 } from './base.jsx'
 
@@ -60,10 +60,10 @@ function mergeParts(parts) {
 // ───────────────────────── Elenco Chibi (estilo bollitas_chibi_hoja) ─────────────────────────
 function buildChibiGhostGeos() {
   // Cuerpo tintable blanco (se tiñe con instanceColor)
-  const dome = new THREE.SphereGeometry(0.42, 18, 14).scale(1.0, 1.08, 0.96).translate(0, 0.56, 0)
-  const skirt = new THREE.CylinderGeometry(0.41, 0.50, 0.44, 18, 1, false).translate(0, 0.28, 0)
-  const armL = new THREE.SphereGeometry(0.13, 12, 10).scale(0.85, 1.15, 0.85).translate(-0.42, 0.48, 0.14)
-  const armR = new THREE.SphereGeometry(0.13, 12, 10).scale(0.85, 1.15, 0.85).translate(0.42, 0.48, 0.14)
+  const dome = new THREE.SphereGeometry(0.42, 10, 8).scale(1.0, 1.08, 0.96).translate(0, 0.56, 0)
+  const skirt = new THREE.CylinderGeometry(0.41, 0.50, 0.44, 10, 1, false).translate(0, 0.28, 0)
+  const armL = new THREE.SphereGeometry(0.13, 8, 6).scale(0.85, 1.15, 0.85).translate(-0.42, 0.48, 0.14)
+  const armR = new THREE.SphereGeometry(0.13, 8, 6).scale(0.85, 1.15, 0.85).translate(0.42, 0.48, 0.14)
   const body = mergeParts([
     prepGeo(dome, '#ffffff', '#e9dcff'),
     prepGeo(skirt, '#d8c4ff', '#ffffff'),
@@ -266,7 +266,7 @@ function getGeos() {
   const ghost = buildChibiGhostGeos()
   const crow = buildChibiCrowGeos()
   const bat = buildChibiBatGeos()
-  G_CACHE = {
+  G_CACHE = markShared({
     ghostBody: ghost.body, ghostFace: ghost.face,
     crowBody: crow.body, crowFace: crow.face,
     batBody: bat.body, batWings: bat.wings,
@@ -283,20 +283,20 @@ function getGeos() {
     fence: buildFenceGeo(),
     moon: buildCrescentMoonGeo(),
     eyes: buildEyePairGeo(),
-    sphere: new THREE.SphereGeometry(1, 14, 12),
-    torus: new THREE.TorusGeometry(1, 0.026, 12, 34),
-    arch: new THREE.TorusGeometry(1, 0.042, 12, 28, Math.PI),
-    capsule: new THREE.CapsuleGeometry(0.5, 1.0, 8, 14),
-    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1.0, 14),
-    cone: new THREE.ConeGeometry(0.5, 1.0, 14),
-  }
+    sphere: new THREE.SphereGeometry(1, 10, 8),
+    torus: new THREE.TorusGeometry(1, 0.026, 6, 18),
+    arch: new THREE.TorusGeometry(1, 0.042, 6, 18, Math.PI),
+    capsule: new THREE.CapsuleGeometry(0.5, 1.0, 4, 8),
+    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1.0, 10),
+    cone: new THREE.ConeGeometry(0.5, 1.0, 10),
+  })
   return G_CACHE
 }
 
 let M_CACHE = null
 function getMats() {
   if (M_CACHE) return M_CACHE
-  M_CACHE = {
+  M_CACHE = markShared({
     terrain: new THREE.MeshStandardMaterial({
       vertexColors: true, roughness: 0.85, metalness: 0.08,
       emissive: '#1e1238', emissiveIntensity: 0.28, side: THREE.DoubleSide,
@@ -314,7 +314,7 @@ function getMats() {
     bridgeHolo: new THREE.MeshStandardMaterial({ color: '#b784ff', emissive: '#7e3ff2', emissiveIntensity: 1.0, transparent: true, opacity: 0.78, depthWrite: false }),
     gateMetal: new THREE.MeshStandardMaterial({ color: '#332454', roughness: 0.38, metalness: 0.68, emissive: '#6e34c9', emissiveIntensity: 0.55 }),
     aurora: new THREE.MeshBasicMaterial({ color: '#b784ff', transparent: true, opacity: 0.26, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
-  }
+  })
   return M_CACHE
 }
 
@@ -342,7 +342,8 @@ function getCheckerTex(c1 = '#f4ebff', c2 = '#281642') {
     tex.anisotropy = 4
   }
   tex.needsUpdate = true
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.94, side: THREE.DoubleSide, depthWrite: false })
+  markShared(tex)
+  const mat = markShared(new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.94, side: THREE.DoubleSide, depthWrite: false }))
   texMap.set(key, mat)
   return mat
 }
@@ -374,7 +375,8 @@ function getCurbTexMat(label, bg = '#2b1947', stripe = '#b784ff', fg = '#f8f0ff'
     tex.anisotropy = 4
   }
   tex.needsUpdate = true
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+  markShared(tex)
+  const mat = markShared(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }))
   texMap.set(key, mat)
   return mat
 }
@@ -485,14 +487,14 @@ function SombrioTerrainAndSky({ way, detail }) {
       terrains.push(buildTerrainGeo(s, {
         arc: Math.PI * 0.62,
         maxH: s.radius * 0.30,
-        radial: 24,
-        along: Math.min(160, Math.ceil(s.length * 1.1)),
+        radial: 18,
+        along: Math.min(120, Math.ceil(s.length * 1.0)),
         height: (u, a) => sombrioHeight(s, u, a),
         colors,
       }))
       skies.push(buildSkyGeo(s, {
-        radial: 16,
-        along: Math.min(80, Math.ceil(s.length * 0.55)),
+        radial: 12,
+        along: Math.min(60, Math.ceil(s.length * 0.5)),
         colors: s.route === 0 ? ['#120924', '#381563'] : ['#18102e', '#2f1c54'],
       }))
       if (s.kind === 'salida' || s.kind === 'llegada' || s.route === 2 || s.event) {
@@ -838,9 +840,9 @@ function SombrioDioramaProps({ way }) {
 
   return (
     <group>
-      <Instanced geo={geos.tomb} mat={mats.vcSolid} items={built.tombs} castShadow />
-      <Instanced geo={geos.tree} mat={mats.vcSolid} items={built.trees} castShadow />
-      <Instanced geo={geos.house} mat={mats.vcSolid} items={built.houses} castShadow />
+      <Instanced geo={geos.tomb} mat={mats.vcSolid} items={built.tombs} />
+      <Instanced geo={geos.tree} mat={mats.vcSolid} items={built.trees} />
+      <Instanced geo={geos.house} mat={mats.vcSolid} items={built.houses} />
       <Instanced geo={geos.lantern} mat={mats.vcSolid} items={built.lanterns} />
       <Instanced geo={geos.sphere} mat={mats.halo} items={built.halos} />
       <Instanced geo={geos.candle} mat={mats.vcSolid} items={built.candles} />
@@ -1331,7 +1333,9 @@ function SwitchMechanism({ seg, sw }) {
     const dist = Math.max(dir.length(), 0.25)
     const quat = new THREE.Quaternion().setFromUnitVectors(Y, dir.clone().normalize())
     const qRing = new THREE.Quaternion().setFromUnitVectors(Z, fFrom.tangent)
-    return { fFrom, fTo, mid, dist, quat, qRing }
+    const pFrom = fFrom.pos.clone().addScaledVector(fFrom.up, 0.06)
+    const pTo = fTo.pos.clone().addScaledVector(fTo.up, 0.06)
+    return { pFrom, pTo, mid, dist, quat, qRing }
   }, [seg, sw])
 
   useFrame(({ clock }) => {
@@ -1348,13 +1352,13 @@ function SwitchMechanism({ seg, sw }) {
   return (
     <group>
       {/* Ancla de entrada sobre el riel `from` */}
-      <mesh geometry={geos.torus} material={mats.portalArch} position={anchors.fFrom.pos.clone().addScaledVector(anchors.fFrom.up, 0.06)} quaternion={anchors.qRing} scale={[0.36, 0.36, 0.5]} />
+      <mesh geometry={geos.torus} material={mats.portalArch} position={anchors.pFrom} quaternion={anchors.qRing} scale={[0.36, 0.36, 0.5]} />
       {/* Conector temático del mecanismo */}
       <group ref={rotRef} position={anchors.mid} quaternion={anchors.quat}>
         <mesh geometry={geos.capsule} material={mats.bridgeHolo} scale={[0.12, anchors.dist * 0.7, 0.12]} />
       </group>
       {/* Ancla de salida sobre el riel `to` */}
-      <mesh geometry={geos.torus} material={mats.ectoplasm} position={anchors.fTo.pos.clone().addScaledVector(anchors.fTo.up, 0.06)} quaternion={anchors.qRing} scale={[0.34, 0.34, 0.5]} />
+      <mesh geometry={geos.torus} material={mats.ectoplasm} position={anchors.pTo} quaternion={anchors.qRing} scale={[0.34, 0.34, 0.5]} />
     </group>
   )
 }

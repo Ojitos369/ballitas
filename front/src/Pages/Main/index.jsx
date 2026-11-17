@@ -3,6 +3,12 @@ import { Sim } from '../../Core/sim.js'
 import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
+import { StatsHud } from '../../Components/World3D/StatsOverlay.jsx'
+
+function initialStatsOn() {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('stats') === '1'
+}
 
 export default function Main() {
   const simRef = useRef(null)
@@ -13,6 +19,8 @@ export default function Main() {
   const [follow, setFollow] = useState(false)
   const [pov, setPov] = useState(false)
   const [cine, setCine] = useState(false)
+  const [showStats, setShowStats] = useState(initialStatsOn)
+  const [stats, setStats] = useState(null)
   const [, setTick] = useState(0)
 
   // La sim vive fuera de React: se refresca la UI 5 veces por segundo.
@@ -21,9 +29,14 @@ export default function Main() {
     return () => clearInterval(id)
   }, [])
 
-  // Atajo de teclado: tecla C alterna el modo cine; Esc sale de POV.
+  // Atajo de teclado: tecla C alterna el modo cine; F3 alterna stats; Esc sale de POV.
   useEffect(() => {
     const onKey = (e) => {
+      if (e.key === 'F3') {
+        e.preventDefault()
+        setShowStats((v) => !v)
+        return
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'Escape') {
         if (!document.pointerLockElement) setPov(false)
@@ -60,7 +73,8 @@ export default function Main() {
 
   return (
     <div className="app">
-      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} onSelect={select} onExitPov={() => setPov(false)} />
+      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} showStats={showStats} onStatsSample={setStats} onSelect={select} onExitPov={() => setPov(false)} />
+      {showStats && <StatsHud stats={stats} />}
       <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBollita={followBollita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       {selected && <Detail b={selected} sim={sim} follow={follow} pov={pov} onFollow={toggleFollow} onPov={togglePov} onClose={() => select(null)} />}
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Stars, Environment, Lightformer, GradientTexture } from '@react-three/drei'
+import { OrbitControls, Stars, Environment, Lightformer, GradientTexture, PerformanceMonitor } from '@react-three/drei'
 import {
   EffectComposer,
   Bloom,
@@ -17,6 +17,7 @@ import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Bollita from './Bollita.jsx'
 import PovPanel from '../Panels/PovPanel.jsx'
+import { StatsProbe } from './StatsOverlay.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -185,6 +186,8 @@ function NebulaDome({ r }) {
     fog: false,
   }), [])
 
+  useEffect(() => () => mat.dispose(), [mat])
+
   useFrame((_, dt) => {
     mat.uniforms.uTime.value += dt
   })
@@ -246,6 +249,12 @@ function ConstellationDome({ r }) {
     pg.setAttribute('position', new THREE.Float32BufferAttribute(pts.flatMap((p) => [p.x, p.y, p.z]), 3))
     return { lineGeo: lg, pointGeo: pg, dotTex: makeConstellationDotTex() }
   }, [r])
+
+  useEffect(() => () => {
+    lineGeo.dispose()
+    pointGeo.dispose()
+    dotTex?.dispose()
+  }, [lineGeo, pointGeo, dotTex])
 
   useFrame((_, dt) => {
     if (groupRef.current) groupRef.current.rotation.y += dt * 0.004
@@ -774,48 +783,49 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
   )
 }
 
-// Luz principal con sombras. El área de sombra acompaña al objetivo de la cámara para tener detalle donde se mira.
-// Solo proyectan/reciben las mallas que lo declaren (castShadow / receiveShadow) en Nodes, Paths y Bollita.
-function Sol({ r }) {
+// Luz principal con sombras. Solo proyecta sombras al seguir una bollita / POV para ahorrar GPU en vista general.
+function Sol({ r, shadowsOn, selected }) {
   const luz = useRef()
   const controls = useThree((s) => s.controls)
   useFrame(() => {
-    if (!controls) return
-    luz.current.target.position.copy(controls.target)
+    if (!luz.current) return
+    const tgt = shadowsOn && selected && selected.phase !== 'gone' ? selected.pos : controls?.target
+    if (!tgt) return
+    luz.current.target.position.copy(tgt)
     luz.current.target.updateMatrixWorld()
-    luz.current.position.copy(controls.target).addScaledVector(SOL_DIR, r)
+    luz.current.position.copy(tgt).addScaledVector(SOL_DIR, r)
   })
   return (
     <directionalLight
       ref={luz}
-      castShadow
+      castShadow={shadowsOn}
       intensity={1.35}
       color="#ffe6c4"
-      shadow-mapSize={[2048, 2048]}
-      shadow-bias={-0.0003}
+      shadow-mapSize={[512, 512]}
+      shadow-bias={-0.0005}
       shadow-normalBias={0.03}
-      shadow-radius={2.5}
+      shadow-radius={1.5}
     >
-      <orthographicCamera attach="shadow-camera" args={[-45, 45, 45, -45, 1, r * 2.5]} />
+      <orthographicCamera attach="shadow-camera" args={[-16, 16, 16, -16, 1, r * 2.5]} />
     </directionalLight>
   )
 }
 
-function PostFX({ dofOn, selected }) {
+function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
   const dofTarget = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(() => {
-    if (!dofOn || !dofRef.current?.target) return
+    if (!dofOn || !ultraQuality || !dofRef.current?.target) return
     if (selected && selected.phase !== 'gone') dofRef.current.target.copy(selected.pos)
     else if (controls) dofRef.current.target.copy(controls.target)
   })
 
   return (
     <EffectComposer multisampling={0}>
-      <SMAA />
-      {dofOn && (
+      {highQuality && <SMAA />}
+      {ultraQuality && dofOn && (
         <DepthOfField
           ref={dofRef}
           target={dofTarget}
@@ -824,16 +834,16 @@ function PostFX({ dofOn, selected }) {
           resolutionScale={0.5}
         />
       )}
-      <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.32} />
-      <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />
-      <Vignette eskil={false} offset={0.22} darkness={0.48} />
-      <Noise opacity={0.025} />
+      <Bloom mipmapBlur luminanceThreshold={highQuality ? 1.1 : 1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
+      {highQuality && <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />}
+      <Vignette eskil={false} offset={0.22} darkness={highQuality ? 0.48 : 0.45} />
+      {highQuality && <Noise opacity={0.025} />}
       <ToneMapping mode={TONE_MAPPING_AGX} middleGrey={0.52} />
     </EffectComposer>
   )
 }
 
-export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, onSelect, onExitPov }) {
+export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
@@ -866,6 +876,24 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
     return () => window.removeEventListener('keydown', onKey)
   }, [])
   const cameraOnBall = Boolean((povActive || follow) && selected && selected.phase !== 'gone')
+  const [dpr, setDpr] = useState(1)
+  const [lowPerf, setLowPerf] = useState(false)
+  const highQualityFx = cameraOnBall && !lowPerf
+  const ultraQualityFx = highQualityFx && dpr >= 1.25
+
+  const handlePerfDecline = useCallback(() => {
+    setDpr((prev) => Math.max(0.6, Number((prev - 0.15).toFixed(2))))
+    setLowPerf(true)
+  }, [])
+  const handlePerfIncline = useCallback(() => {
+    setDpr((prev) => Math.min(1.5, Number((prev + 0.15).toFixed(2))))
+    setLowPerf(false)
+  }, [])
+  const handlePerfChange = useCallback(({ factor }) => {
+    const next = Number((0.6 + factor * 0.9).toFixed(2))
+    setDpr((prev) => (Math.abs(prev - next) >= 0.08 ? next : prev))
+    setLowPerf(factor < 0.65)
+  }, [])
 
   const handleCanvasReady = useCallback((dom) => {
     canvasDomRef.current = dom
@@ -1065,18 +1093,28 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
     <>
       <Canvas
       shadows="soft"
-      dpr={[1, 1.5]}
+      dpr={dpr}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
       onPointerMissed={() => { if (!povActive) onSelect(null) }}
     >
+      <PerformanceMonitor
+        ms={120}
+        iterations={3}
+        flipflops={3}
+        bounds={() => [30, 55]}
+        step={0.2}
+        onDecline={handlePerfDecline}
+        onIncline={handlePerfIncline}
+        onChange={handlePerfChange}
+      />
       <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
 
       {/* fondo: cúpula oscura + nebulosa FBM + estrellas, centradas en el mundo */}
       <group position={center}>
         {/* radio 12r + zoom máximo 6r < far 20r: la cúpula nunca se recorta */}
         <mesh scale={r * 12}>
-          <sphereGeometry args={[1, 32, 16]} />
+          <sphereGeometry args={[1, 24, 12]} />
           <meshBasicMaterial side={THREE.BackSide} depthWrite={false} fog={false}>
             <GradientTexture stops={[0, 0.55, 1]} colors={['#0d1124', '#060812', '#020307']} />
           </meshBasicMaterial>
@@ -1086,7 +1124,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
         <Stars
           radius={r * 8}
           depth={r * 2}
-          count={2500}
+          count={1200}
           factor={Math.max(1.5, r * 0.035)}
           saturation={0.25}
           fade
@@ -1095,12 +1133,12 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       </group>
 
       {/* Iluminación con contraste: clave cálida + relleno frío tenue */}
-      <Sol r={r} />
+      <Sol r={r} shadowsOn={cameraOnBall} selected={selected} />
       <hemisphereLight args={['#9bb6f0', '#161124', 0.22]} />
       <directionalLight position={[-1, 0.25, -1]} intensity={0.25} color="#6d92e8" />
 
       {/* entorno generado en local (sin HDR de red): reflejos sutiles en cristal y esferas */}
-      <Environment resolution={256} frames={1} environmentIntensity={0.45}>
+      <Environment resolution={128} frames={1} environmentIntensity={0.45}>
         <color attach="background" args={['#06091a']} />
         <Lightformer form="rect" intensity={1.6} color="#dce8ff" position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[12, 12, 1]} />
         <Lightformer form="rect" intensity={0.9} color="#7ea6f5" position={[-8, 2, 4]} rotation-y={Math.PI / 2} scale={[10, 4, 1]} />
@@ -1110,7 +1148,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} sim={sim} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
+      <Paths world={sim.world} sim={sim} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} />
       {bollitas.map((b) => (
         <Bollita
           key={b.id}
@@ -1136,7 +1174,8 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
         horizonRef={horizonRef}
         onCanvasReady={handleCanvasReady}
       />
-      <PostFX dofOn={dofOn} selected={selected} />
+      <PostFX dofOn={dofOn} selected={selected} highQuality={highQualityFx} ultraQuality={ultraQualityFx} />
+      <StatsProbe active={showStats} onSample={onStatsSample} />
     </Canvas>
     <PovPanel
       active={povActive}
