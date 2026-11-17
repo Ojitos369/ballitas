@@ -1,9 +1,11 @@
+import ListaBollitas from './ListaBollitas.jsx'
+
 const SPEEDS = [[0, '⏸', 'Pausa'], [1, '1×', 'Velocidad normal'], [3, '3×', 'Velocidad triple'], [8, '8×', 'Velocidad por ocho']]
 
 // Mismo tono que el cuerpo 3D de la bollita.
 export const colorDe = (b) => `hsl(${Math.round(b.genome.hue * 360)} 75% 60%)`
 
-export default function Hud({ sim, speed, setSpeed, selected, onSelect, cine, onToggleCine }) {
+export default function Hud({ sim, speed, setSpeed, selected, onSelect, follow, onFollowBollita, cine, onToggleCine }) {
   const vivas = sim.bollitas.filter((b) => b.phase !== 'dying' && b.phase !== 'gone')
   const gen = Math.max(0, ...vivas.map((b) => b.gen))
   return (
@@ -11,6 +13,7 @@ export default function Hud({ sim, speed, setSpeed, selected, onSelect, cine, on
       <header className="barra">
         <h1>bollitas</h1>
         <span className="dato">{vivas.length} vivas · gen {gen}</span>
+        <ListaBollitas sim={sim} vivas={vivas} selected={selected} onSelect={onSelect} follow={follow} onFollow={onFollowBollita} />
         <div className="velocidad" role="group" aria-label="Velocidad de la simulación">
           {SPEEDS.map(([v, l, a]) => (
             <button key={v} aria-label={a} aria-pressed={speed === v} onClick={() => setSpeed(v)}>{l}</button>
