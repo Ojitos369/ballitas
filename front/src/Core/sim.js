@@ -4,7 +4,7 @@
 // ═══════════════════════════ CONTRATO: BALLITA ═══════════════════════════
 // (la forma del mundo y WORLD_SCALE/TUBE_SCALE están al inicio de world.js)
 // Escala temporal:
-//   TIME_SCALE (2.5): factor objetivo de duración de viaje por circuito (~2-3x más tiempo para
+//   TIME_SCALE (4.5): factor objetivo de duración real de viaje (antes 2.5; ver TRAVEL_SLOW). Factor de duración de viaje por circuito (~2-3x más tiempo para
 //                     disfrutar cada tramo). Los costos por segundo (DRAIN_E, DRAIN_P, PPS_K) y por
 //                     unidad de longitud (TRAVEL_E_LEN), así como FRIC/VMAX, están calibrados para
 //                     caminos largos sin agotar energía ni romper la selección natural.
@@ -50,14 +50,17 @@ import {
 import { voice, moodOf, archetype } from './personality.js'
 
 export const POP = 10
-export const TIME_SCALE = 2.5
+export const TIME_SCALE = 4.5
+// El viaje por tubos corre en cámara lenta: física, drenajes y mecanismos avanzan TRAVEL_SLOW s por segundo real,
+// así el equilibrio (energía/puntos por tramo) queda igual que con la escala 2.5 calibrada.
+export const TRAVEL_SLOW = 2.5 / TIME_SCALE
 const TRAITS = ['valentia', 'curiosidad', 'apetito', 'sociabilidad', 'animo', 'velocidad']
 const GENES = ['prefs', 'ways', 'routes', 'kinds']
 // Equilibrio: un ciclo destino + viaje dura ~60-65 s (el viaje ~2.5x más largo) y sólo rinde un destino.
 const DRAIN_E = 0.22 // energía/s siempre
 const DRAIN_P = 0.25 // puntos/s siempre
 const TRAVEL_E_LEN = 0.0055 // energía por unidad de distancia recorrida en tubo (× ecost del tema)
-const PPS_K = 0.35 / TIME_SCALE // escala de los puntos/s del tema
+const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
 // Física del tubo
 const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
 const GRAV = 24
@@ -203,8 +206,9 @@ export class Sim {
       return
     }
     b.age += dt
-    b.e -= DRAIN_E * dt
-    b.p -= DRAIN_P * dt
+    const sd = b.phase === 'travel' ? dt * TRAVEL_SLOW : dt // tiempo de simulación del viaje
+    b.e -= DRAIN_E * sd
+    b.p -= DRAIN_P * sd
     b.timer = Math.max(0, b.timer - dt)
     if (b.react && b.react.until < this.t) b.react = null
 
@@ -222,7 +226,7 @@ export class Sim {
         if (this.walkStep(b, dt)) this.enterSeg(b, b.way.segments[0])
         break
       case 'travel':
-        this.travelStep(b, dt)
+        this.travelStep(b, sd)
         break
     }
     b.p = clamp(b.p, 0, 100); b.e = clamp(b.e, 0, 100)
@@ -425,7 +429,7 @@ export class Sim {
   enterSeg(b, seg) {
     const prev = b.phase === 'travel' ? b.seg : null
     if (!prev) {
-      b.phase = 'travel'; b.dur = b.timer = this.eta(b, b.way); b.snap = 0.3
+      b.phase = 'travel'; b.dur = b.timer = this.eta(b, b.way) / TRAVEL_SLOW; b.snap = 0.3
       b.lane = 0; b.ang = laneAngle(seg, 0, 0); b.sw = null; b.off = b.rail = 0
     } else if (segmentTangent(prev, 1, tmp).angleTo(segmentTangent(seg, 0, tmp2)) > 0.35 && b.rail > 0.3) {
       // quiebro de tangente (entrada a un embudo, etc.): se funde la posición en vez de saltar
