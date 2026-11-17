@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { colorDe } from './Hud.jsx'
-import { buildSkin, PATTERN_LABEL } from '../World3D/skins.js'
+import { generateSkin, PATTERN_LABEL } from '../World3D/skins.js'
 import { obtenerGlobo } from '../../Core/dialogos.js'
 
 const TRAITS = [['valentia', 'Valentía'], ['curiosidad', 'Curiosidad'], ['apetito', 'Apetito'], ['sociabilidad', 'Sociabilidad'], ['animo', 'Ánimo'], ['velocidad', 'Rapidez']]
@@ -30,43 +30,110 @@ const Barra = ({ label, v, color }) => (
 )
 
 export function SkinThumb({ skin, bodyCss, size = 32 }) {
-  const { id, hatColor, ribbonColor, pupilColor } = skin
+  const { parts, palette, hatColor, ribbonColor, pupilColor, baseColor } = skin
+  const hatId = parts?.hat?.id ?? skin.id
+  const earId = parts?.ears?.id ?? 'none'
+  const eyeId = parts?.eyes?.id ?? skin.eyeStyle ?? 'round'
+  const bodyFill = baseColor ?? bodyCss
+  const earFill = parts?.ears?.color ?? bodyFill
+  const earIn = parts?.ears?.innerColor ?? '#f9a8d4'
+  const irisFill = palette?.irisBot ?? pupilColor
+
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
-      {id === 'gatita' && <>
-        <polygon points="6,13 9,3 14,10" fill={bodyCss} />
-        <polygon points="26,13 23,3 18,10" fill={bodyCss} />
+      {earId === 'cat' && <>
+        <polygon points="6,14 9,4 14,11" fill={earFill} />
+        <polygon points="26,14 23,4 18,11" fill={earFill} />
+        <polygon points="8,12 9.5,6.5 12.5,10.5" fill={earIn} />
+        <polygon points="24,12 22.5,6.5 19.5,10.5" fill={earIn} />
       </>}
-      {id === 'elfa' && <>
-        <polygon points="2,16 9,12 9,19" fill={bodyCss} />
-        <polygon points="30,16 23,12 23,19" fill={bodyCss} />
+      {earId === 'elf' && <>
+        <polygon points="1,16 9,12 9,19" fill={earFill} />
+        <polygon points="31,16 23,12 23,19" fill={earFill} />
       </>}
-      {id === 'miedosa' && <>
-        <ellipse cx="9" cy="11" rx="3" ry="7" transform="rotate(-25 9 11)" fill={hatColor} />
-        <ellipse cx="23" cy="11" rx="3" ry="7" transform="rotate(25 23 11)" fill={hatColor} />
+      {earId === 'bunny' && <>
+        <ellipse cx="10" cy="8" rx="2.6" ry="6.5" transform="rotate(-14 10 8)" fill={earFill} />
+        <ellipse cx="22" cy="8" rx="2.6" ry="6.5" transform="rotate(14 22 8)" fill={earFill} />
       </>}
-      <circle cx="16" cy="18" r="10" fill={bodyCss} />
-      {id === 'maga' && <>
-        <ellipse cx="16" cy="10" rx="11" ry="2.2" fill={hatColor} />
-        <polygon points="10,10 17,1 22,10" fill={hatColor} />
-        <rect x="11.5" y="8" width="9" height="2" fill={ribbonColor} />
+      {earId === 'bear' && <>
+        <circle cx="8" cy="10" r="3.4" fill={earFill} />
+        <circle cx="24" cy="10" r="3.4" fill={earFill} />
       </>}
-      {id === 'elfa' && <polygon points="10,11 17,2 22,11" fill={hatColor} />}
-      {id === 'pirata' && <path d="M7,15 A9,9 0 0,1 25,15 Z" fill={hatColor} />}
-      {id === 'ascetica' && <ellipse cx="16" cy="4" rx="7" ry="2" fill="none" stroke="#fde047" strokeWidth="1.8" />}
-      {id === 'rutinaria' && <ellipse cx="16" cy="9" rx="9" ry="3.2" fill={hatColor} />}
-      {id === 'alegre' && <>
-        <line x1="12" y1="9" x2="10" y2="3" stroke={ribbonColor} strokeWidth="1.5" />
-        <line x1="20" y1="9" x2="22" y2="3" stroke={ribbonColor} strokeWidth="1.5" />
-        <circle cx="10" cy="3" r="2" fill={hatColor} />
-        <circle cx="22" cy="3" r="2" fill={hatColor} />
+      {earId === 'droopy' && <>
+        <ellipse cx="6.5" cy="18" rx="2.4" ry="5.5" transform="rotate(18 6.5 18)" fill={earFill} />
+        <ellipse cx="25.5" cy="18" rx="2.4" ry="5.5" transform="rotate(-18 25.5 18)" fill={earFill} />
       </>}
-      {id === 'solitaria' && <rect x="9" y="10" width="14" height="3.2" rx="1.5" fill="#38bdf8" />}
-      <circle cx="12.5" cy="17" r="2.2" fill="#fff" />
-      <circle cx="19.5" cy="17" r="2.2" fill="#fff" />
-      <circle cx="12.5" cy="17" r="1.1" fill={pupilColor} />
-      <circle cx="19.5" cy="17" r="1.1" fill={pupilColor} />
-      {id === 'pirata' && <circle cx={skin.patchSide < 0 ? 12.5 : 19.5} cy="17" r="2.6" fill="#1f1a2c" />}
+      {earId === 'horns' && <>
+        <path d="M9,11 Q7,5 10,4 Q11,7 12,10 Z" fill="#e2c799" />
+        <path d="M23,11 Q25,5 22,4 Q21,7 20,10 Z" fill="#e2c799" />
+      </>}
+      {earId === 'antennae' && <>
+        <line x1="12" y1="9" x2="10" y2="3" stroke="#f4c542" strokeWidth="1.4" />
+        <line x1="20" y1="9" x2="22" y2="3" stroke="#f4c542" strokeWidth="1.4" />
+        <circle cx="10" cy="3" r="1.8" fill="#f4c542" />
+        <circle cx="22" cy="3" r="1.8" fill="#f4c542" />
+      </>}
+
+      <circle cx="16" cy="18" r="10" fill={bodyFill} />
+
+      {hatId === 'wizard' && <>
+        <ellipse cx="16" cy="10.5" rx="11.5" ry="2.4" fill={hatColor} />
+        <path d="M9,10.5 Q15,1 22,4 Q19,7 22,10.5 Z" fill={hatColor} />
+        <circle cx="16" cy="7.5" r="1.6" fill="#f4c542" />
+      </>}
+      {hatId === 'conical_elf' && <>
+        <path d="M8,12 Q14,2 24,5 Q20,8 23,12 Z" fill={hatColor} />
+        <rect x="8.5" y="10" width="15" height="2.4" rx="1" fill="#f4e8cc" />
+        <circle cx="24" cy="5.5" r="2" fill="#f4e8cc" />
+      </>}
+      {hatId === 'bandana' && <path d="M7,15 A9,9 0 0,1 25,15 Z" fill="#b8333a" />}
+      {hatId === 'halo' && <ellipse cx="16" cy="4.5" rx="6.8" ry="1.8" fill="none" stroke="#fde047" strokeWidth="1.8" />}
+      {hatId === 'beret' && <ellipse cx="16" cy="9" rx="9" ry="3.2" fill={hatColor} />}
+      {hatId === 'hood' && <path d="M6,20 A10.5,10.5 0 0,1 26,20" fill="none" stroke={hatColor} strokeWidth="2.8" />}
+      {hatId === 'nightcap' && <>
+        <path d="M8,11 Q16,2 25,8 L23,12 Z" fill={hatColor} />
+        <circle cx="25" cy="8.5" r="1.8" fill="#f4e8cc" />
+      </>}
+      {hatId === 'crown' && <polygon points="10,10 11,4 14,7 16,3 18,7 21,4 22,10" fill="#f4c542" />}
+      {hatId === 'flower_crown' && <>
+        <circle cx="19" cy="8" r="2.6" fill={ribbonColor} />
+        <circle cx="19" cy="8" r="1" fill="#f4c542" />
+      </>}
+      {hatId === 'bow' && <>
+        <ellipse cx="18" cy="8.5" rx="3" ry="1.8" fill={ribbonColor} />
+        <ellipse cx="22.5" cy="8.5" rx="3" ry="1.8" fill={ribbonColor} />
+      </>}
+      {hatId === 'brain' && <>
+        <circle cx="21" cy="10" r="3" fill="#f48fb1" />
+        <circle cx="23.5" cy="12" r="2.2" fill="#f48fb1" />
+      </>}
+
+      {eyeId === 'zen' ? <>
+        <path d="M10.5,17 Q12.5,19 14.5,17" fill="none" stroke="#2c1328" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M17.5,17 Q19.5,19 21.5,17" fill="none" stroke="#2c1328" strokeWidth="1.4" strokeLinecap="round" />
+      </> : eyeId === 'cyclops' ? <>
+        <circle cx="16" cy="17" r="3.4" fill="#fff" />
+        <circle cx="16" cy="17" r="2" fill={irisFill} />
+        <circle cx="16" cy="17" r="1" fill="#1a1026" />
+      </> : <>
+        <circle cx="12.2" cy="17.5" r="2.5" fill="#fff" />
+        <circle cx="12.2" cy="17.5" r="1.6" fill={irisFill} />
+        <circle cx="12.2" cy="17.5" r="0.8" fill="#1a1026" />
+        {eyeId === 'asym' ? (
+          <path d="M18,16 L21.5,19 M21.5,16 L18,19" stroke="#2c1328" strokeWidth="1.4" strokeLinecap="round" />
+        ) : <>
+          <circle cx="19.8" cy="17.5" r="2.5" fill="#fff" />
+          <circle cx="19.8" cy="17.5" r="1.6" fill={irisFill} />
+          <circle cx="19.8" cy="17.5" r="0.8" fill="#1a1026" />
+        </>}
+      </>}
+
+      {skin.hasPatch && <circle cx={skin.patchSide < 0 ? 12.2 : 19.8} cy="17.5" r="2.8" fill="#1f1a2c" />}
+      {skin.hasGlasses && <>
+        <circle cx="12.2" cy="17.5" r="3" fill="none" stroke="#f4c542" strokeWidth="0.9" />
+        <circle cx="19.8" cy="17.5" r="3" fill="none" stroke="#f4c542" strokeWidth="0.9" />
+      </>}
+      {skin.hasVisor && <rect x="9" y="15.5" width="14" height="3.6" rx="1.6" fill="#38bdf8" opacity="0.85" />}
     </svg>
   )
 }
@@ -76,8 +143,9 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
   const lugar = ida ? '' : donde(b, sim)
   const idea = obtenerGlobo(b, sim) ?? b.thought ?? b.log?.[0]
   const fav = gustos(b, sim)
-  const skin = useMemo(() => buildSkin(b.genome, b.arch), [b.genome, b.arch])
+  const skin = useMemo(() => generateSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyCss = colorDe(b)
+
   return (
     <aside className="tarjeta" aria-label={`Detalles de ${b.name}`}>
       <div className="cabecera">
@@ -90,10 +158,34 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
         <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
       </div>
       <p className="sub">{b.arch?.title} · {b.mood} · gen {b.gen} · {Math.round(b.age)}s</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 6px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 4px' }}>
         <SkinThumb skin={skin} bodyCss={bodyCss} />
-        <span className="sub" style={{ margin: 0 }}>{skin.family.emoji} {skin.family.name} · {PATTERN_LABEL[skin.patternType]}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.25 }}>
+            {skin.emoji} {skin.name}
+          </div>
+          <div className="sub" style={{ margin: 0 }}>{PATTERN_LABEL[skin.patternType]}</div>
+        </div>
       </div>
+      {skin.partsSummary?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '2px 0 7px' }} aria-label="Piezas del skin">
+          {skin.partsSummary.map((label) => (
+            <span
+              key={label}
+              style={{
+                fontSize: 10,
+                padding: '1px 6px',
+                borderRadius: 999,
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid var(--line)',
+                color: 'var(--dim)',
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
       {ida && <p className="aviso">{b.cause ? `Murió por falta de ${b.cause}.` : 'Ya no está.'}</p>}
       <Barra label={`⭐ ${Math.round(b.p)}`} v={b.p / 100} color="#ffd54a" />
       <Barra label={`⚡ ${Math.round(b.e)}`} v={b.e / 100} color="#5dffb0" />
