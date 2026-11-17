@@ -1,4 +1,20 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+
+// Panel minimizable: recuerda la elección por panel; en pantallas chicas arranca minimizado.
+export function usePanelMin(key) {
+  const [min, setMin] = useState(() => {
+    try {
+      const v = localStorage.getItem(`ballitas:min:${key}`)
+      if (v != null) return v === '1'
+    } catch {}
+    return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 700px)').matches
+  })
+  const toggle = () => setMin((m) => {
+    try { localStorage.setItem(`ballitas:min:${key}`, m ? '0' : '1') } catch {}
+    return !m
+  })
+  return [min, toggle]
+}
 import { colorDe } from './Hud.jsx'
 import { generateSkin, PATTERN_LABEL } from '../World3D/skins.js'
 import { obtenerGlobo } from '../../Core/dialogos.js'
@@ -145,9 +161,10 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
   const fav = gustos(b, sim)
   const skin = useMemo(() => generateSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyCss = colorDe(b)
+  const [min, toggleMin] = usePanelMin('ficha')
 
   return (
-    <aside className="tarjeta" aria-label={`Detalles de ${b.name}`}>
+    <aside className={`tarjeta${min ? ' min' : ''}`} aria-label={`Detalles de ${b.name}`}>
       <div className="cabecera">
         <span className="punto" style={{ background: bodyCss }} />
         <h2>{b.name}</h2>
@@ -155,6 +172,7 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
           <button className="seguir" aria-pressed={follow} onClick={onFollow}>{follow ? '↩ Salir' : '👁 Seguir'}</button>
           <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista frontal (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
         </>}
+        <button className="cerrar" onClick={toggleMin} aria-expanded={!min} aria-label={min ? 'Mostrar ficha' : 'Minimizar ficha'} title={min ? 'Mostrar ficha' : 'Minimizar ficha'}>{min ? '▴' : '▾'}</button>
         <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
       </div>
       <p className="sub">{b.arch?.title} · {b.mood} · gen {b.gen} · {Math.round(b.age)}s</p>
