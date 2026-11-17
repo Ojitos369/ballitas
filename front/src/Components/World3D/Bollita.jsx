@@ -8,9 +8,13 @@ import { terminalPulse } from './Nodes.jsx'
 import WorldHtml from './WorldHtml.jsx'
 import {
   buildSkin,
+  createClayBodyMaterial,
+  GEO as SKIN_GEO,
   getBodyTexture,
   getChibiTextures,
   getEmotionTexture,
+  getIrisTexture,
+  getMat as getSkinMat,
   SkinAccessory,
   SkinMouth,
 } from './skins.js'
@@ -37,16 +41,22 @@ const CHIBI_FACES = {
 // Geometrías compartidas entre todas las bollitas para rendimiento con decenas de instancias
 const SHARED_GEO = {
   click: new THREE.SphereGeometry(1, 8, 6),
-  body: new THREE.SphereGeometry(1, 24, 18),
-  eye: new THREE.SphereGeometry(1, 14, 12),
-  brow: new THREE.BoxGeometry(0.32, 1, 0.06),
-  pupil: new THREE.SphereGeometry(1, 10, 8),
-  catchlight: new THREE.SphereGeometry(1, 6, 6),
-  sparkle: new THREE.PlaneGeometry(0.24, 0.24),
-  blush: new THREE.PlaneGeometry(0.32, 0.22),
-  sweat: new THREE.SphereGeometry(0.085, 8, 8),
-  tongue: new THREE.SphereGeometry(0.065, 8, 6),
-  limb: new THREE.SphereGeometry(1, 8, 8),
+  body: SKIN_GEO.body,
+  eye: new THREE.SphereGeometry(1, 18, 14),
+  iris: SKIN_GEO.irisDisc,
+  zenArc: new THREE.TorusGeometry(0.145, 0.028, 10, 22, Math.PI),
+  stitchArm: new THREE.CapsuleGeometry(0.026, 0.22, 6, 12),
+  brow: (() => {
+    const g = new THREE.CapsuleGeometry(0.5, 1.8, 6, 12)
+    g.rotateZ(Math.PI / 2)
+    return g
+  })(),
+  catchlight: new THREE.SphereGeometry(1, 10, 8),
+  sparkle: new THREE.PlaneGeometry(0.22, 0.22),
+  blush: new THREE.PlaneGeometry(0.34, 0.24),
+  sweat: new THREE.SphereGeometry(0.085, 10, 8),
+  tongue: new THREE.SphereGeometry(0.065, 10, 8),
+  limb: new THREE.SphereGeometry(1, 14, 12),
   ring: new THREE.TorusGeometry(1.3, 0.014, 6, 32),
   flash: new THREE.SphereGeometry(1, 12, 10),
   extOrb: new THREE.SphereGeometry(1, 14, 10),
@@ -92,6 +102,7 @@ function getSharedMats() {
     sweat: new THREE.MeshBasicMaterial({ color: '#7fd8ff' }),
     tongue: new THREE.MeshBasicMaterial({ color: '#ff7aa2' }),
     ring: new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, toneMapped: false }),
+    darkLine: new THREE.MeshBasicMaterial({ color: '#2c1328' }),
   }
   return sharedMats
 }
@@ -144,12 +155,13 @@ function resolveExpression(b, g) {
 }
 
 // Una bollita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Bollita({ b, sim, selected, pov = false, worldRadius = 110, onSelect }) {
+export default function Bollita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
   const root = useRef(); const bodyGroup = useRef()
   const orbGroupRef = useRef(); const extOrbRef = useRef(); const extHaloRef = useRef()
-  const eyeL = useRef(); const eyeR = useRef()
+  const eyeL = useRef(); const eyeR = useRef(); const zenEyesRef = useRef()
   const browL = useRef(); const browR = useRef(); const mouth = useRef()
   const blush = useRef(); const sweat = useRef(); const ring = useRef(); const pupils = useRef()
+  const pupilL = useRef(); const pupilR = useRef()
   const sparkleL = useRef(); const sparkleR = useRef(); const tongue = useRef()
   const footL = useRef(); const footR = useRef(); const handL = useRef(); const handR = useRef()
   const flash = useRef(); const emoSprite = useRef()
@@ -165,18 +177,23 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
   const color = useMemo(() => bodyColor(b.genome), [b])
   const skin = useMemo(() => buildSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyTex = useMemo(() => getBodyTexture(skin), [skin])
+  const bodyMat = useMemo(() => createClayBodyMaterial(bodyTex, 0.72), [bodyTex])
   const mats = useMemo(() => getSharedMats(), [])
   const chibiTex = useMemo(() => getChibiTextures(), [])
 
-  const limbMat = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.45 }), [color])
+  const limbMat = useMemo(() => getSkinMat(skin.baseColor, 0.72, 0.02), [skin.baseColor])
   const blushMat = useMemo(() => new THREE.MeshBasicMaterial({
     color: skin.blushColor,
     map: chibiTex.blush,
     transparent: true,
-    opacity: 0.4,
+    opacity: 0.45,
     depthWrite: false,
   }), [skin.blushColor, chibiTex.blush])
-  const pupilMat = useMemo(() => new THREE.MeshBasicMaterial({ color: skin.pupilColor }), [skin.pupilColor])
+  const irisMat = useMemo(() => new THREE.MeshBasicMaterial({
+    map: getIrisTexture(skin.eyeStyle, skin.irisTop, skin.irisBot, skin.pupilColor),
+    transparent: true,
+    alphaTest: 0.08,
+  }), [skin.eyeStyle, skin.irisTop, skin.irisBot, skin.pupilColor])
   const browMat = useMemo(() => new THREE.MeshBasicMaterial({ color: skin.browColor }), [skin.browColor])
   const flashMat = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#ffffff',
@@ -210,10 +227,12 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
   }), [color])
 
   const r = BALL_R * (0.86 + g.apetito * 0.14)
-  // Ojos chibi más grandes y expresivos
-  const eyeSize = 0.23 + g.sociabilidad * 0.08
-  const pupilR = Math.max(0.085, skin.pupilSize * 1.45)
+  const eyeSize = 0.255 + g.sociabilidad * 0.065
+  const irisR = Math.max(0.18, eyeSize * 0.78)
   const phase0 = b.id * 1.7
+  const isCyclops = skin.eyeStyle === 'cyclops'
+  const isZen = skin.eyeStyle === 'zen'
+  const isAsym = skin.eyeStyle === 'asym'
 
   useFrame(({ camera, clock }, dt) => {
     const cdt = Math.min(dt, 0.1)
@@ -284,7 +303,6 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     const side = 1 / Math.sqrt(speedStretch)
     root.current.scale.set(vs * side, vs * side, vs * speedStretch)
 
-    // Rebote en destino y ajuste a pared en tubos al ser más pequeña
     const hop = b.phase === 'at' ? Math.abs(bob) * 0.14 * c.bounce : 0
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
     root.current.position.copy(b.pos).addScaledVector(b.up, hop + wallOffset)
@@ -326,41 +344,76 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     }
     vTmp.copy(b.dir).sub(prevDir)
     prevDir.lerp(b.dir, Math.min(1, cdt * 6))
-    let lookX = THREE.MathUtils.clamp(-vTmp.dot(vx) * 0.45, -0.055, 0.055)
-    let lookY = THREE.MathUtils.clamp(vTmp.dot(vy) * 0.35, -0.04, 0.04)
+    let lookX = THREE.MathUtils.clamp(-vTmp.dot(vx) * 0.45, -0.05, 0.05)
+    let lookY = THREE.MathUtils.clamp(vTmp.dot(vy) * 0.35, -0.035, 0.035)
     if (b.speed < 0.4) {
-      lookX += Math.sin(t * 1.1 + phase0) * 0.035
-      lookY += Math.cos(t * 0.8 + phase0) * 0.02
+      lookX += Math.sin(t * 1.1 + phase0) * 0.03
+      lookY += Math.cos(t * 0.8 + phase0) * 0.018
     }
+
+    const zenClosed = isZen && c.eye < 1.28 && b.mood !== 'asustada'
+    if (zenEyesRef.current) zenEyesRef.current.visible = zenClosed
 
     const eyeScaleYL = Math.max(0.08, c.eye * blink * (isWinking ? 0.12 : 1))
     const eyeScaleYR = Math.max(0.08, c.eye * blink)
-    const eyeRBase = eyeSize + 0.05
-    eyeL.current.scale.set(eyeRBase * skin.eyeScaleX * skin.eyeAsym[0], eyeRBase * eyeScaleYL * skin.eyeScaleY * skin.eyeAsym[0], eyeRBase * 0.52)
-    eyeR.current.scale.set(eyeRBase * skin.eyeScaleX * skin.eyeAsym[1], eyeRBase * eyeScaleYR * skin.eyeScaleY * skin.eyeAsym[1], eyeRBase * 0.52)
+    const eyeRBase = eyeSize + 0.045
 
-    if (F.dizzy) {
-      const spin = t * 8
-      pupils.current.position.set(Math.cos(spin) * 0.045, Math.sin(spin) * 0.045, 0.07)
-    } else {
-      pupils.current.position.set(lookX, (c.eye < 0.5 ? -0.025 : 0) + lookY, 0.07)
+    if (eyeL.current) {
+      eyeL.current.visible = !zenClosed
+      eyeL.current.scale.set(
+        eyeRBase * skin.eyeScaleX * skin.eyeAsym[0],
+        eyeRBase * eyeScaleYL * skin.eyeScaleY * skin.eyeAsym[0],
+        eyeRBase * 0.52,
+      )
+    }
+    if (eyeR.current) {
+      eyeR.current.visible = !zenClosed && !isCyclops && !isAsym
+      eyeR.current.scale.set(
+        eyeRBase * skin.eyeScaleX * skin.eyeAsym[1],
+        eyeRBase * eyeScaleYR * skin.eyeScaleY * skin.eyeAsym[1],
+        eyeRBase * 0.52,
+      )
     }
 
-    const spVis = c.sparkle > 0.35 && blink > 0.5
+    if (pupils.current) {
+      pupils.current.visible = !zenClosed
+      if (F.dizzy) {
+        const spin = t * 8
+        pupils.current.position.set(Math.cos(spin) * 0.04, Math.sin(spin) * 0.04, 0.065)
+      } else {
+        pupils.current.position.set(lookX, (c.eye < 0.5 ? -0.022 : 0) + lookY, 0.065)
+      }
+    }
+    if (pupilL.current) pupilL.current.scale.set(1, Math.max(0.15, blink * (isWinking ? 0.18 : 1)), 1)
+    if (pupilR.current) {
+      pupilR.current.visible = !isCyclops && !isAsym
+      pupilR.current.scale.set(1, Math.max(0.15, blink), 1)
+    }
+
+    const spVis = c.sparkle > 0.35 && blink > 0.5 && !zenClosed
     const spPulse = 0.85 + Math.sin(t * 7 + phase0) * 0.25
-    if (sparkleL.current && sparkleR.current) {
+    if (sparkleL.current) {
       sparkleL.current.visible = spVis && !isWinking
-      sparkleR.current.visible = spVis
       sparkleL.current.scale.setScalar(c.sparkle * spPulse)
+    }
+    if (sparkleR.current) {
+      sparkleR.current.visible = spVis && !isCyclops && !isAsym
       sparkleR.current.scale.setScalar(c.sparkle * spPulse)
     }
 
-    browL.current.rotation.z = -c.brow - skin.browBaseTilt
-    browR.current.rotation.z = c.brow + skin.browBaseTilt
-    browL.current.position.y = browR.current.position.y = 0.46 + (c.eye - 1) * 0.13
+    if (browL.current) {
+      browL.current.rotation.z = -c.brow - skin.browBaseTilt
+      browL.current.position.y = (isCyclops ? 0.54 : 0.47) + (c.eye - 1) * 0.12
+    }
+    if (browR.current) {
+      browR.current.visible = !isCyclops
+      browR.current.rotation.z = c.brow + skin.browBaseTilt
+      browR.current.position.y = 0.47 + (c.eye - 1) * 0.12
+    }
+
     mouth.current.scale.set(skin.mouthWidth, Math.max(0.25, Math.abs(c.mouth) + 0.15), 1)
     if (tongue.current) tongue.current.visible = isBlep
-    blushMat.opacity = Math.min(0.92, Math.max(0.15, c.blush * 0.78 * skin.blushBoost))
+    blushMat.opacity = Math.min(0.92, Math.max(0.18, c.blush * 0.78 * skin.blushBoost))
     sweat.current.visible = c.sweat > 0.5
 
     // 7. Animación de patitas y manitas chibi
@@ -369,13 +422,21 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     const stride = walking ? Math.sin(t * 14 + phase0) * 0.22 : (b.phase === 'at' ? Math.abs(bob) * 0.12 : 0)
     if (footL.current && footR.current) {
       const tuck = rolling ? 0.55 : 1
-      footL.current.position.set(-0.34, -0.92 * tuck + (walking ? Math.max(0, stride) * 0.4 : stride * 0.3), 0.18 + (walking ? stride : rolling ? -0.3 : 0))
-      footR.current.position.set(0.34, -0.92 * tuck + (walking ? Math.max(0, -stride) * 0.4 : stride * 0.3), 0.18 + (walking ? -stride : rolling ? -0.3 : 0))
+      footL.current.position.set(-0.34, -0.9 * tuck + (walking ? Math.max(0, stride) * 0.4 : stride * 0.3), 0.22 + (walking ? stride : rolling ? -0.3 : 0))
+      footR.current.position.set(0.34, -0.9 * tuck + (walking ? Math.max(0, -stride) * 0.4 : stride * 0.3), 0.22 + (walking ? -stride : rolling ? -0.3 : 0))
     }
     if (handL.current && handR.current) {
       const wave = F === CHIBI_FACES.alegria || F === CHIBI_FACES.risa ? Math.sin(t * 10 + phase0) * 0.22 : 0
-      handL.current.position.set(-0.92, -0.14 + Math.abs(wave), 0.22 - (rolling ? 0.25 : 0))
-      handR.current.position.set(0.92, -0.14 + Math.abs(wave), 0.22 - (rolling ? 0.25 : 0))
+      if (skin.hasPrayerHands && !rolling) {
+        handL.current.position.set(-0.085, -0.22 + Math.abs(wave) * 0.25, 0.94)
+        handR.current.position.set(0.085, -0.22 + Math.abs(wave) * 0.25, 0.94)
+      } else if (skin.hasDrumstick && !rolling) {
+        handL.current.position.set(-0.24, -0.28, 0.91)
+        handR.current.position.set(0.22, -0.24, 0.92)
+      } else {
+        handL.current.position.set(-0.82, -0.18 + Math.abs(wave), 0.38 - (rolling ? 0.28 : 0))
+        handR.current.position.set(0.82, -0.18 + Math.abs(wave), 0.38 - (rolling ? 0.28 : 0))
+      }
     }
 
     // 8. Efectos sprite sobre la cabeza (corazón, estrella, gota, ¿?, !)
@@ -456,71 +517,125 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
 
   const liveThought = obtenerGlobo(b, sim)
   const talking = liveThought && liveThought.until > sim.t
+  const eyeX = isCyclops ? 0 : 0.34
+  const eyeY = isCyclops ? 0.16 : 0.13
 
   return (
     <>
     <group
       ref={root}
-      onClick={(e) => (e.stopPropagation(), onSelect(b))}
-      onPointerOver={() => (document.body.style.cursor = 'pointer')}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onClick={(e) => { if (!pov && !povMode) { e.stopPropagation(); onSelect(b) } }}
+      onPointerOver={() => { if (!pov && !povMode) document.body.style.cursor = 'pointer' }}
+      onPointerOut={() => { if (!pov && !povMode) document.body.style.cursor = '' }}
     >
       {/* zona de clic generosa; sin sombra */}
-      <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} />
+      <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} visible={!pov && !povMode} />
       <group ref={bodyGroup} scale={r} visible={!pov}>
-        <mesh geometry={SHARED_GEO.body} castShadow>
-          <meshStandardMaterial map={bodyTex} roughness={0.32} />
-        </mesh>
+        <mesh geometry={SHARED_GEO.body} material={bodyMat} scale={skin.bodyScale} castShadow />
 
-        {/* Ojos chibi grandes y brillantes */}
-        {[-1, 1].map((sg) => (
-          <group key={sg}>
+        {/* Ojos chibi grandes con iris degradado y doble reflejo */}
+        <mesh
+          ref={eyeL}
+          geometry={SHARED_GEO.eye}
+          material={mats.eye}
+          position={[-eyeX, eyeY, 0.85]}
+          scale={[1, 1, 0.55]}
+        />
+        <mesh
+          ref={browL}
+          geometry={SHARED_GEO.brow}
+          material={browMat}
+          position={[-eyeX, 0.47, 0.86]}
+          scale={[0.17, skin.browThick * 0.72, 0.045]}
+        />
+        <mesh
+          ref={eyeR}
+          geometry={SHARED_GEO.eye}
+          material={mats.eye}
+          position={[0.34, 0.13, 0.85]}
+          scale={[1, 1, 0.55]}
+        />
+        <mesh
+          ref={browR}
+          geometry={SHARED_GEO.brow}
+          material={browMat}
+          position={[0.34, 0.47, 0.86]}
+          scale={[0.17, skin.browThick * 0.72, 0.045]}
+        />
+
+        {/* Ojos cerrados serenos (Monje zen) */}
+        <group ref={zenEyesRef} visible={isZen}>
+          {[-1, 1].map((sg) => (
             <mesh
-              ref={sg < 0 ? eyeL : eyeR}
-              geometry={SHARED_GEO.eye}
-              material={mats.eye}
-              position={[sg * 0.35, 0.14, 0.86]}
-              scale={[1, 1, 0.55]}
+              key={sg}
+              geometry={SHARED_GEO.zenArc}
+              material={mats.darkLine}
+              position={[sg * 0.34, 0.14, 0.94]}
+              rotation={[0, sg * 0.24, Math.PI]}
             />
+          ))}
+        </group>
+
+        {/* Ojo derecho cosido en X (Zombi asimétrico) */}
+        {isAsym && (
+          <group position={[0.35, 0.13, 0.94]} rotation={[0, 0.25, 0]}>
+            <mesh geometry={SHARED_GEO.stitchArm} material={mats.darkLine} rotation={[0, 0, Math.PI / 4]} />
+            <mesh geometry={SHARED_GEO.stitchArm} material={mats.darkLine} rotation={[0, 0, -Math.PI / 4]} />
+          </group>
+        )}
+
+        {/* Iris degradado, pupila, doble reflejo y sparkle */}
+        <group ref={pupils}>
+          <group ref={pupilL} position={[-eyeX, eyeY, 0.985]} rotation={[0, isCyclops ? 0 : -0.24, 0]}>
+            <mesh geometry={SHARED_GEO.iris} material={irisMat} scale={irisR * (isCyclops ? 1.32 : 1)} />
+            {skin.hasCatchlight && (
+              <>
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[-0.045, 0.055, irisR * 0.3]}
+                  scale={[irisR * 0.34, irisR * 0.28, irisR * 0.15]}
+                />
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[0.04, -0.048, irisR * 0.3]}
+                  scale={irisR * 0.15}
+                />
+              </>
+            )}
             <mesh
-              ref={sg < 0 ? browL : browR}
-              geometry={SHARED_GEO.brow}
-              material={browMat}
-              position={[sg * 0.35, 0.46, 0.86]}
-              scale={[1, skin.browThick, 1]}
+              ref={sparkleL}
+              geometry={SHARED_GEO.sparkle}
+              material={mats.sparkle}
+              position={[0.05, 0.05, irisR * 0.36]}
             />
           </group>
-        ))}
-
-        {/* Pupilas con doble reflejo y sparkle */}
-        <group ref={pupils}>
-          {[-1, 1].map((sg) => (
-            <group key={sg} position={[sg * 0.35, 0.14, 0.99]}>
-              <mesh geometry={SHARED_GEO.pupil} material={pupilMat} scale={pupilR} />
-              {skin.hasCatchlight && (
-                <>
-                  <mesh
-                    geometry={SHARED_GEO.catchlight}
-                    material={mats.catchlight}
-                    position={[0.03, 0.036, pupilR * 0.72]}
-                    scale={pupilR * 0.36}
-                  />
-                  <mesh
-                    geometry={SHARED_GEO.catchlight}
-                    material={mats.catchlight}
-                    position={[-0.025, -0.028, pupilR * 0.74]}
-                    scale={pupilR * 0.18}
-                  />
-                </>
-              )}
-              <mesh
-                ref={sg < 0 ? sparkleL : sparkleR}
-                geometry={SHARED_GEO.sparkle}
-                material={mats.sparkle}
-                position={[0.04, 0.04, pupilR * 0.86]}
-              />
-            </group>
-          ))}
+          <group ref={pupilR} position={[0.34, 0.13, 0.985]} rotation={[0, 0.24, 0]}>
+            <mesh geometry={SHARED_GEO.iris} material={irisMat} scale={irisR} />
+            {skin.hasCatchlight && (
+              <>
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[-0.045, 0.055, irisR * 0.3]}
+                  scale={[irisR * 0.34, irisR * 0.28, irisR * 0.15]}
+                />
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[0.04, -0.048, irisR * 0.3]}
+                  scale={irisR * 0.15}
+                />
+              </>
+            )}
+            <mesh
+              ref={sparkleR}
+              geometry={SHARED_GEO.sparkle}
+              material={mats.sparkle}
+              position={[0.05, 0.05, irisR * 0.36]}
+            />
+          </group>
         </group>
 
         {/* Boquita chibi y lengüita */}
@@ -543,8 +658,9 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
               key={sg}
               geometry={SHARED_GEO.blush}
               material={blushMat}
-              position={[sg * 0.58, -0.06, 0.79]}
-              rotation={[0, sg * 0.72, 0]}
+              position={[sg * 0.56, -0.09, 0.8]}
+              rotation={[0, sg * 0.68, 0]}
+              scale={skin.cheekPuff}
             />
           ))}
         </group>
@@ -552,11 +668,11 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
         {/* Gota de sudor */}
         <mesh ref={sweat} geometry={SHARED_GEO.sweat} material={mats.sweat} position={[0.72, 0.58, 0.5]} />
 
-        {/* Pequeñas patitas y manitas chibi */}
-        <mesh ref={footL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.34, -0.92, 0.18]} scale={[0.19, 0.12, 0.24]} />
-        <mesh ref={footR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.34, -0.92, 0.18]} scale={[0.19, 0.12, 0.24]} />
-        <mesh ref={handL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.92, -0.14, 0.22]} scale={[0.13, 0.13, 0.15]} />
-        <mesh ref={handR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.92, -0.14, 0.22]} scale={[0.13, 0.13, 0.15]} />
+        {/* Pequeñas patitas y manitas chibi redondeadas */}
+        <mesh ref={footL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.34, -0.9, 0.22]} scale={[0.18, 0.12, 0.22]} />
+        <mesh ref={footR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.34, -0.9, 0.22]} scale={[0.18, 0.12, 0.22]} />
+        <mesh ref={handL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.82, -0.18, 0.38]} scale={[0.13, 0.13, 0.15]} />
+        <mesh ref={handR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.82, -0.18, 0.38]} scale={[0.13, 0.13, 0.15]} />
 
         {/* Accesorios del skin */}
         <SkinAccessory skin={skin} />
@@ -583,9 +699,9 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
         ref={extOrbRef}
         geometry={SHARED_GEO.extOrb}
         material={extOrbMat}
-        onClick={(e) => (e.stopPropagation(), onSelect(b))}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onClick={(e) => { if (!pov && !povMode) { e.stopPropagation(); onSelect(b) } }}
+        onPointerOver={() => { if (!pov && !povMode) document.body.style.cursor = 'pointer' }}
+        onPointerOut={() => { if (!pov && !povMode) document.body.style.cursor = '' }}
       />
       <sprite ref={extHaloRef} material={extHaloMat} raycast={() => null} />
     </group>

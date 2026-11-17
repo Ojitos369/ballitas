@@ -25,7 +25,10 @@ export default function Main() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape') { setPov(false); return }
+      if (e.key === 'Escape') {
+        if (!document.pointerLockElement) setPov(false)
+        return
+      }
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key === 'c' || e.key === 'C') setCine((v) => !v)
@@ -57,7 +60,7 @@ export default function Main() {
 
   return (
     <div className="app">
-      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} onSelect={select} />
+      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} onSelect={select} onExitPov={() => setPov(false)} />
       <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBollita={followBollita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       {selected && <Detail b={selected} sim={sim} follow={follow} pov={pov} onFollow={toggleFollow} onPov={togglePov} onClose={() => select(null)} />}
     </div>

@@ -94,3 +94,30 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .tag.node { font-weight: 600; border-width: 2px; }
 .tag.tip { border-radius: 10px; text-align: center; }
 .bubble { display: flex; flex-direction: column; align-items: center; background: #fff; color: #1a1030; border: 3px solid; border-radius: 14px; padding: 3px 10px; font-size: 14px; white-space: nowrap; }
+
+/* panel compacto y joystick virtual en modo POV */
+.pov-panel { z-index: 105; position: absolute; top: 46px; right: 12px; width: min(268px, calc(100vw - 24px)); padding: 8px 10px; background: rgba(10, 12, 30, 0.72); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 6px; user-select: none; }
+.pov-panel-head { display: flex; align-items: center; gap: 6px; }
+.pov-badge { font-size: 11px; font-weight: 600; color: var(--fg); margin-right: auto; }
+.pov-mini-btn { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; font-size: 11px; color: var(--dim); line-height: 1.4; }
+.pov-mini-btn:hover { color: var(--fg); background: rgba(255, 255, 255, 0.14); }
+.pov-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.pov-action { display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; font-size: 11px; color: var(--fg); }
+.pov-action:hover { background: rgba(255, 255, 255, 0.14); }
+.pov-action[aria-pressed="true"] { background: var(--on); border-color: rgba(138, 167, 255, 0.65); }
+.pov-action kbd { font: inherit; font-size: 10px; padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); color: var(--dim); }
+.pov-status { margin: 0; font-size: 10.5px; color: #b7ccff; }
+.pov-help { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 5px; }
+
+.pov-joy-wrap { z-index: 105; position: absolute; right: 16px; bottom: 48px; display: flex; flex-direction: column; align-items: center; gap: 4px; user-select: none; touch-action: none; }
+.pov-joy-pad { position: relative; width: 92px; height: 92px; border-radius: 50%; background: rgba(10, 14, 30, 0.56); border: 1px solid rgba(155, 182, 240, 0.32); backdrop-filter: blur(8px); touch-action: none; cursor: grab; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 14px rgba(138, 167, 255, 0.12); }
+.pov-joy-pad:active { cursor: grabbing; border-color: rgba(155, 182, 240, 0.6); }
+.pov-joy-cross { position: absolute; inset: 14px; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, 0.14); pointer-events: none; }
+.pov-joy-knob { width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, rgba(210, 226, 255, 0.9), rgba(110, 146, 232, 0.65)); border: 1px solid rgba(255, 255, 255, 0.45); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4); pointer-events: none; will-change: transform; }
+.pov-joy-label { font-size: 10px; color: var(--dim); letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
+
+@media (max-width: 520px) {
+  .pov-panel { right: 8px; top: 44px; width: min(240px, calc(100vw - 16px)); }
+  .pov-joy-wrap { right: 10px; bottom: 44px; }
+  .pov-joy-pad { width: 84px; height: 84px; }
+}
