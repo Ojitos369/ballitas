@@ -4,6 +4,7 @@
 import { createElement, useLayoutEffect, useRef } from 'react'
 import { VidaGuard, disposeObject3D } from './base.jsx'
 import Pista from './pista.jsx'
+import Criaturas from './criaturas.jsx'
 
 export const VIDA_PERF = {
   active: 0,
@@ -32,7 +33,7 @@ export function VidaDeCamino(props) {
   return createElement(
     'group',
     { ref: wrapRef },
-    createElement(VidaGuard, { themeId: id }, createElement(Pista, props)),
+    createElement(VidaGuard, { themeId: id }, createElement(Pista, props), createElement(Criaturas, props)),
   )
 }
 
