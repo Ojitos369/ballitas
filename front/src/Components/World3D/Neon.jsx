@@ -7,12 +7,29 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { mulberry32 } from '../../Core/world.js'
 import { NEON_DECOR } from './themes.js'
 
-const GLOW = 2.3 // por encima del umbral del Bloom (1.15)
+// Diagnóstico: el Bloom filtra por LUMINANCIA (0.21r+0.72g+0.07b), no por canal. Con el viejo "color x 2.3" un
+// violeta #a24bff daba luminancia ~0.37 (y x0.6 en el valle del pulso) frente al umbral 1.15: no florecía nada.
+// Ahora cada color se escala hasta una luminancia objetivo (tope por canal HDR) y el pulso nunca baja de 0.85.
+const GLOW_LUM = 2.4
+const GLOW_MAX = 8
+const HALO_K = 0.5 // intensidad de la banda aditiva (falso glow sobre la pista)
+const HALO_ARC = 0.9 // medio ángulo (rad) de la banda alrededor del lateral del tubo
 const Y = new THREE.Vector3(0, 1, 0)
 const _m = new THREE.Matrix4()
 
-export function makeNeonMaterial(time, vertexColors) {
+export function glowColor(hex) {
+  const c = new THREE.Color(hex)
+  const L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+  const k = Math.min(GLOW_LUM / Math.max(L, 0.05), GLOW_MAX / Math.max(c.r, c.g, c.b, 1e-3))
+  return c.multiplyScalar(k)
+}
+
+export function makeNeonMaterial(time, vertexColors, additive = false) {
   const m = new THREE.MeshBasicMaterial({ vertexColors, toneMapped: false })
+  if (additive) {
+    m.transparent = true; m.blending = THREE.AdditiveBlending; m.depthWrite = false; m.side = THREE.DoubleSide
+    m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -1
+  }
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = time
     sh.vertexShader = 'uniform float uTime;\nvarying float vPulse;\n' + sh.vertexShader.replace(
@@ -22,7 +39,7 @@ export function makeNeonMaterial(time, vertexColors) {
       #ifdef USE_INSTANCING
       wp = instanceMatrix * wp;
       #endif
-      vPulse = 0.8 + 0.2 * sin(uTime * 2.4 + wp.x * 0.55 + wp.z * 0.8 + wp.y * 0.3);`,
+      vPulse = 0.85 + 0.15 * sin(uTime * 2.4 + wp.x * 0.55 + wp.z * 0.8 + wp.y * 0.3);`,
     )
     sh.fragmentShader = 'varying float vPulse;\n' + sh.fragmentShader.replace(
       '#include <color_fragment>',
@@ -31,6 +48,37 @@ export function makeNeonMaterial(time, vertexColors) {
   }
   m.customProgramCacheKey = () => 'neonPulse'
   return m
+}
+
+// Banda aditiva pegada al tubo, centrada en el lateral de la franja y desvanecida a negro en los bordes:
+// falso "glow" proyectado sobre la pista (sin luces reales; el aditivo sobre negro no suma nada).
+function haloGeo(frames, R, side, color) {
+  const n = frames.length; const K = 5
+  const pos = new Float32Array(n * K * 3); const col = new Float32Array(n * K * 3); const idx = []
+  for (let i = 0; i < n; i++) {
+    const f = frames[i]
+    for (let j = 0; j < K; j++) {
+      const t = j / (K - 1) * 2 - 1 // -1..1
+      const a = t * HALO_ARC
+      const rad = R + 0.04
+      const ca = Math.cos(a) * side * rad; const sa = Math.sin(a) * rad
+      const o = (i * K + j) * 3
+      pos[o] = f.pos.x + f.right.x * ca + f.up.x * sa
+      pos[o + 1] = f.pos.y + f.right.y * ca + f.up.y * sa
+      pos[o + 2] = f.pos.z + f.right.z * ca + f.up.z * sa
+      const w = (1 - t * t) * HALO_K
+      col[o] = color.r * w; col[o + 1] = color.g * w; col[o + 2] = color.b * w
+    }
+    if (i < n - 1) for (let j = 0; j < K - 1; j++) {
+      const a = i * K + j; const b = a + K
+      idx.push(a, a + 1, b, a + 1, b + 1, b)
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+  g.setIndex(idx)
+  return g
 }
 
 const HEADS = {
@@ -80,9 +128,9 @@ function stripGeo(frames, R, side, color) {
 function buildNeon(way, getFrames, sample) {
   const id = way.theme.id
   const D = NEON_DECOR[id]
-  const cols = D.c.map((c) => new THREE.Color(c).multiplyScalar(GLOW))
+  const cols = D.c.map(glowColor)
   const rng = mulberry32(way.idx * 6151 + 97)
-  const strips = []; const arcs = []; const masts = []; const heads = []; const signs = []
+  const strips = []; const halos = []; const arcs = []; const masts = []; const heads = []; const signs = []
   const q = new THREE.Quaternion(); const e = new THREE.Vector3(); const sc = new THREE.Vector3(); const z = new THREE.Vector3()
   const put = (list, p, quat, sx, sy, sz, c) => list.push({ m: new THREE.Matrix4().compose(p, quat, sc.set(sx, sy, sz)), c })
   let k = 0
@@ -92,6 +140,7 @@ function buildNeon(way, getFrames, sample) {
     const frames = getFrames(s)
     const c0 = cols[s.route % 2 === 0 ? 0 : 1]
     strips.push(stripGeo(frames, R, 1, c0), stripGeo(frames, R, -1, c0))
+    halos.push(haloGeo(frames, R, 1, c0), haloGeo(frames, R, -1, c0))
 
     const nArc = Math.floor(s.length / D.arc)
     for (let i = 0; i < nArc; i++) {
@@ -123,6 +172,7 @@ function buildNeon(way, getFrames, sample) {
   }
   return {
     strips: strips.length ? mergeGeometries(strips) : null,
+    halo: halos.length ? mergeGeometries(halos) : null,
     arcs, masts, heads, signs, id,
   }
 }
@@ -149,12 +199,13 @@ export default function Neon({ way, time, getFrames, sample }) {
     head: HEADS[NEON_DECOR[d.id].head](),
     sign: new THREE.BoxGeometry(1, 1, 0.06),
   }), [d.id])
-  const mats = useMemo(() => ({ inst: makeNeonMaterial(time, false), strip: makeNeonMaterial(time, true) }), [time])
-  useEffect(() => () => { d.strips?.dispose(); Object.values(geos).forEach((g) => g.dispose()) }, [d, geos])
-  useEffect(() => () => { mats.inst.dispose(); mats.strip.dispose() }, [mats])
+  const mats = useMemo(() => ({ inst: makeNeonMaterial(time, false), strip: makeNeonMaterial(time, true), halo: makeNeonMaterial(time, true, true) }), [time])
+  useEffect(() => () => { d.strips?.dispose(); d.halo?.dispose(); Object.values(geos).forEach((g) => g.dispose()) }, [d, geos])
+  useEffect(() => () => { mats.inst.dispose(); mats.strip.dispose(); mats.halo.dispose() }, [mats])
   return (
     <group>
       {d.strips && <mesh geometry={d.strips} material={mats.strip} raycast={() => null} />}
+      {d.halo && <mesh geometry={d.halo} material={mats.halo} renderOrder={2} raycast={() => null} />}
       <NInst geo={geos.arc} mat={mats.inst} items={d.arcs} />
       <NInst geo={geos.mast} mat={mats.inst} items={d.masts} />
       <NInst geo={geos.head} mat={mats.inst} items={d.heads} />
