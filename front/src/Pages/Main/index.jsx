@@ -40,6 +40,16 @@ export default function Main() {
     if (!b) setFollow(false)
   }
   const toggleFollow = () => setFollow((v) => { const next = !v; if (next) setPov(false); return next })
+  const followBollita = (b) => {
+    if (!b) return
+    if (selected === b) {
+      toggleFollow()
+    } else {
+      setPov(false)
+      setSelected(b)
+      setFollow(true)
+    }
+  }
   const togglePov = () => setPov((v) => { const next = !v; if (next) setFollow(false); return next })
   // Si la bollita seguida o en POV muere, se vuelve sola a la vista general.
   if (follow && selected && selected.phase === 'gone') setFollow(false)
@@ -48,7 +58,7 @@ export default function Main() {
   return (
     <div className="app">
       <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} onSelect={select} />
-      <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} cine={cine} onToggleCine={() => setCine((v) => !v)} />
+      <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBollita={followBollita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       {selected && <Detail b={selected} sim={sim} follow={follow} pov={pov} onFollow={toggleFollow} onPov={togglePov} onClose={() => select(null)} />}
     </div>
   )
