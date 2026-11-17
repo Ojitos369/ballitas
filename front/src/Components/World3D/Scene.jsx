@@ -70,8 +70,9 @@ const FOLLOW_FWD_RATE = 3 // filtro del rumbo de la ballita para la cámara de s
 const FOLLOW_OFF_W = 3 // resorte crítico de la posición relativa de la cámara
 const FOLLOW_TUBE_W = 8 // en el tubo sigue al riel (ya suave) más de cerca: un retraso la sacaría del cristal en curvas
 const FOLLOW_ROLL_W = 2.5 // rapidez con que la cámara endereza el horizonte al seguir
-const FOLLOW_ROT_W = 4 // suavizado (slerp por tiempo) de la mirada al seguir
-const FOLLOW_ZONA = THREE.MathUtils.degToRad(6) // desvío máximo de la ballita respecto del centro (dentro del tercio central)
+const FOLLOW_ROT_W = 3 // suavizado (slerp por tiempo) de la mirada al seguir
+const FOLLOW_ZONA = 0.26 // la ballita puede desviarse hasta este tanto de la media pantalla (tercio central = 0.33)
+const occQuat = new THREE.Quaternion()
 const ENTRADA_S = 1.1 // duración de la transición al empezar a seguir
 const rotGoal = new THREE.Quaternion()
 const REL_DEFAULT = { yaw: 0, pitch: 0.42, dist: SEGUIR_DIST }
@@ -996,8 +997,12 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         else {
           // zona muerta: la mirada se suaviza y la ballita puede moverse dentro del tercio central, nunca fuera
           fs.quat.slerp(rotGoal, 1 - Math.exp(-FOLLOW_ROT_W * h))
-          const desvio = midVec.set(0, 0, -1).applyQuaternion(fs.quat).angleTo(viewDir)
-          if (desvio > FOLLOW_ZONA) fs.quat.slerp(rotGoal, 1 - FOLLOW_ZONA / desvio)
+          // la zona es una elipse dentro del tercio central de la pantalla (más ancha en horizontal)
+          midVec.copy(viewDir).applyQuaternion(occQuat.copy(fs.quat).invert())
+          const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * FOLLOW_ZONA
+          const z = Math.max(1e-4, -midVec.z)
+          const fuera = midVec.z >= 0 ? 4 : Math.hypot(midVec.x / (z * t * (camera.aspect || 1)), midVec.y / (z * t))
+          if (fuera > 1) fs.quat.slerp(rotGoal, 1 - 1 / fuera)
         }
         camera.quaternion.copy(fs.quat)
       }
