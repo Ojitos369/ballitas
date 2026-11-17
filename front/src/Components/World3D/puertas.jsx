@@ -4,7 +4,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { wallFrame } from '../../Core/world.js'
+import { laneFrame } from '../../Core/world.js'
 import { PISTA } from './vida/pista.jsx'
 
 const BLACK = '#15151a'
@@ -93,21 +93,26 @@ const _m = new THREE.Matrix4(); const _x = new THREE.Vector3(); const _y = new T
 function gateAt(seg, u, kind, themeId) {
   const build = GATES[kind]
   if (!build || !seg) return []
-  const f = wallFrame(seg, 0, u, 0)
-  _y.copy(f.dir).negate()
+  const lane = seg.lanes?.find((l) => l.id === 0) ?? seg.lanes?.[0]
+  if (!lane) return []
+  const f = laneFrame(seg, lane.id, u)
+  _y.copy(f.up).normalize()
   _x.crossVectors(_y, f.tangent).normalize()
-  _m.makeBasis(_x, _y, f.tangent).setPosition(f.axis)
-  return build(seg.radius, PISTA[themeId] ?? PISTA.neon).map(([g, c]) => colorize(g, c).applyMatrix4(_m))
+  _m.makeBasis(_x, _y, f.tangent).setPosition(f.pos)
+  const radius = Math.max(1.5, ...seg.lanes.map((l) => (l.width ?? 1) * 2))
+  return build(radius, PISTA[themeId] ?? PISTA.neon).map(([g, c]) => colorize(g, c).applyMatrix4(_m))
 }
 
 export function buildGatesGeo(world) {
   const parts = []
   for (const way of world.ways) {
-    const out = way.segments[0]
+    const out = way.segments.find((s) => s.kind === 'salida') ?? way.segments[0]
     const inn = way.segments.find((s) => s.kind === 'llegada')
     const id = way.theme.id
-    if (out) parts.push(...gateAt(out, Math.min(0.5, 2.5 / out.length), out.gate ?? way.gates?.out, id))
-    if (inn) parts.push(...gateAt(inn, Math.max(0.5, 1 - 2.5 / inn.length), inn.gate ?? way.gates?.in, id))
+    // Una parrilla sobre la recta ancha de salida y una meta sobre la llegada: abarcan
+    // los carriles que se abren y se reúnen, sin usar la boca del tubo como soporte.
+    if (out) parts.push(...gateAt(out, Math.min(0.5, 3 / out.length), 'parrilla_semaforo', id))
+    if (inn) parts.push(...gateAt(inn, Math.max(0.5, 1 - 3 / inn.length), 'meta_cuadros', id))
   }
   const g = mergeGeometries(parts)
   for (const p of parts) p.dispose()
