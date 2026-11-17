@@ -1,0 +1,3086 @@
+{
+ "piezas": [
+  {
+   "tipo": "body",
+   "id": "chibi_round",
+   "label": "Cuerpo redondito",
+   "emoji": "⚪",
+   "categoria": "body",
+   "familia": "body",
+   "params": {
+    "scale": [
+     1,
+     0.98,
+     1
+    ],
+    "cheekPuff": 1
+   }
+  },
+  {
+   "tipo": "body",
+   "id": "chibi_plump",
+   "label": "Cuerpo esponjoso",
+   "emoji": "🍡",
+   "categoria": "body",
+   "familia": "body",
+   "params": {
+    "scale": [
+     1.05,
+     0.96,
+     1.04
+    ],
+    "cheekPuff": 1.18
+   }
+  },
+  {
+   "tipo": "body",
+   "id": "chibi_tall",
+   "label": "Cuerpo estilizado",
+   "emoji": "🫧",
+   "categoria": "body",
+   "familia": "body",
+   "params": {
+    "scale": [
+     0.96,
+     1.04,
+     0.97
+    ],
+    "cheekPuff": 0.95
+   }
+  },
+  {
+   "tipo": "body",
+   "id": "chibi_tiny",
+   "label": "Cuerpo compacto",
+   "emoji": "🍬",
+   "categoria": "body",
+   "familia": "body",
+   "params": {
+    "scale": [
+     0.98,
+     0.94,
+     0.98
+    ],
+    "cheekPuff": 1.05
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "none",
+   "label": "Sin sombrero",
+   "emoji": "✨",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "conical_elf",
+   "label": "Gorro élfico con pompón",
+   "emoji": "🧝",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0.12
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "wizard",
+   "label": "Sombrero de maga estelar",
+   "emoji": "🧙",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": -0.08
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "beret",
+   "label": "Boina suave",
+   "emoji": "🥐",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": -0.22
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "hood",
+   "label": "Capucha acogedora",
+   "emoji": "🧥",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "bandana",
+   "label": "Pañuelo pirata",
+   "emoji": "🏴‍☠️",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0.08
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "nightcap",
+   "label": "Gorro de dormir",
+   "emoji": "🌙",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0.18
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "crown",
+   "label": "Corona real",
+   "emoji": "👑",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "halo",
+   "label": "Halo luminoso",
+   "emoji": "😇",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "flower_crown",
+   "label": "Brote floral",
+   "emoji": "🌸",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0.1
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "bow",
+   "label": "Moño grande",
+   "emoji": "🎀",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0.12
+   }
+  },
+  {
+   "tipo": "hat",
+   "id": "brain",
+   "label": "Cerebro expuesto",
+   "emoji": "🧠",
+   "categoria": "hat",
+   "familia": "hat",
+   "params": {
+    "scale": 1,
+    "tilt": 0.15
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "none",
+   "label": "Sin orejas",
+   "emoji": "·",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1,
+    "tilt": 0,
+    "droop": 0
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "cat",
+   "label": "Orejas de gato",
+   "emoji": "🐱",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1,
+    "tilt": 0.08,
+    "droop": 0.1
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "elf",
+   "label": "Orejas puntiagudas",
+   "emoji": "🧝",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1.05,
+    "tilt": 0.05,
+    "droop": 0.12
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "bunny",
+   "label": "Orejas de conejo",
+   "emoji": "🐰",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1.05,
+    "tilt": 0.1,
+    "droop": 0.25
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "bear",
+   "label": "Orejas de oso",
+   "emoji": "🐻",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1,
+    "tilt": 0.04,
+    "droop": 0
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "droopy",
+   "label": "Orejas caídas",
+   "emoji": "🐶",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1,
+    "tilt": 0.12,
+    "droop": 0.65
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "horns",
+   "label": "Cuernitos curvos",
+   "emoji": "😈",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 0.95,
+    "tilt": 0.1,
+    "droop": 0
+   }
+  },
+  {
+   "tipo": "ears",
+   "id": "antennae",
+   "label": "Antenitas estelares",
+   "emoji": "✨",
+   "categoria": "ears",
+   "familia": "ears",
+   "params": {
+    "scale": 1,
+    "tilt": 0.08,
+    "droop": 0
+   }
+  },
+  {
+   "tipo": "hair",
+   "id": "none",
+   "label": "Sin flequillo",
+   "emoji": "·",
+   "categoria": "hair",
+   "familia": "hair",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "hair",
+   "id": "bangs_elf",
+   "label": "Flequillo élfico",
+   "emoji": "🌿",
+   "categoria": "hair",
+   "familia": "hair",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "hair",
+   "id": "curls_mage",
+   "label": "Rizos ondulados",
+   "emoji": "💜",
+   "categoria": "hair",
+   "familia": "hair",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "hair",
+   "id": "tufts_zombie",
+   "label": "Mechones despeinados",
+   "emoji": "🧟",
+   "categoria": "hair",
+   "familia": "hair",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "eyes",
+   "id": "round",
+   "label": "Ojos redondos",
+   "emoji": "👀",
+   "categoria": "eyes",
+   "familia": "eyes",
+   "params": {
+    "scaleX": 1,
+    "scaleY": 1
+   }
+  },
+  {
+   "tipo": "eyes",
+   "id": "rogue",
+   "label": "Ojos pícaros",
+   "emoji": "😏",
+   "categoria": "eyes",
+   "familia": "eyes",
+   "params": {
+    "scaleX": 1.02,
+    "scaleY": 0.94
+   }
+  },
+  {
+   "tipo": "eyes",
+   "id": "starry",
+   "label": "Ojos estrellados",
+   "emoji": "🤩",
+   "categoria": "eyes",
+   "familia": "eyes",
+   "params": {
+    "scaleX": 1.06,
+    "scaleY": 1.06
+   }
+  },
+  {
+   "tipo": "eyes",
+   "id": "zen",
+   "label": "Ojos zen serenos",
+   "emoji": "😌",
+   "categoria": "eyes",
+   "familia": "eyes",
+   "params": {
+    "scaleX": 1,
+    "scaleY": 1
+   }
+  },
+  {
+   "tipo": "eyes",
+   "id": "cyclops",
+   "label": "Ojo único gigante",
+   "emoji": "👁️",
+   "categoria": "eyes",
+   "familia": "eyes",
+   "params": {
+    "scaleX": 1.42,
+    "scaleY": 1.42
+   }
+  },
+  {
+   "tipo": "eyes",
+   "id": "asym",
+   "label": "Ojo cosido asimétrico",
+   "emoji": "🪡",
+   "categoria": "eyes",
+   "familia": "eyes",
+   "params": {
+    "scaleX": 1.12,
+    "scaleY": 1.12
+   }
+  },
+  {
+   "tipo": "brows",
+   "id": "soft",
+   "label": "Cejas suaves",
+   "emoji": "〰️",
+   "categoria": "brows",
+   "familia": "brows",
+   "params": {
+    "tilt": 0,
+    "thick": 0.055
+   }
+  },
+  {
+   "tipo": "brows",
+   "id": "grumpy",
+   "label": "Ceño fruncido",
+   "emoji": "😠",
+   "categoria": "brows",
+   "familia": "brows",
+   "params": {
+    "tilt": -0.34,
+    "thick": 0.07
+   }
+  },
+  {
+   "tipo": "brows",
+   "id": "arched",
+   "label": "Cejas arqueadas",
+   "emoji": "🤨",
+   "categoria": "brows",
+   "familia": "brows",
+   "params": {
+    "tilt": 0.16,
+    "thick": 0.058
+   }
+  },
+  {
+   "tipo": "brows",
+   "id": "thick",
+   "label": "Cejas expresivas",
+   "emoji": "✨",
+   "categoria": "brows",
+   "familia": "brows",
+   "params": {
+    "tilt": 0.04,
+    "thick": 0.075
+   }
+  },
+  {
+   "tipo": "mouth",
+   "id": "curva",
+   "label": "Sonrisa dulce",
+   "emoji": "😊",
+   "categoria": "mouth",
+   "familia": "mouth",
+   "params": {
+    "width": 0.95
+   }
+  },
+  {
+   "tipo": "mouth",
+   "id": "w",
+   "label": "Boquita :3",
+   "emoji": "😺",
+   "categoria": "mouth",
+   "familia": "mouth",
+   "params": {
+    "width": 0.95
+   }
+  },
+  {
+   "tipo": "mouth",
+   "id": "zigzag",
+   "label": "Boca gruñona",
+   "emoji": "😤",
+   "categoria": "mouth",
+   "familia": "mouth",
+   "params": {
+    "width": 0.95
+   }
+  },
+  {
+   "tipo": "mouth",
+   "id": "dientes",
+   "label": "Colmillitos",
+   "emoji": "🧛",
+   "categoria": "mouth",
+   "familia": "mouth",
+   "params": {
+    "width": 1
+   }
+  },
+  {
+   "tipo": "mouth",
+   "id": "open",
+   "label": "Sonrisa abierta",
+   "emoji": "😄",
+   "categoria": "mouth",
+   "familia": "mouth",
+   "params": {
+    "width": 1
+   }
+  },
+  {
+   "tipo": "mouth",
+   "id": "o",
+   "label": "Boquita curiosa",
+   "emoji": "😮",
+   "categoria": "mouth",
+   "familia": "mouth",
+   "params": {
+    "width": 0.85
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "patch",
+   "label": "Parche pirata",
+   "emoji": "🏴‍☠️",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1,
+    "side": -1,
+    "skull": true
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "scar",
+   "label": "Cicatriz",
+   "emoji": "⚔️",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1,
+    "side": 1
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "stitch",
+   "label": "Costuras",
+   "emoji": "🪡",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1,
+    "side": -1
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "whiskers",
+   "label": "Bigotes",
+   "emoji": "🐱",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "glasses",
+   "label": "Gafas redondas",
+   "emoji": "👓",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1,
+    "style": "round"
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "visor",
+   "label": "Visor futurista",
+   "emoji": "🕶️",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1,
+    "style": "visor"
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "freckles",
+   "label": "Pecas",
+   "emoji": "✨",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "blush",
+   "label": "Rubor",
+   "emoji": "🩷",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "boost": 1
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "bandage",
+   "label": "Curita",
+   "emoji": "🩹",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1,
+    "side": 1
+   }
+  },
+  {
+   "tipo": "faceExtras",
+   "id": "crumbs",
+   "label": "Migajitas",
+   "emoji": "🍪",
+   "categoria": "faceExtras",
+   "familia": "faceExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "none",
+   "label": "Sin atuendo",
+   "emoji": "·",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "bell_collar",
+   "label": "Collar con cascabel",
+   "emoji": "🔔",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "tunic_clasp",
+   "label": "Túnica con broche",
+   "emoji": "🟢",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "mage_cloak",
+   "label": "Capa estelar",
+   "emoji": "🔮",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "pirate_coat",
+   "label": "Casaca y cinturón",
+   "emoji": "🧥",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "tattered_bib",
+   "label": "Túnica deshilachada",
+   "emoji": "🧟",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "monk_robe",
+   "label": "Túnica y cuentas zen",
+   "emoji": "📿",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "scarf",
+   "label": "Bufanda cálida",
+   "emoji": "🧣",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "neckWear",
+   "id": "bib",
+   "label": "Servilleta glotona",
+   "emoji": "🍽️",
+   "categoria": "neckWear",
+   "familia": "neckWear",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "cat_tail",
+   "label": "Colita curva",
+   "emoji": "🐈",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "pom_tail",
+   "label": "Colita pompón",
+   "emoji": "🐇",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "devil_tail",
+   "label": "Colita picuda",
+   "emoji": "😈",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "wings",
+   "label": "Alitas pequeñas",
+   "emoji": "🪽",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "earring",
+   "label": "Aro dorado",
+   "emoji": "💛",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "drumstick",
+   "label": "Muslito mordido",
+   "emoji": "🍗",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "prayer_hands",
+   "label": "Manitas en oración",
+   "emoji": "🙏",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  },
+  {
+   "tipo": "backExtras",
+   "id": "flower",
+   "label": "Florecita",
+   "emoji": "🌼",
+   "categoria": "backExtras",
+   "familia": "backExtras",
+   "params": {
+    "scale": 1
+   }
+  }
+ ],
+ "secciones": {
+  "familias": {
+   "valentia:1": {
+    "id": "pirata",
+    "name": "Pirata",
+    "emoji": "🏴‍☠️"
+   },
+   "valentia:0": {
+    "id": "miedosa",
+    "name": "Conejito temblón",
+    "emoji": "🐰"
+   },
+   "curiosidad:1": {
+    "id": "maga",
+    "name": "Maga",
+    "emoji": "🧙"
+   },
+   "curiosidad:0": {
+    "id": "rutinaria",
+    "name": "Boina clásica",
+    "emoji": "🥐"
+   },
+   "apetito:1": {
+    "id": "zombi",
+    "name": "Zombi glotona",
+    "emoji": "🧟"
+   },
+   "apetito:0": {
+    "id": "ascetica",
+    "name": "Monje zen",
+    "emoji": "😇"
+   },
+   "sociabilidad:1": {
+    "id": "gatita",
+    "name": "Gatita",
+    "emoji": "🐱"
+   },
+   "sociabilidad:0": {
+    "id": "solitaria",
+    "name": "Encapuchada",
+    "emoji": "🕶️"
+   },
+   "animo:1": {
+    "id": "alegre",
+    "name": "Estrellita",
+    "emoji": "🌟"
+   },
+   "animo:0": {
+    "id": "elfa",
+    "name": "Elfa gruñona",
+    "emoji": "🧝"
+   }
+  },
+  "presets": {
+   "elfa": {
+    "id": "elfa",
+    "name": "Elfa gruñona",
+    "emoji": "🧝",
+    "trait": "animo",
+    "hi": false,
+    "baseHue": 0.28
+   },
+   "gatita": {
+    "id": "gatita",
+    "name": "Gatita",
+    "emoji": "🐱",
+    "trait": "sociabilidad",
+    "hi": true,
+    "baseHue": 0.08
+   },
+   "maga": {
+    "id": "maga",
+    "name": "Maga",
+    "emoji": "🧙",
+    "trait": "curiosidad",
+    "hi": true,
+    "baseHue": 0.74
+   },
+   "pirata": {
+    "id": "pirata",
+    "name": "Pirata",
+    "emoji": "🏴‍☠️",
+    "trait": "valentia",
+    "hi": true,
+    "baseHue": 0.05
+   },
+   "zombi": {
+    "id": "zombi",
+    "name": "Zombi glotona",
+    "emoji": "🧟",
+    "trait": "apetito",
+    "hi": true,
+    "baseHue": 0.31
+   },
+   "ascetica": {
+    "id": "ascetica",
+    "name": "Monje zen",
+    "emoji": "😇",
+    "trait": "apetito",
+    "hi": false,
+    "baseHue": 0.07
+   },
+   "miedosa": {
+    "id": "miedosa",
+    "name": "Conejito temblón",
+    "emoji": "🐰",
+    "trait": "valentia",
+    "hi": false,
+    "baseHue": 0.56
+   },
+   "rutinaria": {
+    "id": "rutinaria",
+    "name": "Boina clásica",
+    "emoji": "🥐",
+    "trait": "curiosidad",
+    "hi": false,
+    "baseHue": 0.1
+   },
+   "solitaria": {
+    "id": "solitaria",
+    "name": "Encapuchada",
+    "emoji": "🕶️",
+    "trait": "sociabilidad",
+    "hi": false,
+    "baseHue": 0.65
+   },
+   "alegre": {
+    "id": "alegre",
+    "name": "Estrellita",
+    "emoji": "🌟",
+    "trait": "animo",
+    "hi": true,
+    "baseHue": 0.13
+   }
+  },
+  "rasgos": {
+   "etiquetas": {
+    "valentia": [
+     "Miedosa",
+     "Valiente"
+    ],
+    "curiosidad": [
+     "Rutinaria",
+     "Curiosa"
+    ],
+    "apetito": [
+     "Ascética",
+     "Glotona"
+    ],
+    "sociabilidad": [
+     "Solitaria",
+     "Sociable"
+    ],
+    "animo": [
+     "Gruñona",
+     "Alegre"
+    ]
+   },
+   "tono": {
+    "valentia": [
+     "Ay… ",
+     "¡Sin miedo! "
+    ],
+    "curiosidad": [
+     "Mmh. ",
+     "Ooh, "
+    ],
+    "apetito": [
+     "Meh. ",
+     "Ñam, "
+    ],
+    "sociabilidad": [
+     "(a solas) ",
+     "¡Amigos! "
+    ],
+    "animo": [
+     "Tsk. ",
+     "¡Yupi! "
+    ]
+   }
+  },
+  "caras": {
+   "feliz": {
+    "eye": 1,
+    "brow": 0,
+    "mouth": 0.7,
+    "blush": 0.4,
+    "sweat": 0,
+    "bounce": 1,
+    "emoji": "😊"
+   },
+   "euforica": {
+    "eye": 1.15,
+    "brow": 0.05,
+    "mouth": 1,
+    "blush": 0.9,
+    "sweat": 0,
+    "bounce": 1.8,
+    "emoji": "🤩"
+   },
+   "cansada": {
+    "eye": 0.35,
+    "brow": -0.25,
+    "mouth": -0.2,
+    "blush": 0,
+    "sweat": 0,
+    "bounce": 0.4,
+    "emoji": "😴"
+   },
+   "preocupada": {
+    "eye": 1.1,
+    "brow": -0.5,
+    "mouth": -0.6,
+    "blush": 0,
+    "sweat": 1,
+    "bounce": 0.7,
+    "emoji": "😟"
+   },
+   "mareada": {
+    "eye": 0.6,
+    "brow": -0.35,
+    "mouth": -0.35,
+    "blush": 0,
+    "sweat": 1,
+    "bounce": 0.5,
+    "emoji": "😵"
+   },
+   "asustada": {
+    "eye": 1.35,
+    "brow": -0.7,
+    "mouth": -0.9,
+    "blush": 0,
+    "sweat": 1,
+    "bounce": 1.2,
+    "emoji": "😱"
+   }
+  },
+  "razones": {
+   "busco energía": "⚡",
+   "quiero puntos": "⭐",
+   "ruta inexplorada": "🧭",
+   "seguir al grupo": "🤝",
+   "evitar multitudes": "🫧",
+   "busco adrenalina": "🔥",
+   "camino seguro": "🛡️",
+   "me apetece velocidad": "💨",
+   "explorar circuito": "🗺️"
+  },
+  "temas": {
+   "sombrio": {
+    "id": "sombrio",
+    "name": "Camino Sombrío",
+    "emoji": "🌑",
+    "risk": 0.9,
+    "ecost": 1.2,
+    "pps": -0.5,
+    "visual": {
+     "glass": "#7a5cc0",
+     "rib": "#8a5cf0",
+     "rail": "#a24bff",
+     "banner": {
+      "c": [
+       "#3d2466",
+       "#6b3fa0",
+       "#9b6bff"
+      ]
+     },
+     "lamp": {
+      "c": "#b784ff",
+      "pole": "#2a2238"
+     },
+     "arch": {
+      "c": "#2e2540"
+     },
+     "landmark": {
+      "kind": "obelisk",
+      "c1": "#231b33",
+      "c2": "#6b3fa0",
+      "glow": "#b784ff"
+     },
+     "props": [
+      {
+       "k": "tree",
+       "seed": 1,
+       "d": 0.22,
+       "off": [
+        0,
+        0.35
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        1.1,
+        1.8
+       ],
+       "h": [
+        2.2,
+        3.8
+       ],
+       "c": [
+        "#1f1630",
+        "#2b1e42",
+        "#3a2759"
+       ],
+       "top": true,
+       "tilt": 0.22
+      },
+      {
+       "k": "rock",
+       "seed": 2,
+       "d": 0.18,
+       "off": [
+        0,
+        0.25
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.55,
+        0.95
+       ],
+       "h": [
+        0.5,
+        1.05
+       ],
+       "c": [
+        "#3d3852",
+        "#4c4566"
+       ],
+       "top": true,
+       "tilt": 0.25
+      },
+      {
+       "k": "mushroom",
+       "seed": 27,
+       "d": 0.16,
+       "off": [
+        0,
+        0.2
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.38,
+        0.68
+       ],
+       "h": [
+        0.38,
+        0.72
+       ],
+       "c": [
+        "#9b6bff",
+        "#7a5cff"
+       ],
+       "e": 1.25,
+       "top": true,
+       "tilt": 0.2
+      },
+      {
+       "k": "sphere",
+       "seed": 3,
+       "d": 0.25,
+       "off": [
+        0.4,
+        2.2
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.2,
+        0.34
+       ],
+       "h": [
+        0.2,
+        0.34
+       ],
+       "c": [
+        "#b784ff",
+        "#7a5cff"
+       ],
+       "e": 1.3,
+       "a": 0.75
+      }
+     ],
+     "parts": {
+      "n": 90,
+      "c": "#9b6bff",
+      "s": 0.1,
+      "kind": "spores",
+      "vy": 0.18,
+      "vx": 0.15,
+      "amp": 0.65,
+      "freq": 1.1,
+      "a": 0.55,
+      "glow": 1.25
+     },
+     "cine": {
+      "panel": {
+       "base": "#1a1529",
+       "glow": "#b784ff"
+      },
+      "bar": "#c864ff",
+      "neon": "#8a5cf0",
+      "floor": "#9b6bff",
+      "atmo": {
+       "kind": "fog_lanterns",
+       "mode": 0,
+       "c1": "#4b1f7a",
+       "c2": "#c57aff",
+       "density": 1,
+       "spark": "#d39bff",
+       "streak": "#8d6bff"
+      }
+     }
+    }
+   },
+   "bosque": {
+    "id": "bosque",
+    "name": "Camino del Bosque",
+    "emoji": "🌲",
+    "risk": 0.3,
+    "ecost": 0.8,
+    "pps": 0.2,
+    "visual": {
+     "glass": "#7fe09a",
+     "rib": "#4caf50",
+     "rail": "#9cff6b",
+     "banner": {
+      "c": [
+       "#2e7d32",
+       "#8bc34a",
+       "#ffd54f"
+      ]
+     },
+     "lamp": {
+      "c": "#d4ff5a",
+      "pole": "#4e342e"
+     },
+     "arch": {
+      "c": "#4a3525"
+     },
+     "landmark": {
+      "kind": "tree_arch",
+      "c1": "#5c3a21",
+      "c2": "#2e7d32",
+      "glow": "#d4ff5a"
+     },
+     "props": [
+      {
+       "k": "pine",
+       "seed": 4,
+       "d": 0.32,
+       "off": [
+        0,
+        0.28
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        1.3,
+        2.1
+       ],
+       "h": [
+        2.4,
+        3.8
+       ],
+       "c": [
+        "#2e7d32",
+        "#3f9b46",
+        "#1f6b28"
+       ],
+       "top": true,
+       "tilt": 0.12
+      },
+      {
+       "k": "tree",
+       "seed": 28,
+       "d": 0.12,
+       "off": [
+        0,
+        0.25
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        1.4,
+        2
+       ],
+       "h": [
+        2.2,
+        3.2
+       ],
+       "c": [
+        "#43a047",
+        "#558b2f"
+       ],
+       "top": true,
+       "tilt": 0.15
+      },
+      {
+       "k": "mushroom",
+       "seed": 5,
+       "d": 0.32,
+       "off": [
+        0,
+        0.15
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.4,
+        0.72
+       ],
+       "h": [
+        0.35,
+        0.65
+       ],
+       "c": [
+        "#e53935",
+        "#ff7043",
+        "#ffb74d"
+       ],
+       "top": true,
+       "tilt": 0.18
+      }
+     ],
+     "parts": {
+      "n": 80,
+      "c": "#d4ff5a",
+      "s": 0.12,
+      "kind": "fireflies",
+      "vy": 0.08,
+      "vx": 0.12,
+      "amp": 0.9,
+      "freq": 1.6,
+      "a": 0.65,
+      "glow": 1.3
+     },
+     "cine": {
+      "panel": {
+       "base": "#192b1f",
+       "glow": "#a8ff60"
+      },
+      "bar": "#b9ff5a",
+      "neon": "#52d67a",
+      "floor": "#7fe09a",
+      "atmo": {
+       "kind": "vines_fireflies",
+       "mode": 1,
+       "c1": "#2e8b3c",
+       "c2": "#d4ff5a",
+       "density": 1,
+       "spark": "#d4ff5a",
+       "streak": "#7bf09b"
+      }
+     }
+    }
+   },
+   "mar": {
+    "id": "mar",
+    "name": "Camino del Mar",
+    "emoji": "🌊",
+    "risk": 0.5,
+    "ecost": 1,
+    "pps": 0.1,
+    "visual": {
+     "glass": "#5fc4f0",
+     "rib": "#7fe0ff",
+     "rail": "#7fe0ff",
+     "banner": {
+      "c": [
+       "#0288d1",
+       "#4dd0e1",
+       "#ff8a65"
+      ]
+     },
+     "lamp": {
+      "c": "#bff3ff",
+      "pole": "#29566e"
+     },
+     "arch": {
+      "c": "#2b536b"
+     },
+     "landmark": {
+      "kind": "lighthouse",
+      "c1": "#e6f7ff",
+      "c2": "#0288d1",
+      "glow": "#bff3ff"
+     },
+     "props": [
+      {
+       "k": "coral",
+       "seed": 6,
+       "d": 0.36,
+       "off": [
+        0,
+        0.25
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.65,
+        1.25
+       ],
+       "h": [
+        0.7,
+        1.65
+       ],
+       "c": [
+        "#ff6f91",
+        "#ff9671",
+        "#ffc75f"
+       ],
+       "tilt": 0.28
+      },
+      {
+       "k": "sphere",
+       "seed": 7,
+       "d": 0.25,
+       "off": [
+        0,
+        0.2
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.8,
+        1.6
+       ],
+       "h": [
+        0.35,
+        0.65
+       ],
+       "c": [
+        "#2a8fd6",
+        "#5fc4f0",
+        "#e6fbff"
+       ],
+       "a": 0.85
+      },
+      {
+       "k": "sphere",
+       "seed": 8,
+       "d": 0.4,
+       "off": [
+        0.3,
+        3
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.15,
+        0.4
+       ],
+       "h": [
+        0.15,
+        0.4
+       ],
+       "c": [
+        "#bff3ff"
+       ],
+       "e": 1.2,
+       "a": 0.5
+      }
+     ],
+     "parts": {
+      "n": 95,
+      "c": "#bff3ff",
+      "s": 0.1,
+      "kind": "bubbles",
+      "vy": 0.75,
+      "vx": 0.08,
+      "amp": 0.45,
+      "freq": 1.8,
+      "a": 0.55,
+      "glow": 1.2
+     },
+     "cine": {
+      "panel": {
+       "base": "#132838",
+       "glow": "#5ee7ff"
+      },
+      "bar": "#ff7a4d",
+      "neon": "#4fd8ff",
+      "floor": "#5fc4f0",
+      "atmo": {
+       "kind": "bubbles_caustics",
+       "mode": 2,
+       "c1": "#23b8eb",
+       "c2": "#bff3ff",
+       "density": 1.1,
+       "spark": "#9cf2ff",
+       "streak": "#4fe3ff"
+      }
+     }
+    }
+   },
+   "desierto": {
+    "id": "desierto",
+    "name": "Camino del Desierto",
+    "emoji": "🌵",
+    "risk": 0.6,
+    "ecost": 1.5,
+    "pps": -0.2,
+    "visual": {
+     "glass": "#f0cf8a",
+     "rib": "#ffb347",
+     "rail": "#ffd27a",
+     "banner": {
+      "c": [
+       "#d84315",
+       "#ff9800",
+       "#ffe082"
+      ]
+     },
+     "lamp": {
+      "c": "#ffd27a",
+      "pole": "#6d4c3d"
+     },
+     "arch": {
+      "c": "#7a5a3a"
+     },
+     "landmark": {
+      "kind": "pyramid",
+      "c1": "#d4a55c",
+      "c2": "#8d6e4b",
+      "glow": "#ffd27a"
+     },
+     "props": [
+      {
+       "k": "cactus",
+       "seed": 9,
+       "d": 0.22,
+       "off": [
+        0,
+        0.28
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.65,
+        1.05
+       ],
+       "h": [
+        1.2,
+        2.2
+       ],
+       "c": [
+        "#3f8f4a",
+        "#2f7a3e",
+        "#52a35b"
+       ],
+       "top": true,
+       "tilt": 0.1
+      },
+      {
+       "k": "flower",
+       "seed": 29,
+       "d": 0.14,
+       "off": [
+        0,
+        0.2
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.38,
+        0.62
+       ],
+       "h": [
+        0.45,
+        0.78
+       ],
+       "c": [
+        "#ff7aa8",
+        "#ffb74d"
+       ],
+       "top": true,
+       "tilt": 0.15
+      },
+      {
+       "k": "sphere",
+       "seed": 10,
+       "d": 0.3,
+       "off": [
+        0.4,
+        1.6
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        1.6,
+        3.4
+       ],
+       "h": [
+        0.5,
+        1.2
+       ],
+       "c": [
+        "#e0b872",
+        "#d4a55c"
+       ]
+      },
+      {
+       "k": "rock",
+       "seed": 11,
+       "d": 0.25,
+       "off": [
+        0,
+        0.6
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.55,
+        1.1
+       ],
+       "h": [
+        0.38,
+        0.78
+       ],
+       "c": [
+        "#8d6e4b",
+        "#a0805a",
+        "#b38b5d"
+       ],
+       "tilt": 0.5
+      }
+     ],
+     "parts": {
+      "n": 85,
+      "c": "#ffe2a8",
+      "s": 0.085,
+      "kind": "sand",
+      "vy": 0.05,
+      "vx": 0.95,
+      "amp": 0.5,
+      "freq": 2,
+      "a": 0.5,
+      "glow": 1.15
+     },
+     "cine": {
+      "panel": {
+       "base": "#302318",
+       "glow": "#ffc866"
+      },
+      "bar": "#ff7b29",
+      "neon": "#ffb347",
+      "floor": "#ffd27a",
+      "atmo": {
+       "kind": "sand_heat",
+       "mode": 3,
+       "c1": "#e8a84a",
+       "c2": "#ffd98a",
+       "density": 1,
+       "spark": "#ffd27a",
+       "streak": "#ffcf70"
+      }
+     }
+    }
+   },
+   "hielo": {
+    "id": "hielo",
+    "name": "Camino de Hielo",
+    "emoji": "❄️",
+    "risk": 0.5,
+    "ecost": 0.5,
+    "pps": -0.1,
+    "visual": {
+     "glass": "#bfeaff",
+     "rib": "#eaffff",
+     "rail": "#bff3ff",
+     "banner": {
+      "c": [
+       "#4fc3f7",
+       "#b3e5fc",
+       "#ffffff"
+      ]
+     },
+     "lamp": {
+      "c": "#d8f6ff",
+      "pole": "#4d6f82"
+     },
+     "arch": {
+      "c": "#54798e"
+     },
+     "landmark": {
+      "kind": "ice_spire",
+      "c1": "#9edcff",
+      "c2": "#e8f7ff",
+      "glow": "#bff3ff"
+     },
+     "props": [
+      {
+       "k": "ice_spire",
+       "seed": 12,
+       "d": 0.45,
+       "off": [
+        0,
+        0.18
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.55,
+        1.05
+       ],
+       "h": [
+        1.1,
+        2.9
+       ],
+       "c": [
+        "#cfefff",
+        "#9edcff"
+       ],
+       "a": 0.84,
+       "tilt": 0.28
+      },
+      {
+       "k": "sphere",
+       "seed": 13,
+       "d": 0.25,
+       "off": [
+        0,
+        0.15
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.6,
+        1.15
+       ],
+       "h": [
+        0.4,
+        0.8
+       ],
+       "c": [
+        "#e8f7ff"
+       ],
+       "top": true
+      }
+     ],
+     "parts": {
+      "n": 115,
+      "c": "#e8f9ff",
+      "s": 0.095,
+      "kind": "snow",
+      "vy": -0.65,
+      "vx": 0.14,
+      "amp": 0.6,
+      "freq": 1.4,
+      "a": 0.65,
+      "glow": 1.15
+     },
+     "cine": {
+      "panel": {
+       "base": "#1a2c3b",
+       "glow": "#a8ecff"
+      },
+      "bar": "#6ce2ff",
+      "neon": "#c4f5ff",
+      "floor": "#9ee8ff",
+      "atmo": {
+       "kind": "frost_crystals",
+       "mode": 4,
+       "c1": "#9ce4ff",
+       "c2": "#ffffff",
+       "density": 1.05,
+       "spark": "#e6faff",
+       "streak": "#8be8ff"
+      }
+     }
+    }
+   },
+   "volcan": {
+    "id": "volcan",
+    "name": "Camino del Volcán",
+    "emoji": "🌋",
+    "risk": 1,
+    "ecost": 1.7,
+    "pps": 0.6,
+    "visual": {
+     "glass": "#ff9a6a",
+     "rib": "#ff5a1f",
+     "rail": "#ff7a2f",
+     "banner": {
+      "c": [
+       "#b71c1c",
+       "#ff5722",
+       "#ffb300"
+      ]
+     },
+     "lamp": {
+      "c": "#ff8a3d",
+      "pole": "#2e1d1a"
+     },
+     "arch": {
+      "c": "#3d2420"
+     },
+     "landmark": {
+      "kind": "volcano_torii",
+      "c1": "#2b1b17",
+      "c2": "#5a2a1a",
+      "glow": "#ff6a2b"
+     },
+     "props": [
+      {
+       "k": "crystal",
+       "seed": 14,
+       "d": 0.35,
+       "off": [
+        0,
+        0.45
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.55,
+        1.05
+       ],
+       "h": [
+        0.65,
+        1.45
+       ],
+       "c": [
+        "#ff4d1a",
+        "#ff8a2f"
+       ],
+       "e": 1.35,
+       "tilt": 0.5
+      },
+      {
+       "k": "rock",
+       "seed": 15,
+       "d": 0.35,
+       "off": [
+        0,
+        0.9
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.85,
+        1.65
+       ],
+       "h": [
+        0.65,
+        1.4
+       ],
+       "c": [
+        "#2b1b17",
+        "#3a2620",
+        "#4a2e25"
+       ],
+       "tilt": 0.45
+      },
+      {
+       "k": "ice_spire",
+       "seed": 16,
+       "d": 0.2,
+       "off": [
+        0,
+        0.25
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.55,
+        0.95
+       ],
+       "h": [
+        1,
+        2.2
+       ],
+       "c": [
+        "#5a2a1a",
+        "#703522"
+       ],
+       "top": true,
+       "tilt": 0.18
+      }
+     ],
+     "parts": {
+      "n": 105,
+      "c": "#ff7b29",
+      "s": 0.105,
+      "kind": "embers",
+      "vy": 1.05,
+      "vx": 0.2,
+      "amp": 0.55,
+      "freq": 2.4,
+      "a": 0.65,
+      "glow": 1.35
+     },
+     "cine": {
+      "panel": {
+       "base": "#271715",
+       "glow": "#ff6e30"
+      },
+      "bar": "#ff4e1c",
+      "neon": "#ff7a2f",
+      "floor": "#ff6a2b",
+      "atmo": {
+       "kind": "lava_embers",
+       "mode": 5,
+       "c1": "#ff3b14",
+       "c2": "#ffaa33",
+       "density": 1.15,
+       "spark": "#ff9033",
+       "streak": "#ff6830"
+      }
+     }
+    }
+   },
+   "cristal": {
+    "id": "cristal",
+    "name": "Camino de Cristal",
+    "emoji": "💎",
+    "risk": 0.4,
+    "ecost": 0.9,
+    "pps": 0.4,
+    "visual": {
+     "glass": "#b8a1ff",
+     "rib": "#a78bff",
+     "rail": "#b8a1ff",
+     "banner": {
+      "c": [
+       "#7e57c2",
+       "#4dd0e1",
+       "#f48fb1"
+      ]
+     },
+     "lamp": {
+      "c": "#d8c4ff",
+      "pole": "#3a3352"
+     },
+     "arch": {
+      "c": "#483f66"
+     },
+     "landmark": {
+      "kind": "prism_tower",
+      "c1": "#7df9ff",
+      "c2": "#a78bff",
+      "glow": "#e6dcff"
+     },
+     "props": [
+      {
+       "k": "crystal",
+       "seed": 17,
+       "d": 0.45,
+       "off": [
+        0,
+        0.25
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.52,
+        0.98
+       ],
+       "h": [
+        0.95,
+        2.45
+       ],
+       "c": [
+        "#7df9ff",
+        "#ff7de9",
+        "#a78bff",
+        "#7dffb2"
+       ],
+       "e": 1.3,
+       "a": 0.86,
+       "tilt": 0.28
+      },
+      {
+       "k": "sphere",
+       "seed": 18,
+       "d": 0.2,
+       "off": [
+        0.5,
+        2.5
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.18,
+        0.32
+       ],
+       "h": [
+        0.18,
+        0.32
+       ],
+       "c": [
+        "#e6dcff"
+       ],
+       "e": 1.35
+      }
+     ],
+     "parts": {
+      "n": 90,
+      "c": "#d4c2ff",
+      "s": 0.105,
+      "kind": "sparkles",
+      "vy": 0.12,
+      "vx": 0.1,
+      "amp": 0.5,
+      "freq": 2.2,
+      "a": 0.6,
+      "glow": 1.3
+     },
+     "cine": {
+      "panel": {
+       "base": "#1e1c36",
+       "glow": "#7df9ff"
+      },
+      "bar": "#d084ff",
+      "neon": "#7df9ff",
+      "floor": "#b8a1ff",
+      "atmo": {
+       "kind": "prisms",
+       "mode": 6,
+       "c1": "#7df9ff",
+       "c2": "#f08cff",
+       "density": 1.05,
+       "spark": "#e6dcff",
+       "streak": "#7df9ff"
+      }
+     }
+    }
+   },
+   "nubes": {
+    "id": "nubes",
+    "name": "Camino de las Nubes",
+    "emoji": "☁️",
+    "risk": 0.2,
+    "ecost": 0.6,
+    "pps": 0,
+    "visual": {
+     "glass": "#ffffff",
+     "rib": "#fff2a8",
+     "rail": "#fff2a8",
+     "banner": {
+      "c": [
+       "#ffd54f",
+       "#90caf9",
+       "#f8bbd0"
+      ]
+     },
+     "lamp": {
+      "c": "#fff0a0",
+      "pole": "#6b758a"
+     },
+     "arch": {
+      "c": "#7a8499"
+     },
+     "landmark": {
+      "kind": "windmill",
+      "c1": "#f1f7ff",
+      "c2": "#90caf9",
+      "glow": "#fff2a8"
+     },
+     "props": [
+      {
+       "k": "sphere",
+       "seed": 19,
+       "d": 0.4,
+       "off": [
+        0.2,
+        2.4
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.9,
+        2
+       ],
+       "h": [
+        0.7,
+        1.4
+       ],
+       "c": [
+        "#ffffff",
+        "#f1f7ff"
+       ],
+       "a": 0.88
+      },
+      {
+       "k": "torus",
+       "seed": 20,
+       "d": 0.1,
+       "off": [
+        0,
+        0
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        1.7,
+        1.7
+       ],
+       "h": [
+        1,
+        1
+       ],
+       "c": [
+        "#ffd54a"
+       ],
+       "e": 1.25,
+       "ring": true
+      },
+      {
+       "k": "sphere",
+       "seed": 21,
+       "d": 0.25,
+       "off": [
+        0.5,
+        3
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.15,
+        0.3
+       ],
+       "h": [
+        0.15,
+        0.3
+       ],
+       "c": [
+        "#fff7b0"
+       ],
+       "e": 1.25
+      }
+     ],
+     "parts": {
+      "n": 65,
+      "c": "#fff6cc",
+      "s": 0.12,
+      "kind": "feathers",
+      "vy": -0.15,
+      "vx": 0.22,
+      "amp": 0.75,
+      "freq": 1.1,
+      "a": 0.55,
+      "glow": 1.15
+     },
+     "cine": {
+      "panel": {
+       "base": "#273042",
+       "glow": "#ffe985"
+      },
+      "bar": "#ffd54f",
+      "neon": "#8fd4ff",
+      "floor": "#fff2a8",
+      "atmo": {
+       "kind": "mist_lightning",
+       "mode": 7,
+       "c1": "#d8ecff",
+       "c2": "#ffe57f",
+       "density": 0.95,
+       "spark": "#ffe97d",
+       "streak": "#a6dcff"
+      }
+     }
+    }
+   },
+   "neon": {
+    "id": "neon",
+    "name": "Camino Neón",
+    "emoji": "🌃",
+    "risk": 0.7,
+    "ecost": 1.1,
+    "pps": 0.5,
+    "visual": {
+     "glass": "#2bffe8",
+     "rib": "#ff2bd6",
+     "rail": "#2bffe8",
+     "banner": {
+      "c": [
+       "#ff2bd6",
+       "#2bffe8",
+       "#ffe600"
+      ]
+     },
+     "lamp": {
+      "c": "#2bffe8",
+      "pole": "#1c2233"
+     },
+     "arch": {
+      "c": "#222a40"
+     },
+     "landmark": {
+      "kind": "neon_gate",
+      "c1": "#1c2233",
+      "c2": "#ff2bd6",
+      "glow": "#2bffe8"
+     },
+     "props": [
+      {
+       "k": "torus",
+       "seed": 22,
+       "d": 0.08,
+       "off": [
+        0,
+        0
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        1.32,
+        1.55
+       ],
+       "h": [
+        1,
+        1
+       ],
+       "c": [
+        "#ff2bd6",
+        "#2bffe8",
+        "#fff22b"
+       ],
+       "e": 1.25,
+       "ring": true
+      },
+      {
+       "k": "cyl",
+       "seed": 23,
+       "d": 0.25,
+       "off": [
+        0,
+        0.4
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.1,
+        0.18
+       ],
+       "h": [
+        1,
+        3
+       ],
+       "c": [
+        "#2bffe8",
+        "#ff2bd6"
+       ],
+       "e": 1.3
+      },
+      {
+       "k": "pod",
+       "seed": 24,
+       "d": 0.2,
+       "off": [
+        0.4,
+        2.4
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.3,
+        0.55
+       ],
+       "h": [
+        0.35,
+        0.65
+       ],
+       "c": [
+        "#ff2bd6",
+        "#2bffe8"
+       ],
+       "e": 1.3,
+       "tilt": 0.8
+      }
+     ],
+     "parts": {
+      "n": 90,
+      "c": "#ff4be0",
+      "s": 0.1,
+      "kind": "sparks",
+      "vy": 0.2,
+      "vx": 0.65,
+      "amp": 0.4,
+      "freq": 2.8,
+      "a": 0.6,
+      "glow": 1.35
+     },
+     "cine": {
+      "panel": {
+       "base": "#12182b",
+       "glow": "#2bffe8"
+      },
+      "bar": "#ff4e2b",
+      "neon": "#2bffe8",
+      "floor": "#ff2bd6",
+      "atmo": {
+       "kind": "circuit_grid",
+       "mode": 8,
+       "c1": "#2bffe8",
+       "c2": "#ff2bd6",
+       "density": 1.1,
+       "spark": "#ff8a3d",
+       "streak": "#2bffe8"
+      }
+     }
+    }
+   },
+   "jardin": {
+    "id": "jardin",
+    "name": "Camino del Jardín",
+    "emoji": "🌸",
+    "risk": 0.1,
+    "ecost": 0.7,
+    "pps": 0.15,
+    "visual": {
+     "glass": "#ffd1e8",
+     "rib": "#ff8fb8",
+     "rail": "#ffd1e8",
+     "banner": {
+      "c": [
+       "#ff6fa5",
+       "#ffd24a",
+       "#a5d6a7"
+      ]
+     },
+     "lamp": {
+      "c": "#ffb8d6",
+      "pole": "#3f6340"
+     },
+     "arch": {
+      "c": "#476b47"
+     },
+     "landmark": {
+      "kind": "flower_gazebo",
+      "c1": "#3f8f4a",
+      "c2": "#ff6fa5",
+      "glow": "#ffd24a"
+     },
+     "props": [
+      {
+       "k": "sphere",
+       "seed": 25,
+       "d": 0.25,
+       "off": [
+        0,
+        0.2
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.7,
+        1.3
+       ],
+       "h": [
+        0.5,
+        0.9
+       ],
+       "c": [
+        "#2f8f3a",
+        "#3fa84a"
+       ],
+       "top": true
+      },
+      {
+       "k": "flower",
+       "seed": 26,
+       "d": 0.55,
+       "off": [
+        0,
+        0.2
+       ],
+       "y": [
+        0,
+        0
+       ],
+       "w": [
+        0.42,
+        0.72
+       ],
+       "h": [
+        0.55,
+        1.05
+       ],
+       "c": [
+        "#ff6fa5",
+        "#ffd24a",
+        "#b06bff",
+        "#ff8a5c"
+       ],
+       "top": true,
+       "tilt": 0.2
+      }
+     ],
+     "parts": {
+      "n": 75,
+      "c": "#ffc2df",
+      "s": 0.11,
+      "kind": "petals",
+      "vy": -0.35,
+      "vx": 0.25,
+      "amp": 0.85,
+      "freq": 1.3,
+      "a": 0.65,
+      "glow": 1.2
+     },
+     "cine": {
+      "panel": {
+       "base": "#212b25",
+       "glow": "#ff96c8"
+      },
+      "bar": "#ff85b3",
+      "neon": "#a8f0c6",
+      "floor": "#ffd1e8",
+      "atmo": {
+       "kind": "petals",
+       "mode": 9,
+       "c1": "#ff7cb8",
+       "c2": "#ffe07d",
+       "density": 1,
+       "spark": "#ffb8dc",
+       "streak": "#ffcfe6"
+      }
+     }
+    }
+   }
+  },
+  "dialogos": {
+   "base": {
+    "nace": [
+     "¡Hola, mundo!",
+     "Acabo de rodar hasta aquí."
+    ],
+    "llega": [
+     "Llegué a {n}.",
+     "Así que esto es {n}."
+    ],
+    "ganaP": [
+     "Conseguí puntos en {s}.",
+     "¡{s} suma!"
+    ],
+    "ganaE": [
+     "Recargo energía en {s}.",
+     "{s} me sienta de maravilla."
+    ],
+    "camino": [
+     "Voy a {n} por el {c}.",
+     "Toca el {c}."
+    ],
+    "hambre": [
+     "Se me acaba la energía…",
+     "Necesito descansar."
+    ],
+    "miedo": [
+     "Me quedan pocos puntos…",
+     "Esto no pinta bien."
+    ],
+    "muere": [
+     "Adiós, mundo…",
+     "Me apago…"
+    ],
+    "canon": [
+     "¡Fueeego!",
+     "¡Salgo disparada!"
+    ],
+    "trampolin": [
+     "¡Boing, boing!",
+     "¡Qué bote!"
+    ],
+    "rizo": [
+     "¡Cabeza abajo!",
+     "¡Otra vuelta!"
+    ],
+    "caida": [
+     "¡Aaaah, caigo!",
+     "¡Al vacío!"
+    ],
+    "embudo": [
+     "Vueltas y vueltas…",
+     "Me mareo…"
+    ],
+    "geiser": [
+     "¡Al chorro del géiser!",
+     "¡Arriba voy!"
+    ],
+    "erupcion": [
+     "¡Erupción! ¡A volar!",
+     "¡El cráter me lanza!"
+    ],
+    "turbina": [
+     "¡Viento de lado!",
+     "¡Qué impulso!"
+    ],
+    "hielo_resbaloso": [
+     "¡Qué rápido patina!",
+     "¡A toda velocidad!"
+    ],
+    "pantano": [
+     "Uy, qué pegajoso…",
+     "Me frena el pantano…"
+    ],
+    "portal": [
+     "¡Salto espacial!",
+     "¡Teletransporte!"
+    ],
+    "cascada": [
+     "¡Por la cascada!",
+     "¡Agua va!"
+    ],
+    "carril": [
+     "¡Cambio de carril por {m}!",
+     "¡Por la pared gracias a {m}!"
+    ],
+    "falla": [
+     "¡Uy, me caí en {m}!",
+     "¡Falló {m}!",
+     "¡Al suelo otra vez por {m}!"
+    ]
+   },
+   "eventos": {
+    "nace": [
+     "¡Hola, mundo redondo!",
+     "Acabo de rodar hasta aquí.",
+     "¡Qué brillante se ve todo!",
+     "Listísima para rodar sin parar.",
+     "¡Alguien sabe dónde está la rampa?",
+     "Recién salida del horno cósmico."
+    ],
+    "llega": [
+     "¡Por fin llegué a {n}!",
+     "Así que esto es {n}… qué vistas.",
+     "Aterrizaje suave en {n}.",
+     "¡Hola, {n}! Ya estoy aquí.",
+     "Un planeta más en mi bitácora: {n}."
+    ],
+    "ganaP": [
+     "¡Puntos fresquitos en {s}!",
+     "¡{s} suma un montón!",
+     "¡Toma ya, más puntos en {s}!",
+     "Esto en {s} sí que vale la pena.",
+     "¡Brillo total gracias a {s}!"
+    ],
+    "ganaE": [
+     "¡Batería al cien en {s}!",
+     "{s} me recarga las pilas.",
+     "¡Qué gusto da pasar por {s}!",
+     "Energía pura saliendo de {s}.",
+     "Con esto en {s} ruedo hasta mañana."
+    ],
+    "camino": [
+     "Rumbo a {n} por el {c}.",
+     "¡Nos vemos en {n}! Tomo el {c}.",
+     "Toca cruzar el {c} hacia {n}.",
+     "¡Siguiente parada: {n}!",
+     "A ver qué sorpresas guarda el {c}."
+    ],
+    "hambre": [
+     "Me quedo sin pilas…",
+     "Necesito recargar ya…",
+     "Uf, qué pesada me siento…",
+     "¿Hay algún cargador cerca?",
+     "Mis patitas piden un descanso."
+    ],
+    "miedo": [
+     "Me quedan pocos puntos…",
+     "Esto se está poniendo feo…",
+     "Necesito puntos urgente.",
+     "¡Ay, no quiero desaparecer!",
+     "Tiemblo hasta las mejillas…"
+    ],
+    "muere": [
+     "Adiós, mundo… fue divertido rodar.",
+     "Me apago despacito…",
+     "Buenas noches, universo…",
+     "Hasta la próxima generación…"
+    ],
+    "salida": [
+     "¡Tres, dos, uno… lanzada!",
+     "¡Allá voy a toda pastilla!",
+     "¡Agárrense que salgo!",
+     "¡Despegue del tubo!"
+    ],
+    "llegada": [
+     "¡Meta a la vista!",
+     "¡Llegando a puerto!",
+     "¡Qué viajazo me acabo de pegar!",
+     "¡Frenando con estilo!"
+    ],
+    "canon": [
+     "¡Fueeego! ¡Salgo volando!",
+     "¡Pum! ¡Adiós tubo!",
+     "¡Modo bala activado!",
+     "¡Por los aires sin frenos!",
+     "¡Disparo directo al cielo!"
+    ],
+    "trampolin": [
+     "¡Boing, boing, boing!",
+     "¡Qué pedazo de salto!",
+     "¡Toco las estrellas y vuelvo!",
+     "¡Rebote perfecto!",
+     "¡Wheee, floto en el aire!"
+    ],
+    "rizo": [
+     "¡Cabeza abajo, qué locura!",
+     "¡La gravedad hoy no manda!",
+     "¡Looping de campeonato!",
+     "¡El mundo da vueltas!",
+     "¡Otra vuelta más!"
+    ],
+    "caida": [
+     "¡Aaaah, que me caigooo!",
+     "¡Al vacío sin paracaídas!",
+     "¡Siento mariposas en la panza!",
+     "¡Suelo, acércate despacio!",
+     "¡Vértigo máximo!"
+    ],
+    "embudo": [
+     "Vueltas y vueltas sin fin…",
+     "¡Me estoy mareandooo!",
+     "¡Como agua por el desagüe!",
+     "¡Gira que te gira!",
+     "¿Dónde quedó el norte?"
+    ],
+    "cascada": [
+     "¡Splash! ¡Qué fresquita el agua!",
+     "¡Bajada con espuma y burbujas!",
+     "¡Cuidado que salpica!",
+     "¡Tobogán acuático espacial!",
+     "¡Gluglú, qué chorro tan rico!"
+    ],
+    "espiral": [
+     "¡Hélice infinita!",
+     "¡Enroscada como un resorte!",
+     "¡Bajando en tirabuzón!",
+     "¡Qué curvas tan elegantes!"
+    ],
+    "sacacorchos": [
+     "¡Giro doble en el aire!",
+     "¡Parecemos un sacacorchos!",
+     "¡Tornillo cósmico a toda velocidad!",
+     "¡Izquierda, derecha, vuelta!"
+    ],
+    "horquilla": [
+     "¡Horquilla! ¡Media vuelta!",
+     "¡Curva cerrada, a frenar!",
+     "¡Me pego a la pared en la vuelta!",
+     "¡Qué curvón!"
+    ],
+    "rampa": [
+     "¡Deslizamiento suave!",
+     "¡Qué gustito da esta rampa!",
+     "¡Patinando cuesta abajo!"
+    ],
+    "geiser": [
+     "¡Chorro arriba! ¡Me lanza el géiser!",
+     "¡Pshhh! ¡Vapor a presión!",
+     "¡El géiser me manda por los aires!",
+     "¡Agua caliente y vuelo gratis!",
+     "¡Qué empujón tan brutal del géiser!",
+     "¡Surfeando la columna de vapor!"
+    ],
+    "erupcion": [
+     "¡BOOM! ¡Erupción volcánica!",
+     "¡Chispas por todas partes!",
+     "¡El cráter me disparó al espacio!",
+     "¡Caliente, caliente, qué salto!",
+     "¡Lava abajo, yo arriba volando!",
+     "¡Súper eyección volcánica!"
+    ],
+    "turbina": [
+     "¡Fiuuu! ¡Menudo ventarrón!",
+     "¡La turbina me empuja de lado!",
+     "¡Aire a mil por hora!",
+     "¡Me despeino con este viento!",
+     "¡Impulso lateral turbo!",
+     "¡Viento de cola, qué velocidad!"
+    ],
+    "hielo_resbaloso": [
+     "¡Fiuuu, patinando sin control!",
+     "¡Hielo puro! ¡No hay quien frene!",
+     "¡Brrr, qué frío y qué rápido!",
+     "¡Patinaje artístico espacial!",
+     "¡Resbalo como mantequilla!",
+     "¡A toda pastilla sobre el hielo!"
+    ],
+    "pantano": [
+     "¡Glup… esto está súper pegajoso!",
+     "¡Uf, qué lento se rueda aquí!",
+     "¡Burbujas de lodo por todos lados!",
+     "¡Me cuesta avanzar en este pantano!",
+     "¡Chof, chof… paso a pasito!",
+     "¡Paciencia, ya saldremos del barro!"
+    ],
+    "portal": [
+     "¡ZAP! ¡Teletransporte instantáneo!",
+     "¡Acabo de doblar el espacio!",
+     "¿Eso fue un portal? ¡Qué flash!",
+     "¡Salto cuántico completado!",
+     "¡De aquí a allá en un parpadeo!",
+     "¡Wooo, luces de otra dimensión!"
+    ],
+    "velocidad_rapida": [
+     "¡Voy hecha un rayo!",
+     "¡Máxima velocidad, qué subidón!",
+     "¡El viento me silba en las orejas!",
+     "¡Ruta exprés sin mirar atrás!",
+     "¡No me alcanzan ni las estrellas!"
+    ],
+    "velocidad_lenta": [
+     "Tranquilita, disfrutando el paisaje…",
+     "Sin prisa, paso a paso.",
+     "Ruta calmada, qué relax.",
+     "Aquí se va despacito pero seguro.",
+     "Respirando hondo en este tramo lento."
+    ],
+    "cerca_ballita": [
+     "¡Hola, {other}! ¡Qué gusto verte!",
+     "¡Eh, {other}, echamos una carrera?",
+     "¡Cuidado {other}, que paso rodando!",
+     "¡Nos cruzamos en el camino, {other}!",
+     "¡Ánimo, {other}!"
+    ],
+    "plan": [
+     "Mi plan: {razon}",
+     "Lo tengo claro: {razon}",
+     "Decidido: {razon}"
+    ]
+   },
+   "skins": {
+    "pirata": {
+     "_idle": [
+      "¡Arrr, a por el tesoro!",
+      "¡Viento en popa, grumete!"
+     ],
+     "canon": [
+      "¡Al abordaje por los aires!",
+      "¡Disparo de cañón pirata!"
+     ],
+     "geiser": [
+      "¡Un géiser marino, arr!",
+      "¡Por la borda hacia el cielo!"
+     ],
+     "erupcion": [
+      "¡Fuego en la cubierta!",
+      "¡Más pólvora que mi barco!"
+     ],
+     "cascada": [
+      "¡Agua salada a la vista!",
+      "¡Surfeando la ola, arr!"
+     ],
+     "hielo_resbaloso": [
+      "¡Iceberg a estribor!",
+      "¡Resbalo más que en cubierta mojada!"
+     ],
+     "pantano": [
+      "¡Encallada en el lodo!",
+      "¡Remen fuerte, marineros!"
+     ],
+     "portal": [
+      "¡Un atajo secreto de corsarios!"
+     ],
+     "cerca_ballita": [
+      "¡Ahoy, {other}!",
+      "¡Comparte el botín, {other}!"
+     ]
+    },
+    "miedosa": {
+     "_idle": [
+      "Ay, ay, ay… espero no caerme.",
+      "¿Segura que este tubo aguanta?"
+     ],
+     "caida": [
+      "¡NOOO, MIS OREJITAS TIEMBLAN!",
+      "¡Sálvenmeeee!"
+     ],
+     "erupcion": [
+      "¡FUEGOOO! ¡Quiero volver a casa!",
+      "¡Socorro, el volcán me lanzó!"
+     ],
+     "geiser": [
+      "¡Ay! ¡El agua me empujó muy alto!"
+     ],
+     "turbina": [
+      "¡Me lleva el viento, auxilio!"
+     ],
+     "hielo_resbaloso": [
+      "¡No puedo frenar, qué susto!"
+     ],
+     "pantano": [
+      "Al menos aquí no voy tan rápido… uf."
+     ],
+     "portal": [
+      "¿¡Dónde estoy ahora!? ¡Qué miedo!"
+     ],
+     "cerca_ballita": [
+      "¡{other}, no me dejes sola!"
+     ]
+    },
+    "maga": {
+     "_idle": [
+      "Siento vibraciones arcanas…",
+      "¡Magia en cada curva!"
+     ],
+     "portal": [
+      "¡Hechizo de teletransporte perfecto!",
+      "¡Mi especialidad: portales!"
+     ],
+     "erupcion": [
+      "¡Conjuro de fuego natural!",
+      "¡Qué energía tan mística!"
+     ],
+     "geiser": [
+      "¡Alquimia de agua y vapor!"
+     ],
+     "turbina": [
+      "¡Vientos etéreos a mi favor!"
+     ],
+     "cascada": [
+      "¡Poción de cascada brillante!"
+     ],
+     "cerca_ballita": [
+      "¡Saludos mágicos, {other}!"
+     ]
+    },
+    "rutinaria": {
+     "_idle": [
+      "Todo según el horario previsto.",
+      "Paso a paso, sin sorpresas."
+     ],
+     "pantano": [
+      "Un retraso de 3 segundos en el cronograma."
+     ],
+     "hielo_resbaloso": [
+      "¡Demasiada velocidad para mi agenda!"
+     ],
+     "portal": [
+      "¡Esto no estaba en el mapa oficial!"
+     ],
+     "cascada": [
+      "Hum, humedad dentro de los parámetros."
+     ],
+     "cerca_ballita": [
+      "Buenos días, {other}. Circulando."
+     ]
+    },
+    "zombi": {
+     "_idle": [
+      "Mmm… ¿hay snacks en el planeta?",
+      "Ruedo por comida… ñam…"
+     ],
+     "pantano": [
+      "¡Lodo fresquito! Me recuerda a casa.",
+      "Mmm, burbujas…"
+     ],
+     "erupcion": [
+      "¡Asadito al carbón!"
+     ],
+     "geiser": [
+      "¡Baño termal gratis!"
+     ],
+     "hielo_resbaloso": [
+      "¡Frío para conservarme fresca!"
+     ],
+     "cerca_ballita": [
+      "Hola {other}… ¿tienes galletas?"
+     ]
+    },
+    "ascetica": {
+     "_idle": [
+      "Paz interior en movimiento.",
+      "Fluir como el cosmos."
+     ],
+     "pantano": [
+      "La lentitud enseña paciencia.",
+      "Acepto la calma del barro."
+     ],
+     "erupcion": [
+      "Incluso el fuego es armonía."
+     ],
+     "portal": [
+      "Todo está conectado en un punto."
+     ],
+     "cascada": [
+      "El agua fluye sin esfuerzo."
+     ],
+     "cerca_ballita": [
+      "Que la paz te acompañe, {other}."
+     ]
+    },
+    "gatita": {
+     "_idle": [
+      "¡Miau! ¡A rodar se ha dicho!",
+      "¡Purrr, qué bonito día!"
+     ],
+     "cascada": [
+      "¡Miau, agua noooo! ¡Me mojo!",
+      "¡Fuchi, agua por todas partes!"
+     ],
+     "geiser": [
+      "¡Miau! ¡Susto acuático!"
+     ],
+     "hielo_resbaloso": [
+      "¡Patitas patinando, miau!"
+     ],
+     "trampolin": [
+      "¡Salto felino perfecto!"
+     ],
+     "turbina": [
+      "¡Mis bigotes vuelan al viento!"
+     ],
+     "cerca_ballita": [
+      "¡Miauu, {other}! ¡Juguemos!"
+     ]
+    },
+    "solitaria": {
+     "_idle": [
+      "Mejor sola que mal acompañada.",
+      "Silencio y velocidad…"
+     ],
+     "portal": [
+      "Desaparecer en un segundo. Ideal."
+     ],
+     "turbina": [
+      "El viento borra mis huellas."
+     ],
+     "hielo_resbaloso": [
+      "Nadie me alcanza aquí."
+     ],
+     "cerca_ballita": [
+      "Oh, {other}… hola, supongo.",
+      "Espacio personal, {other}."
+     ]
+    },
+    "alegre": {
+     "_idle": [
+      "¡Yupi! ¡Todo es una fiesta!",
+      "¡Brillos y sonrisas!"
+     ],
+     "trampolin": [
+      "¡Súper salto estelar!"
+     ],
+     "erupcion": [
+      "¡Fuegos artificiales naturales!"
+     ],
+     "geiser": [
+      "¡Fuente de fiesta! ¡Wheee!"
+     ],
+     "portal": [
+      "¡Magia de colores! ¡Otra vez!"
+     ],
+     "cascada": [
+      "¡Arcoíris en el agua!"
+     ],
+     "cerca_ballita": [
+      "¡Holaaa {other}! ¡Qué alegría verte!"
+     ]
+    },
+    "elfa": {
+     "_idle": [
+      "Tsk, qué caminos tan ruidosos…",
+      "Más rápido, que pierdo el tiempo."
+     ],
+     "pantano": [
+      "Ugh, ¡me mancho las botas en este lodo!",
+      "Qué lentitud tan molesta…"
+     ],
+     "hielo_resbaloso": [
+      "Al menos esto avanza rápido."
+     ],
+     "turbina": [
+      "¡Me despeina el gorro!"
+     ],
+     "erupcion": [
+      "¡Demasiado drama volcánico!"
+     ],
+     "cerca_ballita": [
+      "Apártate un poco, {other}."
+     ]
+    }
+   }
+  }
+ }
+}

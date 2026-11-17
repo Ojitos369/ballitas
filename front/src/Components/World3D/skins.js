@@ -507,6 +507,14 @@ function makeDrumstickMeatGeo() {
   return geo
 }
 
+// Mezcla en SKIN_PARTS las piezas del catálogo del back (Core/api.js); lo local se conserva si el back no las trae.
+export function aplicarCatalogo(piezas) {
+  for (const [slot, items] of Object.entries(piezas || {})) {
+    const dst = (SKIN_PARTS[slot] ??= {})
+    for (const p of Object.values(items)) dst[p.id] = part(p.id, p.label, p.emoji, p.category, p.defaults)
+  }
+}
+
 export const GEO = {
   body: makeClayBodyGeo(),
   sphere: new THREE.SphereGeometry(1, 24, 18),

@@ -8,3 +8,6 @@ logs/*
 *.pnpm-store*
 
 .build-tmp/
+
+/back/data/
+.venv/
