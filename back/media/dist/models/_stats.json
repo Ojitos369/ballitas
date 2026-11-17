@@ -1,0 +1,128 @@
+{
+ "volcan_erupcion": {
+  "tris": 414,
+  "x": 1.117,
+  "y_alto": 1.0,
+  "z": 1.158,
+  "bytes": 38884
+ },
+ "geiser": {
+  "tris": 302,
+  "x": 1.0,
+  "y_alto": 0.806,
+  "z": 1.0,
+  "bytes": 29676
+ },
+ "rampa_roca": {
+  "tris": 80,
+  "x": 1.0,
+  "y_alto": 0.5,
+  "z": 0.8,
+  "bytes": 7664
+ },
+ "rampa_hielo": {
+  "tris": 80,
+  "x": 1.0,
+  "y_alto": 0.5,
+  "z": 0.8,
+  "bytes": 7668
+ },
+ "rampa_madera": {
+  "tris": 176,
+  "x": 1.0,
+  "y_alto": 0.67,
+  "z": 0.8,
+  "bytes": 14748
+ },
+ "cascada_roca": {
+  "tris": 170,
+  "x": 1.058,
+  "y_alto": 1.0,
+  "z": 1.101,
+  "bytes": 16736
+ },
+ "isla_nube": {
+  "tris": 462,
+  "x": 1.0,
+  "y_alto": 0.896,
+  "z": 0.978,
+  "bytes": 43176
+ },
+ "puente_cristal": {
+  "tris": 332,
+  "x": 1.0,
+  "y_alto": 0.576,
+  "z": 0.487,
+  "bytes": 28580
+ },
+ "alga_larga": {
+  "tris": 360,
+  "x": 0.452,
+  "y_alto": 1.0,
+  "z": 0.224,
+  "bytes": 29616
+ },
+ "concha_gigante": {
+  "tris": 372,
+  "x": 1.0,
+  "y_alto": 0.865,
+  "z": 0.975,
+  "bytes": 33140
+ },
+ "saguaro_grande": {
+  "tris": 342,
+  "x": 0.837,
+  "y_alto": 1.0,
+  "z": 0.374,
+  "bytes": 30240
+ },
+ "estalagmita_hielo": {
+  "tris": 150,
+  "x": 0.635,
+  "y_alto": 1.0,
+  "z": 0.559,
+  "bytes": 13108
+ },
+ "geoda": {
+  "tris": 270,
+  "x": 0.972,
+  "y_alto": 0.621,
+  "z": 1.0,
+  "bytes": 27460
+ },
+ "lapida": {
+  "tris": 104,
+  "x": 0.64,
+  "y_alto": 1.0,
+  "z": 0.44,
+  "bytes": 10060
+ },
+ "tronco_hueco": {
+  "tris": 220,
+  "x": 0.938,
+  "y_alto": 1.0,
+  "z": 0.859,
+  "bytes": 19708
+ },
+ "fuente_jardin": {
+  "tris": 378,
+  "x": 1.0,
+  "y_alto": 0.909,
+  "z": 0.975,
+  "bytes": 33644
+ },
+ "hongo_gigante": {
+  "tris": 301,
+  "x": 1.04,
+  "y_alto": 1.0,
+  "z": 1.04,
+  "bytes": 27864
+ },
+ "luciernaga_farol": {
+  "tris": 218,
+  "x": 0.478,
+  "y_alto": 1.0,
+  "z": 0.357,
+  "bytes": 19564
+ }
+}
