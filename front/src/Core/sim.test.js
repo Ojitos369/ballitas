@@ -476,6 +476,61 @@ test('trazado tipo circuito: sin cambios de signo de curvatura de alta frecuenci
   assert.ok(!OBSTACLES.includes('zigzag'), 'ya no hay obstáculo zigzag')
 })
 
+test('cambio de carril sólo por eventos: 5 min simulados, todo cambio ocurre dentro de un switch', () => {
+  const sim = new Sim({ rng: mulberry32(11) })
+  const prev = new Map(); let changes = 0; let free = 0
+  for (let i = 0; i < 15000; i++) { // 300 s a 0.02
+    sim.tick(0.02)
+    for (const b of sim.ballitas) {
+      const p = prev.get(b.id)
+      if (b.phase !== 'travel') { prev.delete(b.id); continue }
+      if (p && p.seg === b.seg && p.lane !== b.lane) {
+        changes++
+        if (!b.sw && !p.sw) free++ // en curso: inicio, caída por fallo o final del mecanismo
+        if (b.sw && !p.sw) assert.ok(b.segT >= b.sw.s.u - 0.02 && b.segT <= b.sw.s.uEnd + 1e-6, `inicio de switch fuera de [u,uEnd]: ${b.segT} vs ${b.sw.s.u}-${b.sw.s.uEnd}`)
+      }
+      prev.set(b.id, { seg: b.seg, lane: b.lane, sw: b.sw })
+    }
+  }
+  assert.ok(changes > 5, `pocos cambios: ${changes}`)
+  assert.equal(free, 0, `${free} cambios de carril fuera de un evento`)
+})
+
+test('sin choques: tubos de caminos distintos y nodos, muestreo cada ~2 u', () => {
+  const MARGIN = 1.5; const TRIM = 18
+  const samples = world.ways.map((w) => {
+    const pts = []
+    for (const s of w.segments) {
+      const n = Math.max(2, Math.ceil(s.length / 2))
+      for (let k = 0; k <= n; k++) {
+        const d = (k / n) * s.length
+        if ((s.kind === 'salida' && d < TRIM) || (s.kind === 'llegada' && s.length - d < TRIM)) continue
+        pts.push({ p: s.curve.getPointAt(k / n), r: s.radius })
+      }
+    }
+    return pts
+  })
+  let worst = Infinity; let who = ''
+  for (let i = 0; i < world.ways.length; i++) {
+    const w = world.ways[i]
+    for (const n of world.nodes) for (const s of w.segments) {
+      if ((s.kind === 'salida' && n.idx === w.from) || (s.kind === 'llegada' && n.idx === w.to)) continue
+      const m = Math.max(2, Math.ceil(s.length / 2))
+      for (let k = 0; k <= m; k++) {
+        const c = s.curve.getPointAt(k / m).distanceTo(n.pos) - NODE_R - s.radius
+        if (c < worst) { worst = c; who = `${w.id}/${s.kind} vs nodo ${n.name}` }
+      }
+    }
+    for (let j = i + 1; j < world.ways.length; j++) {
+      for (const a of samples[i]) for (const b of samples[j]) {
+        const c = a.p.distanceTo(b.p) - a.r - b.r
+        if (c < worst) { worst = c; who = `${w.id} vs ${world.ways[j].id}` }
+      }
+    }
+  }
+  assert.ok(worst > MARGIN, `holgura mínima ${worst.toFixed(2)} <= ${MARGIN} (${who})`)
+})
+
 test('relieve: continuo, finito, dentro del tubo y nulo en las uniones', () => {
   for (const s of world.segments) {
     for (const l of s.lanes) {
