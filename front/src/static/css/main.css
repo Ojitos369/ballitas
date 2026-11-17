@@ -7,7 +7,7 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 :focus-visible { outline: 2px solid #8aa7ff; outline-offset: 2px; }
 
 /* barra superior: casi transparente y sin capturar clics fuera de sus botones */
-.barra { z-index: 100; position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; pointer-events: none; background: linear-gradient(rgba(5, 6, 15, 0.55), transparent); }
+.barra { z-index: 100; position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 12px; pointer-events: none; background: linear-gradient(rgba(5, 6, 15, 0.55), transparent); }
 .barra h1 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; opacity: 0.8; }
 .barra .dato { color: var(--dim); font-size: 11px; }
 .velocidad { margin-left: auto; display: flex; gap: 2px; pointer-events: auto; }
@@ -52,6 +52,8 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 
 @media (max-width: 520px) {
   .tarjeta { left: 8px; width: calc(100% - 16px); max-height: 45%; }
+  body:has(.pov-joy-wrap) .tarjeta { width: calc(100% - 112px); }
+  body:has(.pov-joy-wrap) .vista-ballita { bottom: 150px; }
   .lista-panel { left: 8px; width: calc(100vw - 16px); max-height: calc(100vh - 110px); }
 }
 
@@ -149,7 +151,7 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .pov-joy-label { font-size: 10px; color: var(--dim); letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
 
 @media (max-width: 520px) {
-  .pov-panel { right: 8px; top: 44px; width: min(240px, calc(100vw - 16px)); }
+  .pov-panel { right: 8px; top: 84px; width: min(240px, calc(100vw - 16px)); }
   .pov-joy-wrap { right: 10px; bottom: 44px; }
   .pov-joy-pad { width: 84px; height: 84px; }
 }

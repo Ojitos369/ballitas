@@ -346,7 +346,12 @@ const SKIN_LINES = {
 // Memoria de líneas recientes por ballita (id -> array de textos usados)
 const MEMORY_MAX = 10
 const memoria = new Map()
-const globosVivos = new Map()
+const globosVivos = new WeakMap()
+function globosDe(sim) {
+  let globos = globosVivos.get(sim)
+  if (!globos) { globos = new Map(); globosVivos.set(sim, globos) }
+  return globos
+}
 
 function recordar(bId, texto) {
   let hist = memoria.get(bId)
@@ -379,7 +384,8 @@ export function elegirDialogo(b, event, ctx = {}, rng = Math.random) {
   const skinSet = SKIN_LINES[fam?.id] || {}
   const basePool = EVENT_LINES[event] || EVENT_LINES.camino
   const skinPool = skinSet[event] || []
-  const idlePool = !skinPool.length && skinSet._idle && rng() < 0.25 ? skinSet._idle : []
+  const critical = ['muere', 'hambre', 'miedo'].includes(event)
+  const idlePool = !critical && !skinPool.length && skinSet._idle && rng() < 0.25 ? skinSet._idle : []
 
   // Priorizar líneas del skin ~45% de las veces si existen
   let candidates = skinPool.length && rng() < 0.48
@@ -406,6 +412,7 @@ export function elegirDialogo(b, event, ctx = {}, rng = Math.random) {
  */
 export function actualizarDialogoVivo(b, sim, state) {
   const t = sim?.t ?? 0
+  const globos = globosDe(sim)
   if (!state.init) {
     state.init = true
     state.lastSeg = b.seg || null
@@ -419,15 +426,16 @@ export function actualizarDialogoVivo(b, sim, state) {
   // 1. Si sim.js emitió un b.thought nuevo (e.g. llega, ganaP, ganaE, hambre, miedo, muere, etc.)
   if (b.thought && b.thought !== state.lastThought) {
     state.lastThought = b.thought
+    if (b.phase === 'travel') state.lastSeg = b.seg || null
     // Si coincide con un evento conocido reciente, podemos darle sabor del skin si queremos,
     // o respetar b.thought enriqueciéndolo si es un evento de obstáculo
     const ev = b.phase === 'travel' && b.seg?.kind ? b.seg.kind : null
     if (ev && EVENT_LINES[ev] && b.thought.until > t) {
       const d = elegirDialogo(b, ev, { n: sim.world?.nodes?.[b.way?.to]?.name ?? '' }, sim.rng)
-      globosVivos.set(b.id, { ...d, until: b.thought.until })
-      return globosVivos.get(b.id)
+      globos.set(b.id, { ...d, until: b.thought.until })
+      return globos.get(b.id)
     }
-    globosVivos.set(b.id, b.thought)
+    globos.set(b.id, b.thought)
     return b.thought
   }
 
@@ -440,7 +448,7 @@ export function actualizarDialogoVivo(b, sim, state) {
         n: sim.world?.nodes?.[b.way?.to]?.name ?? '',
       }, sim.rng)
       const bubble = { ...d, until: t + 3.4 }
-      globosVivos.set(b.id, bubble)
+      globos.set(b.id, bubble)
       return bubble
     }
   }
@@ -452,12 +460,12 @@ export function actualizarDialogoVivo(b, sim, state) {
     state.lastPlanRazon = razon
     const d = elegirDialogo(b, 'plan', { razon }, sim.rng)
     const bubble = { ...d, until: t + 3.6 }
-    globosVivos.set(b.id, bubble)
+    globos.set(b.id, bubble)
     return bubble
   }
 
   // Solo disparar comentarios ambientales si no hay un globo activo ahora
-  const cur = globosVivos.get(b.id)
+  const cur = globos.get(b.id)
   if (cur && cur.until > t) return cur
 
   // 4. Reacción a otras ballitas cercanas
@@ -469,7 +477,7 @@ export function actualizarDialogoVivo(b, sim, state) {
       if (b.pos.distanceToSquared(other.pos) < 12.25) {
         const d = elegirDialogo(b, 'cerca_ballita', { other: other.name }, sim.rng)
         const bubble = { ...d, until: t + 3.0 }
-        globosVivos.set(b.id, bubble)
+        globos.set(b.id, bubble)
         return bubble
       }
     }
@@ -483,13 +491,13 @@ export function actualizarDialogoVivo(b, sim, state) {
     if (prof === 'rapida' || sk > 1.2 || b.speed > 20) {
       const d = elegirDialogo(b, 'velocidad_rapida', {}, sim.rng)
       const bubble = { ...d, until: t + 2.8 }
-      globosVivos.set(b.id, bubble)
+      globos.set(b.id, bubble)
       return bubble
     }
     if (prof === 'lenta' || sk < 0.8 || (b.speed > 0 && b.speed < 4.5)) {
       const d = elegirDialogo(b, 'velocidad_lenta', {}, sim.rng)
       const bubble = { ...d, until: t + 2.8 }
-      globosVivos.set(b.id, bubble)
+      globos.set(b.id, bubble)
       return bubble
     }
   }
@@ -502,7 +510,7 @@ export function actualizarDialogoVivo(b, sim, state) {
  */
 export function obtenerGlobo(b, sim) {
   const t = sim?.t ?? 0
-  const live = globosVivos.get(b.id)
+  const live = sim ? globosDe(sim).get(b.id) : null
   if (live && live.until > t) return live
   if (b.thought && b.thought.until > t) return b.thought
   return live || b.thought || null

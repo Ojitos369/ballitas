@@ -158,6 +158,11 @@ function resolveExpression(b, g) {
 
 // Una ballita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
 export default function Ballita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
+  // El cursor 'pointer' no debe quedarse pegado si la ballita muere o entra POV bajo el puntero.
+  useEffect(() => {
+    if (pov || povMode) document.body.style.cursor = ''
+    return () => { document.body.style.cursor = '' }
+  }, [pov, povMode])
   const root = useRef(); const bodyGroup = useRef()
   const orbGroupRef = useRef(); const extOrbRef = useRef(); const extHaloRef = useRef()
   const eyeL = useRef(); const eyeR = useRef(); const zenEyesRef = useRef()

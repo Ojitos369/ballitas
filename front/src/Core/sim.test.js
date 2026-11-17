@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Sim, POP, TIME_SCALE } from './sim.js'
+import { voice } from './personality.js'
+import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
   mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
   MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff,
@@ -289,6 +291,100 @@ test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y t
   }
 })
 
+test('la simulación mantiene energía y puntos en el rango visible al morir', () => {
+  const sim = new Sim({ rng: mulberry32(301), pop: 1 })
+  const b = sim.ballitas[0]
+  b.e = -2
+  b.p = -3
+  sim.step(b, 0)
+  assert.equal(b.e, 0)
+  assert.equal(b.p, 0)
+  assert.equal(b.phase, 'dying')
+})
+
+test('goDest descarta destinos letales si existe una alternativa viable', () => {
+  const sim = new Sim({ rng: mulberry32(302), pop: 1 })
+  const b = sim.ballitas[0]
+  const destinos = sim.world.nodes[b.node].destinos
+  const letal = destinos[0]
+  for (const d of destinos) { d.dp = 20; d.de = 20; b.genome.prefs[d.idx] = 0 }
+  letal.dp = -100
+  letal.de = -100
+  b.genome.prefs[letal.idx] = 1
+  sim.goDest(b)
+  assert.notEqual(b.dest, letal)
+})
+
+test('al cruzar de segmento se cancela un switch activo y se elige un carril válido', () => {
+  const sim = new Sim({ rng: mulberry32(303), pop: 1 })
+  const b = sim.ballitas[0]
+  const way = sim.world.ways.find((w) => w.segments.some((s) => s.next.length))
+  const prev = way.segments.find((s) => s.next.length)
+  const next = way.segments[prev.next[0]]
+  b.way = way
+  b.route = null
+  b.phase = 'travel'
+  b.seg = prev
+  b.rail = 1
+  b.sw = { to: 999, t: 0.8, dur: 2 }
+  b.ang = 1
+  sim.enterSeg(b, next)
+  assert.equal(b.sw, null)
+  assert.ok(next.lanes.some((lane) => lane.id === b.lane))
+})
+
+test('wallFrame sanea un avance NaN sin contaminar el marco', () => {
+  const seg = world.ways[0].segments[0]
+  const frame = wallFrame(seg, 0, Number.NaN)
+  assert.ok(Number.isFinite(frame.pos.x + frame.pos.y + frame.pos.z))
+  assert.ok(Math.abs(frame.tangent.length() - 1) < 1e-6)
+})
+
+test('voice cubre todos los eventos emitidos por la simulación y contextualiza carril/falla', () => {
+  const sim = new Sim({ rng: mulberry32(304), pop: 1 })
+  const b = sim.ballitas[0]
+  for (const event of ['geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada', 'carril', 'falla']) {
+    const result = voice(b, event, { m: 'el mecanismo' }, () => 0)
+    assert.ok(result.text.length > 0)
+    assert.ok(result.emoji)
+    if (event === 'carril' || event === 'falla') assert.match(result.text, /el mecanismo/)
+  }
+})
+
+test('un pensamiento de tramo WOW no se reemplaza al siguiente ciclo de diálogo', () => {
+  const sim = new Sim({ rng: mulberry32(305), pop: 1 })
+  const b = sim.ballitas[0]
+  b.phase = 'travel'
+  b.seg = sim.world.ways[0].segments.find((s) => s.kind === 'rizo')
+  b.way = sim.world.ways[0]
+  const state = {}
+  actualizarDialogoVivo(b, sim, state)
+  b.thought = { text: '¡Rizo!', emoji: '➰', until: sim.t + 3 }
+  const first = actualizarDialogoVivo(b, sim, state)
+  const second = actualizarDialogoVivo(b, sim, state)
+  assert.equal(second, first)
+})
+
+test('los globos se aíslan por instancia de Sim aunque se repitan los id de ballita', () => {
+  const a = new Sim({ rng: mulberry32(306), pop: 1 })
+  const b = new Sim({ rng: mulberry32(307), pop: 1 })
+  a.ballitas[0].thought = { text: 'globo A', until: 10 }
+  b.ballitas[0].thought = { text: 'globo B', until: 10 }
+  actualizarDialogoVivo(a.ballitas[0], a, {})
+  actualizarDialogoVivo(b.ballitas[0], b, {})
+  assert.equal(a.ballitas[0].id, b.ballitas[0].id)
+  assert.equal(obtenerGlobo(a.ballitas[0], a).text, 'globo A')
+  assert.equal(obtenerGlobo(b.ballitas[0], b).text, 'globo B')
+})
+
+test('los eventos críticos no usan líneas ociosas de la personalidad', () => {
+  const sim = new Sim({ rng: mulberry32(308), pop: 1 })
+  const b = sim.ballitas[0]
+  b.arch = { key: 'valentia', hi: true }
+  const result = elegirDialogo(b, 'muere', {}, () => 0)
+  assert.match(result.text, /Adi[oó]s|apago|Buenas noches|pr[oó]xima generaci[oó]n/)
+})
+
 test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, usa y falla mecanismos', () => {
   const sim = new Sim({ rng: mulberry32(5) })
   const DT = 0.02
@@ -319,7 +415,7 @@ test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, 
       }
       if (p && p.way === b.way) {
         assert.ok(Math.abs(angDiff(p.ang, b.ang)) < 1.5, `salto de ángulo ${angDiff(p.ang, b.ang).toFixed(3)} en ${s.kind}`)
-        assert.ok(Math.abs(p.off - b.off) < 1, 'salto radial')
+        assert.ok(Math.abs(p.off - b.off) < 1, `salto radial ${p.off} -> ${b.off} (${p.seg.kind} -> ${s.kind})`)
         // (en esquinas cerradas el punto de la pared barre más rápido que el eje: se excluyen)
         if (p.seg === s && p.snap <= 0 && b.snap <= 0 && !['embudo', 'cascada', 'zigzag'].includes(s.kind)) {
           assert.ok(p.pos.distanceTo(b.pos) < 4.5,`salto de posición ${p.pos.distanceTo(b.pos).toFixed(3)} en ${s.kind}`)
