@@ -6,7 +6,7 @@ import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.j
 import {
   mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
   MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff, segmentTangent,
-  laneRelief, reliefSlope, OUT_GATES, IN_GATES, SPHERE_R,
+  laneRelief, reliefSlope, OUT_GATES, IN_GATES, SPHERE_R, buildWorld, setWorldPicks,
 } from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
@@ -574,4 +574,14 @@ test('bocas: puerta de salida y de llegada distintas, legibles y variadas entre 
     }
   }
   assert.ok(outs.size >= 4 && ins.size >= 4, 'tipos de boca variados')
+})
+
+test('elecciones precalculadas (worker/caché): mismo mundo sin repetir la búsqueda', () => {
+  assert.equal(world.picks.length, world.ways.length)
+  setWorldPicks(369, JSON.parse(JSON.stringify(world.picks)))
+  const t = performance.now(); const w2 = buildWorld(369); const ms = performance.now() - t
+  const sum = (w) => w.segments.reduce((a, s) => a + s.length, 0)
+  assert.equal(w2.segments.length, world.segments.length)
+  assert.ok(Math.abs(sum(w2) - sum(world)) < 1e-6)
+  assert.ok(ms < 1500, `reconstrucción lenta: ${ms.toFixed(0)} ms`)
 })

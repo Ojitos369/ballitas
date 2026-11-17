@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Sim } from '../../Core/sim.js'
 import { iniciarBack } from '../../Core/api.js'
+import { cargarMundo } from '../../Core/cargarMundo.js'
 import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
@@ -12,8 +13,26 @@ function initialStatsOn() {
   return new URLSearchParams(window.location.search).get('stats') === '1'
 }
 
-// `vista` ('mapa' | 'camino' | 'ballita') es la fuente de verdad; follow/pov se derivan de ella y de `punto`.
+// El mundo se prepara en un worker (o caché) antes de montar la escena: la UI no se congela mientras tanto.
 export default function Main() {
+  const [listo, setListo] = useState(false)
+  const [avance, setAvance] = useState(0)
+  useEffect(() => { let vivo = true; cargarMundo(369, setAvance).then(() => { if (vivo) setListo(true) }); return () => { vivo = false } }, [])
+  if (listo) return <MainScene />
+  return (
+    <div role="status" aria-live="polite" style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', background: '#0b1020', color: '#cfe3ff', font: '600 18px system-ui' }}>
+      <div style={{ width: 260, textAlign: 'center' }}>
+        Tejiendo los caminos… {Math.round(avance * 100)}%
+        <div style={{ marginTop: 12, height: 6, borderRadius: 3, background: '#1e2a4a' }}>
+          <div style={{ width: `${avance * 100}%`, height: '100%', borderRadius: 3, background: '#6cf', transition: 'width .2s' }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// `vista` ('mapa' | 'camino' | 'ballita') es la fuente de verdad; follow/pov se derivan de ella y de `punto`.
+function MainScene() {
   const simRef = useRef(null)
   if (!simRef.current) simRef.current = new Sim()
   const sim = simRef.current

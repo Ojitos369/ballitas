@@ -626,9 +626,22 @@ function buildLanes(way) {
 
 const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un nodo
 
-export function buildWorld(seed = 369) {
+// Elecciones de la búsqueda de huecos ({theta, bowExtra, salt} por camino), calculadas aparte (worker/caché):
+// con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
+const PICKS = new Map()
+// shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
+export const WORLD_GEN = 1
+export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
+export function buildWorld(seed = 369, onProgress = null) {
   const rng = mulberry32(seed)
-  const world = { nodes: [], destinos: [], circuits: [], ways: [], waysFrom: [], routes: [], segments: [] }
+  const world = { nodes: [], destinos: [], circuits: [], ways: [], waysFrom: [], routes: [], segments: [], picks: [] }
+  const known = PICKS.get(seed)
+  const placeWay = (w, c, a, b, placed) => {
+    const way = placeWayAt(w, c, a, b, placed, known?.[world.picks.length])
+    world.picks.push(way.pick)
+    onProgress?.(world.picks.length)
+    return way
+  }
   const dirs = sphereDirs(NODE_DEFS.length)
   NODE_DEFS.forEach((d, idx) => world.nodes.push({ idx, name: d.name, color: d.color, pos: dirs[idx].clone().multiplyScalar(SPHERE_R), radius: NODE_R }))
   world.nodes.forEach((node) => buildCity(world, node, NODE_DEFS[node.idx], rng))
@@ -970,6 +983,15 @@ function indexPlacedWay(placed, entry) {
   }
 }
 
+function placeWayAt(world, circuit, from, to, placed, pick) {
+  if (pick) {
+    const w = buildWay(world, circuit, from, to, pick.theta, pick.bowExtra, true, pick.salt)
+    w.pick = pick
+    return w
+  }
+  return placeWay(world, circuit, from, to, placed)
+}
+
 function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
@@ -1026,6 +1048,7 @@ function placeWay(world, circuit, from, to, placed) {
       if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt } }
       if (res.minTube >= 4.0 && res.minNode >= 1.5 && res.minHub >= 24) {
         const w = buildWay(world, circuit, from, to, theta, bowExtra, true, salt)
+        w.pick = { theta, bowExtra, salt }
         indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
         return w
       }
@@ -1033,6 +1056,7 @@ function placeWay(world, circuit, from, to, placed) {
   }
   const chosen = best || { theta: baseTheta, bowExtra: 0, salt: 0 }
   const w = buildWay(world, circuit, from, to, chosen.theta, chosen.bowExtra, true, chosen.salt)
+  w.pick = { theta: chosen.theta, bowExtra: chosen.bowExtra, salt: chosen.salt }
   indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
   return w
 }
