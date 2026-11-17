@@ -106,4 +106,41 @@ export const PLAN_REASONS = {
   'explorar circuito': '🗺️',
 }
 
+export const TRAIT_KEYS = ['valentia', 'curiosidad', 'apetito', 'sociabilidad', 'animo', 'velocidad']
+
+// Metadatos de presets de skin asociados a los arquetipos clásicos (incluye los 6 personajes de la hoja chibi).
+export const SKIN_PRESETS = {
+  elfa: { id: 'elfa', name: 'Elfa gruñona', emoji: '🧝', trait: 'animo', hi: false, baseHue: 0.28 },
+  gatita: { id: 'gatita', name: 'Gatita', emoji: '🐱', trait: 'sociabilidad', hi: true, baseHue: 0.08 },
+  maga: { id: 'maga', name: 'Maga', emoji: '🧙', trait: 'curiosidad', hi: true, baseHue: 0.74 },
+  pirata: { id: 'pirata', name: 'Pirata', emoji: '🏴‍☠️', trait: 'valentia', hi: true, baseHue: 0.05 },
+  zombi: { id: 'zombi', name: 'Zombi glotona', emoji: '🧟', trait: 'apetito', hi: true, baseHue: 0.31 },
+  ascetica: { id: 'ascetica', name: 'Monje zen', emoji: '😇', trait: 'apetito', hi: false, baseHue: 0.07 },
+  miedosa: { id: 'miedosa', name: 'Conejito temblón', emoji: '🐰', trait: 'valentia', hi: false, baseHue: 0.56 },
+  rutinaria: { id: 'rutinaria', name: 'Boina clásica', emoji: '🥐', trait: 'curiosidad', hi: false, baseHue: 0.1 },
+  solitaria: { id: 'solitaria', name: 'Encapuchada', emoji: '🕶️', trait: 'sociabilidad', hi: false, baseHue: 0.65 },
+  alegre: { id: 'alegre', name: 'Estrellita', emoji: '🌟', trait: 'animo', hi: true, baseHue: 0.13 },
+}
+
+// Resume los rasgos del genoma con su intensidad dominante y ranking para reglas de coherencia visual.
+export function traitProfile(genome) {
+  const t = genome?.traits ?? {}
+  const ranked = Object.keys(TRAIT_LABEL)
+    .map((key) => {
+      const val = t[key] ?? 0.5
+      return { key, val, hi: val >= 0.5, dist: Math.abs(val - 0.5) }
+    })
+    .sort((a, b) => b.dist - a.dist)
+  const top = ranked[0] ?? { key: 'animo', val: 0.5, hi: true, dist: 0 }
+  return {
+    traits: t,
+    ranked,
+    dominant: top.key,
+    dominantHi: top.hi,
+    dominance: top.dist,
+    secondary: ranked[1] ?? top,
+  }
+}
+
+
 
