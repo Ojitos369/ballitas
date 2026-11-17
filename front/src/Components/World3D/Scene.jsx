@@ -184,7 +184,7 @@ const NEBULA_FRAG = /* glsl */ `
     col = mix(col, warm, core * smoothstep(0.4, 0.8, n1));
     col += vec3(0.9, 0.85, 1.0) * pow(band, 6.0) * cloud * 0.25; // brillo lechoso del plano galáctico
 
-    float a = clamp(wisp * 0.55, 0.0, 0.7);
+    float a = clamp(wisp * 0.28, 0.0, 0.35); // velo tenue: el protagonismo es de las galaxias
     gl_FragColor = vec4(col * a, a);
   }
 `
@@ -223,56 +223,162 @@ function Parallax({ center, follow, children }) {
   return <group ref={ref} position={center}>{children}</group>
 }
 
-// Nubes de nebulosa a media distancia (sprites aditivos): al ir en una capa de parallax distinta de la
-// cúpula, se deslizan delante de ella y dan volumen al fondo.
-function makeCloudTex() {
+// ═══ Fondo de galaxias: espirales, barradas y elípticas lejanas (planos inclinados fijos) + supernovas ═══
+// Texturas dibujadas una vez en canvas; color base cálido en el núcleo y frío en los brazos.
+function makeGalaxyTex(kind, seed) {
+  const S = 256
   const c = document.createElement('canvas')
-  c.width = c.height = 256
+  c.width = c.height = S
   const ctx = c.getContext('2d')
-  const rnd = mulberry32(4242)
-  for (let i = 0; i < 70; i++) { // muchas manchas suaves superpuestas = borde irregular y textura interior
-    const a = rnd() * Math.PI * 2
-    const d = Math.pow(rnd(), 1.4) * 80
-    const x = 128 + Math.cos(a) * d
-    const y = 128 + Math.sin(a) * d * 0.7
-    const rad = 18 + rnd() * 46
+  const rnd = mulberry32(seed)
+  const cx = S / 2
+  ctx.globalCompositeOperation = 'lighter'
+  const blob = (x, y, rad, col, a) => {
     const g = ctx.createRadialGradient(x, y, 0, x, y, rad)
-    g.addColorStop(0, `rgba(255,255,255,${0.05 + rnd() * 0.08})`)
-    g.addColorStop(1, 'rgba(255,255,255,0)')
+    g.addColorStop(0, `rgba(${col},${a})`)
+    g.addColorStop(1, `rgba(${col},0)`)
     ctx.fillStyle = g
-    ctx.fillRect(0, 0, 256, 256)
+    ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2)
+  }
+  if (kind === 'eliptica') {
+    for (let i = 0; i < 6; i++) blob(cx, cx, 30 + i * 16, '255,214,170', 0.22 - i * 0.03)
+  } else {
+    const arms = kind === 'barrada' ? 2 : 2 + Math.floor(rnd() * 2)
+    const twist = Math.PI * (1.6 + rnd() * 0.8) // vuelta y media aprox.: se lee como espiral, no como anillo
+    const r0 = kind === 'barrada' ? 28 : 6
+    if (kind === 'barrada') for (let i = -1; i <= 1; i += 0.04) blob(cx + i * r0, cx, 10, '255,220,180', 0.07)
+    const armPt = (off, t, jit) => {
+      const ang = off + t * twist + (rnd() - 0.5) * jit
+      const rad = r0 + Math.pow(t, 0.85) * (112 - r0)
+      return [cx + Math.cos(ang) * rad, cx + Math.sin(ang) * rad]
+    }
+    for (let a = 0; a < arms; a++) {
+      const off = (a / arms) * Math.PI * 2
+      for (let i = 0; i < 140; i++) { // brillo difuso del brazo
+        const t = i / 140
+        const [x, y] = armPt(off, t, 0.12)
+        blob(x, y, 16 * (1 - t * 0.4), '170,190,255', 0.045 * (1 - t * 0.6))
+      }
+      for (let i = 0; i < 420; i++) { // estrellas y cúmulos finos a lo largo del brazo
+        const t = Math.pow(rnd(), 0.8)
+        const [x, y] = armPt(off, t, 0.28)
+        const c = rnd() < 0.15 ? '255,150,210' : rnd() < 0.4 ? '150,190,255' : '230,236,255'
+        blob(x + (rnd() - 0.5) * 8, y + (rnd() - 0.5) * 8, 1.4 + rnd() * 2.6, c, 0.22 + rnd() * 0.3)
+      }
+    }
+    for (let i = 0; i < 5; i++) blob(cx, cx, 8 + i * 11, '255,226,190', 0.4 - i * 0.07) // bulbo
+  }
+  blob(cx, cx, 7, '255,250,240', 0.9) // núcleo
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+function makeFlareTex() {
+  const S = 128
+  const c = document.createElement('canvas')
+  c.width = c.height = S
+  const ctx = c.getContext('2d')
+  const h = S / 2
+  const g = ctx.createRadialGradient(h, h, 0, h, h, h)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.08, 'rgba(255,240,220,0.9)')
+  g.addColorStop(0.3, 'rgba(255,170,120,0.25)')
+  g.addColorStop(1, 'rgba(255,120,80,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, S, S)
+  ctx.globalCompositeOperation = 'lighter'
+  for (const [w, hgt] of [[S, 3], [3, S]]) { // destello en cruz
+    const lg = ctx.createLinearGradient(h - w / 2, h - hgt / 2, h + w / 2, h + hgt / 2)
+    lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.9)'); lg.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = lg
+    ctx.fillRect(h - w / 2, h - hgt / 2, w, hgt)
   }
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   return tex
 }
 
-const CLOUD_COLORS = ['#5b3cff', '#17b4c9', '#c02d9a', '#3a6bff', '#ff7a45', '#8a2be2']
-function NebulaClouds({ r }) {
-  const { tex, items } = useMemo(() => {
-    const rnd = mulberry32(777)
+const GALAXY_TINTS = ['#ffffff', '#d6e2ff', '#ffe2c4', '#e8d4ff', '#c8f0ff']
+const galObj = new THREE.Object3D()
+function Galaxias({ r }) {
+  const { texs, items } = useMemo(() => {
+    if (typeof document === 'undefined') return { texs: [], items: [] }
+    const kinds = ['espiral', 'espiral', 'barrada', 'eliptica', 'espiral', 'barrada']
+    const texs = kinds.map((k, i) => makeGalaxyTex(k, 101 + i * 37))
+    const rnd = mulberry32(2026)
     const items = []
-    for (let i = 0; i < 16; i++) {
+    const N = 22
+    for (let i = 0; i < N; i++) {
+      const y = 1 - 2 * ((i + 0.5) / N) // repartidas en todo el cielo (espiral de Fibonacci)
+      const rr = Math.sqrt(1 - y * y)
+      const a = i * 2.39996 + rnd() * 0.4
+      const dist = r * (6.4 + rnd() * 1.2)
+      galObj.position.set(Math.cos(a) * rr * dist, y * dist, Math.sin(a) * rr * dist)
+      galObj.lookAt(0, 0, 0)
+      galObj.rotateX((rnd() - 0.5) * 2.2) // inclinación: de frente a casi de canto
+      galObj.rotateZ(rnd() * Math.PI * 2)
+      const big = i % 7 === 3 // unas pocas grandes y cercanas, el resto lejanas
+      items.push({
+        pos: galObj.position.toArray(),
+        quat: galObj.quaternion.toArray(),
+        size: r * (big ? 2.4 + rnd() * 0.8 : 0.6 + rnd() * 0.9),
+        tex: i % texs.length,
+        tint: GALAXY_TINTS[i % GALAXY_TINTS.length],
+        opacity: big ? 0.85 : 0.5 + rnd() * 0.35,
+      })
+    }
+    return { texs, items }
+  }, [r])
+  useEffect(() => () => texs.forEach((t) => t.dispose()), [texs])
+  return items.map((it, i) => (
+    <mesh key={i} position={it.pos} quaternion={it.quat} scale={it.size}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={texs[it.tex]} color={it.tint} transparent opacity={it.opacity} side={THREE.DoubleSide}
+        depthWrite={false} fog={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+    </mesh>
+  ))
+}
+
+// Supernovas: destellos lejanos que estallan (subida rápida, apagado lento) y quedan dormidos un rato.
+function Supernovas({ r }) {
+  const refs = useRef([])
+  const { tex, items } = useMemo(() => {
+    const rnd = mulberry32(31337)
+    const items = []
+    for (let i = 0; i < 5; i++) {
       const y = 1 - 2 * rnd()
       const rr = Math.sqrt(1 - y * y)
       const a = rnd() * Math.PI * 2
-      const dist = r * (4.2 + rnd() * 1.2)
+      const dist = r * (6 + rnd())
       items.push({
         pos: [Math.cos(a) * rr * dist, y * dist, Math.sin(a) * rr * dist],
-        scale: r * (1.6 + rnd() * 2.2),
-        rot: rnd() * Math.PI * 2,
-        color: CLOUD_COLORS[i % CLOUD_COLORS.length],
-        opacity: 0.16 + rnd() * 0.14,
+        period: 18 + rnd() * 26,
+        phase: rnd() * 40,
+        size: r * (0.5 + rnd() * 0.4),
+        color: rnd() < 0.5 ? '#ffd0a0' : '#bcd4ff',
       })
     }
-    return { tex: typeof document === 'undefined' ? null : makeCloudTex(), items }
+    return { tex: typeof document === 'undefined' ? null : makeFlareTex(), items }
   }, [r])
   useEffect(() => () => tex?.dispose(), [tex])
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    items.forEach((it, i) => {
+      const s = refs.current[i]
+      if (!s) return
+      const k = ((t + it.phase) % it.period) / it.period // 0..1 por ciclo
+      const burst = k < 0.03 ? k / 0.03 : k < 0.35 ? Math.exp(-(k - 0.03) * 9) : 0
+      s.material.opacity = burst
+      s.scale.setScalar(it.size * (0.4 + burst * 0.8))
+      s.visible = burst > 0.01
+    })
+  })
   if (!tex) return null
   return items.map((it, i) => (
-    <sprite key={i} position={it.pos} scale={[it.scale, it.scale * 0.7, 1]}>
-      <spriteMaterial map={tex} color={it.color} rotation={it.rot} transparent opacity={it.opacity}
-        depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
+    <sprite key={i} ref={(el) => { refs.current[i] = el }} position={it.pos} visible={false}>
+      <spriteMaterial map={tex} color={it.color} transparent opacity={0} depthWrite={false} fog={false}
+        blending={THREE.AdditiveBlending} toneMapped={false} />
     </sprite>
   ))
 }
@@ -1181,14 +1287,15 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       </Parallax>
       <Parallax center={center} follow={0.92}>
         <NebulaDome r={r} />
-        <Stars radius={r * 8} depth={r * 2} count={2400} factor={Math.max(1.2, r * 0.026)} saturation={0.35} fade speed={0.2} />
+        <Galaxias r={r} />
+        <Supernovas r={r} />
+        <Stars radius={r * 8} depth={r * 2} count={900} factor={Math.max(3, r * 0.065)} saturation={0.3} fade speed={0.2} />
       </Parallax>
       <Parallax center={center} follow={0.6}>
-        <NebulaClouds r={r} />
-        <Stars radius={r * 5.5} depth={r * 1.2} count={600} factor={Math.max(2, r * 0.045)} saturation={0.6} fade speed={0.4} />
+        <Stars radius={r * 5.5} depth={r * 1.2} count={220} factor={Math.max(4, r * 0.1)} saturation={0.5} fade speed={0.4} />
       </Parallax>
       <Parallax center={center} follow={0.25}>
-        <Stars radius={r * 3.2} depth={r * 0.8} count={260} factor={Math.max(2.6, r * 0.06)} saturation={0.8} fade speed={0.6} />
+        <Stars radius={r * 3.2} depth={r * 0.8} count={70} factor={Math.max(5, r * 0.13)} saturation={0.7} fade speed={0.6} />
       </Parallax>
 
       {/* Iluminación con contraste: clave cálida + relleno frío tenue */}
