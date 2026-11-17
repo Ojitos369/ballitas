@@ -1,4 +1,4 @@
-import { createElement as h } from 'react'
+import { createElement as h, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { SKIN_PRESETS, skinFamily, traitProfile } from '../../Core/personality.js'
 import { applyLoadedImage } from './texUtils.js'
@@ -599,15 +599,66 @@ function injectClaySSS(material) {
 }
 
 const matCache = new Map()
+const matMeta = new WeakMap()
 const MAX_MATS = 256
+let cacheEpoch = 0
+let cacheEpochPending = false
+
+function currentCacheEpoch() {
+  if (!cacheEpochPending) {
+    cacheEpochPending = true
+    queueMicrotask(() => {
+      cacheEpoch += 1
+      cacheEpochPending = false
+    })
+  }
+  return cacheEpoch
+}
+
+let activeMatCollector = null
+function collectRender(fn) {
+  const mats = new Set()
+  const prev = activeMatCollector
+  activeMatCollector = mats
+  try {
+    return { node: fn(), mats: Array.from(mats) }
+  } finally {
+    activeMatCollector = prev
+  }
+}
+
+function pruneMatCache(protectEpoch = -1) {
+  if (matCache.size <= MAX_MATS) return
+  for (const [k, entry] of matCache) {
+    if (matCache.size <= MAX_MATS) break
+    if (protectEpoch >= 0 && entry.epoch === protectEpoch) continue
+    if (entry.refs > 0) continue
+    matCache.delete(k)
+    entry.mat.dispose()
+  }
+}
+
+function retainMat(m) {
+  const entry = m && matMeta.get(m)
+  if (entry) entry.refs += 1
+}
+
+function releaseMat(m) {
+  const entry = m && matMeta.get(m)
+  if (entry && entry.refs > 0) entry.refs -= 1
+  pruneMatCache()
+}
 
 export function getMat(color, roughness = 0.74, metalness = 0.02, emissive = null, opacity = 1, clay = true) {
   const key = `${color}|${roughness}|${metalness}|${emissive ?? ''}|${opacity}|${clay ? 1 : 0}`
-  let m = matCache.get(key)
-  if (m) {
+  const epoch = currentCacheEpoch()
+  const hit = matCache.get(key)
+  if (hit) {
+    hit.epoch = epoch
     matCache.delete(key)
-    matCache.set(key, m)
-    return m
+    matCache.set(key, hit)
+    if (activeMatCollector) activeMatCollector.add(hit.mat)
+    return hit.mat
   }
   const opts = { color, roughness, metalness }
   if (emissive) {
@@ -619,20 +670,49 @@ export function getMat(color, roughness = 0.74, metalness = 0.02, emissive = nul
     opts.opacity = opacity
     opts.depthWrite = false
   }
-  m = new THREE.MeshStandardMaterial(opts)
+  const m = new THREE.MeshStandardMaterial(opts)
   if (clay && metalness < 0.25 && opacity >= 1) injectClaySSS(m)
-  if (matCache.size >= MAX_MATS) {
-    const oldest = matCache.keys().next().value
-    matCache.get(oldest)?.dispose()
-    matCache.delete(oldest)
-  }
-  matCache.set(key, m)
+  const entry = { mat: m, refs: 0, epoch }
+  matMeta.set(m, entry)
+  matCache.set(key, entry)
+  pruneMatCache(epoch)
+  if (activeMatCollector) activeMatCollector.add(m)
   return m
+}
+
+const bodyTexMeta = new WeakMap()
+const bodyMatRegistry = typeof FinalizationRegistry !== 'undefined'
+  ? new FinalizationRegistry((tex) => releaseBodyTex(tex))
+  : null
+
+function retainBodyTex(tex) {
+  const entry = tex && bodyTexMeta.get(tex)
+  if (entry) entry.refs += 1
+}
+
+function releaseBodyTex(tex) {
+  const entry = tex && bodyTexMeta.get(tex)
+  if (entry && entry.refs > 0) entry.refs -= 1
+  pruneTexCache()
 }
 
 export function createClayBodyMaterial(map, roughness = 0.72) {
   const m = new THREE.MeshStandardMaterial({ map, roughness, metalness: 0.02 })
   injectClaySSS(m)
+  if (map && bodyTexMeta.has(map)) {
+    retainBodyTex(map)
+    let released = false
+    const origDispose = m.dispose.bind(m)
+    m.dispose = () => {
+      if (!released) {
+        released = true
+        bodyMatRegistry?.unregister(m)
+        releaseBodyTex(map)
+      }
+      origDispose()
+    }
+    bodyMatRegistry?.register(m, map, m)
+  }
   return m
 }
 
@@ -641,13 +721,30 @@ export function createClayBodyMaterial(map, roughness = 0.72) {
 const texCache = new Map()
 const MAX_TEX = 64
 
+function bodyTexKey(skin) {
+  return `${skin.seed}|${skin.patternType}|${skin.baseColor}|${skin.accentColor}`
+}
+
+function pruneTexCache(protectEpoch = -1) {
+  if (texCache.size <= MAX_TEX) return
+  for (const [k, entry] of texCache) {
+    if (texCache.size <= MAX_TEX) break
+    if (protectEpoch >= 0 && entry.epoch === protectEpoch) continue
+    if (entry.refs > 0) continue
+    texCache.delete(k)
+    entry.tex.dispose()
+  }
+}
+
 export function getBodyTexture(skin) {
-  const key = `${skin.seed}|${skin.patternType}|${skin.baseColor}|${skin.accentColor}`
+  const key = bodyTexKey(skin)
+  const epoch = currentCacheEpoch()
   const hit = texCache.get(key)
   if (hit) {
+    hit.epoch = epoch
     texCache.delete(key)
     texCache.set(key, hit)
-    return hit
+    return hit.tex
   }
 
   const W = 128
@@ -780,12 +877,10 @@ export function getBodyTexture(skin) {
   tex.colorSpace = THREE.SRGBColorSpace
   tex.needsUpdate = true
 
-  if (texCache.size >= MAX_TEX) {
-    const oldest = texCache.keys().next().value
-    texCache.get(oldest)?.dispose()
-    texCache.delete(oldest)
-  }
-  texCache.set(key, tex)
+  const entry = { tex, refs: 0, epoch }
+  bodyTexMeta.set(tex, entry)
+  texCache.set(key, entry)
+  pruneTexCache(epoch)
   return tex
 }
 
@@ -801,13 +896,46 @@ function makeCanvasTex(size, drawFn) {
 }
 
 const irisTexCache = new Map()
+const irisTexMeta = new WeakMap()
 const MAX_IRIS_TEX = 64
+
+function irisTexKey(eyeStyle, irisTop, irisBot, pupilColor) {
+  return `${eyeStyle}|${irisTop}|${irisBot}|${pupilColor}`
+}
+
+function pruneIrisTexCache(protectEpoch = -1) {
+  if (irisTexCache.size <= MAX_IRIS_TEX) return
+  for (const [k, entry] of irisTexCache) {
+    if (irisTexCache.size <= MAX_IRIS_TEX) break
+    if (protectEpoch >= 0 && entry.epoch === protectEpoch) continue
+    if (entry.refs > 0) continue
+    irisTexCache.delete(k)
+    entry.tex.dispose()
+  }
+}
+
+function retainIrisTex(tex) {
+  const entry = tex && irisTexMeta.get(tex)
+  if (entry) entry.refs += 1
+}
+
+function releaseIrisTex(tex) {
+  const entry = tex && irisTexMeta.get(tex)
+  if (entry && entry.refs > 0) entry.refs -= 1
+  pruneIrisTexCache()
+}
 
 // Textura del iris anime con degradado vertical rico, pupila oscura, estrella opcional y borde limpio.
 export function getIrisTexture(eyeStyle, irisTop, irisBot, pupilColor) {
-  const key = `${eyeStyle}|${irisTop}|${irisBot}|${pupilColor}`
+  const key = irisTexKey(eyeStyle, irisTop, irisBot, pupilColor)
+  const epoch = currentCacheEpoch()
   const hit = irisTexCache.get(key)
-  if (hit) return hit
+  if (hit) {
+    hit.epoch = epoch
+    irisTexCache.delete(key)
+    irisTexCache.set(key, hit)
+    return hit.tex
+  }
 
   const tex = makeCanvasTex(128, (ctx, s) => {
     const cx = s / 2
@@ -873,12 +1001,10 @@ export function getIrisTexture(eyeStyle, irisTop, irisBot, pupilColor) {
     ctx.stroke()
   })
 
-  if (irisTexCache.size >= MAX_IRIS_TEX) {
-    const oldest = irisTexCache.keys().next().value
-    irisTexCache.get(oldest)?.dispose()
-    irisTexCache.delete(oldest)
-  }
-  irisTexCache.set(key, tex)
+  const entry = { tex, refs: 0, epoch }
+  irisTexMeta.set(tex, entry)
+  irisTexCache.set(key, entry)
+  pruneIrisTexCache(epoch)
   return tex
 }
 
@@ -1604,7 +1730,7 @@ export const buildSkin = generateSkin
 
 // ═══════════════════════════ BOCAS PROCEDURALES SUAVES ═══════════════════════════
 
-export function SkinMouth({ mouthType }) {
+function buildMouthNode(mouthType) {
   const mDark = getMat('#2c1328', 0.65, 0)
   const mWhite = getMat('#f8fafc', 0.5, 0)
   const mMouthIn = getMat('#e85d75', 0.6, 0)
@@ -1652,6 +1778,17 @@ export function SkinMouth({ mouthType }) {
   }
 
   return msh({ geometry: GEO.torusArc, material: mDark, rotation: [0, 0, Math.PI], scale: [0.14, 0.14, 0.15] })
+}
+
+export function SkinMouth({ mouthType }) {
+  const { node, mats } = useMemo(() => collectRender(() => buildMouthNode(mouthType)), [mouthType])
+  useEffect(() => {
+    for (let i = 0; i < mats.length; i++) retainMat(mats[i])
+    return () => {
+      for (let i = 0; i < mats.length; i++) releaseMat(mats[i])
+    }
+  }, [mats])
+  return node
 }
 
 // ═══════════════════════════ RENDERIZADORES POR RANURA ═══════════════════════════
@@ -2213,13 +2350,33 @@ function renderBackExtras(backExtras, pal) {
 }
 
 export function SkinAccessory({ skin }) {
-  const { parts, palette } = skin
-  return grp(null,
-    renderHat(parts.hat, palette),
-    renderEars(parts.ears, palette),
-    renderHair(parts.hair),
-    renderFaceExtras(parts.faceExtras, skin),
-    renderNeckWear(parts.neckWear, palette),
-    renderBackExtras(parts.backExtras, palette),
-  )
+  const { node, mats } = useMemo(() => {
+    const { parts, palette } = skin
+    return collectRender(() => {
+      getMat(skin.baseColor, 0.72, 0.02)
+      return grp(null,
+        renderHat(parts.hat, palette),
+        renderEars(parts.ears, palette),
+        renderHair(parts.hair),
+        renderFaceExtras(parts.faceExtras, skin),
+        renderNeckWear(parts.neckWear, palette),
+        renderBackExtras(parts.backExtras, palette),
+      )
+    })
+  }, [skin])
+
+  useEffect(() => {
+    for (let i = 0; i < mats.length; i++) retainMat(mats[i])
+    const bodyEntry = texCache.get(bodyTexKey(skin))
+    const irisEntry = irisTexCache.get(irisTexKey(skin.eyeStyle, skin.irisTop, skin.irisBot, skin.pupilColor))
+    if (bodyEntry) retainBodyTex(bodyEntry.tex)
+    if (irisEntry) retainIrisTex(irisEntry.tex)
+    return () => {
+      for (let i = 0; i < mats.length; i++) releaseMat(mats[i])
+      if (bodyEntry) releaseBodyTex(bodyEntry.tex)
+      if (irisEntry) releaseIrisTex(irisEntry.tex)
+    }
+  }, [mats, skin])
+
+  return node
 }

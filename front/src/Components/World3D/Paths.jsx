@@ -2855,7 +2855,7 @@ function addLandmark(way, V, out) {
     put(boxes, basePos, IDENT, 1.9, 0.9, 1.9, c1)
     put(cones, basePos.clone().addScaledVector(Y, 0.9), IDENT, 1.25, 5.2, 1.25, c2)
     put(lights, basePos.clone().addScaledVector(Y, 6.7), IDENT, 0.65, 0.65, 0.65, glowC)
-    spinMeta.push({ pos: basePos.clone().addScaledVector(Y, 6.7), ex: 0.3, ey: 0, ez: 0.2, sx: 0.5, sy: 1.2, sz: 0.3, scale: 1.15, c: glowC })
+    spinMeta?.push({ pos: basePos.clone().addScaledVector(Y, 6.7), ex: 0.3, ey: 0, ez: 0.2, sx: 0.5, sy: 1.2, sz: 0.3, scale: 1.15, c: glowC })
   } else if (lm.kind === 'tree_arch') {
     put(cyls, basePos, IDENT, 0.85, 3.6, 0.85, c1)
     put(cones, basePos.clone().addScaledVector(Y, 2.8), IDENT, 3.2, 2.8, 3.2, c2)
@@ -2868,7 +2868,7 @@ function addLandmark(way, V, out) {
     put(cyls, basePos.clone().addScaledVector(Y, 4.2), IDENT, 1.05, 1.5, 1.05, c1)
     put(lights, basePos.clone().addScaledVector(Y, 6.1), IDENT, 0.95, 0.95, 0.95, glowC)
     put(cones, basePos.clone().addScaledVector(Y, 6.7), IDENT, 1.4, 1.0, 1.4, c2)
-    spinMeta.push({ pos: basePos.clone().addScaledVector(Y, 6.1), ex: Math.PI / 2, ey: 0, ez: 0, sx: 0, sy: 1.5, sz: 0, scale: 1.6, c: glowC })
+    spinMeta?.push({ pos: basePos.clone().addScaledVector(Y, 6.1), ex: Math.PI / 2, ey: 0, ez: 0, sx: 0, sy: 1.5, sz: 0, scale: 1.6, c: glowC })
   } else if (lm.kind === 'pyramid') {
     put(boxes, basePos, IDENT, 3.6, 1.2, 3.6, c2)
     put(boxes, basePos.clone().addScaledVector(Y, 1.2), IDENT, 2.4, 1.2, 2.4, c1)
@@ -2878,7 +2878,7 @@ function addLandmark(way, V, out) {
     put(cones, basePos, IDENT, 1.6, 5.4, 1.6, c1)
     put(octas, basePos.clone().addScaledVector(Y, 2.2).addScaledVector(N, 0.8), IDENT, 0.9, 2.4, 0.9, c2)
     put(octas, basePos.clone().addScaledVector(Y, 1.8).addScaledVector(N, -0.8), IDENT, 0.8, 2.0, 0.8, c2)
-    spinMeta.push({ pos: basePos.clone().addScaledVector(Y, 4.8), ex: 0.4, ey: 0.2, ez: 0, sx: 0.4, sy: 1.1, sz: 0.3, scale: 1.35, c: glowC })
+    spinMeta?.push({ pos: basePos.clone().addScaledVector(Y, 4.8), ex: 0.4, ey: 0.2, ez: 0, sx: 0.4, sy: 1.1, sz: 0.3, scale: 1.35, c: glowC })
   } else if (lm.kind === 'volcano_torii') {
     const pL = basePos.clone().addScaledVector(T, -1.2)
     const pR = basePos.clone().addScaledVector(T, 1.2)
@@ -2889,14 +2889,16 @@ function addLandmark(way, V, out) {
   } else if (lm.kind === 'prism_tower') {
     put(boxes, basePos, IDENT, 1.8, 1.0, 1.8, c2)
     put(octas, basePos.clone().addScaledVector(Y, 3.2), IDENT, 1.5, 3.6, 1.5, c1)
-    spinMeta.push({ pos: basePos.clone().addScaledVector(Y, 3.2), ex: 0.5, ey: 0, ez: 0.5, sx: 0.8, sy: 1.4, sz: 0.6, scale: 1.75, c: glowC })
+    spinMeta?.push({ pos: basePos.clone().addScaledVector(Y, 3.2), ex: 0.5, ey: 0, ez: 0.5, sx: 0.8, sy: 1.4, sz: 0.6, scale: 1.75, c: glowC })
     put(lights, basePos.clone().addScaledVector(Y, 3.2), IDENT, 0.65, 0.65, 0.65, glowC)
   } else if (lm.kind === 'windmill') {
     put(cones, basePos, IDENT, 1.8, 4.8, 1.8, c1)
     const hub = basePos.clone().addScaledVector(Y, 4.2).addScaledVector(N, -side * 0.75)
     put(lights, hub, IDENT, 0.5, 0.5, 0.5, glowC)
-    for (let k = 0; k < 4; k++) {
-      bladeMeta.push({ pos: hub, axis: N.clone().multiplyScalar(-side), angle0: (k * Math.PI) / 2, speed: 1.4, len: 2.3, width: 0.35, c: k % 2 === 0 ? c2 : glowC })
+    if (bladeMeta) {
+      for (let k = 0; k < 4; k++) {
+        bladeMeta.push({ pos: hub, axis: N.clone().multiplyScalar(-side), angle0: (k * Math.PI) / 2, speed: 1.4, len: 2.3, width: 0.35, c: k % 2 === 0 ? c2 : glowC })
+      }
     }
   } else if (lm.kind === 'neon_gate') {
     const pL = basePos.clone().addScaledVector(T, -1.3)
@@ -3256,7 +3258,7 @@ function getSegFrames(seg) {
   return f
 }
 
-function buildExterior(way) {
+function buildExteriorBase(way) {
   const themeId = way.theme.id
   const V = VISUALS[themeId]
   const r = way.params.radius
@@ -3265,30 +3267,16 @@ function buildExterior(way) {
   const dim = hot(V.rib, 0.8)
   const extNeonHex = EXT_NEON_HEX[themeId] ?? V.rail
 
-  const tubes = []; const extCores = []; const extCables = []; const extClamps = []; const extPylons = []
-  const extFlora = []; const extFloraGlow = []; const extRuins = []; const extPlumes = []; const extPulseMeta = []
-  const mouthRings = []
-  const lmSolids = []; const lmCones = []; const lmBoxes = []; const lmOctas = []
-  const lmSpheres = []; const lmSpheresA = []; const lmDiscs = []; const lmFunnels = []
-  const lmRings = []; const lmLights = []; const lmBanners = []
-  const lmSpinMeta = []; const lmBladeMeta = []; const lmPulseMeta = []
-
-  const bayRng = mulberry32(way.idx * 8191 + 19)
-  const samples = []
-  const pFrom = way.segments[0]?.curve.getPoint(0)
-  const pTo = way.segments[way.segments.length - 1]?.curve.getPoint(1)
-  let pylonCount = 0
+  const tubes = []; const extCores = []; const extPlumes = []
+  const mouthRings = []; const lmSolids = []; const lmRings = []; const lmLights = []; const lmSpinMeta = []
 
   for (const s of way.segments) {
     const c = s.curve; const R = s.radius
 
-    const nSamp = Math.max(3, Math.ceil(s.length / 7))
-    for (let i = 0; i <= nSamp; i++) samples.push(c.getPointAt(i / nSamp))
-
     addSegmentEvent(s, V, {
       cones: null, iceSpires: null, ribFrames: null, fxBuckets: null,
-      lmCones, lmCyls: lmSolids, lmLights, lmRings, mouthRings,
-      lmSpinMeta, lmBladeMeta, lmPulseMeta, lmDiscs, extPlumes, extPulseMeta,
+      lmCones: null, lmCyls: lmSolids, lmLights, lmRings, mouthRings,
+      lmSpinMeta, lmBladeMeta: null, lmPulseMeta: null, lmDiscs: null, extPlumes, extPulseMeta: null,
     })
 
     if (s.air) {
@@ -3299,7 +3287,6 @@ function buildExterior(way) {
         put(mouthRings, p.clone().addScaledVector(Y, 0.3), aim(Z, Y), R * 1.7, R * 1.7, R * 1.7, mouthC)
         put(mouthRings, P0.clone().addScaledVector(T0, 0.9), aim(Z, T0), R * 1.35, R * 1.35, R * 1.35, mouthC)
       } else if (s.kind === 'canon' || s.kind === 'erupcion') {
-        ;[[0.5, 1.15], [1.1, 1.3], [1.7, 1.5]].forEach(([b, k]) => put(extClamps, P0.clone().addScaledVector(T0, -b), aim(Z, T0), R * k * 2.02, R * k * 2.02, 2.0, METAL))
         put(mouthRings, P0, aim(Z, T0), R * 1.2, R * 1.2, R * 1.2, hot('#ff7a2f', 1.65))
         ;[0.8, 1.7].forEach((d, idx) => put(mouthRings, P0.clone().addScaledVector(T0, d), aim(Z, T0), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), hot('#ff9a3c', 1.55)))
       } else {
@@ -3309,7 +3296,6 @@ function buildExterior(way) {
       put(mouthRings, P1, aim(Z, T1), R * 1.9, R * 1.9, R * 1.9, mouthC)
       put(lmRings, P1, aim(Z, T1), R * 1.25, R * 1.25, R * 1.25, dim)
       put(lmRings, P1, aim(Z, T1), R * 0.6, R * 0.6, R * 0.6, dim)
-      put(lmDiscs, P1, aim(Y, T1), R * 3.8, 0.04, R * 3.8)
       continue
     }
 
@@ -3323,6 +3309,81 @@ function buildExterior(way) {
     const coreCol = ev ? coreBase.clone().lerp(hot(EVENT_ACCENTS[ev], 1.4), 0.45) : coreBase
     extCores.push(buildFramesTubeGeo(frames, coreRad, 4, { offsetUp: -R * 0.12, uvScaleX: 0.25, color: coreCol }))
 
+    if (s.kind === 'salida' || s.kind === 'llegada') {
+      const baseU = s.kind === 'salida' ? 0.04 : 0.96
+      const stepU = s.kind === 'salida' ? 0.08 : -0.08
+      for (let k = 0; k < 3; k++) {
+        const u = THREE.MathUtils.clamp(baseU + k * stepU, 0.02, 0.98)
+        const targetList = k === 0 ? mouthRings : lmRings
+        put(targetList, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), mouthC)
+      }
+    }
+  }
+
+  addLandmark(way, V, {
+    cones: null, cyls: lmSolids, boxes: null, octas: null, spheresA: null,
+    lights: lmLights, banners: null, rings: lmRings, spinMeta: lmSpinMeta, bladeMeta: null,
+  })
+
+  way.junctions.forEach((j, i) => {
+    if (j.kind === 'fork') {
+      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#4fe3ff', 1.35))
+      lmSpinMeta.push({ pos: j.pos, ex: 0.45, ey: i * 0.7, ez: 0.2, sx: 0.9, sy: 1.3, sz: 0.3, scale: r * 2.45, c: hot('#4fe3ff', 1.3) })
+      lmSpinMeta.push({ pos: j.pos, ex: -0.45, ey: i * 0.7, ez: -0.2, sx: -0.9, sy: 1.1, sz: -0.3, scale: r * 1.95, c: ribBase })
+    } else if (j.kind === 'cross') {
+      put(lmLights, j.pos, IDENT, r * 0.95, r * 0.95, r * 0.95, hot('#ffd859', 1.4))
+      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: 0, ez: 0, sx: 1.1, sy: 0.8, sz: 0.2, scale: r * 2.65, c: hot('#ffd859', 1.3) })
+      lmSpinMeta.push({ pos: j.pos, ex: Math.PI / 2, ey: 0, ez: 0, sx: 0.2, sy: -1.2, sz: 0.9, scale: r * 2.15, c: ribBase })
+      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: Math.PI / 2, ez: 0.4, sx: -0.8, sy: 0.4, sz: 1.3, scale: r * 1.65, c: hot(V.rail, 1.3) })
+    } else {
+      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#7affb2', 1.35))
+      lmSpinMeta.push({ pos: j.pos, ex: 0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: 1.4, sz: 0.4, scale: r * 2.5, c: hot('#7affb2', 1.28) })
+      lmSpinMeta.push({ pos: j.pos, ex: -0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: -1.4, sz: -0.4, scale: r * 1.85, c: ribBase })
+    }
+  })
+
+  return {
+    tube: mergeAndDispose(tubes),
+    extCore: mergeAndDispose(extCores),
+    extPlumes, lmSolids, lmRings, lmLights, lmSpinMeta, mouthRings,
+  }
+}
+
+function buildExteriorNear(way) {
+  const themeId = way.theme.id
+  const V = VISUALS[themeId]
+  const r = way.params.radius
+
+  const extCables = []; const extClamps = []; const extPylons = []
+  const extFlora = []; const extFloraGlow = []; const extRuins = []; const extPulseMeta = []
+  const lmCones = []; const lmBoxes = []; const lmOctas = []
+  const lmSpheres = []; const lmSpheresA = []; const lmDiscs = []; const lmFunnels = []
+  const lmBanners = []; const lmBladeMeta = []; const lmPulseMeta = []
+
+  const bayRng = mulberry32(way.idx * 8191 + 19)
+  const pFrom = way.segments[0]?.curve.getPoint(0)
+  const pTo = way.segments[way.segments.length - 1]?.curve.getPoint(1)
+  let pylonCount = 0
+
+  for (const s of way.segments) {
+    const c = s.curve; const R = s.radius
+
+    addSegmentEvent(s, V, {
+      cones: null, iceSpires: null, ribFrames: null, fxBuckets: null,
+      lmCones, lmCyls: null, lmLights: null, lmRings: null, mouthRings: null,
+      lmSpinMeta: null, lmBladeMeta, lmPulseMeta, lmDiscs, extPlumes: null, extPulseMeta,
+    })
+
+    if (s.air) {
+      const P0 = c.getPoint(0); const T0 = c.getTangent(0); const P1 = c.getPoint(1); const T1 = c.getTangent(1)
+      if (s.kind === 'canon' || s.kind === 'erupcion') {
+        ;[[0.5, 1.15], [1.1, 1.3], [1.7, 1.5]].forEach(([b, k]) => put(extClamps, P0.clone().addScaledVector(T0, -b), aim(Z, T0), R * k * 2.02, R * k * 2.02, 2.0, METAL))
+      }
+      put(lmDiscs, P1, aim(Y, T1), R * 3.8, 0.04, R * 3.8)
+      continue
+    }
+
+    const frames = getSegFrames(s)
     const nClamps = Math.max(1, Math.round(s.length / 11))
     for (let i = 1; i < nClamps; i++) {
       const f = sampleCurveFrame(frames, i / nClamps)
@@ -3374,16 +3435,6 @@ function buildExterior(way) {
       }
     }
 
-    if (s.kind === 'salida' || s.kind === 'llegada') {
-      const baseU = s.kind === 'salida' ? 0.04 : 0.96
-      const stepU = s.kind === 'salida' ? 0.08 : -0.08
-      for (let k = 0; k < 3; k++) {
-        const u = THREE.MathUtils.clamp(baseU + k * stepU, 0.02, 0.98)
-        const targetList = k === 0 ? mouthRings : lmRings
-        put(targetList, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), mouthC)
-      }
-    }
-
     if (s.kind === 'embudo') {
       const A = c.getPoint(0); const B = c.getPoint(1); const ctr = new THREE.Vector3()
       for (let i = 0; i < 24; i++) ctr.add(c.getPoint(0.02 + (i / 23) * 0.28))
@@ -3400,36 +3451,17 @@ function buildExterior(way) {
   }
 
   addLandmark(way, V, {
-    cones: lmCones, cyls: lmSolids, boxes: lmBoxes, octas: lmOctas, spheresA: lmSpheresA,
-    lights: lmLights, banners: lmBanners, rings: lmRings, spinMeta: lmSpinMeta, bladeMeta: lmBladeMeta,
+    cones: lmCones, cyls: null, boxes: lmBoxes, octas: lmOctas, spheresA: lmSpheresA,
+    lights: null, banners: lmBanners, rings: null, spinMeta: null, bladeMeta: lmBladeMeta,
   })
 
-  way.junctions.forEach((j, i) => {
-    put(lmSpheres, j.pos, IDENT, r * 4)
-    if (j.kind === 'fork') {
-      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#4fe3ff', 1.35))
-      lmSpinMeta.push({ pos: j.pos, ex: 0.45, ey: i * 0.7, ez: 0.2, sx: 0.9, sy: 1.3, sz: 0.3, scale: r * 2.45, c: hot('#4fe3ff', 1.3) })
-      lmSpinMeta.push({ pos: j.pos, ex: -0.45, ey: i * 0.7, ez: -0.2, sx: -0.9, sy: 1.1, sz: -0.3, scale: r * 1.95, c: ribBase })
-    } else if (j.kind === 'cross') {
-      put(lmLights, j.pos, IDENT, r * 0.95, r * 0.95, r * 0.95, hot('#ffd859', 1.4))
-      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: 0, ez: 0, sx: 1.1, sy: 0.8, sz: 0.2, scale: r * 2.65, c: hot('#ffd859', 1.3) })
-      lmSpinMeta.push({ pos: j.pos, ex: Math.PI / 2, ey: 0, ez: 0, sx: 0.2, sy: -1.2, sz: 0.9, scale: r * 2.15, c: ribBase })
-      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: Math.PI / 2, ez: 0.4, sx: -0.8, sy: 0.4, sz: 1.3, scale: r * 1.65, c: hot(V.rail, 1.3) })
-    } else {
-      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#7affb2', 1.35))
-      lmSpinMeta.push({ pos: j.pos, ex: 0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: 1.4, sz: 0.4, scale: r * 2.5, c: hot('#7affb2', 1.28) })
-      lmSpinMeta.push({ pos: j.pos, ex: -0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: -1.4, sz: -0.4, scale: r * 1.85, c: ribBase })
-    }
-  })
+  for (const j of way.junctions) put(lmSpheres, j.pos, IDENT, r * 4)
 
   return {
-    samples,
-    tube: mergeAndDispose(tubes),
-    extCore: mergeAndDispose(extCores),
     extCable: mergeAndDispose(extCables),
-    extClamps, extPylons, extFlora, extFloraGlow, extRuins, extPlumes, extPulseMeta,
-    lmSolids, lmCones, lmBoxes, lmOctas, lmSpheres, lmSpheresA, lmDiscs, lmFunnels,
-    lmRings, lmLights, lmBanners, lmSpinMeta, lmBladeMeta, lmPulseMeta, mouthRings,
+    extClamps, extPylons, extFlora, extFloraGlow, extRuins, extPulseMeta,
+    lmCones, lmBoxes, lmOctas, lmSpheres, lmSpheresA, lmDiscs, lmFunnels,
+    lmBanners, lmBladeMeta, lmPulseMeta,
   }
 }
 
@@ -3820,11 +3852,24 @@ const _spinE = new THREE.Euler()
 const _spinS = new THREE.Vector3()
 const _rotQ = new THREE.Quaternion()
 
-function SpinRings({ meta, mat, detailU }) {
-  const ref = useRef()
-  const lastUpd = useRef(-10)
+function updateSpinRingsMesh(o, meta, t, detailVal, lastUpdRef) {
+  if (!o || !meta.length || (o.parent && !o.parent.visible)) return
+  if (detailVal < 0.05 && t - lastUpdRef.current < 0.14) return
+  lastUpdRef.current = t
+  for (let i = 0; i < meta.length; i++) {
+    const it = meta[i]
+    _spinE.set(it.ex + t * it.sx, it.ey + t * it.sy, it.ez + t * it.sz)
+    _spinQ.setFromEuler(_spinE)
+    _spinS.setScalar(it.scale)
+    _spinMat.compose(it.pos, _spinQ, _spinS)
+    o.setMatrixAt(i, _spinMat)
+  }
+  o.instanceMatrix.needsUpdate = true
+}
+
+function SpinRings({ meta, mat, meshRef }) {
   useLayoutEffect(() => {
-    const o = ref.current
+    const o = meshRef.current
     if (!o) return
     for (let i = 0; i < meta.length; i++) {
       const it = meta[i]
@@ -3838,25 +3883,9 @@ function SpinRings({ meta, mat, detailU }) {
     o.instanceMatrix.needsUpdate = true
     if (o.instanceColor) o.instanceColor.needsUpdate = true
     setConservativeSphere(o, meta.map((m) => m.pos), 6)
-  }, [meta])
-  useFrame(({ clock }) => {
-    const o = ref.current
-    if (!o || (o.parent && !o.parent.visible)) return
-    const t = clock.elapsedTime
-    if (detailU && detailU.value < 0.05 && t - lastUpd.current < 0.14) return
-    lastUpd.current = t
-    for (let i = 0; i < meta.length; i++) {
-      const it = meta[i]
-      _spinE.set(it.ex + t * it.sx, it.ey + t * it.sy, it.ez + t * it.sz)
-      _spinQ.setFromEuler(_spinE)
-      _spinS.setScalar(it.scale)
-      _spinMat.compose(it.pos, _spinQ, _spinS)
-      o.setMatrixAt(i, _spinMat)
-    }
-    o.instanceMatrix.needsUpdate = true
-  })
+  }, [meta, meshRef])
   if (!meta.length) return null
-  return <instancedMesh ref={ref} args={[GEO.torus, mat, meta.length]} />
+  return <instancedMesh ref={meshRef} args={[GEO.torus, mat, meta.length]} />
 }
 
 function SpinBlades({ meta, mat, detailU }) {
@@ -3992,12 +4021,103 @@ function disposeMats(mats) {
   }
 }
 
-function Way({ way, world = null, focused, detailActive = false, worldRadius = 110, forceFocusDetail = false, wayDistRef, onPickWay }) {
+function WayExteriorNear({ way, mats, detailU, extFineRef, lmFineRef }) {
+  const d = useMemo(() => buildExteriorNear(way), [way])
+  useEffect(() => () => { d.extCable?.dispose?.() }, [d])
+  const pulseRings = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'ring'), [d.lmPulseMeta])
+  const pulseCyls = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'cyl'), [d.lmPulseMeta])
+  const pulseLights = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'light'), [d.lmPulseMeta])
+  return (
+    <>
+      <group ref={lmFineRef} visible>
+        <Inst geo={GEO.cone} mat={mats.lmDeco} items={d.lmCones} />
+        <Inst geo={GEO.box} mat={mats.lmDeco} items={d.lmBoxes} />
+        <Inst geo={GEO.octa} mat={mats.lmDeco} items={d.lmOctas} />
+        <Inst geo={GEO.sphere} mat={mats.lmGlass} items={d.lmSpheres} />
+        <Inst geo={GEO.sphere} mat={mats.lmDecoA} items={d.lmSpheresA} />
+        <Inst geo={GEO.cyl} mat={mats.lmGlass} items={d.lmDiscs} />
+        <Inst geo={GEO.funnel} mat={mats.lmGlass} items={d.lmFunnels} />
+        <Inst geo={GEO.banner} mat={mats.lmDeco} items={d.lmBanners} />
+        <SpinBlades meta={d.lmBladeMeta} mat={mats.lmDeco} detailU={detailU} />
+        <PulseInst geo={GEO.torus} mat={mats.lmGlow} items={pulseRings} detailU={detailU} />
+        <PulseInst geo={GEO.cyl} mat={mats.lmDecoA} items={pulseCyls} detailU={detailU} />
+        <PulseInst geo={GEO.sphere} mat={mats.lmGlow} items={pulseLights} detailU={detailU} />
+      </group>
+      <group ref={extFineRef} visible>
+        {d.extCable && <mesh geometry={d.extCable} material={mats.extCable} />}
+        <Inst geo={GEO.pylon} mat={mats.extMetal} items={d.extPylons} />
+        <Inst geo={GEO.extClamp} mat={mats.extMetal} items={d.extClamps} />
+        <Inst geo={GEO.tree} mat={mats.extFlora} items={d.extFlora} />
+        <Inst geo={GEO.mushroom} mat={mats.extFloraGlow} items={d.extFloraGlow} />
+        <Inst geo={GEO.ruinPillar} mat={mats.extRuins} items={d.extRuins} />
+        <PulseInst geo={GEO.plume} mat={mats.extPlume} items={d.extPulseMeta} detailU={detailU} />
+      </group>
+    </>
+  )
+}
+
+function updateWayController(ctrl, h, t, dist, worldRadius) {
+  const targetF = ctrl.focused ? 1 : 0
+  let f = THREE.MathUtils.damp(ctrl.focusU.value, targetF, 11, h)
+  if (Math.abs(f - targetF) < 0.001) f = targetF
+  ctrl.focusU.value = f
+
+  let targetDet = 0
+  if (ctrl.forceFocusDetail && ctrl.focused) {
+    targetDet = 1
+  } else if (ctrl.detailActive) {
+    const rInt = ctrl.radius * 6.0 + worldRadius * 0.08
+    const rExt = ctrl.radius * 13.0 + worldRadius * 0.3
+    targetDet = 1 - THREE.MathUtils.smoothstep(dist, rInt, rExt)
+  }
+
+  let det = THREE.MathUtils.damp(ctrl.detailU.value, targetDet, 10, h)
+  if (det < 0.005 && targetDet <= 0.001) det = 0
+  else if (det > 0.995 && targetDet >= 0.999) det = 1
+  ctrl.detailU.value = det
+
+  const showNearExt = ctrl.detailActive || ctrl.nearActive || det > 0.03
+  if (ctrl.intGroupRef.current) ctrl.intGroupRef.current.visible = ctrl.detailActive && det > 0.01
+  if (ctrl.extGroupRef.current) ctrl.extGroupRef.current.visible = det < 0.99
+  if (ctrl.extFineRef.current) ctrl.extFineRef.current.visible = showNearExt && det < 0.99
+  if (ctrl.lmFineRef.current) ctrl.lmFineRef.current.visible = showNearExt
+  if (ctrl.tunelNearRef.current) ctrl.tunelNearRef.current.visible = showNearExt
+
+  const { mats, tunelMats } = ctrl
+  const intDepth = f >= 0.98 && det >= 0.98
+  mats.deco.depthWrite = intDepth
+  mats.glow.depthWrite = intDepth
+  mats.decorGlow.depthWrite = intDepth
+  mats.rail.depthWrite = intDepth
+  mats.sign.depthWrite = intDepth
+  mats.floor.depthWrite = intDepth
+  mats.hull.depthWrite = intDepth
+  mats.panel.depthWrite = intDepth
+  mats.neonRim.depthWrite = intDepth
+
+  const extDepth = f >= 0.98 && det <= 0.02
+  mats.extCore.depthWrite = extDepth
+  mats.extMetal.depthWrite = extDepth
+  mats.extCable.depthWrite = extDepth
+  mats.extFlora.depthWrite = extDepth
+  mats.extFloraGlow.depthWrite = extDepth
+  mats.extRuins.depthWrite = extDepth
+
+  const lmDepth = f >= 0.98
+  tunelMats.walk.depthWrite = lmDepth
+  tunelMats.rib.depthWrite = lmDepth
+  mats.lmDeco.depthWrite = lmDepth
+  mats.lmGlow.depthWrite = lmDepth
+
+  ctrl.dirty = f !== targetF || Math.abs(det - targetDet) > 0.001 || det > 0
+}
+
+function Way({ way, world = null, focused, detailActive = false, nearActive = false, tunelActive = false, forceFocusDetail = false, controllersRef, onPickWay }) {
   const id = way.theme.id
   const focusU = useMemo(() => ({ value: 1 }), [])
   const detailU = useMemo(() => ({ value: 0 }), [])
   const mats = useMemo(() => createWayMaterials(id, focusU, detailU), [id, focusU, detailU])
-  const d = useMemo(() => buildExterior(way), [way])
+  const d = useMemo(() => buildExteriorBase(way), [way])
   const tunelMats = useMemo(() => createTunelMats(way, focusU, detailU, withWayFade), [way, focusU, detailU])
   const tunelNearRef = useRef()
   useEffect(() => () => disposeMats(tunelMats), [tunelMats])
@@ -4005,78 +4125,60 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
   const extFineRef = useRef()
   const lmFineRef = useRef()
   const intGroupRef = useRef()
+  const spinMeshRef = useRef()
+  const lastSpinUpdRef = useRef(-10)
 
   useEffect(() => () => {
     d.tube?.dispose?.()
     d.extCore?.dispose?.()
-    d.extCable?.dispose?.()
     disposeMats(mats)
   }, [d, mats])
 
-  const pulseRings = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'ring'), [d.lmPulseMeta])
-  const pulseCyls = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'cyl'), [d.lmPulseMeta])
-  const pulseLights = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'light'), [d.lmPulseMeta])
+  const ctrl = useMemo(() => ({
+    idx: way.idx,
+    radius: way.params.radius,
+    focusU,
+    detailU,
+    mats,
+    tunelMats,
+    intGroupRef,
+    extGroupRef,
+    extFineRef,
+    lmFineRef,
+    tunelNearRef,
+    spinMeshRef,
+    lastSpinUpdRef,
+    spinMeta: d.lmSpinMeta,
+    focused,
+    detailActive,
+    nearActive,
+    tunelActive,
+    forceFocusDetail,
+    dirty: true,
+  }), [way.idx, way.params.radius, focusU, detailU, mats, tunelMats, d.lmSpinMeta])
 
-  useFrame((_, dt) => {
-    const h = Math.min(dt, 0.1)
-    const f = THREE.MathUtils.damp(focusU.value, focused ? 1 : 0, 11, h)
-    focusU.value = f
+  useLayoutEffect(() => {
+    const map = controllersRef.current
+    map.set(way.idx, ctrl)
+    return () => { map.delete(way.idx) }
+  }, [controllersRef, ctrl, way.idx])
 
-    let targetDet = 0
-    if (forceFocusDetail && focused) {
-      targetDet = 1
-    } else if (detailActive) {
-      const dist = wayDistRef.current[way.idx] ?? Infinity
-      const rInt = way.params.radius * 6.0 + worldRadius * 0.08
-      const rExt = way.params.radius * 13.0 + worldRadius * 0.3
-      targetDet = 1 - THREE.MathUtils.smoothstep(dist, rInt, rExt)
-    }
-
-    let det = THREE.MathUtils.damp(detailU.value, targetDet, 10, h)
-    if (det < 0.005 && targetDet <= 0.001) det = 0
-    else if (det > 0.995 && targetDet >= 0.999) det = 1
-    detailU.value = det
-
-    const showNearExt = detailActive || det > 0.03
-    if (intGroupRef.current) intGroupRef.current.visible = detailActive && det > 0.01
-    if (extGroupRef.current) extGroupRef.current.visible = det < 0.99
-    if (extFineRef.current) extFineRef.current.visible = showNearExt
-    if (lmFineRef.current) lmFineRef.current.visible = showNearExt
-    if (tunelNearRef.current) tunelNearRef.current.visible = showNearExt
-
-    const intDepth = f >= 0.98 && det >= 0.98
-    mats.deco.depthWrite = intDepth
-    mats.glow.depthWrite = intDepth
-    mats.decorGlow.depthWrite = intDepth
-    mats.rail.depthWrite = intDepth
-    mats.sign.depthWrite = intDepth
-    mats.floor.depthWrite = intDepth
-    mats.hull.depthWrite = intDepth
-    mats.panel.depthWrite = intDepth
-    mats.neonRim.depthWrite = intDepth
-
-    const extDepth = f >= 0.98 && det <= 0.02
-    mats.extCore.depthWrite = extDepth
-    mats.extMetal.depthWrite = extDepth
-    mats.extCable.depthWrite = extDepth
-    mats.extFlora.depthWrite = extDepth
-    mats.extFloraGlow.depthWrite = extDepth
-    mats.extRuins.depthWrite = extDepth
-
-    const lmDepth = f >= 0.98
-    tunelMats.walk.depthWrite = lmDepth
-    tunelMats.rib.depthWrite = lmDepth
-    mats.lmDeco.depthWrite = lmDepth
-    mats.lmGlow.depthWrite = lmDepth
-  })
+  useEffect(() => {
+    ctrl.focused = focused
+    ctrl.detailActive = detailActive
+    ctrl.nearActive = nearActive
+    ctrl.tunelActive = tunelActive
+    ctrl.forceFocusDetail = forceFocusDetail
+    ctrl.dirty = true
+  }, [ctrl, focused, detailActive, nearActive, tunelActive, forceFocusDetail])
 
   return (
     <group>
       {/* Tubo de cristal principal (siempre visible, adapta brillo y ruido por uDetail) */}
       {d.tube && <mesh geometry={d.tube} material={mats.tube} onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(way) } : undefined} />}
 
-      {/* Túnel-banda del hábitat: celosía blanca, cristal en rejilla, pasarelas y luces de ciudad */}
-      <TunelBanda way={way} mats={tunelMats} nearRef={tunelNearRef} />
+      {/* Túnel-banda del hábitat con LOD: piel de celosía en rango medio y pasarelas/arcos solo de cerca */}
+      <TunelBanda way={way} mats={tunelMats} nearRef={tunelNearRef} active={tunelActive} nearActive={nearActive} />
 
       {/* Landmarks, nudos y siluetas de eventos (esenciales siempre; detalle fino solo de cerca) */}
       <group>
@@ -4084,37 +4186,17 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
         <Inst geo={GEO.torus} mat={mats.lmGlow} items={d.lmRings} />
         <Inst geo={GEO.cyl} mat={mats.lmDeco} items={d.lmSolids} />
         <Inst geo={GEO.sphere} mat={mats.lmGlow} items={d.lmLights} />
-        <SpinRings meta={d.lmSpinMeta} mat={mats.lmGlow} detailU={detailU} />
-        <group ref={lmFineRef} visible={false}>
-          <Inst geo={GEO.cone} mat={mats.lmDeco} items={d.lmCones} />
-          <Inst geo={GEO.box} mat={mats.lmDeco} items={d.lmBoxes} />
-          <Inst geo={GEO.octa} mat={mats.lmDeco} items={d.lmOctas} />
-          <Inst geo={GEO.sphere} mat={mats.lmGlass} items={d.lmSpheres} />
-          <Inst geo={GEO.sphere} mat={mats.lmDecoA} items={d.lmSpheresA} />
-          <Inst geo={GEO.cyl} mat={mats.lmGlass} items={d.lmDiscs} />
-          <Inst geo={GEO.funnel} mat={mats.lmGlass} items={d.lmFunnels} />
-          <Inst geo={GEO.banner} mat={mats.lmDeco} items={d.lmBanners} />
-          <SpinBlades meta={d.lmBladeMeta} mat={mats.lmDeco} detailU={detailU} />
-          <PulseInst geo={GEO.torus} mat={mats.lmGlow} items={pulseRings} detailU={detailU} />
-          <PulseInst geo={GEO.cyl} mat={mats.lmDecoA} items={pulseCyls} detailU={detailU} />
-          <PulseInst geo={GEO.sphere} mat={mats.lmGlow} items={pulseLights} detailU={detailU} />
-        </group>
+        <SpinRings meta={d.lmSpinMeta} mat={mats.lmGlow} meshRef={spinMeshRef} />
       </group>
 
-      {/* Capa EXTERIOR: tira de neón y penachos siempre; pilones/abrazaderas/cables/flora de cerca */}
+      {/* Capa EXTERIOR: tira de neón y penachos siempre; pilones/abrazaderas/cables/flora/landmarks finos bajo demanda */}
       <group ref={extGroupRef}>
         {d.extCore && <mesh geometry={d.extCore} material={mats.extCore} />}
         <Inst geo={GEO.plume} mat={mats.extPlume} items={d.extPlumes} />
-        <group ref={extFineRef} visible={false}>
-          {d.extCable && <mesh geometry={d.extCable} material={mats.extCable} />}
-          <Inst geo={GEO.pylon} mat={mats.extMetal} items={d.extPylons} />
-          <Inst geo={GEO.extClamp} mat={mats.extMetal} items={d.extClamps} />
-          <Inst geo={GEO.tree} mat={mats.extFlora} items={d.extFlora} />
-          <Inst geo={GEO.mushroom} mat={mats.extFloraGlow} items={d.extFloraGlow} />
-          <Inst geo={GEO.ruinPillar} mat={mats.extRuins} items={d.extRuins} />
-          <PulseInst geo={GEO.plume} mat={mats.extPlume} items={d.extPulseMeta} detailU={detailU} />
-        </group>
       </group>
+      {nearActive && (
+        <WayExteriorNear way={way} mats={mats} detailU={detailU} extFineRef={extFineRef} lmFineRef={lmFineRef} />
+      )}
 
       {/* Capa INTERIOR + Mini mundo del tema (montados bajo demanda solo en máx 2 ways cercanos/enfocados) */}
       {detailActive && (
@@ -4130,6 +4212,37 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
 }
 
 const MAX_ACTIVE_VIDA = 2
+const MAX_ACTIVE_NEAR = 3
+const MAX_ACTIVE_TUNEL = 6
+
+function reconcileLodSet(curSet, desiredSet, maxAdds = Infinity) {
+  let changed = false
+  let adds = 0
+  const next = new Set()
+  for (const id of curSet) {
+    if (desiredSet.has(id)) next.add(id)
+    else changed = true
+  }
+  for (const id of desiredSet) {
+    if (!next.has(id)) {
+      if (adds >= maxAdds) break
+      next.add(id)
+      adds += 1
+      changed = true
+    }
+  }
+  return changed ? next : null
+}
+
+function selectTopIds(list, maxCount) {
+  list.sort((a, b) => {
+    if (a.isFocus !== b.isFocus) return a.isFocus ? -1 : 1
+    return a.dist - b.dist
+  })
+  const out = new Set()
+  for (let i = 0; i < list.length && out.size < maxCount; i++) out.add(list[i].idx)
+  return out
+}
 
 export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
   const wayMetas = useMemo(() => world.ways.map((w) => {
@@ -4149,89 +4262,115 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
   }), [world])
 
   const wayDistRef = useRef([])
+  const controllersRef = useRef(new Map())
   const mountedRef = useRef(new Set())
+  const nearRef = useRef(new Set())
+  const tunelRef = useRef(new Set())
   const [mountedIds, setMountedIds] = useState(() => new Set())
+  const [nearIds, setNearIds] = useState(() => new Set())
+  const [tunelIds, setTunelIds] = useState(() => new Set())
   const lastEvalRef = useRef(-10)
   const prevFocusRef = useRef(focusWay)
   const prevForceRef = useRef(forceFocusDetail)
 
-  useFrame(({ camera, clock }) => {
+  useFrame(({ camera, clock }, dt) => {
     const t = clock.elapsedTime
+    const h = Math.min(dt, 0.1)
     SHARED_TIME.value = t
     VIDA_BUS.sim = sim
 
     const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail
-    if (!focusChanged && t - lastEvalRef.current < 0.12) return
-    lastEvalRef.current = t
-    prevFocusRef.current = focusWay
-    prevForceRef.current = forceFocusDetail
+    if (focusChanged || t - lastEvalRef.current >= 0.12) {
+      lastEvalRef.current = t
+      prevFocusRef.current = focusWay
+      prevForceRef.current = forceFocusDetail
 
-    const cx = camera.position.x
-    const cy = camera.position.y
-    const cz = camera.position.z
-    const curMounted = mountedRef.current
-    const dists = wayDistRef.current
+      const cx = camera.position.x
+      const cy = camera.position.y
+      const cz = camera.position.z
+      const curMounted = mountedRef.current
+      const curNear = nearRef.current
+      const curTunel = tunelRef.current
+      const dists = wayDistRef.current
 
-    const candidates = []
-    for (let i = 0; i < wayMetas.length; i++) {
-      const m = wayMetas[i]
-      const isFocus = focusWay === m.idx
-      const enterDist = (focusWay != null && !isFocus) ? (m.radius * 2.5 + 2.5) : (m.radius * 7.5 + worldRadius * 0.09)
-      const exitDist = enterDist * 1.35
-      const sp = m.sphere
-      const dxC = cx - sp.center.x
-      const dyC = cy - sp.center.y
-      const dzC = cz - sp.center.z
-      const centerDist = Math.sqrt(dxC * dxC + dyC * dyC + dzC * dzC)
-      const isMounted = curMounted.has(m.idx)
-      const limit = isMounted ? exitDist : enterDist
+      const vidaCands = []
+      const nearCands = []
+      const tunelCands = []
+      for (let i = 0; i < wayMetas.length; i++) {
+        const m = wayMetas[i]
+        const isFocus = focusWay === m.idx
+        const enterDist = (focusWay != null && !isFocus) ? (m.radius * 2.5 + 2.5) : (m.radius * 7.5 + worldRadius * 0.09)
+        const exitDist = enterDist * 1.35
+        const nearEnter = (focusWay != null && !isFocus) ? (m.radius * 5.0 + 6.0) : (m.radius * 13.0 + worldRadius * 0.3)
+        const nearExit = nearEnter * 1.25
+        const tunelEnter = (focusWay != null && !isFocus) ? nearEnter : (m.radius * 16.0 + worldRadius * 1.25)
+        const tunelExit = tunelEnter * 1.2
 
-      let dist = Infinity
-      if (centerDist - sp.radius <= limit || (isFocus && forceFocusDetail)) {
-        const arr = m.flat
-        let minD2 = Infinity
-        for (let k = 0; k < arr.length; k += 3) {
-          const dx = cx - arr[k]
-          const dy = cy - arr[k + 1]
-          const dz = cz - arr[k + 2]
-          const d2 = dx * dx + dy * dy + dz * dz
-          if (d2 < minD2) minD2 = d2
+        const vidaLim = curMounted.has(m.idx) ? exitDist : enterDist
+        const nearLim = curNear.has(m.idx) ? nearExit : nearEnter
+        const tunelLim = curTunel.has(m.idx) ? tunelExit : tunelEnter
+        const maxLim = Math.max(vidaLim, nearLim, tunelLim)
+
+        const sp = m.sphere
+        const dxC = cx - sp.center.x
+        const dyC = cy - sp.center.y
+        const dzC = cz - sp.center.z
+        const centerDist = Math.sqrt(dxC * dxC + dyC * dyC + dzC * dzC)
+
+        let dist = Infinity
+        if (centerDist - sp.radius <= maxLim || (isFocus && forceFocusDetail)) {
+          const arr = m.flat
+          let minD2 = Infinity
+          for (let k = 0; k < arr.length; k += 3) {
+            const dx = cx - arr[k]
+            const dy = cy - arr[k + 1]
+            const dz = cz - arr[k + 2]
+            const d2 = dx * dx + dy * dy + dz * dz
+            if (d2 < minD2) minD2 = d2
+          }
+          dist = Math.max(0, Math.sqrt(minD2) - m.radius)
         }
-        dist = Math.max(0, Math.sqrt(minD2) - m.radius)
+        dists[m.idx] = dist
+        if ((isFocus && forceFocusDetail) || dist < vidaLim) vidaCands.push({ idx: m.idx, dist, isFocus })
+        if ((isFocus && forceFocusDetail) || dist < nearLim) nearCands.push({ idx: m.idx, dist, isFocus })
+        if ((isFocus && (forceFocusDetail || focusWay != null)) || dist < tunelLim) tunelCands.push({ idx: m.idx, dist, isFocus })
       }
-      dists[m.idx] = dist
-      if ((isFocus && forceFocusDetail) || dist < limit) {
-        candidates.push({ idx: m.idx, dist, isFocus })
+
+      const nextMounted = reconcileLodSet(curMounted, selectTopIds(vidaCands, MAX_ACTIVE_VIDA), 1)
+      if (nextMounted) {
+        mountedRef.current = nextMounted
+        setMountedIds(nextMounted)
+      }
+      const nearDesired = selectTopIds(nearCands, MAX_ACTIVE_NEAR)
+      for (const id of (nextMounted ?? mountedRef.current)) nearDesired.add(id)
+      const nextNear = reconcileLodSet(curNear, nearDesired, 1)
+      if (nextNear) {
+        nearRef.current = nextNear
+        setNearIds(nextNear)
+      }
+      const tunelDesired = selectTopIds(tunelCands, MAX_ACTIVE_TUNEL)
+      for (const id of (nextNear ?? nearRef.current)) tunelDesired.add(id)
+      const nextTunel = reconcileLodSet(curTunel, tunelDesired)
+      if (nextTunel) {
+        tunelRef.current = nextTunel
+        setTunelIds(nextTunel)
       }
     }
 
-    candidates.sort((a, b) => {
-      if (a.isFocus !== b.isFocus) return a.isFocus ? -1 : 1
-      return a.dist - b.dist
-    })
-
-    const desired = new Set()
-    for (let i = 0; i < candidates.length && desired.size < MAX_ACTIVE_VIDA; i++) {
-      desired.add(candidates[i].idx)
-    }
-
-    // Desmontaje inmediato al salir y montaje diferido (máx 1 way por tick) para evitar tirones
-    let changed = false
-    const next = new Set()
-    for (const id of curMounted) {
-      if (desired.has(id)) next.add(id)
-      else changed = true
-    }
-    for (const id of desired) {
-      if (!next.has(id)) {
-        next.add(id)
-        changed = true
-        break
+    // Actualizar solo ways activos/en transición; suspender por completo caminos lejanos estables
+    const dists = wayDistRef.current
+    const spinRange = worldRadius * 1.15
+    for (const ctrl of controllersRef.current.values()) {
+      const dist = dists[ctrl.idx] ?? Infinity
+      const targetF = ctrl.focused ? 1 : 0
+      const activeOrTransition = ctrl.detailActive || ctrl.nearActive || ctrl.dirty
+        || Math.abs(ctrl.focusU.value - targetF) > 0.001 || ctrl.detailU.value > 0.001
+      if (activeOrTransition) {
+        updateWayController(ctrl, h, t, dist, worldRadius)
       }
-    }
-    if (changed) {
-      mountedRef.current = next
-      setMountedIds(next)
+      if (ctrl.focused || dist < spinRange) {
+        updateSpinRingsMesh(ctrl.spinMeshRef.current, ctrl.spinMeta, t, ctrl.detailU.value, ctrl.lastSpinUpdRef)
+      }
     }
   })
 
@@ -4244,9 +4383,10 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
           world={world}
           focused={focusWay == null || focusWay === w.idx}
           detailActive={mountedIds.has(w.idx)}
-          worldRadius={worldRadius}
+          nearActive={nearIds.has(w.idx)}
+          tunelActive={tunelIds.has(w.idx)}
           forceFocusDetail={forceFocusDetail}
-          wayDistRef={wayDistRef}
+          controllersRef={controllersRef}
           onPickWay={onPickWay}
         />
       ))}

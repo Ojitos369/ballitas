@@ -67,9 +67,39 @@ function toGeo({ pos, nor, uv, idx }, extra = null) {
   return g
 }
 
-function buildBand(way) {
+function buildBandShell(way) {
   const sh = { pos: [], nor: [], uv: [], idx: [] }
   const city = []
+  const B = makeWallBase()
+  const d = new THREE.Vector3(); const p = new THREE.Vector3()
+
+  for (const seg of way.segments) {
+    if (seg.air) continue
+    const R = seg.radius; const L = seg.length
+    const nU = Math.max(3, Math.ceil(L / 3))
+    const v0 = sh.pos.length / 3
+    for (let i = 0; i <= nU; i++) {
+      const u = i / nU
+      wallBaseInto(seg, u, B)
+      for (let j = 0; j <= NA; j++) {
+        const a = (j / NA) * TAU
+        wallDirInto(B, a, d)
+        p.copy(B.axis).addScaledVector(d, R * SHELL_K)
+        sh.pos.push(p.x, p.y, p.z); sh.nor.push(d.x, d.y, d.z); sh.uv.push(u * L, j / NA)
+        city.push(seg.lanes?.length ? smooth01(0.05, 0.35, laneGapAt(seg, u, a)) : 0)
+      }
+    }
+    for (let i = 0; i < nU; i++) {
+      for (let j = 0; j < NA; j++) {
+        const a = v0 + i * (NA + 1) + j; const b = a + NA + 1
+        sh.idx.push(a, a + 1, b, b, a + 1, b + 1)
+      }
+    }
+  }
+  return sh.pos.length ? toGeo(sh, { aCity: city }) : null
+}
+
+function buildBandNear(way) {
   const wk = { pos: [], nor: [], uv: [], idx: [] }
   const gl = { pos: [], nor: [], uv: [], idx: [] }
   const ribs = []
@@ -81,19 +111,11 @@ function buildBand(way) {
     if (seg.air) continue
     const R = seg.radius; const L = seg.length
     const nU = Math.max(3, Math.ceil(L / 2))
-    const v0 = sh.pos.length / 3
     const w0 = wk.pos.length / 3
     const g0 = gl.pos.length / 3
     for (let i = 0; i <= nU; i++) {
       const u = i / nU
       wallBaseInto(seg, u, B)
-      for (let j = 0; j <= NA; j++) {
-        const a = (j / NA) * TAU
-        wallDirInto(B, a, d)
-        p.copy(B.axis).addScaledVector(d, R * SHELL_K)
-        sh.pos.push(p.x, p.y, p.z); sh.nor.push(d.x, d.y, d.z); sh.uv.push(u * L, j / NA)
-        city.push(seg.lanes?.length ? smooth01(0.05, 0.35, laneGapAt(seg, u, a)) : 0)
-      }
       for (const side of [1, -1]) {
         wallDirInto(B, side * Math.PI * 0.5, d)
         n.crossVectors(B.T, d).multiplyScalar(side) // normal de la cubierta (lejos del suelo)
@@ -108,10 +130,6 @@ function buildBand(way) {
       }
     }
     for (let i = 0; i < nU; i++) {
-      for (let j = 0; j < NA; j++) {
-        const a = v0 + i * (NA + 1) + j; const b = a + NA + 1
-        sh.idx.push(a, a + 1, b, b, a + 1, b + 1)
-      }
       for (const [so, side] of [[0, 1], [2, -1]]) {
         const a = w0 + i * 4 + so; const b = a + 1; const c = a + 4; const e = c + 1
         if (side > 0) wk.idx.push(a, c, b, c, e, b)
@@ -130,7 +148,6 @@ function buildBand(way) {
     }
   }
   return {
-    shell: sh.pos.length ? toGeo(sh, { aCity: city }) : null,
     walk: wk.pos.length ? toGeo(wk) : null,
     rail: gl.pos.length ? toGeo(gl) : null,
     ribs,
@@ -247,9 +264,15 @@ totalEmissiveRadiance += uNeon * gTop * 0.45;`)
   }
 }
 
-/** Banda exterior del camino. `nearRef` agrupa los arcos 3D (Paths lo muestra solo de cerca). */
-export function TunelBanda({ way, mats, nearRef }) {
-  const d = useMemo(() => buildBand(way), [way])
+function TunelBandaShell({ way, mat }) {
+  const shell = useMemo(() => buildBandShell(way), [way])
+  useEffect(() => () => shell?.dispose(), [shell])
+  if (!shell) return null
+  return <mesh geometry={shell} material={mat} renderOrder={2} />
+}
+
+function TunelBandaNear({ way, mats, nearRef }) {
+  const d = useMemo(() => buildBandNear(way), [way])
   const ribMesh = useMemo(() => {
     if (!RIB_GEO) RIB_GEO = buildRibGeo()
     const mesh = new THREE.InstancedMesh(RIB_GEO, mats.rib, Math.max(1, d.ribs.length))
@@ -260,7 +283,6 @@ export function TunelBanda({ way, mats, nearRef }) {
     return mesh
   }, [d, mats.rib])
   useEffect(() => () => {
-    d.shell?.dispose()
     d.walk?.dispose()
     d.rail?.dispose()
   }, [d])
@@ -268,11 +290,21 @@ export function TunelBanda({ way, mats, nearRef }) {
   return (
     <>
       {d.walk && <mesh geometry={d.walk} material={mats.walk} />}
-      {d.shell && <mesh geometry={d.shell} material={mats.shell} renderOrder={2} />}
       {d.rail && <mesh geometry={d.rail} material={mats.rail} renderOrder={3} />}
-      <group ref={nearRef} visible={false}>
+      <group ref={nearRef} visible>
         {d.ribs.length > 0 && <primitive object={ribMesh} />}
       </group>
+    </>
+  )
+}
+
+/** Banda exterior del camino con LOD: piel siempre que esté en rango (`active`), pasarelas/arcos solo de cerca (`nearActive`). */
+export function TunelBanda({ way, mats, nearRef, active = true, nearActive = true }) {
+  if (!active && !nearActive) return null
+  return (
+    <>
+      {active && <TunelBandaShell way={way} mat={mats.shell} />}
+      {nearActive && <TunelBandaNear way={way} mats={mats} nearRef={nearRef} />}
     </>
   )
 }

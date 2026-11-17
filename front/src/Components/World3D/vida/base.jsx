@@ -462,6 +462,77 @@ const textCache = new Map()
 const matCache = new Map()
 const MAX_TEXT_CACHE = 128
 const MAX_MAT_CACHE = 160
+let cacheEpoch = 0
+let cacheEpochPending = false
+
+function currentCacheEpoch() {
+  if (!cacheEpochPending) {
+    cacheEpochPending = true
+    queueMicrotask(() => {
+      cacheEpoch += 1
+      cacheEpochPending = false
+    })
+  }
+  return cacheEpoch
+}
+
+function isTextInUse(textKey, textEntry) {
+  if (textEntry.refs > 0) return true
+  for (const m of matCache.values()) {
+    if (m.textKey === textKey && m.refs > 0) return true
+  }
+  return false
+}
+
+function pruneTextCache(protectEpoch = -1) {
+  if (textCache.size <= MAX_TEXT_CACHE) return
+  for (const [k, entry] of textCache) {
+    if (textCache.size <= MAX_TEXT_CACHE) break
+    if (protectEpoch >= 0 && entry.epoch === protectEpoch) continue
+    if (isTextInUse(k, entry)) continue
+    for (const [mk, me] of matCache) {
+      if (me.textKey === k) {
+        matCache.delete(mk)
+        me.mat?.dispose?.()
+      }
+    }
+    textCache.delete(k)
+    entry.texture?.dispose?.()
+  }
+}
+
+function pruneMatCache(protectEpoch = -1) {
+  if (matCache.size <= MAX_MAT_CACHE) return
+  for (const [k, entry] of matCache) {
+    if (matCache.size <= MAX_MAT_CACHE) break
+    if (protectEpoch >= 0 && entry.epoch === protectEpoch) continue
+    if (entry.refs > 0) continue
+    matCache.delete(k)
+    entry.mat?.dispose?.()
+  }
+}
+
+function retainText(key) {
+  const entry = textCache.get(key)
+  if (entry) entry.refs += 1
+}
+
+function releaseText(key) {
+  const entry = textCache.get(key)
+  if (entry && entry.refs > 0) entry.refs -= 1
+  pruneTextCache()
+}
+
+function retainMat(key) {
+  const entry = matCache.get(key)
+  if (entry) entry.refs += 1
+}
+
+function releaseMat(key) {
+  const entry = matCache.get(key)
+  if (entry && entry.refs > 0) entry.refs -= 1
+  pruneMatCache()
+}
 
 /**
  * CanvasText(texto, estilo) -> { texture, aspect, key }  (cacheado por texto + estilo).
@@ -470,8 +541,14 @@ const MAX_MAT_CACHE = 160
  */
 export function CanvasText(texto, estilo = {}) {
   const key = `${texto}|${JSON.stringify(estilo)}`
+  const epoch = currentCacheEpoch()
   const hit = textCache.get(key)
-  if (hit) return hit
+  if (hit) {
+    hit.epoch = epoch
+    textCache.delete(key)
+    textCache.set(key, hit)
+    return hit
+  }
   const {
     size = 56, font = 'bold', family = 'system-ui, sans-serif', color = '#ffffff',
     bg = 'rgba(14,18,34,0.9)', border = '#ffffff', borderW = 6, pad = 26, radius = 22,
@@ -525,34 +602,33 @@ export function CanvasText(texto, estilo = {}) {
   tex.colorSpace = THREE.SRGBColorSpace
   tex.needsUpdate = true
   markShared(tex)
-  if (textCache.size >= MAX_TEXT_CACHE) {
-    const oldestKey = textCache.keys().next().value
-    const oldest = textCache.get(oldestKey)
-    textCache.delete(oldestKey)
-    oldest?.texture?.dispose?.()
-  }
-  const out = { texture: tex, aspect, key }
+  const out = { texture: tex, aspect, key, refs: 0, epoch }
   textCache.set(key, out)
+  pruneTextCache(epoch)
   return out
 }
 
 /** Material cacheado para un CanvasText (no se crea por frame ni por render). */
 export function textMaterial(ct, { glow = 1 } = {}) {
   const key = `${ct.key}|${glow}`
-  let m = matCache.get(key)
-  if (!m) {
-    if (matCache.size >= MAX_MAT_CACHE) {
-      const oldestKey = matCache.keys().next().value
-      const oldest = matCache.get(oldestKey)
-      matCache.delete(oldestKey)
-      oldest?.dispose?.()
-    }
-    m = markShared(new THREE.MeshBasicMaterial({
-      map: ct.texture, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide, toneMapped: false,
-    }))
-    m.color.setScalar(glow)
-    matCache.set(key, m)
+  const epoch = currentCacheEpoch()
+  const hit = matCache.get(key)
+  if (hit && hit.mat?.map === ct.texture) {
+    hit.epoch = epoch
+    matCache.delete(key)
+    matCache.set(key, hit)
+    return hit.mat
   }
+  if (hit) {
+    matCache.delete(key)
+    hit.mat?.dispose?.()
+  }
+  const m = markShared(new THREE.MeshBasicMaterial({
+    map: ct.texture, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide, toneMapped: false,
+  }))
+  m.color.setScalar(glow)
+  matCache.set(key, { mat: m, key, textKey: ct.key, refs: 0, epoch })
+  pruneMatCache(epoch)
   return m
 }
 
@@ -563,8 +639,23 @@ const PLANE_GEO = markShared(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0))
  * faceCamera: true usa el Billboard de drei (siempre de frente); false usa `quat` (cartel fijo).
  */
 export function Billboard({ text, style, height = 0.5, position, quat, faceCamera = false, glow = 1 }) {
-  const ct = CanvasText(text, style)
-  const mat = textMaterial(ct, { glow })
+  const styleKey = JSON.stringify(style ?? {})
+  const { ct, mat, matKey } = useMemo(() => {
+    const c = CanvasText(text, style)
+    const m = textMaterial(c, { glow })
+    return { ct: c, mat: m, matKey: `${c.key}|${glow}` }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, styleKey, glow])
+
+  useEffect(() => {
+    retainText(ct.key)
+    retainMat(matKey)
+    return () => {
+      releaseMat(matKey)
+      releaseText(ct.key)
+    }
+  }, [ct.key, matKey])
+
   const sc = [height * ct.aspect, height, 1]
   if (faceCamera) {
     return (

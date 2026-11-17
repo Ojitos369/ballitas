@@ -1,17 +1,22 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { CartelesDeRuta, Billboard, Soundless, routeInfo, buildTerrainGeo, buildSkyGeo, placeAlong, laneFrame, switchesOf, Critter, EventStage, Instanced, mulberry32 } from './base.jsx'
+import { CartelesDeRuta, Billboard, Soundless, routeInfo, buildTerrainGeo, buildSkyGeo, placeAlong, laneFrame, switchesOf, Critter, EventStage, Instanced, markShared, mulberry32 } from './base.jsx'
 
 const SIGN = { color: '#fff8ff', bg: 'rgba(37,20,59,.94)', border: '#f3a7ff' }
-const crystalGeo = new THREE.OctahedronGeometry(1, 3)
-const crystalMat = new THREE.MeshStandardMaterial({ color: '#c67bff', emissive: '#6d27b3', emissiveIntensity: 1.15, roughness: .18, metalness: .25 })
-const archGeo = new THREE.TorusGeometry(.43, .055, 10, 32)
-const archMat = new THREE.MeshStandardMaterial({ color: '#f5c8ff', emissive: '#b94aff', emissiveIntensity: 1.5, roughness: .22, metalness: .45 })
-const fairyGeo = new THREE.SphereGeometry(1, 12, 10)
-const fairyMat = new THREE.MeshBasicMaterial({ color: '#fff2a8' })
-const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: .26, depthWrite: false })
-const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .68, metalness: .15, side: THREE.DoubleSide })
+const crystalGeo = markShared(new THREE.OctahedronGeometry(1, 3))
+const crystalMat = markShared(new THREE.MeshStandardMaterial({ color: '#c67bff', emissive: '#6d27b3', emissiveIntensity: 1.15, roughness: .18, metalness: .25 }))
+const archGeo = markShared(new THREE.TorusGeometry(.43, .055, 10, 32))
+const archMat = markShared(new THREE.MeshStandardMaterial({ color: '#f5c8ff', emissive: '#b94aff', emissiveIntensity: 1.5, roughness: .22, metalness: .45 }))
+const gateOrbGeo = markShared(new THREE.SphereGeometry(.14, 16, 12))
+const gateOrbMat = markShared(new THREE.MeshBasicMaterial({ color: '#fff1a1' }))
+const gatePostGeo = markShared(new THREE.CylinderGeometry(.025, .025, .4, 8))
+const gatePostMat = markShared(new THREE.MeshStandardMaterial({ color: '#e5aaff', emissive: '#a336e8', emissiveIntensity: 1.5 }))
+const pulseGeo = markShared(new THREE.SphereGeometry(.34, 18, 14))
+const fairyGeo = markShared(new THREE.SphereGeometry(1, 12, 10))
+const fairyMat = markShared(new THREE.MeshBasicMaterial({ color: '#fff2a8' }))
+const skyMat = markShared(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: .26, depthWrite: false }))
+const terrainMat = markShared(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .68, metalness: .15, side: THREE.DoubleSide }))
 const pulseMat = new THREE.MeshBasicMaterial({ color: '#ffe5ff', transparent: true, opacity: .15, side: THREE.DoubleSide, depthWrite: false })
 const palettes = [['#d6a5ff','#71f1ff','#fff0a6'], ['#ff9de2','#9beaff','#d3ffb0'], ['#ffe28a','#bca2ff','#8efff2']]
 const labels = ['GEODA VIVA','PUENTE PRISMA','CATEDRAL DE LUZ']
@@ -44,8 +49,8 @@ function CrystalSegment({ seg, routeIndex, routeName }) {
     <Instanced geo={crystalGeo} mat={crystalMat} items={scene.items} />
     <mesh geometry={archGeo} position={scene.gate.pos} quaternion={scene.gate.quat} scale={[1.18,1.18,1.18]}><primitive object={archMat} attach="material" /></mesh>
     {gates.map((g) => <group key={g.key} position={g.mid}>
-      <mesh geometry={new THREE.SphereGeometry(.14,16,12)}><meshBasicMaterial color="#fff1a1" /></mesh>
-      <mesh position={[0,.2,0]}><cylinderGeometry args={[.025,.025,.4,8]} /><meshStandardMaterial color="#e5aaff" emissive="#a336e8" emissiveIntensity={1.5} /></mesh>
+      <mesh geometry={gateOrbGeo} material={gateOrbMat} />
+      <mesh position={[0,.2,0]} geometry={gatePostGeo} material={gatePostMat} />
     </group>)}
     <EventStage segment={seg} render={(stage) => <CrystalPulse seg={seg} stage={stage} routeIndex={routeIndex} />} />
     <BillboardMini text={routeName} seg={seg} />
@@ -61,6 +66,7 @@ function CrystalPulse({ seg, stage, routeIndex }) {
   const ref = useRef()
   const color = palettes[routeIndex % palettes.length][routeIndex % 3]
   const mat = useMemo(() => pulseMat.clone(), [])
+  useEffect(() => () => mat.dispose(), [mat])
   useFrame((_, dt) => {
     if (!ref.current) return
     const target = stage.phase === 'climax' ? .72 : stage.phase === 'teaser' ? .34 : stage.phase === 'salida' ? .23 : .12
@@ -72,7 +78,7 @@ function CrystalPulse({ seg, stage, routeIndex }) {
     mat.color.set(color)
   })
   const u = routeIndex === 0 ? .5 : routeIndex === 1 ? .32 : .68
-  return <mesh ref={ref} material={mat} position={seg.curve.getPointAt(u)}><sphereGeometry args={[.34,18,14]} /></mesh>
+  return <mesh ref={ref} geometry={pulseGeo} material={mat} position={seg.curve.getPointAt(u)} />
 }
 
 export default function Vida({ way }) {
