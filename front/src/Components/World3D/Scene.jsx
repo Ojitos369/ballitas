@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Stars, Environment, Lightformer, GradientTexture } from '@react-three/drei'
 import {
@@ -20,6 +20,11 @@ import Bollita from './Bollita.jsx'
 const STEP = 0.05
 const FOV = 50
 const POV_FOV = 75
+const POV_FOV_MIN = 45
+const POV_FOV_MAX = 100
+const POV_PITCH_MAX = THREE.MathUtils.degToRad(80)
+const POV_SENS = 0.0045
+const POV_RETURN_DELAY = 2000
 const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
 const SEGUIR_DIST = 3.6 // distancia cómoda detrás/encima de la bollita (0.55x en tubos)
@@ -40,6 +45,8 @@ const povOrthoUp = new THREE.Vector3()
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
+const povLookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
+const povLookQuat = new THREE.Quaternion()
 const upRefVec = new THREE.Vector3()
 
 const NEBULA_VERT = /* glsl */ `
@@ -145,6 +152,7 @@ function NebulaDome({ r }) {
 function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
   const controls = useRef()
   const camera = useThree((s) => s.camera)
+  const gl = useThree((s) => s.gl)
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
   const ultima = useRef(null)
   const userActive = useRef(false)
@@ -156,7 +164,114 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
   const povQuat = useRef(new THREE.Quaternion())
   const povUp = useRef(new THREE.Vector3(0, 1, 0))
   const povInit = useRef(false)
+  const povYaw = useRef(0)
+  const povPitch = useRef(0)
+  const povFov = useRef(POV_FOV)
+  const povDragging = useRef(false)
+  const povLastInteract = useRef(0)
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
+
+  useEffect(() => {
+    if (!povActive) {
+      povYaw.current = 0
+      povPitch.current = 0
+      povFov.current = POV_FOV
+      povDragging.current = false
+      return
+    }
+    const dom = gl.domElement
+    const prevCursor = dom.style.cursor
+    const prevTouchAction = dom.style.touchAction
+    dom.style.cursor = 'grab'
+    dom.style.touchAction = 'none'
+
+    let pointerId = null
+    let lastX = 0
+    let lastY = 0
+    let moved = false
+
+    const onPointerDown = (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      if (pointerId !== null) return
+      pointerId = e.pointerId
+      lastX = e.clientX
+      lastY = e.clientY
+      moved = false
+    }
+
+    const onPointerMove = (e) => {
+      if (e.pointerId !== pointerId) return
+      const dx = e.clientX - lastX
+      const dy = e.clientY - lastY
+      if (!moved && dx * dx + dy * dy < 16) return
+      if (!moved) {
+        moved = true
+        povDragging.current = true
+        dom.style.cursor = 'grabbing'
+        try { dom.setPointerCapture(e.pointerId) } catch {}
+      }
+      lastX = e.clientX
+      lastY = e.clientY
+      povYaw.current = THREE.MathUtils.clamp(povYaw.current + dx * POV_SENS, -Math.PI, Math.PI)
+      povPitch.current = THREE.MathUtils.clamp(povPitch.current + dy * POV_SENS, -POV_PITCH_MAX, POV_PITCH_MAX)
+      povLastInteract.current = performance.now()
+    }
+
+    const endDrag = (e) => {
+      if (e.pointerId !== pointerId) return
+      pointerId = null
+      if (moved) {
+        try { dom.releasePointerCapture(e.pointerId) } catch {}
+        povLastInteract.current = performance.now()
+      }
+      povDragging.current = false
+      dom.style.cursor = 'grab'
+    }
+
+    const onDblClick = () => {
+      povYaw.current = 0
+      povPitch.current = 0
+    }
+
+    const onWheel = (e) => {
+      e.preventDefault()
+      povFov.current = THREE.MathUtils.clamp(povFov.current + e.deltaY * 0.03, POV_FOV_MIN, POV_FOV_MAX)
+    }
+
+    const onKeyDown = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'r' || e.key === 'R') {
+        povYaw.current = 0
+        povPitch.current = 0
+      }
+    }
+
+    dom.addEventListener('pointerdown', onPointerDown)
+    dom.addEventListener('pointermove', onPointerMove)
+    dom.addEventListener('pointerup', endDrag)
+    dom.addEventListener('pointercancel', endDrag)
+    dom.addEventListener('dblclick', onDblClick)
+    dom.addEventListener('wheel', onWheel, { passive: false })
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      dom.removeEventListener('pointerdown', onPointerDown)
+      dom.removeEventListener('pointermove', onPointerMove)
+      dom.removeEventListener('pointerup', endDrag)
+      dom.removeEventListener('pointercancel', endDrag)
+      dom.removeEventListener('dblclick', onDblClick)
+      dom.removeEventListener('wheel', onWheel)
+      window.removeEventListener('keydown', onKeyDown)
+      dom.style.cursor = prevCursor
+      dom.style.touchAction = prevTouchAction
+      povDragging.current = false
+      povYaw.current = 0
+      povPitch.current = 0
+      povFov.current = POV_FOV
+    }
+  }, [povActive, gl])
 
   // Posición de la vista general: encaja el mundo también en pantallas verticales.
   const casa = () => {
@@ -179,12 +294,21 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
     let targetFov = FOV
     let targetNear = NEAR_DEFAULT
     if (povActive) {
-      targetFov = POV_FOV
+      targetFov = povFov.current
       targetNear = NEAR_POV
       if (modo.current !== 'pov' || ultima.current !== selected) {
         modo.current = 'pov'
         ultima.current = selected
         povInit.current = false
+        povYaw.current = 0
+        povPitch.current = 0
+        povFov.current = POV_FOV
+        povDragging.current = false
+      }
+
+      if (!povDragging.current && performance.now() - povLastInteract.current > POV_RETURN_DELAY) {
+        povYaw.current = Math.abs(povYaw.current) < 1e-4 ? 0 : THREE.MathUtils.damp(povYaw.current, 0, 3.5, h)
+        povPitch.current = Math.abs(povPitch.current) < 1e-4 ? 0 : THREE.MathUtils.damp(povPitch.current, 0, 3.5, h)
       }
 
       if (selected.dir && selected.dir.lengthSq() > 1e-6) {
@@ -219,7 +343,12 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
       povOrthoUp.crossVectors(povRight, povFwd).normalize()
       povMat.makeBasis(povRight, povOrthoUp, sideVec.copy(povFwd).negate())
       povTargetQuat.setFromRotationMatrix(povMat)
-      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-10 * h))
+      if (povYaw.current !== 0 || povPitch.current !== 0) {
+        povLookEuler.set(povPitch.current, povYaw.current, 0, 'YXZ')
+        povLookQuat.setFromEuler(povLookEuler)
+        povTargetQuat.multiply(povLookQuat)
+      }
+      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(povDragging.current ? 18 : 10) * h))
       camera.quaternion.copy(povQuat.current)
 
       const upShift = selected.phase === 'travel' ? -0.06 : 0.08
@@ -449,14 +578,51 @@ function PostFX({ dofOn, selected }) {
   )
 }
 
+function PovHint({ active }) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (!active) { setVisible(false); return }
+    setVisible(true)
+    const id = setTimeout(() => setVisible(false), 4500)
+    return () => clearTimeout(id)
+  }, [active])
+
+  if (!visible) return null
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 24,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        padding: '7px 14px',
+        borderRadius: 999,
+        background: 'rgba(10, 14, 28, 0.72)',
+        border: '1px solid rgba(155, 182, 240, 0.25)',
+        color: '#dce8ff',
+        fontSize: 13,
+        letterSpacing: '0.02em',
+        backdropFilter: 'blur(8px)',
+        pointerEvents: 'none',
+        zIndex: 30,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Arrastra para mirar · R centra · Esc sale
+    </div>
+  )
+}
+
 export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, onSelect }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
+  const povActive = Boolean(pov && selected && selected.phase !== 'gone')
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
   const focusWay = selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null
 
   return (
-    <Canvas
+    <>
+      <Canvas
       shadows="soft"
       dpr={[1, 1.5]}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
@@ -509,5 +675,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       <CameraRig mundo={mundo} nodes={sim.world.nodes} selected={selected} follow={follow} pov={pov} cine={cine} />
       <PostFX dofOn={dofOn} selected={selected} />
     </Canvas>
+    <PovHint active={povActive} />
+    </>
   )
 }
