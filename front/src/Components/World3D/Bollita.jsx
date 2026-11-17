@@ -144,7 +144,7 @@ function resolveExpression(b, g) {
 }
 
 // Una bollita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Bollita({ b, sim, selected, pov = false, worldRadius = 110, onSelect }) {
+export default function Bollita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
   const root = useRef(); const bodyGroup = useRef()
   const orbGroupRef = useRef(); const extOrbRef = useRef(); const extHaloRef = useRef()
   const eyeL = useRef(); const eyeR = useRef()
@@ -461,12 +461,12 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     <>
     <group
       ref={root}
-      onClick={(e) => (e.stopPropagation(), onSelect(b))}
-      onPointerOver={() => (document.body.style.cursor = 'pointer')}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onClick={(e) => { if (!pov && !povMode) { e.stopPropagation(); onSelect(b) } }}
+      onPointerOver={() => { if (!pov && !povMode) document.body.style.cursor = 'pointer' }}
+      onPointerOut={() => { if (!pov && !povMode) document.body.style.cursor = '' }}
     >
       {/* zona de clic generosa; sin sombra */}
-      <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} />
+      <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} visible={!pov && !povMode} />
       <group ref={bodyGroup} scale={r} visible={!pov}>
         <mesh geometry={SHARED_GEO.body} castShadow>
           <meshStandardMaterial map={bodyTex} roughness={0.32} />
@@ -583,9 +583,9 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
         ref={extOrbRef}
         geometry={SHARED_GEO.extOrb}
         material={extOrbMat}
-        onClick={(e) => (e.stopPropagation(), onSelect(b))}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onClick={(e) => { if (!pov && !povMode) { e.stopPropagation(); onSelect(b) } }}
+        onPointerOver={() => { if (!pov && !povMode) document.body.style.cursor = 'pointer' }}
+        onPointerOut={() => { if (!pov && !povMode) document.body.style.cursor = '' }}
       />
       <sprite ref={extHaloRef} material={extHaloMat} raycast={() => null} />
     </group>
