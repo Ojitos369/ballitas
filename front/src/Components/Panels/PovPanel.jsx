@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 
 const JOY_MAX_R = 32
 const JOY_DEADZONE = 0.18 // zona muerta amplia: sin deriva al soltar a medias
@@ -24,7 +24,7 @@ function computeJoy(el, clientX, clientY) {
 }
 
 /**
- * Panel compacto de ayuda y controles en vista POV + pad virtual de mirada.
+ * Controles mínimos en vista POV (centrar, mirar libre, giroscopio, salir) + pad virtual de mirada.
  */
 export default function PovPanel({
   active,
@@ -37,7 +37,6 @@ export default function PovPanel({
   onToggleGyro,
   onExitPov,
 }) {
-  const [showHelp, setShowHelp] = useState(true)
   const padRef = useRef(null)
   const knobRef = useRef(null)
   const joyPointerId = useRef(null)
@@ -117,29 +116,6 @@ export default function PovPanel({
         aria-label="Controles de cámara POV"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div className="pov-panel-head">
-          <span className="pov-badge">🎥 Vista POV</span>
-          <button
-            type="button"
-            className="pov-mini-btn"
-            aria-expanded={showHelp}
-            aria-label={showHelp ? 'Ocultar ayuda POV' : 'Mostrar ayuda POV'}
-            title={showHelp ? 'Ocultar ayuda' : 'Mostrar ayuda'}
-            onClick={() => setShowHelp((v) => !v)}
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            className="pov-mini-btn"
-            aria-label="Salir de POV (Esc)"
-            title="Salir de POV (Esc)"
-            onClick={onExitPov}
-          >
-            ✕
-          </button>
-        </div>
-
         <div className="pov-actions">
           <button
             type="button"
@@ -147,7 +123,7 @@ export default function PovPanel({
             onClick={onCenter}
             title="Centrar mirada al frente (R)"
           >
-            🎯 Centrar <kbd>R</kbd>
+            🎯 Centrar
           </button>
           <button
             type="button"
@@ -167,21 +143,11 @@ export default function PovPanel({
           >
             🧭 {gyroActive ? 'Giro ON' : 'Giroscopio'}
           </button>
+          <button type="button" className="pov-action" aria-label="Salir de POV (Esc)" title="Salir de POV (Esc)" onClick={onExitPov}>✕</button>
         </div>
 
-        {pointerLocked && (
-          <p className="pov-status">Cursor bloqueado · Esc suelta cursor · 2º Esc sale de POV</p>
-        )}
         {gyroNote && <p className="pov-status">{gyroNote}</p>}
 
-        {showHelp && (
-          <div className="pov-help">
-            <span>Arrastra o usa el pad</span>
-            <span>Flechas / WASD / IJKL: girar</span>
-            <span>Q/E: inclinar · Rueda: zoom</span>
-            <span>R / doble clic: centrar · Esc: salir</span>
-          </div>
-        )}
       </section>
 
       <div
@@ -198,7 +164,6 @@ export default function PovPanel({
           <div className="pov-joy-cross" aria-hidden="true" />
           <div ref={knobRef} className="pov-joy-knob" aria-hidden="true" />
         </div>
-        <span className="pov-joy-label">Mirar</span>
       </div>
     </>
   )

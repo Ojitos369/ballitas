@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from 'react'
 import { perfilRuta } from '../World3D/Vistas.jsx'
 
-const VIEWS = [['mapa', 'Mapa', '1'], ['camino', 'Camino', '2'], ['ballita', 'Ballita', '3']]
+const VIEWS = ['mapa', 'camino', 'ballita']
+const NOMBRE = { mapa: 'Mapa', camino: 'Camino', ballita: 'Ballita' }
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0)
 
-// Pestañas de vista + ficha contextual (mapa: camino resaltado; camino: recorrido; ballita: ayuda).
-export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRouteIndex, selected, punto, paused, setPaused, caminoSpeed, setCaminoSpeed, seekTo, onFollow, progressRef }) {
+// Botón discreto de vista (esquina; teclas 1/2/3, V, Esc) + ficha contextual (mapa: camino resaltado; camino: recorrido).
+export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRouteIndex, paused, setPaused, caminoSpeed, setCaminoSpeed, seekTo, onFollow, progressRef }) {
   const nodes = sim.world.nodes
   const perfil = useMemo(() => perfilRuta(way, routeIndex), [way, routeIndex])
   const { route, segs, total } = perfil
@@ -39,16 +40,15 @@ export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRout
   }
 
   return <>
-    <nav className="vistas-tabs" aria-label="Vistas del mundo" role="tablist">
-      {VIEWS.map(([id, label, key]) => <button key={id} role="tab" aria-selected={vista === id} className={vista === id ? 'activa' : ''} onClick={() => goVista(id)}>
-        {label}<kbd>{key}</kbd>
-      </button>)}
-    </nav>
+    <div className="vista-esquina">
+      {vista === 'ballita' && <button type="button" aria-label="Recentrar cámara (R)" title="Recentrar cámara (R)" onClick={() => window.dispatchEvent(new Event('ballitas:recentrar'))}>⟲</button>}
+      <button type="button" aria-label={`Cambiar vista (ahora: ${NOMBRE[vista]})`} title={`Vista: ${NOMBRE[vista]} · 1/2/3, V, Esc`}
+        onClick={() => goVista(VIEWS[(VIEWS.indexOf(vista) + 1) % VIEWS.length])}>👁</button>
+    </div>
     {vista === 'mapa' && way && <div className="vista-toast">
       <strong>{way.theme.emoji} {way.theme.name}</strong><span>{nodes[way.from].name} → {nodes[way.to].name}</span>
       <button onClick={() => goVista('camino')}>Entrar al camino</button>
     </div>}
-    {vista === 'camino' && !way && <div className="vista-toast"><span>Elige un camino en el mapa (tubo o etiqueta) o selecciona una ballita en ruta.</span><button onClick={() => goVista('mapa')}>Volver al mapa</button></div>}
     {vista === 'camino' && way && <aside className="camino-panel" aria-label="Recorrido del camino">
       <header><small>RECORRIDO · {nodes[way.from].name} → {nodes[way.to].name}</small><button onClick={() => goVista('mapa')}>Salir ×</button></header>
       <h2>{way.theme.emoji} {way.theme.name}</h2>
@@ -75,6 +75,5 @@ export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRout
         <div className="ballitas-camino">{enVivo.length ? enVivo.map((b) => <button key={b.id} onClick={() => onFollow(b)}>{b.name}{b.route ? ` · ${b.route.name}` : ''}{posBallita(b) != null ? ` · ${posBallita(b)}%` : ''}</button>) : <small>Nadie por aquí ahora.</small>}</div>
       </>}
     </aside>}
-    {vista === 'ballita' && selected && <div className="vista-toast vista-ballita"><strong>{selected.name}</strong><span>{punto === 'interna' ? 'Punto de vista interno' : 'Seguimiento externo'} · V alterna · Esc mapa</span></div>}
   </>
 }

@@ -1205,6 +1205,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
           sim={sim}
           selected={selected === b}
           pov={pov && selected === b}
+          follow={follow && selected === b}
           povMode={povActive}
           worldRadius={r}
           onSelect={povActive ? NOOP : onSelect}
