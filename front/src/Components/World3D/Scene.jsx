@@ -198,6 +198,19 @@ function medirMundo(nodes) {
   return { center: s.center, r: Math.max(s.radius, 1) * 1.3 }
 }
 
+// Capa de fondo con parallax: sigue a la cámara en fracción `follow` (1 = infinito, no se desplaza;
+// 0 = fija al mundo). Capas con follow distinto se deslizan a ritmos distintos al mover la cámara.
+const parallaxOff = new THREE.Vector3()
+function Parallax({ center, follow, children }) {
+  const ref = useRef()
+  useFrame(({ camera }) => {
+    if (!ref.current) return
+    parallaxOff.copy(camera.position).sub(center).multiplyScalar(follow)
+    ref.current.position.copy(center).add(parallaxOff)
+  })
+  return <group ref={ref} position={center}>{children}</group>
+}
+
 function NebulaDome({ r }) {
   const mat = useMemo(() => new THREE.ShaderMaterial({
     vertexShader: NEBULA_VERT,
@@ -1090,19 +1103,26 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
 
       {/* fondo: cúpula oscura + nebulosa FBM + estrellas, centradas en el mundo */}
-      <group position={center}>
-        {/* radio 12r + zoom máximo 6r < far 20r: la cúpula nunca se recorta */}
+      {/* fondo en capas con parallax: cuanto más lejana la capa, más sigue a la cámara (se desplaza menos).
+          Radios + desplazamiento máximo (zoom 6r) quedan bajo far 20r: nada se recorta. */}
+      <Parallax center={center} follow={1}>
         <mesh scale={r * 12}>
           <sphereGeometry args={[1, 24, 12]} />
           <meshBasicMaterial side={THREE.BackSide} depthWrite={false} fog={false}>
             <GradientTexture stops={[0, 0.55, 1]} colors={['#0d1124', '#060812', '#020307']} />
           </meshBasicMaterial>
         </mesh>
+      </Parallax>
+      <Parallax center={center} follow={0.92}>
         <NebulaDome r={r} />
-        {/* espacio profundo: dos capas de estrellas (lejanas finas + cercanas brillantes), sin líneas de constelación */}
-        <Stars radius={r * 8} depth={r * 2} count={2600} factor={Math.max(1.2, r * 0.028)} saturation={0.35} fade speed={0.2} />
-        <Stars radius={r * 6} depth={r * 1.2} count={500} factor={Math.max(2, r * 0.05)} saturation={0.6} fade speed={0.5} />
-      </group>
+        <Stars radius={r * 8} depth={r * 2} count={2400} factor={Math.max(1.2, r * 0.026)} saturation={0.35} fade speed={0.2} />
+      </Parallax>
+      <Parallax center={center} follow={0.6}>
+        <Stars radius={r * 5.5} depth={r * 1.2} count={600} factor={Math.max(2, r * 0.045)} saturation={0.6} fade speed={0.4} />
+      </Parallax>
+      <Parallax center={center} follow={0.25}>
+        <Stars radius={r * 3.2} depth={r * 0.8} count={260} factor={Math.max(2.6, r * 0.06)} saturation={0.8} fade speed={0.6} />
+      </Parallax>
 
       {/* Iluminación con contraste: clave cálida + relleno frío tenue */}
       <Sol r={r} shadowsOn={cameraOnBall} selected={selected} />
