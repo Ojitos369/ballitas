@@ -955,7 +955,10 @@ function sampleWayPoints(way, steps = 14) {
 }
 
 const SPATIAL_CELL = 12
-const pointCell = (p) => `${Math.floor(p.x / SPATIAL_CELL)},${Math.floor(p.y / SPATIAL_CELL)},${Math.floor(p.z / SPATIAL_CELL)}`
+const CAND_ARC_DIV = +(globalThis.__AD ?? 48)
+// clave numérica de celda (sin cadenas): coordenadas de celda en ±1024
+const cellKey = (x, y, z) => ((x + 1024) * 2048 + (y + 1024)) * 2048 + (z + 1024)
+const pointCell = (p) => cellKey(Math.floor(p.x / SPATIAL_CELL), Math.floor(p.y / SPATIAL_CELL), Math.floor(p.z / SPATIAL_CELL))
 function indexPlacedWay(placed, entry) {
   placed.push(entry)
   const grid = placed.grid || (placed.grid = new Map())
@@ -999,7 +1002,7 @@ function placeWay(world, circuit, from, to, placed) {
       if (pt.trim) continue
       const x = Math.floor(pt.p.x / SPATIAL_CELL); const y = Math.floor(pt.p.y / SPATIAL_CELL); const z = Math.floor(pt.p.z / SPATIAL_CELL)
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const bucket = grid.get(`${x + dx},${y + dy},${z + dz}`)
+        const bucket = grid.get(cellKey(x + dx, y + dy, z + dz))
         if (!bucket) continue
         for (const q of bucket) {
           const r = pt.r + q.r; const d2 = pt.p.distanceToSquared(q.p)
@@ -1074,6 +1077,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   }
   const seg = (kind, curve, route, tramo) => {
     const K = KINDS[kind]
+    if (!commit) curve.arcLengthDivisions = CAND_ARC_DIV // candidato: longitudes aproximadas bastan para medir holguras (el elegido se reconstruye fino)
     const s = {
       idx: commit ? world.segments.length : -1, i: way.segments.length, way, route, kind, name: K.name, emoji: K.emoji,
       curve, length: curve.getLength(), radius: P.radius, air: !!K.air, boost: K.boost, drag: K.drag,
