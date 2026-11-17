@@ -134,6 +134,63 @@ function remolino(col, radios = [1.5, 1.85, 2.2], z = -0.3) {
   return out
 }
 
+// ═══════════════════════════ MODELOS GLB (registro) ═══════════════════════════
+// Los GLB (public/models, ver Modelos.jsx) se cargan de forma diferida y se registran aquí. Mientras no estén,
+// las claves `m:<modelo>[:<tema>]` caen a su forma procedural equivalente (FB); al registrarse el modelo
+// se avisa a los suscriptores (Ecosistema.jsx) para que cambien la geometría.
+const modelos = new Map()
+const subs = new Set()
+let ver = 0
+export const modelosVersion = () => ver
+export const suscribirModelos = (fn) => { subs.add(fn); return () => subs.delete(fn) }
+export const modeloListo = (n) => modelos.has(n)
+export function registrarModelo(nombre, geo) {
+  modelos.set(nombre, geo)
+  ver++
+  subs.forEach((fn) => fn())
+}
+
+/** Geometría limpia (no indexada: position, normal, color lineal) de una escena glTF. El color real de los GLB
+ *  está en COLOR_1 (COLOR_0 sale en blanco del exportador); si no hay COLOR_1 se usa COLOR_0. */
+export function geoDeGltf(scene) {
+  scene.updateMatrixWorld(true)
+  const gs = []
+  scene.traverse((o) => {
+    if (!o.isMesh) return
+    const s = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()
+    s.applyMatrix4(o.matrixWorld)
+    const src = s.attributes.color_1 ?? s.attributes.color
+    const n = s.attributes.position.count
+    const col = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) { col[i * 3] = src ? src.getX(i) : 1; col[i * 3 + 1] = src ? src.getY(i) : 1; col[i * 3 + 2] = src ? src.getZ(i) : 1 }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', s.attributes.position)
+    g.setAttribute('normal', s.attributes.normal)
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    gs.push(g)
+  })
+  return gs.length ? (gs.length === 1 ? gs[0] : mergeGeometries(gs)) : null
+}
+
+// Pieza a partir de un modelo registrado: transformación horneada; `rule(r,g,b,x,y,z)` (color lineal y posición
+// original del vértice) devuelve { fx, glow } para animar solo algunos vértices (lava, agua, chorro...) o null.
+function PM(b, o = {}) {
+  const pos = o.pos ?? [0, 0, 0]
+  const g = b.clone()
+  g.applyMatrix4(_m.compose(_p.set(...pos), _q.setFromEuler(_e.set(...(o.rot ?? [0, 0, 0]))), _s.set(...vec3(o.scl))))
+  const n = g.attributes.position.count
+  const c = b.attributes.color; const p = b.attributes.position
+  const fA = new Float32Array(n * 4); const nA = new Float32Array(n * 4)
+  for (let i = 0; i < n; i++) {
+    const r = o.rule?.(c.getX(i), c.getY(i), c.getZ(i), p.getX(i), p.getY(i), p.getZ(i))
+    fA.set(r?.fx ?? o.fx ?? [0, 0, 0, 0], i * 4)
+    nA[i * 4] = pos[0]; nA[i * 4 + 1] = pos[1]; nA[i * 4 + 2] = pos[2]; nA[i * 4 + 3] = r?.glow ?? o.glow ?? 0
+  }
+  g.setAttribute('aFx', new THREE.BufferAttribute(fA, 4))
+  g.setAttribute('aCen', new THREE.BufferAttribute(nA, 4))
+  return g
+}
+
 // ═══════════════════════════ DETALLES DE ECOSISTEMA (formas) ═══════════════════════════
 const S = {
   // sombrío
@@ -264,19 +321,90 @@ const PIECE = {
   rampa: (id) => rampa(...RAMPA[id]),
 }
 
+// ═══════════════════════════ FORMAS CON MODELO GLB ═══════════════════════════
+// Escalas elegidas para igualar el tamaño de la forma procedural a la que acompañan (los GLB miden ~1).
+const lava = (r, g, b) => (r > 0.6 && g < 0.5 && b < 0.2 ? { fx: F(8, 0.3, 0, 0), glow: 2 } : null)
+const agua = (r, g, b) => (b > 0.75 && g > 0.3 && r < 0.7 ? { fx: F(11, 0.7, 6, 0), glow: 1 } : null)
+const brillo = (min, k = 3, glow = 0.7) => (r, g, b) => (Math.max(r, g, b) > min ? { fx: F(k, 0.3, 0, (r * 7 + b * 5) % TAU), glow } : null)
+const rampaM = (b, id) => [PM(b, { scl: 2, rot: [0, -PI / 2, 0], pos: [0, -1.75, 0] }),
+  ...(id === 'volcan' ? [P(box(2.0, 0.05, 0.12), '#ff6a1a', { pos: [0, -0.78, 0.95], glow: 1.4, fx: F(8, 0.3, 0, 0) })] : [])]
+const MODEL = {
+  volcan_erupcion: (b) => [PM(b, { scl: 1.8, rule: lava }),
+    ...swarm(14, 7, [0.4, 0.1, 0.4], () => oct(0.09), '#ff8a2a', { y0: 1.8, k: 9, sp: 0.33, am: 3.2, glow: 2.4 }),
+    ...swarm(8, 8, [0.5, 0.1, 0.5], () => oct(0.08), '#4a4440', { y0: 1.85, k: 2, sp: 0.15, am: 3.5 })],
+  geiser: (b, id) => [PM(b, { scl: 1.4, pos: [0, -0.25, 0], rule: (r, g, bl, x, y, z) => (y > 0.3 && Math.hypot(x, z) < 0.12 ? { fx: F(6, 0.22, 0, 0), glow: 1.2 } : null) }),
+    P(cyl(0.22, 0.16, 2.6, 7), PAL[id].w, { glow: 1.0, fx: F(6, 0.22, 0, 0) }),
+    ...swarm(10, 3, [0.7, 0, 0.7], () => oct(0.07), PAL[id].w, { y0: 0.1, k: 2, sp: 0.22, am: 2.4, glow: 1.4 })],
+  rampa_roca: rampaM,
+  rampa_hielo: rampaM,
+  rampa_madera: rampaM,
+  cascada_roca: (b) => [PM(b, { scl: 1.3, rule: agua })],
+  lapida: (b) => [PM(b, { scl: 1.0 })],
+  estalagmita_hielo: (b) => [PM(b, { scl: 1.2, glow: 0.12 })],
+  geoda: (b) => [PM(b, { scl: 0.95, rule: brillo(0.7) })],
+  saguaro_grande: (b) => [PM(b, { scl: 1.7 })],
+  concha_gigante: (b) => [PM(b, { scl: 0.75, glow: 0.1 })],
+  alga_larga: (b) => [PM(b, { scl: 1.7, fx: F(1, 0.3, 0.5, 0) })],
+  hongo_gigante: (b) => [PM(b, { scl: 0.9, rule: (r, g, bl) => (Math.min(r, g, bl) > 0.7 ? { fx: [0, 0, 0, 0], glow: 0.5 } : null) })],
+  tronco_hueco: (b) => [PM(b, { scl: 1.7, rot: [0, 0, PI / 2], pos: [0.85, 0.4, 0] })],
+  fuente_jardin: (b) => [PM(b, { scl: 1.2, rule: (r, g, bl) => (bl > 0.8 && r < 0.8 ? { fx: [0, 0, 0, 0], glow: 0.6 } : null) }),
+    ...swarm(6, 5, [0.5, 0, 0.5], () => sph(0.05, 4, 3), '#cffaff', { y0: 1.0, k: 2, sp: 0.22, am: 1.0, glow: 0.9 })],
+  luciernaga_farol: (b) => [PM(b, { scl: 0.9, rule: brillo(0.7, 3, 1.8) })],
+  isla_nube: (b) => [PM(b, { scl: 2, pos: [0, -1.5, 0], fx: F(5, 0.07, 0.35, 0) })],
+  puente_cristal: (b) => [PM(b, { scl: 3, rule: (r, g, bl) => (r + g + bl > 1.4 ? { fx: [0, 0, 0, 0], glow: 0.45 } : null) })],
+}
+// Forma procedural equivalente mientras el GLB no está cargado.
+const FB = {
+  volcan_erupcion: () => volcanPieza(),
+  geiser: (id) => geiserPieza(PAL[id]),
+  rampa_roca: (id) => rampa(...RAMPA[id]),
+  rampa_hielo: (id) => rampa(...RAMPA[id]),
+  rampa_madera: (id) => rampa(...RAMPA[id]),
+  cascada_roca: () => [P(ico(0.7), '#4a4a52', { scl: [1, 0.7, 1] })],
+  lapida: () => S.lapida(),
+  estalagmita_hielo: () => S.estalagmita(),
+  geoda: () => S.geoda(),
+  saguaro_grande: () => S.saguaro(),
+  concha_gigante: () => S.concha(),
+  alga_larga: () => S.alga(),
+  hongo_gigante: () => S.hongo(),
+  tronco_hueco: () => S.tronco(),
+  fuente_jardin: () => S.fuente(),
+  luciernaga_farol: () => S.luciernaga(),
+  isla_nube: () => S.isla(),
+  puente_cristal: () => [P(box(3, 0.18, 1), '#7df9ff', { glow: 0.4 })],
+}
+export const MODELOS_ECO = Object.keys(MODEL)
+// forma procedural -> modelo que la sustituye en una parte de las instancias
+const ALT = { lapida: 'lapida', estalagmita: 'estalagmita_hielo', geoda: 'geoda', saguaro: 'saguaro_grande', concha: 'concha_gigante', alga: 'alga_larga', hongo: 'hongo_gigante', tronco: 'tronco_hueco', fuente: 'fuente_jardin', luciernaga: 'luciernaga_farol', isla: 'isla_nube' }
+const ALT_P = { luciernaga: 0.2, fuente: 0.6, isla: 0.5 } // el resto: 0.4
+const RAMPA_M = { sombrio: 'rampa_roca', desierto: 'rampa_roca', volcan: 'rampa_roca', mar: 'rampa_roca', hielo: 'rampa_hielo', bosque: 'rampa_madera', jardin: 'rampa_madera' }
+// triángulos de cada GLB (manifiesto) para topar el gasto por camino
+const TRIS = { volcan_erupcion: 414, geiser: 302, rampa_roca: 80, rampa_hielo: 80, rampa_madera: 176, cascada_roca: 170, isla_nube: 462, puente_cristal: 332, alga_larga: 360, concha_gigante: 372, saguaro_grande: 342, estalagmita_hielo: 150, geoda: 270, lapida: 104, tronco_hueco: 220, fuente_jardin: 378, hongo_gigante: 301, luciernaga_farol: 218 }
+const MODEL_TRIS_CAP = 9000 // por camino, en detalles con modelo
+
 const geoCache = new Map()
-/** Geometría fusionada de una clave `s:<forma>` o `<pieza>:<tema>` (con caché; se comparte entre caminos). */
+const fbCache = new Map()
+/** Geometría fusionada de una clave `s:<forma>`, `<pieza>:<tema>` o `m:<modelo>[:<tema>]` (con caché; se comparte
+ *  entre caminos). Una clave `m:` usa el GLB registrado o, si aún no cargó, su forma procedural equivalente. */
 export function ecoGeometry(key) {
   let g = geoCache.get(key)
-  if (!g) {
-    const [t, n] = key.split(':')
-    const parts = t === 's' ? S[n]() : PIECE[t](n)
-    g = mergeGeometries(parts, false)
-    for (const p of parts) p.dispose()
-    g.name = 'eco:' + key // rastreo en ?stats=1 (__ballitasDebug)
-    g.computeBoundingSphere()
-    geoCache.set(key, g)
-  }
+  if (g) return g
+  const [t, n, id] = key.split(':')
+  let cache = geoCache
+  let parts
+  if (t === 'm' && modelos.has(n)) parts = MODEL[n](modelos.get(n), id)
+  else if (t === 'm') {
+    g = fbCache.get(key)
+    if (g) return g
+    cache = fbCache
+    parts = FB[n](id)
+  } else parts = t === 's' ? S[n]() : PIECE[t](n)
+  g = mergeGeometries(parts, false)
+  for (const p of parts) p.dispose()
+  g.name = 'eco:' + key // rastreo en ?stats=1 (__ballitasDebug)
+  g.computeBoundingSphere()
+  cache.set(key, g)
   return g
 }
 export const ecoTris = (key) => ecoGeometry(key).attributes.position.count / 3
@@ -292,10 +420,10 @@ const ECO = {
   desierto: [{ k: 'saguaro', d: 0.06, s: [1, 1.7], p: 'top' }, { k: 'duna', d: 0.03, s: [2, 4], p: 'below', off: [3, 6] }, { k: 'esqueleto', d: 0.02, s: [0.9, 1.4], p: 'top' }, { k: 'remolinoArena', d: 0.03, s: [1, 2], p: 'side' }, { k: 'mesa', d: 0.02, s: [1.5, 3], p: 'below', off: [3, 6] }],
   hielo: [{ k: 'estalagmita', d: 0.1, s: [0.8, 1.6], p: 'side' }, { k: 'aurora', d: 0.015, s: [2.5, 4], p: 'air', off: [6, 11], cap: 6 }, { k: 'copo', d: 0.4, s: [0.8, 1.6], p: 'air', off: [0.5, 3], cap: 60 }, { k: 'bloque', d: 0.06, s: [0.8, 1.6], p: 'side' }],
   volcan: [{ k: 'grieta', d: 0.12, s: [1, 1.8], p: 'top' }, { k: 'rocaFlotante', d: 0.05, s: [0.8, 1.6], p: 'air', off: [2, 6] }, { k: 'ceniza', d: 0.05, s: [1, 2], p: 'side' }, { k: 'basalto', d: 0.05, s: [1, 1.8], p: 'side' }, { k: 'ascua', d: 0.3, s: [0.8, 1.6], p: 'air', off: [0.5, 3], cap: 60 }],
-  cristal: [{ k: 'geoda', d: 0.08, s: [0.8, 1.6], p: 'side' }, { k: 'cristalAlto', d: 0.04, s: [1, 1.8], p: 'side' }, { k: 'destello', d: 0.35, s: [0.8, 1.6], p: 'air', off: [0.5, 3], cap: 60 }],
+  cristal: [{ k: 'geoda', d: 0.08, s: [0.8, 1.6], p: 'side' }, { k: 'cristalAlto', d: 0.04, s: [1, 1.8], p: 'side' }, { k: 'destello', d: 0.35, s: [0.8, 1.6], p: 'air', off: [0.5, 3], cap: 60 }, { k: 'puente', mod: 'puente_cristal', d: 0.012, s: [1.5, 2.5], p: 'air', off: [2, 5], cap: 4 }],
   nubes: [{ k: 'isla', d: 0.015, s: [1.5, 2.8], p: 'air', off: [5, 10], cap: 8 }, { k: 'arcoiris', d: 0.006, s: [5, 8], p: 'air', off: [6, 12], cap: 2 }, { k: 'puff', d: 0.06, s: [1, 2], p: 'air', off: [2, 6] }],
   jardin: [{ k: 'flor', d: 0.3, s: [0.8, 1.5], p: 'top' }, { k: 'fuente', d: 0.02, s: [0.9, 1.4], p: 'top' }, { k: 'seto', d: 0.08, s: [0.8, 1.5], p: 'side' }, { k: 'petalo', d: 0.35, s: [0.8, 1.6], p: 'air', off: [0.5, 3], cap: 60 }],
-  neon: [{ k: 'cable', d: 0.1, s: [1, 1.6], p: 'top' }, { k: 'holograma', d: 0.05, s: [1, 1.6], p: 'side' }, { k: 'baliza', d: 0.08, s: [1, 1.6], p: 'side' }, { k: 'pixeles', d: 0.05, s: [1, 1.6], p: 'air', off: [1, 3] }],
+  neon: [{ k: 'cable', d: 0.1, s: [1, 1.6], p: 'top' }, { k: 'holograma', d: 0.05, s: [1, 1.6], p: 'side' }, { k: 'baliza', d: 0.08, s: [1, 1.6], p: 'side' }, { k: 'pixeles', d: 0.05, s: [1, 1.6], p: 'air', off: [1, 3] }, { k: 'puente', mod: 'puente_cristal', d: 0.012, s: [1.5, 2.5], p: 'air', off: [2, 5], cap: 4 }],
 }
 const TINTS = { sombrio: ['#ffffff', '#e0d4ff'], bosque: ['#ffffff', '#e6ffd8'], mar: ['#ffffff', '#d8f4ff', '#ffe8f0'], desierto: ['#ffffff', '#fff0d0'], hielo: ['#ffffff', '#e8f6ff'], volcan: ['#ffffff', '#ffd8c0'], cristal: ['#ffffff', '#ffe0ff', '#d8f8ff'], nubes: ['#ffffff'], jardin: ['#ffffff', '#ffe0ec', '#fff4c8'], neon: ['#ffffff'] }
 const DETAIL_CAP = 40 // por especie y camino
@@ -351,25 +479,29 @@ export function buildEcosistema(way, getFrames, sample) {
     pieces++
     if (pk === 'geiser' || pk === 'volcan') {
       const sc = R * (pk === 'volcan' ? 1.6 : 1.3)
-      add(pk === 'volcan' ? 'volcan:-' : `geiser:${id}`, new THREE.Matrix4().compose(f0.pos.clone().addScaledVector(Yw, -R * 0.6), yaw(), new THREE.Vector3(sc, sc, sc)), WHITE, sc)
+      const mm = new THREE.Matrix4().compose(f0.pos.clone().addScaledVector(Yw, -R * 0.6), yaw(), new THREE.Vector3(sc, sc, sc))
+      const gl = rng() < 0.7 // 70% con el GLB como base, el resto procedural
+      add(pk === 'volcan' ? (gl ? 'm:volcan_erupcion' : 'volcan:-') : gl ? `m:geiser:${id}` : `geiser:${id}`, mm, WHITE, sc)
     } else if (pk === 'cascada') {
       const f1 = sample(frames, 1)
       const top = f0.pos.clone().addScaledVector(f0.right, R * 1.25)
       const bot = f1.pos.clone().addScaledVector(f1.right, R * 1.25)
       const v = top.clone().sub(bot); const L = v.length() || 1
       add(`cascada:${id}`, new THREE.Matrix4().compose(bot, new THREE.Quaternion().setFromUnitVectors(Yw, v.divideScalar(L)), new THREE.Vector3(R, L, R)), WHITE, L)
+      add(`m:cascada_roca:${id}`, new THREE.Matrix4().compose(bot, yaw(), new THREE.Vector3(R * 1.2, R * 1.2, R * 1.2)), WHITE, R * 1.2)
       add(`bruma:${id}`, new THREE.Matrix4().compose(bot, yaw(), new THREE.Vector3(R * 0.8, R * 0.8, R * 0.8)), WHITE, R)
     } else if (pk === 'portal') {
       add(`portal:${id}`, basis(sample(frames, 1), R * 1.1), WHITE, R * 1.1)
     } else {
-      add(`rampa:${id}`, basis(f0, R), WHITE, R)
+      const rm = RAMPA_M[id]
+      add(rm && rng() < 0.75 ? `m:${rm}:${id}` : `rampa:${id}`, basis(f0, R), WHITE, R)
     }
   }
 
   // — Detalles de ecosistema —
   const tints = (TINTS[id] ?? ['#ffffff']).map((c) => new THREE.Color(c))
   const dir = new THREE.Vector3(); const pos = new THREE.Vector3(); const q = new THREE.Quaternion(); const qy = new THREE.Quaternion()
-  let total = 0
+  let total = 0; let mTris = 0
   for (const spec of ECO[id] ?? []) {
     let cnt = 0
     const cap = spec.cap ?? DETAIL_CAP
@@ -398,6 +530,13 @@ export function buildEcosistema(way, getFrames, sample) {
           q.copy(qy)
         }
         const sc = rr(rng, spec.s)
+        const mn = spec.mod ?? (ALT[spec.k] && rng() < (ALT_P[spec.k] ?? 0.4) ? ALT[spec.k] : null)
+        if (mn && mTris + TRIS[mn] <= MODEL_TRIS_CAP) {
+          mTris += TRIS[mn]
+          add(`m:${mn}`, new THREE.Matrix4().compose(pos, q, _s.set(sc, sc, sc)), tints[Math.floor(rng() * tints.length)], sc)
+          cnt++; total++
+          continue
+        }
         add(`s:${spec.k}`, new THREE.Matrix4().compose(pos, q, _s.set(sc, sc, sc)), tints[Math.floor(rng() * tints.length)], sc)
         cnt++; total++
       }

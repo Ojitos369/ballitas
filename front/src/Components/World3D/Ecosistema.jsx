@@ -1,8 +1,9 @@
 // Ecosistema y transiciones naturales de cada camino (ver ecosistema.js). Un InstancedMesh por forma/pieza y camino,
 // un único material compartido y animado en el vertex shader con el uniform de tiempo de Paths (sin useFrame propio).
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import * as THREE from 'three'
-import { buildEcosistema, ecoGeometry } from './ecosistema.js'
+import { buildEcosistema, ecoGeometry, modelosVersion, suscribirModelos } from './ecosistema.js'
+import { cargarModelosEco } from './Modelos.jsx'
 
 const matCache = new WeakMap()
 
@@ -81,9 +82,9 @@ varying float vGlow;
   return m
 }
 
-function EInst({ k, items, maxS, mat }) {
+function EInst({ k, items, maxS, mat, ver }) {
   const ref = useRef()
-  const geo = useMemo(() => ecoGeometry(k), [k])
+  const geo = useMemo(() => ecoGeometry(k), [k, k[0] === 'm' ? ver : 0]) // las claves m: cambian al cargar el GLB
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
@@ -92,16 +93,18 @@ function EInst({ k, items, maxS, mat }) {
     o.instanceColor.needsUpdate = true
     o.computeBoundingSphere()
     o.boundingSphere.radius += 6 + 6 * maxS // holgura: el vertex shader desplaza (sube, órbita, erupciona)
-  }, [items, maxS])
+  }, [items, maxS, geo])
   return <instancedMesh ref={ref} args={[geo, mat, items.length]} raycast={() => null} />
 }
 
 export default function Ecosistema({ way, time, getFrames, sample }) {
   const groups = useMemo(() => buildEcosistema(way, getFrames, sample), [way, getFrames, sample])
   const mat = useMemo(() => ecoMaterial(time), [time])
+  const ver = useSyncExternalStore(suscribirModelos, modelosVersion)
+  useEffect(() => { cargarModelosEco(groups.filter((g) => g.key[0] === 'm').map((g) => g.key.split(':')[1])) }, [groups])
   return (
     <group>
-      {groups.map((g) => <EInst key={g.key} k={g.key} items={g.items} maxS={g.maxS} mat={mat} />)}
+      {groups.map((g) => <EInst key={g.key} k={g.key} items={g.items} maxS={g.maxS} mat={mat} ver={ver} />)}
     </group>
   )
 }

@@ -5,6 +5,8 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { geoDeGltf, modeloListo, registrarModelo } from './ecosistema.js'
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
 const u = (n) => BASE + n + '.glb'
@@ -32,6 +34,17 @@ export const MODELOS = {
 
 export const precargarModelosNuevos = (nombres = Object.keys(MODELOS)) => nombres.forEach((n) => MODELOS[n] && useGLTF.preload(MODELOS[n]))
 
+// Carga diferida (sin Suspense) de los GLB que usa el ecosistema: una sola petición por modelo, compartida entre
+// caminos; al terminar se registra en ecosistema.js, que avisa a los InstancedMesh para cambiar la geometría.
+const pendientes = new Map()
+const loader = new GLTFLoader()
+export function cargarModelosEco(nombres) {
+  for (const n of nombres) {
+    if (!MODELOS[n] || modeloListo(n) || pendientes.has(n)) continue
+    pendientes.set(n, loader.loadAsync(MODELOS[n]).then((g) => { const geo = geoDeGltf(g.scene); if (geo) registrarModelo(n, geo) }).catch((e) => console.warn('modelo', n, e)))
+  }
+}
+
 /** { geometry, material } del modelo (mallas fusionadas, material con vertexColors); null si el nombre no existe.
  *  Suspende mientras carga (usar dentro de <Suspense>). */
 export function useModeloGeo(nombre) {
@@ -46,6 +59,12 @@ export function useModeloGeo(nombre) {
       if (!o.isMesh) return
       const g = o.geometry.clone()
       g.applyMatrix4(o.matrixWorld)
+      // el color real está en COLOR_1 (COLOR_0 sale en blanco del exportador de Blender)
+      if (g.attributes.color_1) {
+        const s = g.attributes.color_1; const a = new Float32Array(s.count * 3)
+        for (let i = 0; i < s.count; i++) { a[i * 3] = s.getX(i); a[i * 3 + 1] = s.getY(i); a[i * 3 + 2] = s.getZ(i) }
+        g.setAttribute('color', new THREE.BufferAttribute(a, 3))
+      }
       for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k)
       if (!g.attributes.color) g.setAttribute('color', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count * 3).fill(1), 3))
       geos.push(g)
