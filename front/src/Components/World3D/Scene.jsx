@@ -962,7 +962,7 @@ function PostFX({ dofOn, selected, highQuality }) {
     const t = setTimeout(() => idle(() => {
       if (warm.current === 0) warm.current = 1
       precompilar(gl, scene, camera, scene)
-    }), 2500)
+    }, { timeout: 1500 }), 2500) // con render continuo casi nunca hay tiempo ocioso: sin timeout no corría
     return () => clearTimeout(t)
   }, [gl, camera, scene])
 
