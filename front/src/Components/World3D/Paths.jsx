@@ -2,7 +2,7 @@ import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState 
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { mulberry32 } from '../../Core/world.js'
+import { mulberry32, laneFrame, wallFrame } from '../../Core/world.js'
 import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
@@ -2752,7 +2752,11 @@ function buildFloorSegmentGeo(s, frames, V, isFast, isSlow) {
   const acc = new THREE.Color(evHex)
 
   const nCols = FLOOR_PROFILE.length
-  const nF = frames.length
+  // El piso sigue la SUPERFICIE del carril 0 (world.laneFrame): peralte en curvas y relieve (lomas,
+  // badenes, rampas) bajo el centro, que se funde con el cristal hacia los bordes. Filas propias cada
+  // ~1.2 u para que las rampas cortas no se pierdan (los `frames` de decoración son más gruesos).
+  const nF = THREE.MathUtils.clamp(Math.ceil(s.length / 1.2), Math.max(12, frames.length), 320) + 1
+  const lf = {}; const wf = {}
   const vCount = nF * nCols
   const pos = new Float32Array(vCount * 3)
   const uv = new Float32Array(vCount * 2)
@@ -2760,21 +2764,18 @@ function buildFloorSegmentGeo(s, frames, V, isFast, isSlow) {
   const accent = new Float32Array(vCount * 3)
   const iCount = (nF - 1) * (nCols - 1) * 6
   const idx = vCount > 65535 ? new Uint32Array(iCount) : new Uint16Array(iCount)
-  const dir = new THREE.Vector3()
-  const down = new THREE.Vector3()
-
   let vi = 0; let ui = 0
   for (let i = 0; i < nF; i++) {
-    const f = frames[i]
-    down.copy(f.up).negate()
-    const uCoord = f.arc * density
+    const u = i / (nF - 1)
+    laneFrame(s, 0, u, lf)
+    const uCoord = u * s.length * density
     for (let k = 0; k < nCols; k++) {
       const [a, radMult] = FLOOR_PROFILE[k]
-      const rr = R * radMult
-      dir.copy(down).multiplyScalar(Math.cos(a)).addScaledVector(f.right, Math.sin(a)).normalize()
-      pos[vi] = f.pos.x + dir.x * rr
-      pos[vi + 1] = f.pos.y + dir.y * rr
-      pos[vi + 2] = f.pos.z + dir.z * rr
+      const rr = R * radMult - lf.relief * Math.cos(Math.min(1, Math.abs(a) / 0.51) * Math.PI / 2) ** 2
+      const p = wallFrame(s, lf.angle + a, u, rr, wf).pos
+      pos[vi] = p.x
+      pos[vi + 1] = p.y
+      pos[vi + 2] = p.z
       meta[vi] = scroll; meta[vi + 1] = glowMult; meta[vi + 2] = warmShift
       accent[vi] = acc.r; accent[vi + 1] = acc.g; accent[vi + 2] = acc.b
       vi += 3
