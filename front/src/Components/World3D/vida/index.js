@@ -1,7 +1,7 @@
 // Registro de módulos de vida por tema. Cada archivo <id>.jsx se edita de forma independiente;
 // aquí solo se enlaza el id del tema con su componente (contrato en README.md).
-import { createElement } from 'react'
-import { VidaGuard } from './base.jsx'
+import { createElement, useEffect, useRef } from 'react'
+import { VidaGuard, disposeObject3D } from './base.jsx'
 import sombrio from './sombrio.jsx'
 import bosque from './bosque.jsx'
 import mar from './mar.jsx'
@@ -24,10 +24,34 @@ export function getVida(themeId) {
   return VIDA[themeId] ?? VidaVacia
 }
 
+export const VIDA_PERF = {
+  active: 0,
+  totalMounts: 0,
+  mountTimes: [],
+}
+
 /** Monta el módulo del tema del `way` dentro de un VidaGuard (un fallo no tumba la escena). */
 export function VidaDeCamino(props) {
   const id = props.way?.theme?.id
-  return createElement(VidaGuard, { themeId: id }, createElement(getVida(id), props))
+  const wrapRef = useRef(null)
+  useEffect(() => {
+    VIDA_PERF.active += 1
+    VIDA_PERF.totalMounts += 1
+    VIDA_PERF.mountTimes.push(performance.now())
+    if (VIDA_PERF.mountTimes.length > 200) {
+      VIDA_PERF.mountTimes.splice(0, VIDA_PERF.mountTimes.length - 200)
+    }
+    const root = wrapRef.current
+    return () => {
+      VIDA_PERF.active -= 1
+      disposeObject3D(root)
+    }
+  }, [])
+  return createElement(
+    'group',
+    { ref: wrapRef },
+    createElement(VidaGuard, { themeId: id }, createElement(getVida(id), props)),
+  )
 }
 
 export { VIDA_BUS } from './base.jsx'

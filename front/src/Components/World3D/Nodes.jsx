@@ -425,7 +425,7 @@ function makeLatheGeo(points, segments = 32) {
 
 // ───────────────────────── Geometrías compartidas suaves ─────────────────────────
 // Edificios de ciudad (3 variantes biseladas/curvas, base en y=0, altura 1)
-const houseRoundedGeo = makeRoundedBoxGeo(1, 1, 1, 0.13, 3)
+const houseRoundedGeo = makeRoundedBoxGeo(1, 1, 1, 0.13, 1)
 const houseTowerGeo = makeLatheGeo([
   [0.5, 0],
   [0.52, 0.06],
@@ -435,7 +435,7 @@ const houseTowerGeo = makeLatheGeo([
   [0.24, 0.94],
   [0.12, 0.99],
   [0.001, 1.0],
-], 28)
+], 12)
 const houseCapsuleGeo = makeLatheGeo([
   [0.48, 0],
   [0.5, 0.08],
@@ -444,12 +444,12 @@ const houseCapsuleGeo = makeLatheGeo([
   [0.32, 0.92],
   [0.16, 0.985],
   [0.001, 1.0],
-], 28)
+], 12)
 
 // Primitivas suaves compartidas
-const cylSmooth = new THREE.CylinderGeometry(0.5, 0.5, 1, 24).translate(0, 0.5, 0)
-const roundedUnit = makeRoundedBoxGeo(1, 1, 1, 0.12, 3)
-const domeGeo = new THREE.SphereGeometry(0.64, 36, 20, 0, Math.PI * 2, 0, Math.PI / 2)
+const cylSmooth = new THREE.CylinderGeometry(0.5, 0.5, 1, 12).translate(0, 0.5, 0)
+const roundedUnit = makeRoundedBoxGeo(1, 1, 1, 0.12, 2)
+const domeGeo = new THREE.SphereGeometry(0.64, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2)
 const padGeo = makeLatheGeo([
   [0.001, 0],
   [1.04, 0],
@@ -457,7 +457,7 @@ const padGeo = makeLatheGeo([
   [0.94, 0.11],
   [0.86, 0.12],
   [0.001, 0.12],
-], 32)
+], 16)
 const basinGeo = makeLatheGeo([
   [0.001, 0],
   [0.96, 0],
@@ -466,8 +466,8 @@ const basinGeo = makeLatheGeo([
   [0.84, 0.36],
   [0.74, 0.24],
   [0.001, 0.24],
-], 32)
-const poolGeo = new THREE.CylinderGeometry(0.76, 0.72, 0.08, 32).translate(0, 0.28, 0)
+], 16)
+const poolGeo = new THREE.CylinderGeometry(0.76, 0.72, 0.08, 16).translate(0, 0.28, 0)
 
 // Destinos suaves por estilo
 const tentCanopyGeo = makeLatheGeo([
@@ -478,7 +478,7 @@ const tentCanopyGeo = makeLatheGeo([
   [0.92, 0.0],
   [0.85, -0.02],
   [0.001, 0.45],
-], 32)
+], 16)
 const towerBodyGeo = makeLatheGeo([
   [0.48, 0],
   [0.46, 0.15],
@@ -489,17 +489,17 @@ const towerBodyGeo = makeLatheGeo([
   [0.22, 1.72],
   [0.08, 1.92],
   [0.001, 1.98],
-], 32)
-const domeRingGeo = new THREE.TorusGeometry(0.66, 0.07, 16, 40)
+], 16)
+const domeRingGeo = new THREE.TorusGeometry(0.66, 0.07, 8, 20)
 const goldIconGeo = makeLatheGeo([
   [0.001, -0.32],
   [0.18, -0.14],
   [0.28, 0.0],
   [0.18, 0.16],
   [0.001, 0.34],
-], 20)
-const greenIconGeo = new THREE.SphereGeometry(0.25, 24, 18)
-const iconHaloRingGeo = new THREE.TorusGeometry(0.36, 0.022, 12, 32)
+], 12)
+const greenIconGeo = new THREE.SphereGeometry(0.25, 12, 10)
+const iconHaloRingGeo = new THREE.TorusGeometry(0.36, 0.022, 6, 18)
 
 // Farola de pista (fallback suave de lamp.glb, base y=0, altura 1)
 const lampFallbackGeo = makeLatheGeo([
@@ -511,15 +511,15 @@ const lampFallbackGeo = makeLatheGeo([
   [0.11, 0.94],
   [0.06, 0.99],
   [0.001, 1.0],
-], 20)
-const haloSphereGeo = new THREE.SphereGeometry(1, 16, 12)
+], 10)
+const haloSphereGeo = new THREE.SphereGeometry(1, 10, 8)
 
 // Atmósfera
-const atmoOuterGeo = new THREE.SphereGeometry(NODE_R * 1.11, 64, 48)
-const atmoInnerGeo = new THREE.SphereGeometry(NODE_R * 1.018, 64, 48)
-const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.028, 64, 48)
+const atmoOuterGeo = new THREE.SphereGeometry(NODE_R * 1.11, 24, 16)
+const atmoInnerGeo = new THREE.SphereGeometry(NODE_R * 1.018, 24, 16)
+const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.028, 24, 16)
 
-// Geometrías suaves de estaciones terminales (32-36 segmentos, perfiles curvos biselados)
+// Geometrías suaves de estaciones terminales
 const stBaseOut = makeLatheGeo([
   [0.001, 0],
   [2.05, 0],
@@ -527,17 +527,17 @@ const stBaseOut = makeLatheGeo([
   [1.82, 0.36],
   [1.72, 0.42],
   [0.001, 0.42],
-], 36)
+], 20)
 const stHullOut = makeLatheGeo([
   [1.52, 0.36],
   [1.48, 0.65],
   [1.36, 1.25],
   [1.26, 1.75],
   [1.28, 1.88],
-], 36)
-const stCollarOut = new THREE.TorusGeometry(1.28, 0.12, 16, 40)
-const stPortalOut = new THREE.TorusGeometry(1.33, 0.085, 16, 44)
-const stDoorLeaf = makeRoundedBoxGeo(0.95, 0.11, 1.75, 0.04, 3).translate(0, -0.055, 0)
+], 20)
+const stCollarOut = new THREE.TorusGeometry(1.28, 0.12, 8, 20)
+const stPortalOut = new THREE.TorusGeometry(1.33, 0.085, 8, 22)
+const stDoorLeaf = makeRoundedBoxGeo(0.95, 0.11, 1.75, 0.04, 2).translate(0, -0.055, 0)
 
 const stBaseIn = makeLatheGeo([
   [0.001, 0],
@@ -546,18 +546,18 @@ const stBaseIn = makeLatheGeo([
   [2.05, 0.36],
   [1.96, 0.4],
   [0.001, 0.4],
-], 36)
+], 20)
 const stBunkerIn = makeLatheGeo([
   [1.88, 0.34],
   [1.76, 0.65],
   [1.54, 1.02],
   [1.36, 1.28],
   [1.26, 1.35],
-], 36)
-const stThroatIn = new THREE.CylinderGeometry(1.18, 1.18, 0.95, 32, 1, true).translate(0, 0.72, 0)
-const stPortalIn = new THREE.TorusGeometry(1.34, 0.068, 14, 44)
-const stBeaconGeo = new THREE.SphereGeometry(0.11, 16, 12)
-const stDishGeo = new THREE.SphereGeometry(0.42, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.38)
+], 20)
+const stThroatIn = new THREE.CylinderGeometry(1.18, 1.18, 0.95, 18, 1, true).translate(0, 0.72, 0)
+const stPortalIn = new THREE.TorusGeometry(1.34, 0.068, 8, 22)
+const stBeaconGeo = new THREE.SphereGeometry(0.11, 10, 8)
+const stDishGeo = new THREE.SphereGeometry(0.42, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.38)
 const pylonFallbackGeo = makeLatheGeo([
   [0.24, 0],
   [0.22, 0.12],
@@ -565,7 +565,7 @@ const pylonFallbackGeo = makeLatheGeo([
   [0.11, 0.9],
   [0.05, 0.98],
   [0.001, 1.0],
-], 20)
+], 10)
 const podFallbackGeo = makeLatheGeo([
   [0.001, 0],
   [0.44, 0.06],
@@ -573,7 +573,7 @@ const podFallbackGeo = makeLatheGeo([
   [0.42, 0.72],
   [0.26, 0.93],
   [0.001, 1.0],
-], 28)
+], 12)
 
 // ───────────────────────── Shader de Atmósfera con Fresnel y Gradiente ─────────────────────────
 function makeAtmoMaterial(color, { back = true } = {}) {
@@ -636,7 +636,7 @@ function fbm3(x, y, z) {
 }
 
 function planetGeo(color) {
-  const g = new THREE.SphereGeometry(NODE_R - 0.02, 144, 108)
+  const g = new THREE.SphereGeometry(NODE_R - 0.02, 80, 60)
   const p = g.attributes.position
   const cols = new Float32Array(p.count * 3)
   const a = new THREE.Color(color).multiplyScalar(0.11)
@@ -846,13 +846,16 @@ function cityData(node) {
 function Instanced({ geo, material, items, children, ...rest }) {
   const ref = useRef()
   useLayoutEffect(() => {
-    if (!ref.current) return
+    const o = ref.current
+    if (!o) return
     items.forEach((it, i) => {
-      ref.current.setMatrixAt(i, it.m ?? it)
-      if (it.c) ref.current.setColorAt(i, it.c)
+      o.setMatrixAt(i, it.m ?? it)
+      if (it.c) o.setColorAt(i, it.c)
     })
-    ref.current.instanceMatrix.needsUpdate = true
-    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
+    o.instanceMatrix.needsUpdate = true
+    if (o.instanceColor) o.instanceColor.needsUpdate = true
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+    o.computeBoundingSphere?.()
   }, [items])
   if (!items.length) return null
   return (
@@ -860,6 +863,38 @@ function Instanced({ geo, material, items, children, ...rest }) {
       {children}
     </instancedMesh>
   )
+}
+
+// Caché compartida de materiales para Destinos y Terminales (evita cientos de shaders duplicados)
+const nodeMatCache = new Map()
+function getCachedMat(key, factory) {
+  let m = nodeMatCache.get(key)
+  if (!m) {
+    m = factory()
+    applyCityFade(m)
+    nodeMatCache.set(key, m)
+  }
+  return m
+}
+
+function getSharedTerminalMats(tex) {
+  return {
+    baseOut: getCachedMat('stBaseOut', () => new THREE.MeshStandardMaterial({ color: '#2a3046', normalMap: tex.hullNormal, roughness: 0.45, metalness: 0.55 })),
+    hullOut: getCachedMat('stHullOut', () => new THREE.MeshStandardMaterial({ color: '#3a4362', map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.38, metalness: 0.5, side: THREE.DoubleSide })),
+    pylonOut: getCachedMat('stPylonOut', () => new THREE.MeshStandardMaterial({ color: '#485378', normalMap: tex.hullNormal, roughness: 0.36, metalness: 0.6 })),
+    collarOut: getCachedMat('stCollarOut', () => new THREE.MeshStandardMaterial({ color: '#58648c', normalMap: tex.hullNormal, roughness: 0.3, metalness: 0.7 })),
+    doorOut: getCachedMat('stDoorOut', () => new THREE.MeshStandardMaterial({ color: '#23283b', normalMap: tex.hullNormal, roughness: 0.34, metalness: 0.72 })),
+    podOut: getCachedMat('stPodOut', () => new THREE.MeshStandardMaterial({ color: '#343d58', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.48, roughness: 0.38, metalness: 0.48 })),
+    ant: getCachedMat('stAnt', () => new THREE.MeshStandardMaterial({ color: '#a8b3d1', metalness: 0.8, roughness: 0.24 })),
+    chimney: getCachedMat('stChimney', () => new THREE.MeshStandardMaterial({ color: '#2c3144', normalMap: tex.hullNormal, roughness: 0.42, metalness: 0.6 })),
+    baseIn: getCachedMat('stBaseIn', () => new THREE.MeshStandardMaterial({ color: '#23283a', normalMap: tex.hullNormal, roughness: 0.48, metalness: 0.5 })),
+    bunkerIn: getCachedMat('stBunkerIn', () => new THREE.MeshStandardMaterial({ color: '#303752', map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.32, roughness: 0.42, metalness: 0.48, side: THREE.DoubleSide })),
+    throatIn: getCachedMat('stThroatIn', () => new THREE.MeshStandardMaterial({ color: '#0d101b', roughness: 0.9, metalness: 0.2, side: THREE.DoubleSide })),
+    pylonIn: getCachedMat('stPylonIn', () => new THREE.MeshStandardMaterial({ color: '#3c4464', normalMap: tex.hullNormal, roughness: 0.38, metalness: 0.56 })),
+    doorIn: getCachedMat('stDoorIn', () => new THREE.MeshStandardMaterial({ color: '#1d2233', normalMap: tex.hullNormal, roughness: 0.34, metalness: 0.7 })),
+    podIn: getCachedMat('stPodIn', () => new THREE.MeshStandardMaterial({ color: '#2e354d', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.38, roughness: 0.44, metalness: 0.42 })),
+    dish: getCachedMat('stDish', () => new THREE.MeshStandardMaterial({ color: '#96a3c7', metalness: 0.75, roughness: 0.25, side: THREE.DoubleSide })),
+  }
 }
 
 // ───────────────────────── Destinos con identidad arquitectónica ─────────────────────────
@@ -892,8 +927,9 @@ function destinoStyle(name, kind) {
   }
 }
 
-function Destino({ d, base, tex }) {
+function Destino({ d, base, tex, planetLodRef }) {
   const grp = useRef()
+  const detailGrp = useRef()
   const icon = useRef()
   useCityFade(grp)
   const [hover, setHover] = useState(false)
@@ -903,8 +939,25 @@ function Destino({ d, base, tex }) {
   const roofColor = gain ? '#b98924' : '#2e8864'
   const style = destinoStyle(d.name, d.kind)
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, d.dir), [d])
+  const relPos = useMemo(() => d.pos.clone().sub(base), [d, base])
+  const mats = useMemo(() => ({
+    pad: getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })),
+    icon: getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })),
+    halo: getCachedMat(`dHalo:${color}`, () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })),
+    body: getCachedMat(`dBody:${bodyColor}`, () => new THREE.MeshStandardMaterial({ color: bodyColor, map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.52, metalness: 0.35 })),
+    roof: getCachedMat(`dRoof:${roofColor}:${color}`, () => new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.42, metalness: 0.35, emissive: color, emissiveIntensity: 0.18, side: THREE.DoubleSide })),
+    pole: getCachedMat('dPole', () => new THREE.MeshStandardMaterial({ color: '#cfd5e6', roughness: 0.35, metalness: 0.55 })),
+    wood: getCachedMat('dWood', () => new THREE.MeshStandardMaterial({ color: '#73513a', roughness: 0.72 })),
+    rim: getCachedMat('dRim', () => new THREE.MeshStandardMaterial({ color: '#8fa0cc', roughness: 0.3, metalness: 0.7 })),
+    annex: getCachedMat('dAnnex', () => new THREE.MeshStandardMaterial({ color: '#464e6e', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.38, roughness: 0.5 })),
+    pool: getCachedMat(`dPool:${d.name === 'Hoguera' ? 'fire' : color}`, () => new THREE.MeshStandardMaterial({ color: d.name === 'Hoguera' ? '#ff8243' : '#4be3c4', emissive: d.name === 'Hoguera' ? '#ff6a2b' : color, emissiveIntensity: 0.68, roughness: 0.18 })),
+    canopy: getCachedMat('dCanopy', () => new THREE.MeshStandardMaterial({ color: '#3c7d63', roughness: 0.6, side: THREE.DoubleSide })),
+  }), [color, bodyColor, roofColor, tex, d.name])
 
   useFrame(({ clock }) => {
+    const near = planetLodRef?.current?.near ?? true
+    if (detailGrp.current) detailGrp.current.visible = near
+    if (!near && !hover) return
     const t = clock.elapsedTime
     icon.current.rotation.y = t * 1.5
     icon.current.position.y = (style === 'torre' ? 2.5 : 2.1) + Math.sin(t * 2 + d.idx) * 0.1
@@ -913,159 +966,72 @@ function Destino({ d, base, tex }) {
   return (
     <group
       ref={grp}
-      position={d.pos.clone().sub(base)}
+      position={relPos}
       quaternion={q}
       onPointerOver={(e) => (e.stopPropagation(), setHover(true))}
       onPointerOut={() => setHover(false)}
     >
-      {/* Basamento circular biselado */}
-      <mesh geometry={padGeo} receiveShadow castShadow>
-        <meshPhysicalMaterial
-          color="#2a2f44"
-          normalMap={tex.hullNormal}
-          roughness={0.55}
-          metalness={0.42}
-          clearcoat={0.5}
-          clearcoatRoughness={0.25}
-          emissive={color}
-          emissiveIntensity={0.14}
-        />
-      </mesh>
+      {/* Basamento circular biselado (siempre visible) */}
+      <mesh geometry={padGeo} material={mats.pad} receiveShadow />
 
-      {style === 'carpa' && (
-        <group position={[0, 0.1, 0]}>
-          {[-0.45, 0.45].map((px) => [-0.45, 0.45].map((pz) => (
-            <mesh key={`${px}${pz}`} geometry={cylSmooth} position={[px, 0, pz]} scale={[0.08, 0.72, 0.08]} castShadow>
-              <meshPhysicalMaterial color="#cfd5e6" roughness={0.35} metalness={0.55} clearcoat={0.6} />
-            </mesh>
-          )))}
-          <mesh geometry={roundedUnit} position={[0, 0, 0]} scale={[0.72, 0.36, 0.52]} castShadow>
-            <meshStandardMaterial color={bodyColor} map={tex.buildingAlbedo} normalMap={tex.buildingNormal} roughness={0.62} />
-          </mesh>
-          <mesh geometry={tentCanopyGeo} position={[0, 0.68, 0]} scale={[1.05, 0.92, 1.05]} castShadow>
-            <meshPhysicalMaterial color={roofColor} roughness={0.45} clearcoat={0.35} emissive={color} emissiveIntensity={0.16} side={THREE.DoubleSide} />
-          </mesh>
-        </group>
-      )}
+      <group ref={detailGrp}>
+        {style === 'carpa' && (
+          <group position={[0, 0.1, 0]}>
+            {[-0.45, 0.45].map((px) => [-0.45, 0.45].map((pz) => (
+              <mesh key={`${px}${pz}`} geometry={cylSmooth} material={mats.pole} position={[px, 0, pz]} scale={[0.08, 0.72, 0.08]} />
+            )))}
+            <mesh geometry={roundedUnit} material={mats.body} position={[0, 0, 0]} scale={[0.72, 0.36, 0.52]} />
+            <mesh geometry={tentCanopyGeo} material={mats.roof} position={[0, 0.68, 0]} scale={[1.05, 0.92, 1.05]} />
+          </group>
+        )}
 
-      {style === 'torre' && (
-        <group position={[0, 0.1, 0]}>
-          <mesh geometry={towerBodyGeo} scale={[0.92, 0.98, 0.92]} castShadow>
-            <meshPhysicalMaterial
-              color={bodyColor}
-              map={tex.buildingAlbedo}
-              normalMap={tex.buildingNormal}
-              emissive="#ffffff"
-              emissiveMap={tex.buildingEmissive}
-              emissiveIntensity={0.42}
-              roughness={0.42}
-              metalness={0.4}
-              clearcoat={0.6}
-              clearcoatRoughness={0.22}
-            />
-          </mesh>
-          <mesh geometry={domeRingGeo} position={[0, 1.32, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.65, 0.65, 0.65]}>
-            <meshStandardMaterial color={roofColor} emissive={color} emissiveIntensity={0.35} roughness={0.3} metalness={0.6} />
-          </mesh>
-        </group>
-      )}
+        {style === 'torre' && (
+          <group position={[0, 0.1, 0]}>
+            <mesh geometry={towerBodyGeo} material={mats.body} scale={[0.92, 0.98, 0.92]} />
+            <mesh geometry={domeRingGeo} material={mats.roof} position={[0, 1.32, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.65, 0.65, 0.65]} />
+          </group>
+        )}
 
-      {style === 'domo' && (
-        <group position={[0, 0.1, 0]}>
-          <mesh geometry={cylSmooth} scale={[1.38, 0.34, 1.38]} castShadow>
-            <meshPhysicalMaterial color="#353b54" normalMap={tex.hullNormal} roughness={0.45} metalness={0.48} clearcoat={0.55} />
-          </mesh>
-          <mesh geometry={domeGeo} position={[0, 0.32, 0]} scale={[1.04, 1.04, 1.04]} castShadow>
-            <meshPhysicalMaterial
-              color={bodyColor}
-              normalMap={tex.hullNormal}
-              emissive={color}
-              emissiveIntensity={0.18}
-              roughness={0.24}
-              metalness={0.52}
-              clearcoat={0.85}
-              clearcoatRoughness={0.14}
-            />
-          </mesh>
-          <mesh geometry={domeRingGeo} position={[0, 0.34, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <meshStandardMaterial color="#8fa0cc" roughness={0.3} metalness={0.7} />
-          </mesh>
-          <mesh geometry={roundedUnit} position={[0, 0, 0.62]} scale={[0.56, 0.48, 0.42]} castShadow>
-            <meshStandardMaterial color="#464e6e" emissive="#ffffff" emissiveMap={tex.buildingEmissive} emissiveIntensity={0.38} roughness={0.5} />
-          </mesh>
-        </group>
-      )}
+        {style === 'domo' && (
+          <group position={[0, 0.1, 0]}>
+            <mesh geometry={cylSmooth} material={mats.pad} scale={[1.38, 0.34, 1.38]} />
+            <mesh geometry={domeGeo} material={mats.body} position={[0, 0.32, 0]} scale={[1.04, 1.04, 1.04]} />
+            <mesh geometry={domeRingGeo} material={mats.rim} position={[0, 0.34, 0]} rotation={[Math.PI / 2, 0, 0]} />
+            <mesh geometry={roundedUnit} material={mats.annex} position={[0, 0, 0.62]} scale={[0.56, 0.48, 0.42]} />
+          </group>
+        )}
 
-      {style === 'fuente' && (
-        <group position={[0, 0.1, 0]}>
-          <mesh geometry={basinGeo} castShadow receiveShadow>
-            <meshPhysicalMaterial color="#40475e" normalMap={tex.hullNormal} roughness={0.55} metalness={0.3} clearcoat={0.4} />
-          </mesh>
-          <mesh geometry={poolGeo}>
-            <meshStandardMaterial
-              color={d.name === 'Hoguera' ? '#ff8243' : '#4be3c4'}
-              emissive={d.name === 'Hoguera' ? '#ff6a2b' : color}
-              emissiveIntensity={0.68}
-              roughness={0.18}
-            />
-          </mesh>
-          <mesh geometry={cylSmooth} position={[0, 0.25, 0]} scale={[0.24, 0.76, 0.24]} castShadow>
-            <meshPhysicalMaterial color="#838ca8" roughness={0.35} metalness={0.55} clearcoat={0.6} />
-          </mesh>
-          <mesh geometry={domeGeo} position={[0, 0.96, 0]} scale={[0.28, 0.24, 0.28]}>
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.55} roughness={0.2} />
-          </mesh>
-        </group>
-      )}
+        {style === 'fuente' && (
+          <group position={[0, 0.1, 0]}>
+            <mesh geometry={basinGeo} material={mats.pad} receiveShadow />
+            <mesh geometry={poolGeo} material={mats.pool} />
+            <mesh geometry={cylSmooth} material={mats.rim} position={[0, 0.25, 0]} scale={[0.24, 0.76, 0.24]} />
+            <mesh geometry={domeGeo} material={mats.icon} position={[0, 0.96, 0]} scale={[0.28, 0.24, 0.28]} />
+          </group>
+        )}
 
-      {style === 'hamaca' && (
-        <group position={[0, 0.1, 0]}>
-          <mesh geometry={cylSmooth} position={[-0.52, 0, 0]} rotation={[0, 0, 0.2]} scale={[0.1, 0.95, 0.1]} castShadow>
-            <meshStandardMaterial color="#73513a" roughness={0.72} />
-          </mesh>
-          <mesh geometry={cylSmooth} position={[0.52, 0, 0]} rotation={[0, 0, -0.2]} scale={[0.1, 0.95, 0.1]} castShadow>
-            <meshStandardMaterial color="#73513a" roughness={0.72} />
-          </mesh>
-          <mesh geometry={roundedUnit} position={[0, 0.55, 0]} scale={[0.92, 0.1, 0.48]} castShadow>
-            <meshStandardMaterial color={roofColor} roughness={0.6} emissive={color} emissiveIntensity={0.18} />
-          </mesh>
-          <mesh geometry={tentCanopyGeo} position={[0, 0.92, 0]} scale={[0.82, 0.48, 0.65]} castShadow>
-            <meshStandardMaterial color="#3c7d63" roughness={0.6} side={THREE.DoubleSide} />
-          </mesh>
-        </group>
-      )}
+        {style === 'hamaca' && (
+          <group position={[0, 0.1, 0]}>
+            <mesh geometry={cylSmooth} material={mats.wood} position={[-0.52, 0, 0]} rotation={[0, 0, 0.2]} scale={[0.1, 0.95, 0.1]} />
+            <mesh geometry={cylSmooth} material={mats.wood} position={[0.52, 0, 0]} rotation={[0, 0, -0.2]} scale={[0.1, 0.95, 0.1]} />
+            <mesh geometry={roundedUnit} material={mats.roof} position={[0, 0.55, 0]} scale={[0.92, 0.1, 0.48]} />
+            <mesh geometry={tentCanopyGeo} material={mats.canopy} position={[0, 0.92, 0]} scale={[0.82, 0.48, 0.65]} />
+          </group>
+        )}
 
-      {style === 'pabellon' && (
-        <group position={[0, 0.1, 0]}>
-          <mesh geometry={roundedUnit} scale={[1.15, 0.85, 0.95]} castShadow>
-            <meshStandardMaterial
-              color={bodyColor}
-              map={tex.buildingAlbedo}
-              normalMap={tex.buildingNormal}
-              emissive="#ffffff"
-              emissiveMap={tex.buildingEmissive}
-              emissiveIntensity={0.48}
-              roughness={0.48}
-              metalness={0.32}
-            />
-          </mesh>
-          <mesh geometry={roundedUnit} position={[0, 0.84, 0]} scale={[1.28, 0.18, 1.08]} castShadow>
-            <meshPhysicalMaterial color={roofColor} roughness={0.32} metalness={0.55} clearcoat={0.75} emissive={color} emissiveIntensity={0.22} />
-          </mesh>
-          <mesh geometry={cylSmooth} position={[0.38, 1.0, -0.25]} scale={[0.05, 0.45, 0.05]}>
-            <meshStandardMaterial color="#9aa4c2" metalness={0.75} roughness={0.28} />
-          </mesh>
-        </group>
-      )}
+        {style === 'pabellon' && (
+          <group position={[0, 0.1, 0]}>
+            <mesh geometry={roundedUnit} material={mats.body} scale={[1.15, 0.85, 0.95]} />
+            <mesh geometry={roundedUnit} material={mats.roof} position={[0, 0.84, 0]} scale={[1.28, 0.18, 1.08]} />
+            <mesh geometry={cylSmooth} material={mats.rim} position={[0.38, 1.0, -0.25]} scale={[0.05, 0.45, 0.05]} />
+          </group>
+        )}
+      </group>
 
-      {/* Icono flotante suave + halo */}
-      <group ref={icon}>
-        <mesh geometry={gain ? goldIconGeo : greenIconGeo} scale={hover ? 1.38 : 1}>
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.65} toneMapped={false} />
-        </mesh>
-        <mesh geometry={iconHaloRingGeo} rotation={[Math.PI / 2, 0, 0]} scale={hover ? 1.38 : 1}>
-          <meshBasicMaterial color={color} transparent opacity={0.45} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-        </mesh>
+      {/* Icono flotante suave + halo (siempre visible como hito del destino) */}
+      <group ref={icon} position={[0, style === 'torre' ? 2.5 : 2.1, 0]}>
+        <mesh geometry={gain ? goldIconGeo : greenIconGeo} material={mats.icon} scale={hover ? 1.38 : 1} />
+        <mesh geometry={iconHaloRingGeo} material={mats.halo} rotation={[Math.PI / 2, 0, 0]} scale={hover ? 1.38 : 1} />
       </group>
       {hover && (
         <WorldHtml center position={[0, 3.25, 0]} distanceFactor={14} zIndexRange={[5, 0]}>
@@ -1077,23 +1043,38 @@ function Destino({ d, base, tex }) {
 }
 
 // ───────────────────────── Estaciones Terminales (Salida / Entrada) ─────────────────────────
-function Terminal({ node, term, color, tex, podAsset, pylonAsset }) {
+function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }) {
   const dir = term.dir || node.verts[term.vert].dir
   const pos = term.pos || node.verts[term.vert].pos
   const isOut = term.kind === 'out'
   const key = `${node.idx}:${term.vert}:${term.kind}`
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, dir), [dir])
+  const relPos = useMemo(() => pos.clone().sub(node.pos), [pos, node.pos])
+  const tmats = useMemo(() => getSharedTerminalMats(tex), [tex])
+  const portalMatObj = useMemo(() => new THREE.MeshStandardMaterial({
+    color, emissive: color, emissiveIntensity: isOut ? 1.55 : 1.05, toneMapped: false,
+  }), [color, isOut])
+  const beaconMatObj = useMemo(() => getCachedMat(`stBeacon:${color}`, () => new THREE.MeshStandardMaterial({
+    color, emissive: color, emissiveIntensity: 1.3, toneMapped: false,
+  })), [color])
+  const haloMatObj = useMemo(() => getCachedMat(`stHalo:${color}`, () => new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+  })), [color])
+  useEffect(() => () => portalMatObj.dispose(), [portalMatObj])
 
   const grp = useRef()
+  const microRef = useRef()
   const doorL = useRef()
   const doorR = useRef()
-  const portalMat = useRef()
   const beacons = useRef([])
   const beaconHalos = useRef([])
   const openAmt = useRef(0)
   useCityFade(grp)
 
   useFrame(({ clock }, dt) => {
+    const near = planetLodRef?.current?.near ?? true
+    if (microRef.current) microRef.current.visible = near
+    if (!near) return
     const t = clock.elapsedTime
     const entry = terminalPulse.get(key)
     const active = entry && t - entry.at < 0.35 ? entry.power : 0
@@ -1105,213 +1086,67 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset }) {
       doorR.current.position.x = 0.48 + slide
     }
 
-    if (portalMat.current) {
-      const base = isOut ? 1.55 : 1.05
-      portalMat.current.emissiveIntensity = base + openAmt.current * 0.9
-    }
+    const base = isOut ? 1.55 : 1.05
+    portalMatObj.emissiveIntensity = base + openAmt.current * 0.9
 
-    beacons.current.forEach((m, i) => {
-      if (!m) return
+    for (let i = 0; i < beacons.current.length; i++) {
+      const m = beacons.current[i]
+      if (!m) continue
       const speed = 2.5 + openAmt.current * 5.5
       const wave = 0.5 + 0.5 * Math.sin(t * speed + (isOut ? -i : i) * 1.1)
-      m.material.emissiveIntensity = 0.8 + wave * (0.9 + openAmt.current * 0.9)
+      m.scale.setScalar(0.85 + wave * 0.35 + openAmt.current * 0.25)
       const halo = beaconHalos.current[i]
-      if (halo) {
-        const s = 0.24 + wave * 0.1 + openAmt.current * 0.12
-        halo.scale.setScalar(s)
-        halo.material.opacity = 0.18 + wave * 0.18
-      }
-    })
+      if (halo) halo.scale.setScalar(0.24 + wave * 0.1 + openAmt.current * 0.12)
+    }
   })
 
-  const pylonGeo = pylonAsset?.geometry || pylonFallbackGeo
-  const podGeo = podAsset?.geometry || podFallbackGeo
+  const pylonGeo = pylonFallbackGeo
+  const podGeo = podFallbackGeo
 
   return (
-    <group ref={grp} position={pos.clone().sub(node.pos)} quaternion={q}>
+    <group ref={grp} position={relPos} quaternion={q}>
       {isOut ? (
-        /* ── SALIDA: Lanzadera / Hangar con acabados metálicos clearcoat ── */
         <group>
-          <mesh geometry={stBaseOut} receiveShadow castShadow>
-            <meshPhysicalMaterial
-              color="#2a3046"
-              normalMap={tex.hullNormal}
-              roughness={0.48}
-              metalness={0.55}
-              clearcoat={0.75}
-              clearcoatRoughness={0.2}
-            />
-          </mesh>
-          {/* Cuerpo del hangar */}
-          <mesh geometry={stHullOut} castShadow receiveShadow>
-            <meshPhysicalMaterial
-              color="#3a4362"
-              map={tex.buildingAlbedo}
-              normalMap={tex.buildingNormal}
-              emissive="#ffffff"
-              emissiveMap={tex.buildingEmissive}
-              emissiveIntensity={0.42}
-              roughness={0.38}
-              metalness={0.52}
-              clearcoat={0.85}
-              clearcoatRoughness={0.16}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-          {/* 4 pilones/aletas radiales suaves (pylon.glb o fallback curvo) */}
-          {[0, 1, 2, 3].map((i) => (
-            <group key={i} rotation={[0, (i * Math.PI) / 2, 0]}>
-              <mesh geometry={pylonGeo} position={[1.48, 0.12, 0]} scale={[1.1, 1.55, 0.95]} castShadow>
-                <meshPhysicalMaterial
-                  color="#485378"
-                  normalMap={tex.hullNormal}
-                  roughness={0.36}
-                  metalness={0.6}
-                  clearcoat={0.82}
-                  clearcoatRoughness={0.18}
-                />
-              </mesh>
-              <mesh
-                ref={(el) => { beacons.current[i] = el }}
-                geometry={stBeaconGeo}
-                position={[1.48, 1.72, 0]}
-              >
-                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.4} toneMapped={false} />
-              </mesh>
-              <mesh
-                ref={(el) => { beaconHalos.current[i] = el }}
-                geometry={haloSphereGeo}
-                position={[1.48, 1.72, 0]}
-                scale={0.28}
-              >
-                <meshBasicMaterial color={color} transparent opacity={0.26} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-              </mesh>
-            </group>
-          ))}
-          {/* Cornisa superior y aro de salida */}
-          <mesh geometry={stCollarOut} position={[0, 1.86, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <meshPhysicalMaterial color="#58648c" normalMap={tex.hullNormal} roughness={0.3} metalness={0.72} clearcoat={0.9} clearcoatRoughness={0.12} />
-          </mesh>
-          <mesh geometry={stPortalOut} position={[0, 1.98, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <meshStandardMaterial ref={portalMat} color={color} emissive={color} emissiveIntensity={1.55} toneMapped={false} />
-          </mesh>
-          {/* Compuerta doble biselada que se abre */}
-          <mesh ref={doorL} geometry={stDoorLeaf} position={[-0.48, 1.8, 0]} castShadow>
-            <meshPhysicalMaterial color="#23283b" normalMap={tex.hullNormal} roughness={0.32} metalness={0.75} clearcoat={0.85} clearcoatRoughness={0.15} />
-          </mesh>
-          <mesh ref={doorR} geometry={stDoorLeaf} position={[0.48, 1.8, 0]} castShadow>
-            <meshPhysicalMaterial color="#23283b" normalMap={tex.hullNormal} roughness={0.32} metalness={0.75} clearcoat={0.85} clearcoatRoughness={0.15} />
-          </mesh>
-          {/* Torre de control (pod.glb o cápsula suave) + antena */}
-          <mesh geometry={podGeo} position={[1.55, 0.14, 0.58]} scale={[0.75, 1.95, 0.75]} castShadow>
-            <meshPhysicalMaterial
-              color="#343d58"
-              emissive="#ffffff"
-              emissiveMap={tex.buildingEmissive}
-              emissiveIntensity={0.48}
-              roughness={0.38}
-              metalness={0.48}
-              clearcoat={0.8}
-            />
-          </mesh>
-          <mesh geometry={cylSmooth} position={[1.55, 2.08, 0.58]} scale={[0.05, 0.78, 0.05]}>
-            <meshStandardMaterial color="#a8b3d1" metalness={0.8} roughness={0.24} />
-          </mesh>
-          {/* Chimeneas de escape */}
-          {[-0.45, 0.45].map((z) => (
-            <mesh key={z} geometry={cylSmooth} position={[-1.58, 0.2, z]} scale={[0.24, 1.3, 0.24]} castShadow>
-              <meshPhysicalMaterial color="#2c3144" normalMap={tex.hullNormal} roughness={0.42} metalness={0.6} clearcoat={0.6} />
-            </mesh>
-          ))}
+          <mesh geometry={stHullOut} material={tmats.hullOut} receiveShadow />
+          <mesh geometry={stPortalOut} material={portalMatObj} position={[0, 1.98, 0]} rotation={[Math.PI / 2, 0, 0]} />
+          <group ref={microRef}>
+            <mesh geometry={stBaseOut} material={tmats.baseOut} receiveShadow />
+            {[0, 1, 2, 3].map((i) => (
+              <group key={i} rotation={[0, (i * Math.PI) / 2, 0]}>
+                <mesh geometry={pylonGeo} material={tmats.pylonOut} position={[1.48, 0.12, 0]} scale={[1.1, 1.55, 0.95]} />
+                <mesh ref={(el) => { beacons.current[i] = el }} geometry={stBeaconGeo} material={beaconMatObj} position={[1.48, 1.72, 0]} />
+                <mesh ref={(el) => { beaconHalos.current[i] = el }} geometry={haloSphereGeo} material={haloMatObj} position={[1.48, 1.72, 0]} scale={0.28} />
+              </group>
+            ))}
+            <mesh geometry={stCollarOut} material={tmats.collarOut} position={[0, 1.86, 0]} rotation={[Math.PI / 2, 0, 0]} />
+            <mesh ref={doorL} geometry={stDoorLeaf} material={tmats.doorOut} position={[-0.48, 1.8, 0]} />
+            <mesh ref={doorR} geometry={stDoorLeaf} material={tmats.doorOut} position={[0.48, 1.8, 0]} />
+            <mesh geometry={podGeo} material={tmats.podOut} position={[1.55, 0.14, 0.58]} scale={[0.75, 1.95, 0.75]} />
+            <mesh geometry={cylSmooth} material={tmats.ant} position={[1.55, 2.08, 0.58]} scale={[0.05, 0.78, 0.05]} />
+            {[-0.45, 0.45].map((z) => (
+              <mesh key={z} geometry={cylSmooth} material={tmats.chimney} position={[-1.58, 0.2, z]} scale={[0.24, 1.3, 0.24]} />
+            ))}
+          </group>
         </group>
       ) : (
-        /* ── ENTRADA: Estación receptora / Túnel con compuerta ── */
         <group>
-          <mesh geometry={stBaseIn} receiveShadow castShadow>
-            <meshPhysicalMaterial
-              color="#23283a"
-              normalMap={tex.hullNormal}
-              roughness={0.5}
-              metalness={0.5}
-              clearcoat={0.7}
-              clearcoatRoughness={0.22}
-            />
-          </mesh>
-          {/* Búnker curvo suave */}
-          <mesh geometry={stBunkerIn} castShadow receiveShadow>
-            <meshPhysicalMaterial
-              color="#303752"
-              map={tex.buildingAlbedo}
-              normalMap={tex.buildingNormal}
-              emissive="#ffffff"
-              emissiveMap={tex.buildingEmissive}
-              emissiveIntensity={0.32}
-              roughness={0.42}
-              metalness={0.48}
-              clearcoat={0.82}
-              clearcoatRoughness={0.18}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-          {/* Garganta interior oscura del túnel */}
-          <mesh geometry={stThroatIn}>
-            <meshStandardMaterial color="#0d101b" roughness={0.9} metalness={0.2} side={THREE.DoubleSide} />
-          </mesh>
-          {/* 3 pilones radiales de guía */}
-          {[0, 1, 2].map((i) => (
-            <group key={i} rotation={[0, (i * Math.PI * 2) / 3, 0]}>
-              <mesh geometry={pylonGeo} position={[1.7, 0.12, 0]} rotation={[0, 0, 0.22]} scale={[1.0, 1.25, 1.0]} castShadow>
-                <meshPhysicalMaterial
-                  color="#3c4464"
-                  normalMap={tex.hullNormal}
-                  roughness={0.38}
-                  metalness={0.56}
-                  clearcoat={0.78}
-                />
-              </mesh>
-              <mesh
-                ref={(el) => { beacons.current[i] = el }}
-                geometry={stBeaconGeo}
-                position={[1.45, 1.38, 0]}
-              >
-                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.15} toneMapped={false} />
-              </mesh>
-              <mesh
-                ref={(el) => { beaconHalos.current[i] = el }}
-                geometry={haloSphereGeo}
-                position={[1.45, 1.38, 0]}
-                scale={0.24}
-              >
-                <meshBasicMaterial color={color} transparent opacity={0.22} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-              </mesh>
-            </group>
-          ))}
-          {/* Aro receptor */}
-          <mesh geometry={stPortalIn} position={[0, 1.34, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <meshStandardMaterial ref={portalMat} color={color} emissive={color} emissiveIntensity={1.05} toneMapped={false} />
-          </mesh>
-          {/* Compuerta doble biselada */}
-          <mesh ref={doorL} geometry={stDoorLeaf} position={[-0.48, 1.22, 0]} castShadow>
-            <meshPhysicalMaterial color="#1d2233" normalMap={tex.hullNormal} roughness={0.34} metalness={0.7} clearcoat={0.85} />
-          </mesh>
-          <mesh ref={doorR} geometry={stDoorLeaf} position={[0.48, 1.22, 0]} castShadow>
-            <meshPhysicalMaterial color="#1d2233" normalMap={tex.hullNormal} roughness={0.34} metalness={0.7} clearcoat={0.85} />
-          </mesh>
-          {/* Ala de servicio (pod.glb o cápsula suave) con antena parabólica */}
-          <mesh geometry={podGeo} position={[-1.65, 0.12, 0.45]} scale={[0.85, 0.98, 0.85]} castShadow>
-            <meshPhysicalMaterial
-              color="#2e354d"
-              emissive="#ffffff"
-              emissiveMap={tex.buildingEmissive}
-              emissiveIntensity={0.38}
-              roughness={0.44}
-              metalness={0.42}
-              clearcoat={0.75}
-            />
-          </mesh>
-          <mesh geometry={stDishGeo} position={[-1.65, 1.24, 0.45]} rotation={[2.6, 0, -0.4]}>
-            <meshPhysicalMaterial color="#96a3c7" metalness={0.75} roughness={0.25} clearcoat={0.8} side={THREE.DoubleSide} />
-          </mesh>
+          <mesh geometry={stBunkerIn} material={tmats.bunkerIn} receiveShadow />
+          <mesh geometry={stPortalIn} material={portalMatObj} position={[0, 1.34, 0]} rotation={[Math.PI / 2, 0, 0]} />
+          <group ref={microRef}>
+            <mesh geometry={stBaseIn} material={tmats.baseIn} receiveShadow />
+            <mesh geometry={stThroatIn} material={tmats.throatIn} />
+            {[0, 1, 2].map((i) => (
+              <group key={i} rotation={[0, (i * Math.PI * 2) / 3, 0]}>
+                <mesh geometry={pylonGeo} material={tmats.pylonIn} position={[1.7, 0.12, 0]} rotation={[0, 0, 0.22]} scale={[1.0, 1.25, 1.0]} />
+                <mesh ref={(el) => { beacons.current[i] = el }} geometry={stBeaconGeo} material={beaconMatObj} position={[1.45, 1.38, 0]} />
+                <mesh ref={(el) => { beaconHalos.current[i] = el }} geometry={haloSphereGeo} material={haloMatObj} position={[1.45, 1.38, 0]} scale={0.24} />
+              </group>
+            ))}
+            <mesh ref={doorL} geometry={stDoorLeaf} material={tmats.doorIn} position={[-0.48, 1.22, 0]} />
+            <mesh ref={doorR} geometry={stDoorLeaf} material={tmats.doorIn} position={[0.48, 1.22, 0]} />
+            <mesh geometry={podGeo} material={tmats.podIn} position={[-1.65, 0.12, 0.45]} scale={[0.85, 0.98, 0.85]} />
+            <mesh geometry={stDishGeo} material={tmats.dish} position={[-1.65, 1.24, 0.45]} rotation={[2.6, 0, -0.4]} />
+          </group>
         </group>
       )}
     </group>
@@ -1323,27 +1158,36 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const city = useMemo(() => cityData(node), [node])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(node.color, { back: true }), [node.color])
   const atmoInnerMat = useMemo(() => makeAtmoMaterial(node.color, { back: false }), [node.color])
+  useEffect(() => () => {
+    geo.dispose()
+    city.roadGeo.dispose()
+    city.lineGeo.dispose()
+    atmoOuterMat.dispose()
+    atmoInnerMat.dispose()
+  }, [geo, city, atmoOuterMat, atmoInnerMat])
 
   const cloudsRef = useRef()
   const lampsRef = useRef()
   const detailRef = useRef()
+  const planetLodRef = useRef({ near: false })
   const normalScale = useMemo(() => new THREE.Vector2(0.32, 0.32), [])
 
   useFrame(({ camera }, dt) => {
     const dist = camera.position.distanceTo(node.pos)
+    planetLodRef.current.near = dist < 95
     if (cloudsRef.current) {
       cloudsRef.current.visible = dist < 90
       if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * 0.032
     }
     if (lampsRef.current) lampsRef.current.visible = dist < 68
-    if (detailRef.current) detailRef.current.visible = dist < 120
+    if (detailRef.current) detailRef.current.visible = dist < 95
   })
 
-  const lampGeo = lampAsset?.geometry || lampFallbackGeo
+  const lampGeo = lampFallbackGeo
 
   return (
     <group position={node.pos}>
-      {/* Esfera del planeta de alta resolución con relieve y normal map suave */}
+      {/* Esfera del planeta con relieve y normal map suave */}
       <mesh geometry={geo} receiveShadow>
         <meshStandardMaterial
           vertexColors
@@ -1371,7 +1215,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
       <mesh geometry={atmoInnerGeo} material={atmoInnerMat} raycast={() => null} />
 
       {/* Calles curvas continuas y líneas guía */}
-      <mesh geometry={city.roadGeo} receiveShadow castShadow>
+      <mesh geometry={city.roadGeo} receiveShadow>
         <meshStandardMaterial map={tex.asphalt} normalMap={tex.asphaltNormal} roughness={0.72} metalness={0.14} />
       </mesh>
       <mesh geometry={city.lineGeo}>
@@ -1379,8 +1223,8 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
       </mesh>
 
       {/* Detalles de ciudad con LOD */}
-      <group ref={detailRef}>
-        <Instanced geo={houseRoundedGeo} items={city.housesRounded} castShadow receiveShadow>
+      <group ref={detailRef} visible={false}>
+        <Instanced geo={houseRoundedGeo} items={city.housesRounded}>
           <meshStandardMaterial
             ref={applyCityFade}
             map={tex.buildingAlbedo}
@@ -1392,29 +1236,25 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
             emissiveIntensity={0.54}
           />
         </Instanced>
-        <Instanced geo={houseTowerGeo} items={city.housesTower} castShadow receiveShadow>
-          <meshPhysicalMaterial
+        <Instanced geo={houseTowerGeo} items={city.housesTower}>
+          <meshStandardMaterial
             ref={applyCityFade}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
             roughness={0.48}
             metalness={0.38}
-            clearcoat={0.55}
-            clearcoatRoughness={0.22}
             emissive="#ffffff"
             emissiveMap={tex.buildingEmissive}
             emissiveIntensity={0.58}
           />
         </Instanced>
-        <Instanced geo={houseCapsuleGeo} items={city.housesCapsule} castShadow receiveShadow>
-          <meshPhysicalMaterial
+        <Instanced geo={houseCapsuleGeo} items={city.housesCapsule}>
+          <meshStandardMaterial
             ref={applyCityFade}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
             roughness={0.42}
             metalness={0.42}
-            clearcoat={0.7}
-            clearcoatRoughness={0.18}
             emissive="#ffffff"
             emissiveMap={tex.buildingEmissive}
             emissiveIntensity={0.5}
@@ -1423,7 +1263,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
       </group>
 
       {/* Luces de pista con halos suaves (LOD cercano) */}
-      <group ref={lampsRef}>
+      <group ref={lampsRef} visible={false}>
         <Instanced geo={lampGeo} items={city.lamps}>
           <meshStandardMaterial
             ref={applyCityFade}
@@ -1446,7 +1286,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         </Instanced>
       </group>
 
-      {node.destinos.map((d) => <Destino key={d.idx} d={d} base={node.pos} tex={tex} />)}
+      {node.destinos.map((d) => <Destino key={d.idx} d={d} base={node.pos} tex={tex} planetLodRef={planetLodRef} />)}
       {city.terminals.map((t, i) => (
         <Terminal
           key={`${t.kind}-${t.to}-${t.vert}-${i}`}
@@ -1456,6 +1296,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
           tex={tex}
           podAsset={podAsset}
           pylonAsset={pylonAsset}
+          planetLodRef={planetLodRef}
         />
       ))}
       <WorldHtml center position={[0, NODE_R + 3.5, 0]} distanceFactor={20} zIndexRange={[5, 0]}>
@@ -1467,18 +1308,15 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
 
 export default function Nodes({ world }) {
   const tex = useMemo(getTextures, [])
-  const lampAsset = useGlbAsset('lamp')
-  const podAsset = useGlbAsset('pod')
-  const pylonAsset = useGlbAsset('pylon')
   return world.nodes.map((n) => (
     <Planet
       key={n.idx}
       node={n}
       world={world}
       tex={tex}
-      lampAsset={lampAsset}
-      podAsset={podAsset}
-      pylonAsset={pylonAsset}
+      lampAsset={null}
+      podAsset={null}
+      pylonAsset={null}
     />
   ))
 }

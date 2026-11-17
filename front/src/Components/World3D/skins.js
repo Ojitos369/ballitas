@@ -3,10 +3,8 @@ import * as THREE from 'three'
 import { SKIN_PRESETS, skinFamily, traitProfile } from '../../Core/personality.js'
 import { applyLoadedImage } from './texUtils.js'
 
-// Los hijos se pasan como argumentos estáticos: evitar prop `key` en el objeto para prevenir colisiones.
-const noKey = (props) => { const { key, ...p } = props || {}; return p }
-const grp = (props, ...children) => h('group', noKey(props), ...children)
-const msh = (props) => h('mesh', noKey(props))
+const grp = (props, ...children) => h('group', props || null, ...children)
+const msh = (props) => h('mesh', props || null)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTRATO DEL SISTEMA GENÉRICO DE SKINS (`SKIN_PARTS` + `generateSkin`)
@@ -1553,7 +1551,7 @@ export function generateSkin(genome, arch, options = {}) {
     baseHue: bodyHue,
     accentHue,
     accentLight,
-    baseColor,
+    baseColor: bodyColor,
     accentColor,
     softColor,
     deepColor,
@@ -1972,10 +1970,10 @@ function renderFaceExtras(extras, skin) {
   const mSkull = getSkullMat()
 
   return grp(null,
-    extras.map((ex) => {
+    ...extras.map((ex, idx) => {
       if (ex.id === 'patch') {
         const sg = ex.side ?? -1
-        return grp({ key: 'patch' },
+        return grp({ key: `patch-${idx}` },
           msh({ geometry: GEO.pillDisc, material: mDark, position: [sg * 0.35, 0.14, 0.94], rotation: [0, sg * 0.28, 0], scale: [0.24, 0.22, 0.16] }),
           msh({ geometry: GEO.plane, material: mSkull, position: [sg * 0.35, 0.14, 0.975], rotation: [0, sg * 0.28, 0], scale: [0.22, 0.22, 1] }),
           msh({ geometry: GEO.capsuleThin, material: mDark, position: [sg * 0.08, 0.42, 0.84], rotation: [0.12, 0, sg * 0.58], scale: [0.024, 0.42, 0.024] }),
@@ -2154,9 +2152,9 @@ function renderBackExtras(backExtras, pal) {
   const mBone = getMat('#f5ead6', 0.72, 0.02)
 
   return grp(null,
-    backExtras.map((ex) => {
+    ...backExtras.map((ex, idx) => {
       if (ex.id === 'cat_tail') {
-        return msh({ key: 'cat_tail', geometry: GEO.tailCat, material: getMat(ex.color, 0.74, 0.02), position: [0, -0.46, -0.82], rotation: [0.15, 0.1, 0] })
+        return msh({ key: `cat_tail-${idx}`, geometry: GEO.tailCat, material: getMat(ex.color, 0.74, 0.02), position: [0, -0.46, -0.82], rotation: [0.15, 0.1, 0] })
       }
       if (ex.id === 'pom_tail') {
         return msh({ key: 'pom_tail', geometry: GEO.sphere, material: mWhite, position: [0, -0.42, -0.98], scale: 0.22 })

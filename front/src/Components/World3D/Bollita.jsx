@@ -1,9 +1,9 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
-import { BALL_R } from '../../Core/world.js'
+import { BALL_R, wallFrame } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
 import WorldHtml from './WorldHtml.jsx'
 import {
@@ -25,7 +25,9 @@ const vx = new THREE.Vector3()
 const vy = new THREE.Vector3()
 const vz = new THREE.Vector3()
 const vTmp = new THREE.Vector3()
+const frameFwd = new THREE.Vector3()
 const prevDirMap = new WeakMap()
+const smooth01 = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c) }
 
 // Expresiones chibi extendidas (heredan FACES y añaden emociones por evento/situación)
 const CHIBI_FACES = {
@@ -172,6 +174,8 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
   const dialogState = useRef({ init: false, nextCheck: 0 })
   const emoState = useRef({ kind: null, until: 0, start: 0, lastSeg: null, lastPhase: null })
   const microState = useRef({ nextWink: 5 + (b.id % 6), winkUntil: 0, nextBlep: 7 + (b.id % 5), blepUntil: 0 })
+  // carril: aterrizaje (squash), inclinación en curvas y voltereta al cambiar de pared
+  const laneFx = useRef({ squash: 0, lean: 0, up: new THREE.Vector3(0, 1, 0), prevT: new THREE.Vector3(), hasPrev: false, hadSw: false, wasAir: false })
 
   const g = b.genome.traits
   const color = useMemo(() => bodyColor(b.genome), [b])
@@ -226,6 +230,20 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
     toneMapped: false,
   }), [color])
 
+  const [nearCam, setNearCam] = useState(false)
+  const nearCamRef = useRef(false)
+
+  useEffect(() => () => {
+    bodyMat.dispose()
+    blushMat.dispose()
+    irisMat.dispose()
+    browMat.dispose()
+    flashMat.dispose()
+    emoMat.dispose()
+    extOrbMat.dispose()
+    extHaloMat.dispose()
+  }, [bodyMat, blushMat, irisMat, browMat, flashMat, emoMat, extOrbMat, extHaloMat])
+
   const r = BALL_R * (0.86 + g.apetito * 0.14)
   const eyeSize = 0.255 + g.sociabilidad * 0.065
   const irisR = Math.max(0.18, eyeSize * 0.78)
@@ -239,12 +257,24 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
     const k = 1 - Math.exp(-9 * cdt)
     const t = clock.elapsedTime
 
-    // 1. Expresión viva según evento y situación
+    const rIntro = r * 14 + worldRadius * 0.12
+    const rExter = r * 24 + worldRadius * 0.36
+    const camDist = camera.position.distanceTo(b.pos)
+    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
+    const nextNear = nearCamRef.current ? camDist < 42 : camDist < 36
+    if (nextNear !== nearCamRef.current) {
+      nearCamRef.current = nextNear
+      setNearCam(nextNear)
+    }
+
+    // 1. Expresión viva según evento y situación (solo si el cuerpo es visible o está seleccionada)
     const F = resolveExpression(b, g)
     const c = cur.current
-    for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce', 'sparkle']) {
-      const target = F[key] ?? 0
-      c[key] += (target - c[key]) * k
+    if (extFactor < 0.96 || selected) {
+      for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce', 'sparkle']) {
+        const target = F[key] ?? 0
+        c[key] += (target - c[key]) * k
+      }
     }
 
     // 2. Tamaño dentro de tubos (~0.55x) con transición suave
@@ -296,20 +326,93 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
       }
     }
 
-    // 3. Squash & stretch elástico chibi
+    // 3a. Marco del carril (world.wallFrame): up hacia el eje del tubo, avance por la tangente
+    const fx = laneFx.current
+    let upV = b.up
+    let fwdV = b.dir
+    let flip = 0
+    const sw = b.phase === 'travel' ? b.sw : null
+    if (b.phase === 'travel' && b.seg?.lanes) {
+      const F = wallFrame(b.seg, b.ang ?? 0, b.segT, b.off ?? 0)
+      // suavizado del up: girar con la pared sin marear
+      if (fx.hasPrev) fx.up.lerp(F.up, k)
+      else fx.up.copy(F.up)
+      if (fx.up.lengthSq() < 1e-6) fx.up.copy(F.up)
+      fx.up.normalize()
+      frameFwd.copy(F.tangent)
+      if (fx.hasPrev) {
+        // inclinación hacia dentro de la curva (aceleración lateral ≈ giro de la tangente · velocidad)
+        const turn = vTmp.copy(F.tangent).sub(fx.prevT).dot(F.side) / Math.max(cdt, 1e-3)
+        const leanT = THREE.MathUtils.clamp(turn * (b.speed ?? 0) * 0.006, -0.55, 0.55)
+        fx.lean += (leanT - fx.lean) * k
+      }
+      fx.prevT.copy(F.tangent)
+      fx.hasPrev = true
+      // squash al despegar de un mecanismo y al aterrizar en la pared
+      if (sw && !fx.hadSw) fx.squash = 0.7
+      if ((fx.hadSw && !sw) || (fx.wasAir && !b.seg.air)) fx.squash = 1
+      fx.hadSw = Boolean(sw)
+      fx.wasAir = Boolean(b.seg.air)
+      upV = fx.up
+      fwdV = frameFwd
+      if (sw) {
+        const x = smooth01(sw.t)
+        if (sw.style === 'salto') flip = x * Math.PI * 2 // voltereta al cruzar el interior del tubo
+        else if (sw.style === 'caida') flip = -x * Math.PI
+        else if (sw.style === 'portal') s *= 1 - 0.85 * Math.sin(Math.PI * smooth01((sw.t - 0.3) / 0.4))
+      }
+    } else {
+      fx.hasPrev = false
+      fx.hadSw = false
+      fx.wasAir = false
+      fx.lean *= 1 - k
+    }
+    fx.squash = Math.max(0, fx.squash - cdt * 3.2)
+    if (bodyGroup.current) bodyGroup.current.rotation.set(flip, 0, fx.lean)
+
+    // 3b. Squash & stretch elástico chibi
     const bob = Math.sin(t * 4.5 * c.bounce + phase0)
     const vs = s * tubeScale
     const speedStretch = b.speed > 0.5 ? 1 + Math.min(b.speed / 36, 0.32) : 1 + bob * 0.075 * c.bounce
     const side = 1 / Math.sqrt(speedStretch)
-    root.current.scale.set(vs * side, vs * side, vs * speedStretch)
+    const sqY = 1 - 0.3 * fx.squash
+    const sqXZ = 1 + 0.15 * fx.squash
+    root.current.scale.set(vs * side * sqXZ, vs * side * sqY, vs * speedStretch * sqXZ)
 
     const hop = b.phase === 'at' ? Math.abs(bob) * 0.14 * c.bounce : 0
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
-    root.current.position.copy(b.pos).addScaledVector(b.up, hop + wallOffset)
+    root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
+
+    // Si la bollita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
+    const bodyVisible = !pov && extFactor < 0.96
+    if (bodyGroup.current) bodyGroup.current.visible = bodyVisible
+    if (orbGroupRef.current) {
+      const showOrb = extFactor > 0.015 && s > 0.02
+      orbGroupRef.current.visible = showOrb
+      if (showOrb) {
+        orbGroupRef.current.position.copy(b.pos)
+        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
+        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
+        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
+        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
+        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
+        if (extHaloRef.current) {
+          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
+          extHaloRef.current.scale.set(haloS, haloS, 1)
+        }
+        extOrbMat.opacity = extFactor * 0.96
+        extHaloMat.opacity = extFactor * 0.86
+      }
+    }
+    if (ring.current) { ring.current.visible = selected && !pov; if (selected && !pov) ring.current.rotation.z = t * 2 }
+    if (!bodyVisible && !selected) {
+      if (emoSprite.current) emoSprite.current.visible = false
+      return
+    }
 
     // 4. Orientación suave
-    vy.copy(b.up)
-    vz.copy(b.dir).addScaledVector(vy, -b.dir.dot(vy))
+    vy.copy(upV)
+    vz.copy(fwdV).addScaledVector(vy, -fwdV.dot(vy))
     if (vz.lengthSq() > 1e-6 && vy.lengthSq() > 1e-6) {
       vz.normalize(); vx.crossVectors(vy, vz).normalize(); vy.crossVectors(vz, vx)
       m4.makeBasis(vx, vy, vz)
@@ -486,33 +589,6 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
       dialogState.current.nextCheck = t + 0.12
       actualizarDialogoVivo(b, sim, dialogState.current)
     }
-
-    if (ring.current) { ring.current.visible = selected && !pov; ring.current.rotation.z = t * 2 }
-
-    // 10. LOD exterior: orbe luminoso visible a distancia dentro de los tubos y en planetas
-    const camDist = camera.position.distanceTo(root.current.position)
-    const rIntro = r * 14 + worldRadius * 0.12
-    const rExter = r * 24 + worldRadius * 0.36
-    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
-    if (bodyGroup.current) bodyGroup.current.visible = !pov && extFactor < 0.96
-    if (orbGroupRef.current) {
-      const showOrb = extFactor > 0.015 && s > 0.02
-      orbGroupRef.current.visible = showOrb
-      if (showOrb) {
-        orbGroupRef.current.position.copy(b.pos)
-        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
-        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
-        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
-        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
-        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
-        if (extHaloRef.current) {
-          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
-          extHaloRef.current.scale.set(haloS, haloS, 1)
-        }
-        extOrbMat.opacity = extFactor * 0.96
-        extHaloMat.opacity = extFactor * 0.86
-      }
-    }
   })
 
   const liveThought = obtenerGlobo(b, sim)
@@ -684,7 +760,7 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
       <mesh ref={ring} geometry={SHARED_GEO.ring} material={mats.ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} scale={r} visible={false} />
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
-      {(selected || talking) && !pov && (
+      {(selected || (talking && nearCam)) && !pov && (
         <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
           <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 155, fontSize: 11 }}>
             {selected && <b>{b.name}</b>}

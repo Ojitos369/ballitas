@@ -121,3 +121,21 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
   .pov-joy-wrap { right: 10px; bottom: 44px; }
   .pov-joy-pad { width: 84px; height: 84px; }
 }
+
+.stats-overlay {
+  z-index: 150;
+  position: fixed;
+  top: 44px;
+  left: 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(6, 9, 22, 0.78);
+  border: 1px solid rgba(138, 167, 255, 0.35);
+  color: #dbe6ff;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+.stats-overlay .stats-title { font-weight: 700; color: #8aa7ff; margin-bottom: 2px; }
+.stats-overlay b { color: #ffffff; }

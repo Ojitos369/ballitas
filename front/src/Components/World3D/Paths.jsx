@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { mulberry32 } from '../../Core/world.js'
 import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
@@ -15,101 +14,6 @@ const Y = new THREE.Vector3(0, 1, 0)
 const Z = new THREE.Vector3(0, 0, 1)
 const IDENT = new THREE.Quaternion()
 const SHARED_TIME = { value: 0 }
-
-// ═══════════════════════════ CACHÉ DE MODELOS GLB + FALLBACK ═══════════════════════════
-const BASE_MODEL = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
-const gltfLoader = new GLTFLoader()
-const modelCache = new Map()
-
-function loadModelAsset(name) {
-  if (!name) return null
-  if (modelCache.has(name)) return modelCache.get(name)
-  const entry = { status: 'loading', data: null, listeners: new Set() }
-  modelCache.set(name, entry)
-
-  if (typeof fetch !== 'function') {
-    entry.status = 'none'
-    return entry
-  }
-
-  const notify = () => {
-    entry.listeners.forEach((fn) => fn(entry.data))
-    entry.listeners.clear()
-  }
-
-  const url = `${BASE_MODEL}${name}.glb`
-  fetch(url)
-    .then(async (res) => {
-      if (!res.ok) return null
-      const ct = (res.headers.get('content-type') || '').toLowerCase()
-      if (ct.includes('text/html')) return null
-      const buf = await res.arrayBuffer()
-      if (buf.byteLength < 12) return null
-      const magic = new DataView(buf).getUint32(0, true)
-      const isGlb = magic === 0x46546c67 // 'glTF'
-      const firstByte = new Uint8Array(buf, 0, 1)[0]
-      if (!isGlb && firstByte !== 0x7b) return null
-      return buf
-    })
-    .then((buf) => {
-      if (!buf) {
-        entry.status = 'none'
-        notify()
-        return
-      }
-      gltfLoader.parse(
-        buf,
-        BASE_MODEL,
-        (gltf) => {
-          let mesh = null
-          gltf?.scene?.traverse((o) => {
-            if (!mesh && o.isMesh && o.geometry) mesh = o
-          })
-          if (mesh) {
-            const geometry = mesh.geometry
-            if (!geometry.attributes.normal) geometry.computeVertexNormals()
-            const rawMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-            entry.data = { geometry, material: rawMat || null }
-            entry.status = 'ready'
-          } else {
-            entry.status = 'none'
-          }
-          notify()
-        },
-        () => {
-          entry.status = 'none'
-          notify()
-        }
-      )
-    })
-    .catch(() => {
-      entry.status = 'none'
-      notify()
-    })
-
-  return entry
-}
-
-function useModelAsset(name) {
-  const [data, setData] = useState(() => {
-    if (!name) return null
-    const entry = loadModelAsset(name)
-    return entry?.status === 'ready' ? entry.data : null
-  })
-
-  useEffect(() => {
-    if (!name) { setData(null); return }
-    const entry = loadModelAsset(name)
-    if (!entry) return
-    if (entry.status === 'ready') { setData(entry.data); return }
-    if (entry.status === 'none') { setData(null); return }
-    const onDone = (loaded) => setData(loaded || null)
-    entry.listeners.add(onDone)
-    return () => entry.listeners.delete(onDone)
-  }, [name])
-
-  return data
-}
 
 // ═══════════════════════════ TEXTURAS + FALLBACK PROCEDURAL ═══════════════════════════
 const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
@@ -915,7 +819,20 @@ function mergeSafe(parts) {
     }
     return c
   })
-  return mergeGeometries(clean, false)
+  const merged = mergeGeometries(clean, false)
+  for (let i = 0; i < parts.length; i++) parts[i]?.dispose?.()
+  for (let i = 0; i < clean.length; i++) {
+    if (clean[i] !== parts[i]) clean[i]?.dispose?.()
+  }
+  return merged
+}
+
+function mergeAndDispose(geos) {
+  if (!geos.length) return null
+  const merged = mergeGeometries(geos, false)
+  for (let i = 0; i < geos.length; i++) geos[i]?.dispose?.()
+  merged?.computeBoundingSphere?.()
+  return merged
 }
 
 function normalizeUnitHeight(g) {
@@ -954,7 +871,7 @@ function makeDeformedSphere(rad, ws, hs, seed, amp = 0.14, freq = 3.2, flattenBo
 
 function buildRoundedBoxGeo(w = 1, h = 1, d = 1, radius = 0.085) {
   const r = Math.min(radius, w * 0.35, h * 0.35, d * 0.35)
-  const g = new THREE.BoxGeometry(w, h, d, 6, 6, 6)
+  const g = new THREE.BoxGeometry(w, h, d, 2, 2, 2)
   const pos = g.attributes.position
   const norm = g.attributes.normal
   const hx = w * 0.5 - r; const hy = h * 0.5 - r; const hz = d * 0.5 - r
@@ -1027,7 +944,7 @@ function buildSmoothOctaGeo() {
     new THREE.Vector2(0.04, 0.975),
     new THREE.Vector2(0.0, 1.0),
   ]
-  const g = new THREE.LatheGeometry(pts, 24)
+  const g = new THREE.LatheGeometry(pts, 12)
   const pos = g.attributes.position
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i); const z = pos.getZ(i)
@@ -1047,30 +964,24 @@ function buildSmoothOctaGeo() {
 function buildRibFrameGeo() {
   const pts = [
     new THREE.Vector2(0.986, -0.095),
-    new THREE.Vector2(1.005, -0.115),
-    new THREE.Vector2(1.045, -0.118),
-    new THREE.Vector2(1.074, -0.105),
-    new THREE.Vector2(1.084, -0.075),
-    new THREE.Vector2(1.082, -0.045),
-    new THREE.Vector2(1.055, -0.032),
+    new THREE.Vector2(1.015, -0.115),
+    new THREE.Vector2(1.075, -0.105),
+    new THREE.Vector2(1.084, -0.045),
     new THREE.Vector2(1.046, -0.018),
     new THREE.Vector2(1.046, 0.018),
-    new THREE.Vector2(1.055, 0.032),
-    new THREE.Vector2(1.082, 0.045),
-    new THREE.Vector2(1.084, 0.075),
-    new THREE.Vector2(1.074, 0.105),
-    new THREE.Vector2(1.045, 0.118),
-    new THREE.Vector2(1.005, 0.115),
+    new THREE.Vector2(1.084, 0.045),
+    new THREE.Vector2(1.075, 0.105),
+    new THREE.Vector2(1.015, 0.115),
     new THREE.Vector2(0.986, 0.095),
     new THREE.Vector2(0.986, -0.095),
   ]
-  const g = new THREE.LatheGeometry(pts, 48)
+  const g = new THREE.LatheGeometry(pts, 10)
   g.rotateX(Math.PI / 2)
   g.computeVertexNormals()
   return g
 }
 
-function buildCurvedPanelGeo(arcHalf = 0.37, rIn = 0.992, rOut = 1.056, segs = 18) {
+function buildCurvedPanelGeo(arcHalf = 0.37, rIn = 0.992, rOut = 1.056, segs = 4) {
   const pos = []
   const uv = []
   const idx = []
@@ -1128,7 +1039,7 @@ function buildCurvedPanelGeo(arcHalf = 0.37, rIn = 0.992, rOut = 1.056, segs = 1
 }
 
 function buildLightBarGeo() {
-  const g = new THREE.CapsuleGeometry(0.025, 0.94, 6, 16)
+  const g = new THREE.CapsuleGeometry(0.025, 0.94, 2, 5)
   g.rotateX(Math.PI / 2)
   const pos = g.getAttribute('position')
   const uv = g.getAttribute('uv')
@@ -1143,7 +1054,7 @@ function buildStreakCardGeo() {
   const p1 = new THREE.PlaneGeometry(1.0, 0.14)
   const p2 = new THREE.PlaneGeometry(1.0, 0.14)
   p2.rotateX(Math.PI / 2)
-  return mergeGeometries([p1, p2])
+  return mergeAndDispose([p1, p2])
 }
 
 function buildBoltGeo() {
@@ -1156,7 +1067,7 @@ function buildBoltGeo() {
     new THREE.Vector3(-0.07, -0.03, 0.35),
     new THREE.Vector3(0, 0, 0.5),
   ])
-  return new THREE.TubeGeometry(curve, 28, 0.022, 10, false)
+  return new THREE.TubeGeometry(curve, 12, 0.022, 6, false)
 }
 
 function buildVineGeo() {
@@ -1167,7 +1078,7 @@ function buildVineGeo() {
     new THREE.Vector3(0.05, 0.25, -0.03),
     new THREE.Vector3(0, 0.5, 0),
   ])
-  return new THREE.TubeGeometry(curve, 20, 0.046, 10, false)
+  return new THREE.TubeGeometry(curve, 10, 0.046, 6, false)
 }
 
 function buildLeafGeo() {
@@ -1180,8 +1091,8 @@ function buildLeafGeo() {
     bevelEnabled: true,
     bevelThickness: 0.014,
     bevelSize: 0.014,
-    bevelSegments: 3,
-    curveSegments: 14,
+    bevelSegments: 1,
+    curveSegments: 6,
   })
   g.translate(0, 0, -0.012)
   const pos = g.attributes.position
@@ -1205,8 +1116,8 @@ function buildBladeGeo() {
     bevelEnabled: true,
     bevelThickness: 0.01,
     bevelSize: 0.01,
-    bevelSegments: 3,
-    curveSegments: 14,
+    bevelSegments: 1,
+    curveSegments: 6,
   })
   g.translate(0, 0, -0.012)
   g.computeVertexNormals()
@@ -1224,8 +1135,8 @@ function buildBannerGeo() {
     bevelEnabled: true,
     bevelThickness: 0.012,
     bevelSize: 0.012,
-    bevelSegments: 3,
-    curveSegments: 12,
+    bevelSegments: 1,
+    curveSegments: 6,
   })
   g.translate(0, 0, -0.012)
   const pos = g.attributes.position
@@ -1248,10 +1159,10 @@ function buildArrowGeo() {
   const g = new THREE.ExtrudeGeometry(s, {
     depth: 0.06,
     bevelEnabled: true,
-    bevelThickness: 0.025,
-    bevelSize: 0.025,
-    bevelSegments: 3,
-    curveSegments: 12,
+    bevelThickness: 0.02,
+    bevelSize: 0.02,
+    bevelSegments: 1,
+    curveSegments: 6,
   })
   g.translate(0, 0, -0.03)
   g.rotateX(Math.PI / 2)
@@ -1259,7 +1170,7 @@ function buildArrowGeo() {
   return g
 }
 
-function strutBetween(a, b, rad = 0.036, radialSegs = 12) {
+function strutBetween(a, b, rad = 0.036, radialSegs = 6) {
   const dir = new THREE.Vector3().subVectors(b, a)
   const len = dir.length()
   const g = new THREE.CylinderGeometry(rad, rad, Math.max(len, 1e-3), radialSegs)
@@ -1272,20 +1183,16 @@ function strutBetween(a, b, rad = 0.036, radialSegs = 12) {
 function buildExtClampGeo() {
   const pts = [
     new THREE.Vector2(0.492, -0.068),
-    new THREE.Vector2(0.506, -0.075),
-    new THREE.Vector2(0.534, -0.075),
-    new THREE.Vector2(0.556, -0.056),
-    new THREE.Vector2(0.564, -0.032),
+    new THREE.Vector2(0.515, -0.075),
+    new THREE.Vector2(0.562, -0.042),
     new THREE.Vector2(0.546, -0.020),
     new THREE.Vector2(0.546, 0.020),
-    new THREE.Vector2(0.564, 0.032),
-    new THREE.Vector2(0.556, 0.056),
-    new THREE.Vector2(0.534, 0.075),
-    new THREE.Vector2(0.506, 0.075),
+    new THREE.Vector2(0.562, 0.042),
+    new THREE.Vector2(0.515, 0.075),
     new THREE.Vector2(0.492, 0.068),
     new THREE.Vector2(0.492, -0.068),
   ]
-  const ring = new THREE.LatheGeometry(pts, 48)
+  const ring = new THREE.LatheGeometry(pts, 8)
   ring.rotateX(Math.PI / 2)
   ring.computeVertexNormals()
   return ring
@@ -1302,19 +1209,15 @@ function buildPylonGeo() {
 
   for (let i = 0; i < 4; i++) {
     const j = (i + 1) % 4
-    parts.push(strutBetween(botP[i], topP[i], 0.042, 12))
-    parts.push(strutBetween(botP[i], botP[j], 0.032, 10))
-    parts.push(strutBetween(midP[i], midP[j], 0.028, 10))
-    parts.push(strutBetween(topP[i], topP[j], 0.034, 10))
-    parts.push(strutBetween(botP[i], midP[j], 0.020, 8))
-    parts.push(strutBetween(midP[i], topP[j], 0.020, 8))
+    parts.push(strutBetween(botP[i], topP[i], 0.042, 4))
+    parts.push(strutBetween(topP[i], topP[j], 0.034, 4))
   }
-  const collar = new THREE.TorusGeometry(0.46, 0.024, 12, 32)
+  const collar = new THREE.TorusGeometry(0.46, 0.024, 5, 10)
   collar.rotateX(Math.PI / 2)
   collar.translate(0, 0.5, 0)
   parts.push(collar)
 
-  const saddle = new THREE.TorusGeometry(0.42, 0.038, 12, 28, Math.PI)
+  const saddle = new THREE.TorusGeometry(0.42, 0.038, 5, 8, Math.PI)
   saddle.rotateZ(Math.PI)
   saddle.translate(0, 1.0, 0)
   parts.push(saddle)
@@ -1326,7 +1229,7 @@ function buildPylonGeo() {
     new THREE.Vector2(0.68, 0.065),
     new THREE.Vector2(0, 0.065),
   ]
-  const pad = new THREE.LatheGeometry(padPts, 28)
+  const pad = new THREE.LatheGeometry(padPts, 8)
   pad.computeVertexNormals()
   parts.push(pad)
   return mergeSafe(parts)
@@ -1339,7 +1242,7 @@ function buildTreeFallbackGeo() {
     new THREE.Vector3(0.04, 0.28, -0.02),
     new THREE.Vector3(-0.02, 0.56, 0.03),
   ])
-  parts.push(new THREE.TubeGeometry(trunkCurve, 14, 0.065, 12, false))
+  parts.push(new THREE.TubeGeometry(trunkCurve, 8, 0.065, 6, false))
   const brA = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0.01, 0.38, 0),
     new THREE.Vector3(0.14, 0.52, 0.07),
@@ -1348,15 +1251,15 @@ function buildTreeFallbackGeo() {
     new THREE.Vector3(-0.01, 0.42, 0.01),
     new THREE.Vector3(-0.15, 0.56, -0.06),
   ])
-  parts.push(new THREE.TubeGeometry(brA, 8, 0.036, 10, false))
-  parts.push(new THREE.TubeGeometry(brB, 8, 0.034, 10, false))
+  parts.push(new THREE.TubeGeometry(brA, 4, 0.036, 5, false))
+  parts.push(new THREE.TubeGeometry(brB, 4, 0.034, 5, false))
 
-  const c1 = makeDeformedSphere(0.28, 22, 16, 11, 0.14, 3.4)
+  const c1 = makeDeformedSphere(0.28, 10, 8, 11, 0.14, 3.4)
   c1.scale(1.15, 0.85, 1.15)
   c1.translate(0, 0.72, 0)
-  const c2 = makeDeformedSphere(0.21, 18, 14, 23, 0.14, 3.8)
+  const c2 = makeDeformedSphere(0.21, 8, 6, 23, 0.14, 3.8)
   c2.translate(0.18, 0.62, 0.09)
-  const c3 = makeDeformedSphere(0.2, 18, 14, 37, 0.14, 3.6)
+  const c3 = makeDeformedSphere(0.2, 8, 6, 37, 0.14, 3.6)
   c3.translate(-0.17, 0.64, -0.08)
   parts.push(c1, c2, c3)
   return normalizeUnitHeight(mergeSafe(parts))
@@ -1364,18 +1267,16 @@ function buildTreeFallbackGeo() {
 
 function buildPineFallbackGeo() {
   const parts = []
-  parts.push(buildSmoothCylGeo(0.065, 0.34, 16))
+  parts.push(buildSmoothCylGeo(0.065, 0.34, 8))
   const tier = (rBot, y0, h, seed) => {
     const pts = [
       new THREE.Vector2(0, y0),
-      new THREE.Vector2(rBot * 0.72, y0 + h * 0.04),
       new THREE.Vector2(rBot, y0 + h * 0.10),
-      new THREE.Vector2(rBot * 0.78, y0 + h * 0.32),
-      new THREE.Vector2(rBot * 0.42, y0 + h * 0.68),
-      new THREE.Vector2(rBot * 0.10, y0 + h * 0.94),
+      new THREE.Vector2(rBot * 0.65, y0 + h * 0.42),
+      new THREE.Vector2(rBot * 0.25, y0 + h * 0.80),
       new THREE.Vector2(0, y0 + h),
     ]
-    const g = new THREE.LatheGeometry(pts, 28)
+    const g = new THREE.LatheGeometry(pts, 12)
     const pos = g.attributes.position
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i); const z = pos.getZ(i)
@@ -1400,19 +1301,15 @@ function buildPineFallbackGeo() {
 function buildMushroomFallbackGeo() {
   const pts = [
     new THREE.Vector2(0.0, 0.0),
-    new THREE.Vector2(0.14, 0.0),
-    new THREE.Vector2(0.16, 0.08),
-    new THREE.Vector2(0.11, 0.34),
+    new THREE.Vector2(0.15, 0.0),
+    new THREE.Vector2(0.11, 0.36),
     new THREE.Vector2(0.10, 0.56),
-    new THREE.Vector2(0.26, 0.56),
     new THREE.Vector2(0.45, 0.52),
-    new THREE.Vector2(0.49, 0.58),
-    new THREE.Vector2(0.46, 0.72),
-    new THREE.Vector2(0.32, 0.90),
-    new THREE.Vector2(0.14, 0.985),
+    new THREE.Vector2(0.48, 0.68),
+    new THREE.Vector2(0.30, 0.90),
     new THREE.Vector2(0.0, 1.0),
   ]
-  const g = new THREE.LatheGeometry(pts, 32)
+  const g = new THREE.LatheGeometry(pts, 12)
   g.computeVertexNormals()
   return g
 }
@@ -1421,26 +1318,12 @@ function buildCrystalFallbackGeo() {
   const shard = (r, h, tiltX, tiltZ, ox, oz) => {
     const pts = [
       new THREE.Vector2(0, 0),
-      new THREE.Vector2(r * 0.96, 0),
       new THREE.Vector2(r, 0.06 * h),
-      new THREE.Vector2(r * 0.86, 0.72 * h),
-      new THREE.Vector2(r * 0.35, 0.93 * h),
-      new THREE.Vector2(0.015, 0.99 * h),
+      new THREE.Vector2(r * 0.84, 0.72 * h),
+      new THREE.Vector2(r * 0.28, 0.94 * h),
       new THREE.Vector2(0, h),
     ]
-    const g = new THREE.LatheGeometry(pts, 18)
-    const pos = g.attributes.position
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i); const z = pos.getZ(i)
-      const rad = Math.hypot(x, z)
-      if (rad > 1e-4) {
-        const ang = Math.atan2(z, x)
-        const hex = 1 + 0.06 * Math.cos(ang * 6)
-        pos.setX(i, x * hex)
-        pos.setZ(i, z * hex)
-      }
-    }
-    pos.needsUpdate = true
+    const g = new THREE.LatheGeometry(pts, 8)
     g.rotateX(tiltX)
     g.rotateZ(tiltZ)
     g.translate(ox, 0, oz)
@@ -1455,13 +1338,13 @@ function buildCrystalFallbackGeo() {
 }
 
 function buildRockFallbackGeo() {
-  const m = makeDeformedSphere(0.38, 26, 20, 41, 0.20, 2.8, true)
+  const m = makeDeformedSphere(0.38, 10, 8, 41, 0.20, 2.8, true)
   m.scale(1.18, 0.82, 1.04)
   m.translate(0, 0.24, 0)
-  const s1 = makeDeformedSphere(0.24, 20, 14, 73, 0.22, 3.2, true)
+  const s1 = makeDeformedSphere(0.24, 8, 6, 73, 0.22, 3.2, true)
   s1.scale(1.1, 0.76, 0.95)
   s1.translate(0.25, 0.15, 0.12)
-  const s2 = makeDeformedSphere(0.20, 20, 14, 97, 0.22, 3.5, true)
+  const s2 = makeDeformedSphere(0.20, 8, 6, 97, 0.22, 3.5, true)
   s2.translate(-0.22, 0.14, -0.10)
   return normalizeUnitHeight(mergeSafe([m, s1, s2]))
 }
@@ -1474,22 +1357,16 @@ function buildFlowerFallbackGeo() {
     new THREE.Vector3(-0.02, 0.62, -0.02),
     new THREE.Vector3(0, 0.84, 0),
   ])
-  parts.push(new THREE.TubeGeometry(stem, 14, 0.036, 10, false))
+  parts.push(new THREE.TubeGeometry(stem, 6, 0.036, 5, false))
 
-  const leafA = buildLeafGeo()
-  leafA.scale(0.45, 0.38, 0.45)
-  leafA.rotateZ(-0.85)
-  leafA.translate(0.02, 0.26, 0)
-  parts.push(leafA)
-
-  const core = new THREE.SphereGeometry(0.12, 18, 14)
+  const core = new THREE.SphereGeometry(0.12, 8, 6)
   core.scale(1.1, 0.72, 1.1)
   core.translate(0, 0.87, 0)
   parts.push(core)
 
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU
-    const p = new THREE.SphereGeometry(0.14, 16, 12)
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * TAU
+    const p = new THREE.SphereGeometry(0.14, 8, 6)
     p.scale(0.85, 0.35, 1.35)
     p.rotateX(0.32)
     p.translate(0, 0, 0.20)
@@ -1506,14 +1383,13 @@ function buildCoralFallbackGeo() {
     [[0, 0, 0], [0.02, 0.35, 0.01], [0.05, 0.72, 0.03], [0.02, 0.96, 0.01]],
     [[0.02, 0.32, 0], [0.18, 0.50, 0.08], [0.24, 0.76, 0.12]],
     [[0.01, 0.40, 0], [-0.18, 0.58, 0.06], [-0.22, 0.82, 0.08]],
-    [[0.03, 0.46, 0.02], [0.06, 0.65, -0.18], [0.08, 0.85, -0.22]],
   ]
   for (let bi = 0; bi < branches.length; bi++) {
     const pts = branches[bi].map(([x, y, z]) => new THREE.Vector3(x, y, z))
     const rad = bi === 0 ? 0.068 : 0.048
-    parts.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, rad, 12, false))
+    parts.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 6, rad, 6, false))
     const tip = pts[pts.length - 1]
-    const cap = new THREE.SphereGeometry(rad * 1.15, 14, 10)
+    const cap = new THREE.SphereGeometry(rad * 1.15, 8, 6)
     cap.translate(tip.x, tip.y, tip.z)
     parts.push(cap)
   }
@@ -1524,26 +1400,12 @@ function buildIceSpireFallbackGeo() {
   const spire = (r, h, ox, oz, tiltX, tiltZ) => {
     const pts = [
       new THREE.Vector2(0, 0),
-      new THREE.Vector2(r * 0.92, 0),
       new THREE.Vector2(r, 0.06 * h),
       new THREE.Vector2(r * 0.72, 0.42 * h),
       new THREE.Vector2(r * 0.32, 0.78 * h),
-      new THREE.Vector2(r * 0.07, 0.96 * h),
       new THREE.Vector2(0, h),
     ]
-    const g = new THREE.LatheGeometry(pts, 28)
-    const pos = g.attributes.position
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i); const x = pos.getX(i); const z = pos.getZ(i)
-      const rad = Math.hypot(x, z)
-      if (rad > 1e-4) {
-        const ang = Math.atan2(z, x)
-        const flute = 1 + 0.07 * Math.cos(ang * 5 + (y / h) * 1.4)
-        pos.setX(i, x * flute + Math.sin((y / h) * Math.PI) * 0.03)
-        pos.setZ(i, z * flute)
-      }
-    }
-    pos.needsUpdate = true
+    const g = new THREE.LatheGeometry(pts, 10)
     g.rotateX(tiltX)
     g.rotateZ(tiltZ)
     g.translate(ox, 0, oz)
@@ -1561,26 +1423,12 @@ function buildCactusFallbackGeo() {
   const parts = []
   const bodyPts = [
     new THREE.Vector2(0, 0),
-    new THREE.Vector2(0.12, 0),
     new THREE.Vector2(0.13, 0.15),
     new THREE.Vector2(0.135, 0.65),
-    new THREE.Vector2(0.115, 0.90),
-    new THREE.Vector2(0.065, 0.98),
+    new THREE.Vector2(0.11, 0.92),
     new THREE.Vector2(0, 1.0),
   ]
-  const body = new THREE.LatheGeometry(bodyPts, 24)
-  const pos = body.attributes.position
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i); const z = pos.getZ(i)
-    const r = Math.hypot(x, z)
-    if (r > 1e-4) {
-      const ang = Math.atan2(z, x)
-      const rib = 1 + 0.08 * Math.cos(ang * 10)
-      pos.setX(i, x * rib)
-      pos.setZ(i, z * rib)
-    }
-  }
-  pos.needsUpdate = true
+  const body = new THREE.LatheGeometry(bodyPts, 10)
   body.computeVertexNormals()
   parts.push(body)
 
@@ -1591,8 +1439,8 @@ function buildCactusFallbackGeo() {
       new THREE.Vector3(side * 0.30, y0 + 0.16, 0),
       new THREE.Vector3(side * 0.30, yTop, 0),
     ])
-    parts.push(new THREE.TubeGeometry(c, 12, 0.072, 12, false))
-    const cap = new THREE.SphereGeometry(0.072, 12, 10)
+    parts.push(new THREE.TubeGeometry(c, 6, 0.072, 6, false))
+    const cap = new THREE.SphereGeometry(0.072, 8, 6)
     cap.translate(side * 0.30, yTop, 0)
     parts.push(cap)
   }
@@ -1606,11 +1454,10 @@ function buildLampFallbackGeo() {
   const basePts = [
     new THREE.Vector2(0, 0),
     new THREE.Vector2(0.18, 0),
-    new THREE.Vector2(0.16, 0.05),
     new THREE.Vector2(0.08, 0.14),
     new THREE.Vector2(0.055, 0.18),
   ]
-  const baseG = new THREE.LatheGeometry(basePts, 20)
+  const baseG = new THREE.LatheGeometry(basePts, 10)
   baseG.computeVertexNormals()
   parts.push(baseG)
 
@@ -1621,16 +1468,14 @@ function buildLampFallbackGeo() {
     new THREE.Vector3(0.18, 0.96, 0),
     new THREE.Vector3(0.30, 0.90, 0),
   ])
-  parts.push(new THREE.TubeGeometry(neck, 20, 0.042, 12, false))
+  parts.push(new THREE.TubeGeometry(neck, 10, 0.042, 6, false))
 
   const hoodPts = [
     new THREE.Vector2(0, 0.94),
-    new THREE.Vector2(0.11, 0.92),
     new THREE.Vector2(0.16, 0.86),
-    new THREE.Vector2(0.14, 0.84),
     new THREE.Vector2(0, 0.87),
   ]
-  const hood = new THREE.LatheGeometry(hoodPts, 20)
+  const hood = new THREE.LatheGeometry(hoodPts, 10)
   hood.translate(0.30, 0, 0)
   hood.computeVertexNormals()
   parts.push(hood)
@@ -1640,17 +1485,13 @@ function buildLampFallbackGeo() {
 function buildPodFallbackGeo() {
   const pts = [
     new THREE.Vector2(0, 0),
-    new THREE.Vector2(0.24, 0.02),
-    new THREE.Vector2(0.38, 0.16),
-    new THREE.Vector2(0.42, 0.36),
-    new THREE.Vector2(0.36, 0.48),
-    new THREE.Vector2(0.36, 0.54),
-    new THREE.Vector2(0.42, 0.66),
-    new THREE.Vector2(0.38, 0.84),
-    new THREE.Vector2(0.24, 0.98),
+    new THREE.Vector2(0.32, 0.12),
+    new THREE.Vector2(0.42, 0.42),
+    new THREE.Vector2(0.38, 0.72),
+    new THREE.Vector2(0.24, 0.96),
     new THREE.Vector2(0, 1.0),
   ]
-  const g = new THREE.LatheGeometry(pts, 28)
+  const g = new THREE.LatheGeometry(pts, 12)
   g.computeVertexNormals()
   return g
 }
@@ -1669,16 +1510,16 @@ function buildRuinArchGeo() {
 }
 
 const GEO = {
-  cone: buildSmoothConeGeo(0.5, 1.0, 28),
-  funnel: base(new THREE.ConeGeometry(0.5, 1, 48, 4, true)),
-  cyl: buildSmoothCylGeo(0.5, 1.0, 28),
-  plume: base(new THREE.CylinderGeometry(0.34, 0.85, 1, 28, 4, true)),
-  sphere: new THREE.SphereGeometry(0.5, 32, 24),
+  cone: buildSmoothConeGeo(0.5, 1.0, 8),
+  funnel: base(new THREE.ConeGeometry(0.5, 1, 10, 1, true)),
+  cyl: buildSmoothCylGeo(0.5, 1.0, 8),
+  plume: base(new THREE.CylinderGeometry(0.34, 0.85, 1, 8, 1, true)),
+  sphere: new THREE.SphereGeometry(0.5, 8, 6),
   box: buildRoundedBoxGeo(1, 1, 1, 0.085),
   octa: buildSmoothOctaGeo(),
-  torus: new THREE.TorusGeometry(1, 0.042, 16, 64),
-  ribNeon: new THREE.TorusGeometry(1, 0.024, 14, 64),
-  mouthNeon: new THREE.TorusGeometry(1, 0.056, 16, 64),
+  torus: new THREE.TorusGeometry(1, 0.042, 6, 14),
+  ribNeon: new THREE.TorusGeometry(1, 0.024, 5, 12),
+  mouthNeon: new THREE.TorusGeometry(1, 0.056, 6, 14),
   ribFrame: buildRibFrameGeo(),
   extClamp: buildExtClampGeo(),
   pylon: buildPylonGeo(),
@@ -1726,22 +1567,6 @@ const GEO_BY = {
   pylon: GEO.pylon,
   clamp: GEO.extClamp,
   pod: GEO.pod,
-}
-
-const MODEL_FOR_KEY = {
-  tree: 'tree',
-  pine: 'pine',
-  mushroom: 'mushroom',
-  crystal: 'crystal',
-  rock: 'rock',
-  flower: 'flower',
-  coral: 'coral',
-  ice_spire: 'ice_spire',
-  cactus: 'cactus',
-  lamp: 'lamp',
-  pylon: 'pylon',
-  clamp: 'clamp',
-  pod: 'pod',
 }
 
 // ═══════════════════════════ MATERIALES Y SHADERS POR WAY ═══════════════════════════
@@ -2658,62 +2483,18 @@ function createWayMaterials(id, focusU, detailU) {
   }
 }
 
-function createGlbDerivedMaterial(glbMat, { focusU, detailU, lod = 'none', scaleLod = false, camFade = null, isGlow = false, isTranslucent = false, opacity = 0.84 }) {
-  const m = isGlow
-    ? new THREE.MeshStandardMaterial({
-        map: glbMat?.map || null,
-        normalMap: glbMat?.normalMap || null,
-        roughness: 0.72,
-        metalness: 0.0,
-        vertexColors: Boolean(glbMat?.vertexColors),
-        toneMapped: false,
-      })
-    : new THREE.MeshPhysicalMaterial({
-        color: '#ffffff',
-        map: glbMat?.map || null,
-        normalMap: glbMat?.normalMap || getOrganicNormalTex(),
-        normalScale: glbMat?.normalScale ? glbMat.normalScale.clone() : new THREE.Vector2(0.24, 0.24),
-        roughnessMap: glbMat?.roughnessMap || getOrganicRoughnessTex(),
-        roughness: glbMat?.roughness ?? 0.58,
-        metalness: glbMat?.metalness ?? 0.12,
-        clearcoat: (glbMat?.metalness ?? 0) > 0.45 ? 0.72 : 0.15,
-        clearcoatRoughness: 0.18,
-        vertexColors: Boolean(glbMat?.vertexColors),
-        transparent: isTranslucent,
-        opacity: isTranslucent ? opacity : 1,
-        depthWrite: !isTranslucent,
-      })
-
-  if (isGlow) {
-    m.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-        vec3 _gN = length(normal) > 1e-5 ? normalize(normal) : vec3(0.0, 1.0, 0.0);
-        vec3 _gV = length(vViewPosition) > 1e-5 ? normalize(vViewPosition) : vec3(0.0, 0.0, 1.0);
-        float _ndv = abs(dot(_gN, _gV));
-        float _fres = mix(0.65, 1.24, pow(_ndv, 0.72));
-        totalEmissiveRadiance += diffuseColor.rgb * _fres;
-        diffuseColor.rgb *= 0.08;`
-      )
-    }
-    m.customProgramCacheKey = () => 'glb-fresnel-glow-v1'
-  }
-  const faded = withWayFade(m, focusU, detailU, {
-    minAlpha: isGlow ? 0.15 : 0.16,
-    minBright: isGlow ? 0.18 : 0.28,
-    minSat: 0.25,
-    lod,
-    scaleLod,
-  })
-  return camFade ? withCameraFade(faded, camFade[0], camFade[1]) : faded
-}
-
 // ═══════════════════════════ HELPERS DE CONSTRUCCIÓN ═══════════════════════════
-const put = (list, p, q, sx, sy = sx, sz = sx, c) => list.push({ m: new THREE.Matrix4().compose(p, q, new THREE.Vector3(sx, sy, sz)), c })
+const put = (list, p, q, sx, sy = sx, sz = sx, c) => {
+  if (list) list.push({ m: new THREE.Matrix4().compose(p, q, new THREE.Vector3(sx, sy, sz)), c })
+}
 const aim = (from, to) => new THREE.Quaternion().setFromUnitVectors(from, to)
 const rr = (rng, [a, b]) => a + rng() * (b - a)
-const pointsGeo = (arr) => new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+const pointsGeo = (arr) => {
+  const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+  g.computeBoundingSphere()
+  if (g.boundingSphere) g.boundingSphere.radius += 5
+  return g
+}
 const METAL = new THREE.Color('#3a3f4a')
 
 const EVENT_ACCENTS = {
@@ -2765,9 +2546,9 @@ function basisQuat(rx, ry, rz) {
 
 const _qStep = new THREE.Quaternion()
 
-function buildCurveFrames(curve, length) {
+function buildCurveFrames(curve, length, { maxSteps = 52, density = 0.62 } = {}) {
   // Muestreo adaptativo por curvatura + longitud para evitar quiebres en rizos, espirales y sacacorchos
-  const preN = Math.min(128, Math.max(48, Math.ceil(length * 1.5)))
+  const preN = Math.min(80, Math.max(28, Math.ceil(length * 0.9)))
   const prePos = new Array(preN + 1)
   const preTan = new Array(preN + 1)
   const cdf = new Float32Array(preN + 1)
@@ -2784,7 +2565,7 @@ function buildCurveFrames(curve, length) {
     }
   }
   const totalW = cdf[preN] || 1
-  const steps = THREE.MathUtils.clamp(Math.ceil(length * 2.4 + totalAng * 18), 18, 260)
+  const steps = THREE.MathUtils.clamp(Math.ceil((length * 0.95 + totalAng * 9) * density), 12, maxSteps)
 
   const frames = new Array(steps + 1)
   const T0 = preTan[0]
@@ -2937,29 +2718,23 @@ function buildFramesTubeGeo(frames, radius, radialSegs, { offsetUp = 0, offsetRi
 
 function buildTrackRailsGeo(frames, R, railCol) {
   // Riel dorsal superior + 2 rieles guía redondeados sobre los bordes de la pista
-  const topRail = buildFramesTubeGeo(frames, 0.023, 12, { offsetUp: R * 0.985, uvScaleX: 0.25, color: railCol })
-  const leftRail = buildFramesTubeGeo(frames, 0.020, 10, { offsetUp: -R * 0.858, offsetRight: -R * 0.399, uvScaleX: 0.25, color: railCol })
-  const rightRail = buildFramesTubeGeo(frames, 0.020, 10, { offsetUp: -R * 0.858, offsetRight: R * 0.399, uvScaleX: 0.25, color: railCol })
-  return mergeGeometries([topRail, leftRail, rightRail], false)
+  const topRail = buildFramesTubeGeo(frames, 0.023, 5, { offsetUp: R * 0.985, uvScaleX: 0.25, color: railCol })
+  const leftRail = buildFramesTubeGeo(frames, 0.020, 4, { offsetUp: -R * 0.858, offsetRight: -R * 0.399, uvScaleX: 0.25, color: railCol })
+  const rightRail = buildFramesTubeGeo(frames, 0.020, 4, { offsetUp: -R * 0.858, offsetRight: R * 0.399, uvScaleX: 0.25, color: railCol })
+  return mergeAndDispose([topRail, leftRail, rightRail])
 }
 
 const FLOOR_PROFILE = [
   [-0.51, 0.968],
-  [-0.48, 0.955],
-  [-0.45, 0.945],
-  [-0.42, 0.942],
-  [-0.38, 0.948],
+  [-0.46, 0.946],
+  [-0.41, 0.943],
   [-0.34, 0.964],
-  [-0.28, 0.974],
-  [-0.18, 0.976],
+  [-0.22, 0.975],
   [0.0, 0.977],
-  [0.18, 0.976],
-  [0.28, 0.974],
+  [0.22, 0.975],
   [0.34, 0.964],
-  [0.38, 0.948],
-  [0.42, 0.942],
-  [0.45, 0.945],
-  [0.48, 0.955],
+  [0.41, 0.943],
+  [0.46, 0.946],
   [0.51, 0.968],
 ]
 
@@ -3027,7 +2802,9 @@ function buildFloorSegmentGeo(s, frames, V, isFast, isSlow) {
 }
 
 function pushFxPoint(buckets, texKey, pos, dir, mode, seed, speed, size, col) {
+  if (!buckets) return
   const b = buckets[texKey]
+  if (!b) return
   b.pos.push(pos.x, pos.y, pos.z)
   b.dir.push(dir.x, dir.y, dir.z)
   b.param.push(mode, seed, speed, size)
@@ -3041,6 +2818,8 @@ function buildFxGeo(b) {
   g.setAttribute('aDir', new THREE.Float32BufferAttribute(b.dir, 3))
   g.setAttribute('aParam', new THREE.Float32BufferAttribute(b.param, 4))
   g.setAttribute('aColor', new THREE.Float32BufferAttribute(b.col, 3))
+  g.computeBoundingSphere()
+  if (g.boundingSphere) g.boundingSphere.radius += 6
   return g
 }
 
@@ -3177,7 +2956,7 @@ function addSegmentEvent(s, V, out) {
   const T0 = c.getTangentAt(0.04)
   const { N: N0 } = frameAt(T0)
   const pulseRate = (s.speedK ?? 1) > 1.05 ? 6.0 : (s.speedK ?? 1) < 0.9 ? 2.4 : 4.0
-  lmPulseMeta.push({ pos: P0, q: aim(Z, T0), baseScale: [R * 1.24, R * 1.24, R * 1.24], amp: [0.16, 0.16, 0.16], freq: pulseRate, phase: s.idx * 0.7, c: accCol, kind: 'ring' })
+  if (lmPulseMeta) lmPulseMeta.push({ pos: P0, q: aim(Z, T0), baseScale: [R * 1.24, R * 1.24, R * 1.24], amp: [0.16, 0.16, 0.16], freq: pulseRate, phase: s.idx * 0.7, c: accCol, kind: 'ring' })
   put(lmLights, P0.clone().addScaledVector(N0, R + 0.35), IDENT, 0.22, 0.22, 0.22, accCol)
   put(lmLights, P0.clone().addScaledVector(N0, -(R + 0.35)), IDENT, 0.22, 0.22, 0.22, accCol)
 
@@ -3189,39 +2968,47 @@ function addSegmentEvent(s, V, out) {
   if (ev === 'geiser') {
     const baseP = Pmid.clone().addScaledVector(Y, -R * 0.9)
     put(lmCones, baseP, IDENT, R * 2.2, 0.75, R * 2.2, new THREE.Color('#475c6c'))
-    lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.6, 2.8, R * 0.6], amp: [0.18, 2.4, 0.18], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.25), kind: 'cyl' })
-    lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.25), q: aim(Z, Y), baseScale: [R * 1.1, R * 1.1, R * 1.1], amp: [0.9, 0.9, 0.9], freq: 2.2, phase: s.idx, c: new THREE.Color('#e0faff'), kind: 'ring' })
-    extPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.72, 3.2, R * 0.72], amp: [0.22, 3.2, 0.22], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.12) })
-    for (let i = 0; i < 16; i++) {
-      pushFxPoint(fxBuckets, 'spray', baseP.clone().addScaledVector(Y, 0.6), Y, 0, rng(), 1.0, 0.36 + rng() * 0.2, new THREE.Color('#b8f4ff'))
+    if (lmPulseMeta) {
+      lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.6, 2.8, R * 0.6], amp: [0.18, 2.4, 0.18], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.25), kind: 'cyl' })
+      lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.25), q: aim(Z, Y), baseScale: [R * 1.1, R * 1.1, R * 1.1], amp: [0.9, 0.9, 0.9], freq: 2.2, phase: s.idx, c: new THREE.Color('#e0faff'), kind: 'ring' })
     }
-    for (let i = 0; i < 8; i++) {
-      pushFxPoint(fxBuckets, 'foam', baseP.clone().addScaledVector(Nmid, (rng() - 0.5) * R).addScaledVector(Y, 0.25), Y, 5, rng(), 0.55, 0.32, new THREE.Color('#ffffff'))
+    if (extPulseMeta) extPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.72, 3.2, R * 0.72], amp: [0.22, 3.2, 0.22], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.12) })
+    if (fxBuckets) {
+      for (let i = 0; i < 16; i++) {
+        pushFxPoint(fxBuckets, 'spray', baseP.clone().addScaledVector(Y, 0.6), Y, 0, rng(), 1.0, 0.36 + rng() * 0.2, new THREE.Color('#b8f4ff'))
+      }
+      for (let i = 0; i < 8; i++) {
+        pushFxPoint(fxBuckets, 'foam', baseP.clone().addScaledVector(Nmid, (rng() - 0.5) * R).addScaledVector(Y, 0.25), Y, 5, rng(), 0.55, 0.32, new THREE.Color('#ffffff'))
+      }
     }
   } else if (ev === 'erupcion') {
     const Pcr = c.getPointAt(0.14)
     const baseP = Pcr.clone().addScaledVector(Y, -R * 0.85)
     put(lmCones, baseP, IDENT, R * 2.8, 1.35, R * 2.8, new THREE.Color('#2b1b17'))
-    lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.1), q: IDENT, baseScale: [R * 0.85, R * 0.45, R * 0.85], amp: [0.22, 0.35, 0.22], freq: 3.1, phase: s.idx, c: hot('#ff5a1f', 1.65), kind: 'light' })
-    extPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.0), q: IDENT, baseScale: [R * 0.85, 3.0, R * 0.85], amp: [0.24, 2.8, 0.24], freq: 3.1, phase: s.idx, c: hot('#ff6b2b', 1.25) })
-    for (let i = 0; i < 18; i++) {
-      const dir = new THREE.Vector3((rng() - 0.5) * 0.7, 0.9 + rng() * 0.7, (rng() - 0.5) * 0.7).normalize()
-      pushFxPoint(fxBuckets, 'ember', baseP.clone().addScaledVector(Y, 1.1), dir, 1, rng(), 0.75 + rng() * 0.4, 0.34 + rng() * 0.18, new THREE.Color('#ff8a2f'))
-    }
-    for (let i = 0; i < 10; i++) {
-      pushFxPoint(fxBuckets, 'smoke', baseP.clone().addScaledVector(Y, 1.3), Y, 1, rng(), 0.32 + rng() * 0.15, 0.65 + rng() * 0.3, new THREE.Color('#5a4a44'))
+    if (lmPulseMeta) lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.1), q: IDENT, baseScale: [R * 0.85, R * 0.45, R * 0.85], amp: [0.22, 0.35, 0.22], freq: 3.1, phase: s.idx, c: hot('#ff5a1f', 1.65), kind: 'light' })
+    if (extPulseMeta) extPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.0), q: IDENT, baseScale: [R * 0.85, 3.0, R * 0.85], amp: [0.24, 2.8, 0.24], freq: 3.1, phase: s.idx, c: hot('#ff6b2b', 1.25) })
+    if (fxBuckets) {
+      for (let i = 0; i < 18; i++) {
+        const dir = new THREE.Vector3((rng() - 0.5) * 0.7, 0.9 + rng() * 0.7, (rng() - 0.5) * 0.7).normalize()
+        pushFxPoint(fxBuckets, 'ember', baseP.clone().addScaledVector(Y, 1.1), dir, 1, rng(), 0.75 + rng() * 0.4, 0.34 + rng() * 0.18, new THREE.Color('#ff8a2f'))
+      }
+      for (let i = 0; i < 10; i++) {
+        pushFxPoint(fxBuckets, 'smoke', baseP.clone().addScaledVector(Y, 1.3), Y, 1, rng(), 0.32 + rng() * 0.15, 0.65 + rng() * 0.3, new THREE.Color('#5a4a44'))
+      }
     }
   } else if (ev === 'cascada') {
     for (const u of [0.28, 0.55, 0.78]) {
       const Pw = c.getPointAt(u)
       put(lmDiscs, Pw.clone().addScaledVector(Y, -R - 2.6), IDENT, R * 2.8, 0.12, R * 2.8)
       put(extPlumes, Pw.clone().addScaledVector(Y, -R - 2.6), IDENT, R * 0.82, R * 1.4 + 2.5, R * 0.82, hot('#7be8ff', 1.05))
-      for (let i = 0; i < 8; i++) {
-        const offP = Pw.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, R * 1.6)
-        pushFxPoint(fxBuckets, 'spray', offP, Y, 2, rng(), 0.65 + rng() * 0.35, 0.3 + rng() * 0.18, new THREE.Color('#a8ecff'))
-      }
-      for (let i = 0; i < 5; i++) {
-        pushFxPoint(fxBuckets, 'foam', Pw.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.5).addScaledVector(Y, -R * 0.7), Y, 5, rng(), 0.45, 0.35, new THREE.Color('#eefaff'))
+      if (fxBuckets) {
+        for (let i = 0; i < 8; i++) {
+          const offP = Pw.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, R * 1.6)
+          pushFxPoint(fxBuckets, 'spray', offP, Y, 2, rng(), 0.65 + rng() * 0.35, 0.3 + rng() * 0.18, new THREE.Color('#a8ecff'))
+        }
+        for (let i = 0; i < 5; i++) {
+          pushFxPoint(fxBuckets, 'foam', Pw.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.5).addScaledVector(Y, -R * 0.7), Y, 5, rng(), 0.45, 0.35, new THREE.Color('#eefaff'))
+        }
       }
     }
   } else if (ev === 'turbina') {
@@ -3229,14 +3016,18 @@ function addSegmentEvent(s, V, out) {
       const Pt = c.getPointAt(u)
       const Tt = c.getTangentAt(u)
       put(lmRings, Pt, aim(Z, Tt), R * 1.38, R * 1.38, R * 1.38, METAL)
-      for (let k = 0; k < 4; k++) {
-        lmBladeMeta.push({ pos: Pt, axis: Tt, angle0: (k * Math.PI) / 2, speed: 5.5, len: R * 1.25, width: 0.22, c: hot('#ffe866', 1.25) })
+      if (lmBladeMeta) {
+        for (let k = 0; k < 4; k++) {
+          lmBladeMeta.push({ pos: Pt, axis: Tt, angle0: (k * Math.PI) / 2, speed: 5.5, len: R * 1.25, width: 0.22, c: hot('#ffe866', 1.25) })
+        }
       }
-      for (let i = 0; i < 10; i++) {
-        const { N: Nt, B: Bt } = frameAt(Tt)
-        const ang = rng() * TAU
-        const p = Pt.clone().addScaledVector(Nt, Math.cos(ang) * R * 0.6).addScaledVector(Bt, Math.sin(ang) * R * 0.6)
-        pushFxPoint(fxBuckets, 'spray', p, Tt, 3, rng(), 1.4 + rng() * 0.6, 0.24, new THREE.Color('#fff7b0'))
+      if (fxBuckets) {
+        for (let i = 0; i < 10; i++) {
+          const { N: Nt, B: Bt } = frameAt(Tt)
+          const ang = rng() * TAU
+          const p = Pt.clone().addScaledVector(Nt, Math.cos(ang) * R * 0.6).addScaledVector(Bt, Math.sin(ang) * R * 0.6)
+          pushFxPoint(fxBuckets, 'spray', p, Tt, 3, rng(), 1.4 + rng() * 0.6, 0.24, new THREE.Color('#fff7b0'))
+        }
       }
     }
   } else if (ev === 'hielo_resbaloso') {
@@ -3248,18 +3039,21 @@ function addSegmentEvent(s, V, out) {
       const { N: Ni } = frameAt(Ti)
       const side = i % 2 === 0 ? 1 : -1
       const cp = Pi.clone().addScaledVector(Ni, side * (R + 0.15))
-      put(out.iceSpires || cones, cp, aim(Y, Ni.clone().multiplyScalar(side).addScaledVector(Y, 0.6).normalize()), 0.45, 1.25, 0.45, new THREE.Color('#bdeeff'))
+      const spireTarget = out.iceSpires || cones
+      if (spireTarget) put(spireTarget, cp, aim(Y, Ni.clone().multiplyScalar(side).addScaledVector(Y, 0.6).normalize()), 0.45, 1.25, 0.45, new THREE.Color('#bdeeff'))
       pushFxPoint(fxBuckets, 'ring', Pi.clone().addScaledVector(Y, R * 0.6), Y, 4, rng(), 2.8 + rng() * 1.5, 0.35, new THREE.Color('#d8f8ff'))
     }
   } else if (ev === 'pantano') {
     for (const u of [0.25, 0.5, 0.75]) {
       const Pp = c.getPointAt(u)
       put(lmCyls, Pp.clone().addScaledVector(Y, -R * 1.12), IDENT, R * 1.85, 0.08, R * 1.85, new THREE.Color('#3b5928'))
-      for (let i = 0; i < 6; i++) {
-        const bp = Pp.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, -R * 0.65)
-        pushFxPoint(fxBuckets, 'foam', bp, Y, 5, rng(), 0.28 + rng() * 0.2, 0.34 + rng() * 0.18, new THREE.Color('#9be066'))
+      if (fxBuckets) {
+        for (let i = 0; i < 6; i++) {
+          const bp = Pp.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, -R * 0.65)
+          pushFxPoint(fxBuckets, 'foam', bp, Y, 5, rng(), 0.28 + rng() * 0.2, 0.34 + rng() * 0.18, new THREE.Color('#9be066'))
+        }
+        pushFxPoint(fxBuckets, 'smoke', Pp.clone().addScaledVector(Y, -R * 0.3), Y, 5, rng(), 0.2, 0.8, new THREE.Color('#5a7a42'))
       }
-      pushFxPoint(fxBuckets, 'smoke', Pp.clone().addScaledVector(Y, -R * 0.3), Y, 5, rng(), 0.2, 0.8, new THREE.Color('#5a7a42'))
     }
   } else if (ev === 'portal') {
     for (const u of [0.15, 0.85]) {
@@ -3267,10 +3061,14 @@ function addSegmentEvent(s, V, out) {
       const Tpt = c.getTangentAt(u)
       const q = aim(Z, Tpt)
       const e0 = new THREE.Euler().setFromQuaternion(q)
-      lmSpinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: 0.6, sy: 1.5, sz: 1.2, scale: R * 1.55, c: hot('#ea80fc', 1.45) })
-      lmSpinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: -0.9, sy: 1.1, sz: -1.6, scale: R * 1.18, c: hot('#4fe3ff', 1.4) })
-      for (let i = 0; i < 12; i++) {
-        pushFxPoint(fxBuckets, 'ring', Ppt, Tpt, 6, rng(), 0.7 + rng() * 0.4, 0.3, new THREE.Color('#ea80fc'))
+      if (lmSpinMeta) {
+        lmSpinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: 0.6, sy: 1.5, sz: 1.2, scale: R * 1.55, c: hot('#ea80fc', 1.45) })
+        lmSpinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: -0.9, sy: 1.1, sz: -1.6, scale: R * 1.18, c: hot('#4fe3ff', 1.4) })
+      }
+      if (fxBuckets) {
+        for (let i = 0; i < 12; i++) {
+          pushFxPoint(fxBuckets, 'ring', Ppt, Tpt, 6, rng(), 0.7 + rng() * 0.4, 0.3, new THREE.Color('#ea80fc'))
+        }
       }
     }
   }
@@ -3447,49 +3245,33 @@ const EXT_RUIN_COLS = [new THREE.Color('#4f352d'), new THREE.Color('#3c2e2c')]
 const EXT_TREE_COLS = [new THREE.Color('#192d38'), new THREE.Color('#20383a')]
 const EXT_FLORA_GLOW_COLS = ['#2ee8c4', '#4eff8c', '#45b8ff'].map((c) => hot(c, 1.15))
 
-function build(way) {
+const segFramesCache = new WeakMap()
+function getSegFrames(seg) {
+  let f = segFramesCache.get(seg)
+  if (!f) {
+    f = buildCurveFrames(seg.curve, seg.length)
+    segFramesCache.set(seg, f)
+  }
+  return f
+}
+
+function buildExterior(way) {
   const themeId = way.theme.id
   const V = VISUALS[themeId]
-  const cine = V.cine ?? {}
   const r = way.params.radius
   const ribBase = hot(V.rib, 1.25)
   const mouthC = hot(V.rail, 1.65)
   const dim = hot(V.rib, 0.8)
-  const archC = new THREE.Color(V.arch?.c ?? '#3a3f4a')
-  const poleC = new THREE.Color(V.lamp?.pole ?? '#3a3f4a')
-  const lampC = hot(V.lamp?.c ?? V.rail, 1.28)
-  const arrowC = hot(V.rail, 1.25)
-  const bannerCols = (V.banner?.c ?? [V.rib, V.rail]).map((c) => new THREE.Color(c))
-  const panelBaseCol = new THREE.Color(cine.panel?.base ?? '#1e2536')
-  const panelGlowBase = cine.panel?.glow ?? V.rail
-  const barBaseHex = cine.bar ?? '#ff6028'
-  const neonBaseHex = cine.neon ?? V.rib
   const extNeonHex = EXT_NEON_HEX[themeId] ?? V.rail
 
-  const tubes = []; const rails = []; const floors = []
-  const extCores = []; const extCables = []; const extClamps = []; const extPylons = []
+  const tubes = []; const extCores = []; const extCables = []; const extClamps = []; const extPylons = []
   const extFlora = []; const extFloraGlow = []; const extRuins = []; const extPlumes = []; const extPulseMeta = []
-  const mouthRings = []; const ribFrames = []; const panelPods = []; const lightBars = []
-  const neonRims = []; const windStreaks = []
-  const solids = []; const cones = []; const boxes = []; const octas = []; const glowOctas = []; const bolts = []
-  const vines = []; const leaves = []; const iceSpires = []; const crystals = []; const flowers = []; const pods = []; const lamps = []
-  const spheresA = []; const dots = []
-  const lights = []; const banners = []; const arrows = []; const signs = []
-  // Landmarks, nudos y siluetas de eventos (siempre visibles en exterior e interior)
+  const mouthRings = []
   const lmSolids = []; const lmCones = []; const lmBoxes = []; const lmOctas = []
   const lmSpheres = []; const lmSpheresA = []; const lmDiscs = []; const lmFunnels = []
   const lmRings = []; const lmLights = []; const lmBanners = []
   const lmSpinMeta = []; const lmBladeMeta = []; const lmPulseMeta = []
-  const sparkBucket = { pos: [], dir: [], param: [], col: [] }
-  const fxBuckets = {
-    spray: { pos: [], dir: [], param: [], col: [] },
-    smoke: { pos: [], dir: [], param: [], col: [] },
-    ember: { pos: [], dir: [], param: [], col: [] },
-    foam: { pos: [], dir: [], param: [], col: [] },
-    ring: { pos: [], dir: [], param: [], col: [] },
-  }
 
-  const solid = way.segments.filter((s) => !s.air)
   const bayRng = mulberry32(way.idx * 8191 + 19)
   const samples = []
   const pFrom = way.segments[0]?.curve.getPoint(0)
@@ -3498,33 +3280,18 @@ function build(way) {
 
   for (const s of way.segments) {
     const c = s.curve; const R = s.radius
-    const ribC = routeColor(neonBaseHex, s.route, 1.22)
-    const railCol = routeColor(V.rail, s.route, 0.85)
 
-    // Muestras para cálculo rápido de distancia cámara -> camino en useFrame
-    const nSamp = Math.max(3, Math.ceil(s.length / 6))
+    const nSamp = Math.max(3, Math.ceil(s.length / 7))
     for (let i = 0; i <= nSamp; i++) samples.push(c.getPointAt(i / nSamp))
 
-    // Perfil de ruta (rápida / lenta / espectacular)
-    const prof = s.route >= 0 ? way.routes?.[s.route]?.profile : null
-    const isFast = s.route >= 0 && (prof ? prof.speed === 'rapida' : s.route === 0)
-    const isSlow = s.route >= 0 && (prof ? prof.speed === 'lenta' : s.route === 1)
-    const isSpec = s.route >= 0 && !isFast && !isSlow
-
-    // Eventos + teasers de curiosidad + anillos de transición
     addSegmentEvent(s, V, {
-      cones, iceSpires, lmCones, lmCyls: lmSolids, lmLights, lmRings, mouthRings, ribFrames,
-      lmSpinMeta, lmBladeMeta, lmPulseMeta, lmDiscs, fxBuckets, extPlumes, extPulseMeta,
+      cones: null, iceSpires: null, ribFrames: null, fxBuckets: null,
+      lmCones, lmCyls: lmSolids, lmLights, lmRings, mouthRings,
+      lmSpinMeta, lmBladeMeta, lmPulseMeta, lmDiscs, extPlumes, extPulseMeta,
     })
 
     if (s.air) {
-      addWindAndSparksForSegment(s, V, null, isFast, isSlow, { windStreaks, sparkBucket })
       const P0 = c.getPoint(0); const T0 = c.getTangent(0); const P1 = c.getPoint(1); const T1 = c.getTangent(1)
-      const n = Math.ceil(s.length / 0.9)
-      for (let i = 1; i < n; i++) dots.push(...c.getPoint(i / n).toArray())
-      for (const u of [0.25, 0.5, 0.75]) {
-        arrows.push({ m: new THREE.Matrix4().compose(c.getPointAt(u), aim(Z, c.getTangentAt(u)), new THREE.Vector3(0.75, 0.75, 0.9)), c: arrowC })
-      }
       if (s.kind === 'trampolin') {
         const p = P0.clone().addScaledVector(Y, -0.35)
         put(lmSolids, p, IDENT, R * 3.4, 0.3, R * 3.4, new THREE.Color(V.rib).multiplyScalar(0.5))
@@ -3545,29 +3312,23 @@ function build(way) {
       continue
     }
 
-    const frames = buildCurveFrames(c, s.length)
+    const frames = getSegFrames(s)
     const ev = s.event || (EVENT_ACCENTS[s.kind] ? s.kind : null)
     const tubeTint = ev ? WHITE_COL.clone().lerp(new THREE.Color(EVENT_ACCENTS[ev]), 0.62) : null
-    tubes.push(buildFramesTubeGeo(frames, R, 32, { uvScaleX: 0.25, color: WHITE_COL, eventColor: tubeTint }))
+    tubes.push(buildFramesTubeGeo(frames, R, 8, { uvScaleX: 0.25, color: WHITE_COL, eventColor: tubeTint }))
 
-    floors.push(buildFloorSegmentGeo(s, frames, V, isFast, isSlow))
-    rails.push(buildTrackRailsGeo(frames, R, railCol))
-
-    // Tira de neón interior para vista exterior (color del tema legible a distancia)
     const coreRad = Math.max(0.145, R * 0.148)
     const coreBase = routeColor(extNeonHex, s.route, 1.45)
     const coreCol = ev ? coreBase.clone().lerp(hot(EVENT_ACCENTS[ev], 1.4), 0.45) : coreBase
-    extCores.push(buildFramesTubeGeo(frames, coreRad, 14, { offsetUp: -R * 0.12, uvScaleX: 0.25, color: coreCol }))
+    extCores.push(buildFramesTubeGeo(frames, coreRad, 4, { offsetUp: -R * 0.12, uvScaleX: 0.25, color: coreCol }))
 
-    // Abrazaderas metálicas espaciadas de forma limpia para la vista exterior (contrato diámetro 1, ancho 0.15)
-    const nClamps = Math.max(1, Math.round(s.length / 9.5))
+    const nClamps = Math.max(1, Math.round(s.length / 11))
     for (let i = 1; i < nClamps; i++) {
       const f = sampleCurveFrame(frames, i / nClamps)
       put(extClamps, f.pos, basisQuat(f.right, f.up, f.T), R * 2.02, R * 2.02, 1.85, EXT_CLAMP_COL)
     }
 
-    // Pilones de andamio de celosía + cables colgantes + flora/ruinas sutiles en las orillas
-    const nPyl = Math.max(1, Math.floor(s.length / 16))
+    const nPyl = Math.max(1, Math.floor(s.length / 18))
     const cableAnchorsL = []
     const cableAnchorsR = []
     for (let i = 0; i < nPyl; i++) {
@@ -3581,7 +3342,7 @@ function build(way) {
         cableAnchorsL.push(f.pos.clone().addScaledVector(Y, -R * 1.04).addScaledVector(f.right, R * 0.52))
         cableAnchorsR.push(f.pos.clone().addScaledVector(Y, -R * 1.04).addScaledVector(f.right, -R * 0.52))
 
-        if (pylonCount % 2 === 0 && pylonCount < 10) {
+        if (pylonCount % 2 === 0 && pylonCount < 8) {
           const side = pylonCount % 4 === 0 ? 1 : -1
           const bankPos = footPos.clone().addScaledVector(f.right, side * (R * 1.4 + 0.9))
           const treeSc = 2.0 + bayRng() * 1.3
@@ -3607,13 +3368,135 @@ function build(way) {
           const mid = a.clone().lerp(b, 0.5).addScaledVector(Y, -dist * 0.16)
           const q1 = a.clone().lerp(mid, 0.5).addScaledVector(Y, -dist * 0.04)
           const q2 = b.clone().lerp(mid, 0.5).addScaledVector(Y, -dist * 0.04)
-          extCables.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, q1, mid, q2, b]), 18, 0.042, 10, false))
+          extCables.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, q1, mid, q2, b]), 7, 0.042, 5, false))
         }
       }
     }
 
-    // Cápsulas segmentadas: anillos nervados + borde neón + paneles opacos alternados + barras de luz + ambiente del tema
-    const baySpacing = isFast ? 2.15 : isSlow ? 2.65 : 2.38
+    if (s.kind === 'salida' || s.kind === 'llegada') {
+      const baseU = s.kind === 'salida' ? 0.04 : 0.96
+      const stepU = s.kind === 'salida' ? 0.08 : -0.08
+      for (let k = 0; k < 3; k++) {
+        const u = THREE.MathUtils.clamp(baseU + k * stepU, 0.02, 0.98)
+        const targetList = k === 0 ? mouthRings : lmRings
+        put(targetList, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), mouthC)
+      }
+    }
+
+    if (s.kind === 'embudo') {
+      const A = c.getPoint(0); const B = c.getPoint(1); const ctr = new THREE.Vector3()
+      for (let i = 0; i < 24; i++) ctr.add(c.getPoint(0.02 + (i / 23) * 0.28))
+      ctr.divideScalar(24)
+      const d = B.clone().sub(ctr).normalize(); const h = -A.clone().sub(B).dot(d)
+      const rad = A.clone().sub(B).addScaledVector(d, h).length()
+      if (h > 0.5) put(lmFunnels, B.clone().addScaledVector(d, -h), aim(Y, d), rad * 2, h, rad * 2)
+    } else if (s.kind === 'cascada' && !s.event) {
+      let last = -9
+      for (let i = 0; i <= 40; i++) {
+        if (Math.abs(c.getTangentAt(i / 40).y) < 0.3 && i - last > 3) { last = i; put(lmDiscs, c.getPointAt(i / 40).addScaledVector(Y, -R - 0.15), IDENT, R * 3.2, 0.14, R * 3.2) }
+      }
+    }
+  }
+
+  addLandmark(way, V, {
+    cones: lmCones, cyls: lmSolids, boxes: lmBoxes, octas: lmOctas, spheresA: lmSpheresA,
+    lights: lmLights, banners: lmBanners, rings: lmRings, spinMeta: lmSpinMeta, bladeMeta: lmBladeMeta,
+  })
+
+  way.junctions.forEach((j, i) => {
+    put(lmSpheres, j.pos, IDENT, r * 4)
+    if (j.kind === 'fork') {
+      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#4fe3ff', 1.35))
+      lmSpinMeta.push({ pos: j.pos, ex: 0.45, ey: i * 0.7, ez: 0.2, sx: 0.9, sy: 1.3, sz: 0.3, scale: r * 2.45, c: hot('#4fe3ff', 1.3) })
+      lmSpinMeta.push({ pos: j.pos, ex: -0.45, ey: i * 0.7, ez: -0.2, sx: -0.9, sy: 1.1, sz: -0.3, scale: r * 1.95, c: ribBase })
+    } else if (j.kind === 'cross') {
+      put(lmLights, j.pos, IDENT, r * 0.95, r * 0.95, r * 0.95, hot('#ffd859', 1.4))
+      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: 0, ez: 0, sx: 1.1, sy: 0.8, sz: 0.2, scale: r * 2.65, c: hot('#ffd859', 1.3) })
+      lmSpinMeta.push({ pos: j.pos, ex: Math.PI / 2, ey: 0, ez: 0, sx: 0.2, sy: -1.2, sz: 0.9, scale: r * 2.15, c: ribBase })
+      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: Math.PI / 2, ez: 0.4, sx: -0.8, sy: 0.4, sz: 1.3, scale: r * 1.65, c: hot(V.rail, 1.3) })
+    } else {
+      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#7affb2', 1.35))
+      lmSpinMeta.push({ pos: j.pos, ex: 0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: 1.4, sz: 0.4, scale: r * 2.5, c: hot('#7affb2', 1.28) })
+      lmSpinMeta.push({ pos: j.pos, ex: -0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: -1.4, sz: -0.4, scale: r * 1.85, c: ribBase })
+    }
+  })
+
+  return {
+    samples,
+    tube: mergeAndDispose(tubes),
+    extCore: mergeAndDispose(extCores),
+    extCable: mergeAndDispose(extCables),
+    extClamps, extPylons, extFlora, extFloraGlow, extRuins, extPlumes, extPulseMeta,
+    lmSolids, lmCones, lmBoxes, lmOctas, lmSpheres, lmSpheresA, lmDiscs, lmFunnels,
+    lmRings, lmLights, lmBanners, lmSpinMeta, lmBladeMeta, lmPulseMeta, mouthRings,
+  }
+}
+
+function buildInterior(way) {
+  const themeId = way.theme.id
+  const V = VISUALS[themeId]
+  const cine = V.cine ?? {}
+  const archC = new THREE.Color(V.arch?.c ?? '#3a3f4a')
+  const poleC = new THREE.Color(V.lamp?.pole ?? '#3a3f4a')
+  const lampC = hot(V.lamp?.c ?? V.rail, 1.28)
+  const arrowC = hot(V.rail, 1.25)
+  const bannerCols = (V.banner?.c ?? [V.rib, V.rail]).map((c) => new THREE.Color(c))
+  const panelBaseCol = new THREE.Color(cine.panel?.base ?? '#1e2536')
+  const panelGlowBase = cine.panel?.glow ?? V.rail
+  const barBaseHex = cine.bar ?? '#ff6028'
+  const neonBaseHex = cine.neon ?? V.rib
+
+  const rails = []; const floors = []
+  const ribFrames = []; const panelPods = []; const lightBars = []
+  const neonRims = []; const windStreaks = []
+  const solids = []; const cones = []; const boxes = []; const octas = []; const glowOctas = []; const bolts = []
+  const vines = []; const leaves = []; const iceSpires = []; const crystals = []; const flowers = []; const pods = []; const lamps = []
+  const spheresA = []; const dots = []
+  const lights = []; const banners = []; const arrows = []; const signs = []
+  const sparkBucket = { pos: [], dir: [], param: [], col: [] }
+  const fxBuckets = {
+    spray: { pos: [], dir: [], param: [], col: [] },
+    smoke: { pos: [], dir: [], param: [], col: [] },
+    ember: { pos: [], dir: [], param: [], col: [] },
+    foam: { pos: [], dir: [], param: [], col: [] },
+    ring: { pos: [], dir: [], param: [], col: [] },
+  }
+
+  const solid = way.segments.filter((s) => !s.air)
+  const bayRng = mulberry32(way.idx * 8191 + 19)
+
+  for (const s of way.segments) {
+    const c = s.curve; const R = s.radius
+    const ribC = routeColor(neonBaseHex, s.route, 1.22)
+    const railCol = routeColor(V.rail, s.route, 0.85)
+
+    const prof = s.route >= 0 ? way.routes?.[s.route]?.profile : null
+    const isFast = s.route >= 0 && (prof ? prof.speed === 'rapida' : s.route === 0)
+    const isSlow = s.route >= 0 && (prof ? prof.speed === 'lenta' : s.route === 1)
+    const isSpec = s.route >= 0 && !isFast && !isSlow
+
+    addSegmentEvent(s, V, {
+      cones, iceSpires, ribFrames, fxBuckets,
+      lmCones: null, lmCyls: null, lmLights: null, lmRings: null, mouthRings: null,
+      lmSpinMeta: null, lmBladeMeta: null, lmPulseMeta: null, lmDiscs: null, extPlumes: null, extPulseMeta: null,
+    })
+
+    if (s.air) {
+      addWindAndSparksForSegment(s, V, null, isFast, isSlow, { windStreaks, sparkBucket })
+      const n = Math.ceil(s.length / 1.2)
+      for (let i = 1; i < n; i++) dots.push(...c.getPoint(i / n).toArray())
+      for (const u of [0.25, 0.5, 0.75]) {
+        arrows.push({ m: new THREE.Matrix4().compose(c.getPointAt(u), aim(Z, c.getTangentAt(u)), new THREE.Vector3(0.75, 0.75, 0.9)), c: arrowC })
+      }
+      continue
+    }
+
+    const frames = getSegFrames(s)
+    const ev = s.event || (EVENT_ACCENTS[s.kind] ? s.kind : null)
+    floors.push(buildFloorSegmentGeo(s, frames, V, isFast, isSlow))
+    rails.push(buildTrackRailsGeo(frames, R, railCol))
+
+    const baySpacing = isFast ? 4.0 : isSlow ? 4.8 : 4.4
     const nBays = Math.max(1, Math.round(s.length / baySpacing))
     const bayLen = s.length / nBays
     const evGlowHex = ev ? (EVENT_ACCENTS[ev] ?? panelGlowBase) : panelGlowBase
@@ -3636,7 +3519,6 @@ function build(way) {
       const f = sampleCurveFrame(frames, u)
       const qBase = basisQuat(f.right, f.up, f.T)
 
-      // Módulos opacos alternados dejando amplias ventanas de cristal
       const slots = i % 2 === 0 ? PANEL_SLOTS_EVEN : PANEL_SLOTS_ODD
       for (const ang of slots) {
         const qPod = qBase.clone().multiply(new THREE.Quaternion().setFromAxisAngle(Z, -ang))
@@ -3647,7 +3529,6 @@ function build(way) {
         })
       }
 
-      // Barras de luz incrustadas en el interior del tubo
       const barMask = i % 2 === 0 ? LIGHTBAR_ANGLES : [LIGHTBAR_ANGLES[0], LIGHTBAR_ANGLES[1]]
       for (const ang of barMask) {
         const dir = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
@@ -3669,7 +3550,6 @@ function build(way) {
 
     addWindAndSparksForSegment(s, V, frames, isFast, isSlow, { windStreaks, sparkBucket })
 
-    // acento visual por perfil de ruta
     if (isSlow && s.length > 5) {
       const nFlora = Math.max(1, Math.floor(s.length / 9))
       for (let i = 0; i < nFlora; i++) {
@@ -3692,18 +3572,7 @@ function build(way) {
       }
     }
 
-    if (s.kind === 'salida' || s.kind === 'llegada') {
-      const baseU = s.kind === 'salida' ? 0.04 : 0.96
-      const stepU = s.kind === 'salida' ? 0.08 : -0.08
-      for (let k = 0; k < 3; k++) {
-        const u = THREE.MathUtils.clamp(baseU + k * stepU, 0.02, 0.98)
-        const targetList = k === 0 ? mouthRings : lmRings
-        put(targetList, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), mouthC)
-      }
-    }
-
-    // pilares con arcos y vigas (detalle cercano interior)
-    const nPost = Math.floor(s.length / 10)
+    const nPost = Math.floor(s.length / 12)
     for (let i = 0; i < nPost; i++) {
       const u = (i + 0.5) / nPost
       const P = c.getPointAt(u); const T = c.getTangentAt(u)
@@ -3721,8 +3590,7 @@ function build(way) {
       put(solids, braceR, aim(Y, N.clone().add(Y).normalize()), 0.09, span * 0.95, 0.09, archC)
     }
 
-    // farolas a lo largo del tramo (usa lamp.glb o cuello de cisne procedural suave)
-    const nLamp = Math.floor(s.length / 14)
+    const nLamp = Math.floor(s.length / 15)
     for (let i = 0; i < nLamp; i++) {
       const u = (i + 0.35) / nLamp
       const P = c.getPointAt(u); const T = c.getTangentAt(u)
@@ -3736,8 +3604,7 @@ function build(way) {
       put(lights, baseP.clone().addScaledVector(Y, 1.44).addScaledVector(inward, 0.36), IDENT, 0.26, 0.26, 0.26, isSlow ? hot('#ffe0a3', 1.3) : lampC)
     }
 
-    // flechas direccionales en el lomo del tubo (más densas en rutas rápidas)
-    const arrStep = isFast ? 4.4 : 7.5
+    const arrStep = isFast ? 5.2 : 8.5
     const arrCol = isFast ? hot(V.rail, 1.38) : arrowC
     const nArr = Math.max(1, Math.floor(s.length / arrStep))
     for (let i = 0; i < nArr; i++) {
@@ -3749,7 +3616,6 @@ function build(way) {
       put(arrows, P.clone().addScaledVector(topDir, R + 0.22), aim(Z, T), 0.72, 0.72, isFast ? 1.05 : 0.85, arrCol)
     }
 
-    // cartelito del obstáculo / evento al inicio del tramo
     const signKind = SIGN_CELLS[evSignKey(s)] ? evSignKey(s) : null
     if (s.kind !== 'salida' && s.kind !== 'llegada' && signKind) {
       const u = Math.min(0.12, 1.8 / Math.max(s.length, 1))
@@ -3764,55 +3630,15 @@ function build(way) {
         uv: [col * 0.25, 1 - (row + 1) / SIGN_ROWS],
       })
     }
-
-    if (s.kind === 'embudo') {
-      const A = c.getPoint(0); const B = c.getPoint(1); const ctr = new THREE.Vector3()
-      for (let i = 0; i < 24; i++) ctr.add(c.getPoint(0.02 + (i / 23) * 0.28))
-      ctr.divideScalar(24)
-      const d = B.clone().sub(ctr).normalize(); const h = -A.clone().sub(B).dot(d)
-      const rad = A.clone().sub(B).addScaledVector(d, h).length()
-      if (h > 0.5) put(lmFunnels, B.clone().addScaledVector(d, -h), aim(Y, d), rad * 2, h, rad * 2)
-    } else if (s.kind === 'cascada' && !s.event) {
-      let last = -9
-      for (let i = 0; i <= 40; i++) {
-        if (Math.abs(c.getTangentAt(i / 40).y) < 0.3 && i - last > 3) { last = i; put(lmDiscs, c.getPointAt(i / 40).addScaledVector(Y, -R - 0.15), IDENT, R * 3.2, 0.14, R * 3.2) }
-      }
-    }
   }
 
-  // Landmarks distintivos del tema (siempre visibles)
-  addLandmark(way, V, {
-    cones: lmCones, cyls: lmSolids, boxes: lmBoxes, octas: lmOctas, spheresA: lmSpheresA,
-    lights: lmLights, banners: lmBanners, rings: lmRings, spinMeta: lmSpinMeta, bladeMeta: lmBladeMeta,
-  })
-
-  // nudos (junctions): esfera de cristal, núcleo emisivo y anillos giratorios según fork / cross / merge
-  way.junctions.forEach((j, i) => {
-    put(lmSpheres, j.pos, IDENT, r * 4)
-    if (j.kind === 'fork') {
-      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#4fe3ff', 1.35))
-      lmSpinMeta.push({ pos: j.pos, ex: 0.45, ey: i * 0.7, ez: 0.2, sx: 0.9, sy: 1.3, sz: 0.3, scale: r * 2.45, c: hot('#4fe3ff', 1.3) })
-      lmSpinMeta.push({ pos: j.pos, ex: -0.45, ey: i * 0.7, ez: -0.2, sx: -0.9, sy: 1.1, sz: -0.3, scale: r * 1.95, c: ribBase })
-    } else if (j.kind === 'cross') {
-      put(lmLights, j.pos, IDENT, r * 0.95, r * 0.95, r * 0.95, hot('#ffd859', 1.4))
-      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: 0, ez: 0, sx: 1.1, sy: 0.8, sz: 0.2, scale: r * 2.65, c: hot('#ffd859', 1.3) })
-      lmSpinMeta.push({ pos: j.pos, ex: Math.PI / 2, ey: 0, ez: 0, sx: 0.2, sy: -1.2, sz: 0.9, scale: r * 2.15, c: ribBase })
-      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: Math.PI / 2, ez: 0.4, sx: -0.8, sy: 0.4, sz: 1.3, scale: r * 1.65, c: hot(V.rail, 1.3) })
-    } else {
-      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#7affb2', 1.35))
-      lmSpinMeta.push({ pos: j.pos, ex: 0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: 1.4, sz: 0.4, scale: r * 2.5, c: hot('#7affb2', 1.28) })
-      lmSpinMeta.push({ pos: j.pos, ex: -0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: -1.4, sz: -0.4, scale: r * 1.85, c: ribBase })
-    }
-  })
-
-  // decoración alrededor de los tubos (solo interior)
   const total = solid.reduce((a, s) => a + s.length, 0)
   const pick = (t) => { for (const s of solid) { if ((t -= s.length) <= 0) return s } return solid[solid.length - 1] }
   const decor = solid.length
     ? V.props.map((p, pi) => {
         const place = mulberry32(p.seed * 7919 + way.idx * 131)
         const look = mulberry32(p.seed * 104729 + pi * 31 + way.idx)
-        const items = []; const n = Math.max(1, Math.floor(total * p.d))
+        const items = []; const n = Math.min(80, Math.max(1, Math.floor(total * p.d * 0.7)))
         for (let i = 0; i < n; i++) {
           const s = pick(place() * total); const u = 0.04 + place() * 0.92; const ang = place() * TAU; const off = rr(place, p.off)
           const P = s.curve.getPointAt(u); const T = s.curve.getTangentAt(u)
@@ -3833,31 +3659,24 @@ function build(way) {
       })
     : []
 
-  // partículas ambientales alrededor del recorrido (solo interior)
   const prng = mulberry32(way.idx * 977 + 5); const pp = []
   if (solid.length) {
-    for (let i = 0; i < V.parts.n; i++) {
+    const nParts = Math.min(180, Math.round(V.parts.n * 0.7))
+    for (let i = 0; i < nParts; i++) {
       const s = pick(prng() * total); const P = s.curve.getPointAt(prng())
       pp.push(P.x + (prng() - 0.5) * 7, P.y + (prng() - 0.5) * 7, P.z + (prng() - 0.5) * 7)
     }
   }
 
   return {
-    samples,
-    tube: tubes.length ? mergeGeometries(tubes) : null,
-    rail: rails.length ? mergeGeometries(rails) : null,
-    floor: floors.length ? mergeGeometries(floors) : null,
-    extCore: extCores.length ? mergeGeometries(extCores) : null,
-    extCable: extCables.length ? mergeGeometries(extCables) : null,
-    extClamps, extPylons, extFlora, extFloraGlow, extRuins, extPlumes, extPulseMeta,
-    lmSolids, lmCones, lmBoxes, lmOctas, lmSpheres, lmSpheresA, lmDiscs, lmFunnels,
-    lmRings, lmLights, lmBanners, lmSpinMeta, lmBladeMeta, lmPulseMeta,
-    ribFrames, neonRims, mouthRings, panelPods, lightBars, windStreaks,
+    rail: mergeAndDispose(rails),
+    floor: mergeAndDispose(floors),
+    ribFrames, neonRims, panelPods, lightBars, windStreaks,
     solids, cones, boxes, octas, glowOctas, bolts, spheresA,
     vines, leaves, iceSpires, crystals, flowers, pods, lamps, decor,
     lights, banners, arrows, signs,
     dots: dots.length ? pointsGeo(dots) : null,
-    parts: pointsGeo(pp),
+    parts: pp.length ? pointsGeo(pp) : null,
     sparks: buildFxGeo(sparkBucket),
     fxGeos: {
       spray: buildFxGeo(fxBuckets.spray),
@@ -3875,37 +3694,42 @@ function evSignKey(s) {
 }
 
 // ═══════════════════════════ COMPONENTES R3F ═══════════════════════════
-function Inst({ geo, mat, model = null, glbOpts = null, items, cast }) {
+function setConservativeSphere(o, points, pad = 2) {
+  if (!o || !points.length) return
+  let minX = Infinity; let minY = Infinity; let minZ = Infinity
+  let maxX = -Infinity; let maxY = -Infinity; let maxZ = -Infinity
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]
+    if (p.x < minX) minX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.z < minZ) minZ = p.z
+    if (p.x > maxX) maxX = p.x
+    if (p.y > maxY) maxY = p.y
+    if (p.z > maxZ) maxZ = p.z
+  }
+  const cx = (minX + maxX) * 0.5
+  const cy = (minY + maxY) * 0.5
+  const cz = (minZ + maxZ) * 0.5
+  const r = Math.hypot(maxX - cx, maxY - cy, maxZ - cz) + pad
+  if (!o.boundingSphere) o.boundingSphere = new THREE.Sphere()
+  o.boundingSphere.center.set(cx, cy, cz)
+  o.boundingSphere.radius = r
+}
+
+function Inst({ geo, mat, items, cast = false }) {
   const ref = useRef()
-  const glb = useModelAsset(model)
-  const finalGeo = glb?.geometry || geo
-  const derivedMat = useMemo(() => {
-    if (!glb?.material || !glbOpts) return null
-    return createGlbDerivedMaterial(glb.material, glbOpts)
-  }, [glb, glbOpts])
-
-  useEffect(() => {
-    if (!derivedMat || !glbOpts?.registry || glbOpts.isTranslucent) return
-    const bucket = glbOpts.registry[glbOpts.lod || 'none']
-    bucket.add(derivedMat)
-    return () => {
-      bucket.delete(derivedMat)
-      derivedMat.dispose()
-    }
-  }, [derivedMat, glbOpts])
-
-  const finalMat = derivedMat || mat
-
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
     items.forEach((it, i) => { o.setMatrixAt(i, it.m); if (it.c) o.setColorAt(i, it.c) })
     o.instanceMatrix.needsUpdate = true
     if (o.instanceColor) o.instanceColor.needsUpdate = true
-  }, [items, finalGeo, finalMat])
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+    o.computeBoundingSphere?.()
+  }, [items, geo, mat])
 
   if (!items.length) return null
-  return <instancedMesh ref={ref} args={[finalGeo, finalMat, items.length]} castShadow={cast} receiveShadow={cast} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} castShadow={cast} receiveShadow={cast} />
 }
 
 function PanelInst({ items, mat }) {
@@ -3921,15 +3745,18 @@ function PanelInst({ items, mat }) {
     g.setAttribute('aGlowColor', new THREE.InstancedBufferAttribute(glowArr, 3))
     return g
   }, [items])
+  useEffect(() => () => geo.dispose(), [geo])
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
     items.forEach((it, i) => { o.setMatrixAt(i, it.m); if (it.c) o.setColorAt(i, it.c) })
     o.instanceMatrix.needsUpdate = true
     if (o.instanceColor) o.instanceColor.needsUpdate = true
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+    o.computeBoundingSphere?.()
   }, [items])
   if (!items.length) return null
-  return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} />
 }
 
 function WindStreaksInst({ items, mat }) {
@@ -3951,14 +3778,17 @@ function WindStreaksInst({ items, mat }) {
     g.setAttribute('aStreakCol', new THREE.InstancedBufferAttribute(cArr, 3))
     return g
   }, [items])
+  useEffect(() => () => geo.dispose(), [geo])
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
     items.forEach((it, i) => o.setMatrixAt(i, it.m))
     o.instanceMatrix.needsUpdate = true
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+    o.computeBoundingSphere?.()
   }, [items])
   if (!items.length) return null
-  return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} />
 }
 
 function SignInst({ items, mat }) {
@@ -3970,14 +3800,17 @@ function SignInst({ items, mat }) {
     g.setAttribute('aUvOffset', new THREE.InstancedBufferAttribute(uvOff, 2))
     return g
   }, [items])
+  useEffect(() => () => geo.dispose(), [geo])
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
     items.forEach((it, i) => o.setMatrixAt(i, it.m))
     o.instanceMatrix.needsUpdate = true
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+    o.computeBoundingSphere?.()
   }, [items])
   if (!items.length) return null
-  return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} />
 }
 
 const _spinMat = new THREE.Matrix4()
@@ -3986,18 +3819,31 @@ const _spinE = new THREE.Euler()
 const _spinS = new THREE.Vector3()
 const _rotQ = new THREE.Quaternion()
 
-function SpinRings({ meta, mat }) {
+function SpinRings({ meta, mat, detailU }) {
   const ref = useRef()
+  const lastUpd = useRef(-10)
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
-    meta.forEach((it, i) => o.setColorAt(i, it.c))
+    for (let i = 0; i < meta.length; i++) {
+      const it = meta[i]
+      _spinE.set(it.ex, it.ey, it.ez)
+      _spinQ.setFromEuler(_spinE)
+      _spinS.setScalar(it.scale)
+      _spinMat.compose(it.pos, _spinQ, _spinS)
+      o.setMatrixAt(i, _spinMat)
+      o.setColorAt(i, it.c)
+    }
+    o.instanceMatrix.needsUpdate = true
     if (o.instanceColor) o.instanceColor.needsUpdate = true
+    setConservativeSphere(o, meta.map((m) => m.pos), 6)
   }, [meta])
   useFrame(({ clock }) => {
     const o = ref.current
     if (!o || (o.parent && !o.parent.visible)) return
     const t = clock.elapsedTime
+    if (detailU && detailU.value < 0.05 && t - lastUpd.current < 0.14) return
+    lastUpd.current = t
     for (let i = 0; i < meta.length; i++) {
       const it = meta[i]
       _spinE.set(it.ex + t * it.sx, it.ey + t * it.sy, it.ez + t * it.sz)
@@ -4009,21 +3855,25 @@ function SpinRings({ meta, mat }) {
     o.instanceMatrix.needsUpdate = true
   })
   if (!meta.length) return null
-  return <instancedMesh ref={ref} args={[GEO.torus, mat, meta.length]} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[GEO.torus, mat, meta.length]} />
 }
 
-function SpinBlades({ meta, mat }) {
+function SpinBlades({ meta, mat, detailU }) {
   const ref = useRef()
+  const lastUpd = useRef(-10)
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
     meta.forEach((it, i) => o.setColorAt(i, it.c))
     if (o.instanceColor) o.instanceColor.needsUpdate = true
+    setConservativeSphere(o, meta.map((m) => m.pos), 5)
   }, [meta])
   useFrame(({ clock }) => {
     const o = ref.current
     if (!o || (o.parent && !o.parent.visible)) return
     const t = clock.elapsedTime
+    if (detailU && detailU.value < 0.05 && t - lastUpd.current < 0.14) return
+    lastUpd.current = t
     for (let i = 0; i < meta.length; i++) {
       const it = meta[i]
       _spinQ.setFromUnitVectors(Z, it.axis)
@@ -4036,21 +3886,25 @@ function SpinBlades({ meta, mat }) {
     o.instanceMatrix.needsUpdate = true
   })
   if (!meta.length) return null
-  return <instancedMesh ref={ref} args={[GEO.blade, mat, meta.length]} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[GEO.blade, mat, meta.length]} />
 }
 
-function PulseInst({ geo, mat, items }) {
+function PulseInst({ geo, mat, items, detailU }) {
   const ref = useRef()
+  const lastUpd = useRef(-10)
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
     items.forEach((it, i) => o.setColorAt(i, it.c))
     if (o.instanceColor) o.instanceColor.needsUpdate = true
+    setConservativeSphere(o, items.map((m) => m.pos), 6)
   }, [items])
   useFrame(({ clock }) => {
     const o = ref.current
     if (!o || (o.parent && !o.parent.visible)) return
     const t = clock.elapsedTime
+    if (detailU && detailU.value < 0.05 && t - lastUpd.current < 0.14) return
+    lastUpd.current = t
     for (let i = 0; i < items.length; i++) {
       const it = items[i]
       const p = Math.pow(Math.max(0, Math.sin(t * it.freq + it.phase)), 2)
@@ -4061,33 +3915,105 @@ function PulseInst({ geo, mat, items }) {
     o.instanceMatrix.needsUpdate = true
   })
   if (!items.length) return null
-  return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} />
 }
 
-function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail = false }) {
+function WayInterior({ way, mats }) {
+  const d = useMemo(() => buildInterior(way), [way])
+  useEffect(() => () => {
+    d.rail?.dispose?.()
+    d.floor?.dispose?.()
+    d.dots?.dispose?.()
+    d.parts?.dispose?.()
+    d.sparks?.dispose?.()
+    if (d.fxGeos) {
+      for (const k in d.fxGeos) d.fxGeos[k]?.dispose?.()
+    }
+  }, [d])
+
+  return (
+    <>
+      {d.floor && <mesh geometry={d.floor} material={mats.floor} receiveShadow />}
+      {d.rail && <mesh geometry={d.rail} material={mats.rail} />}
+      <Inst geo={GEO.ribFrame} mat={mats.hull} items={d.ribFrames} />
+      <Inst geo={GEO.ribNeon} mat={mats.neonRim} items={d.neonRims} />
+      <PanelInst items={d.panelPods} mat={mats.panel} />
+      <Inst geo={GEO.lightBar} mat={mats.lightBar} items={d.lightBars} />
+      <WindStreaksInst items={d.windStreaks} mat={mats.windStreak} />
+      <Inst geo={GEO.cyl} mat={mats.deco} items={d.solids} />
+      <Inst geo={GEO.cone} mat={mats.deco} items={d.cones} />
+      <Inst geo={GEO.box} mat={mats.deco} items={d.boxes} />
+      <Inst geo={GEO.octa} mat={mats.deco} items={d.octas} />
+      <Inst geo={GEO.octa} mat={mats.decorGlow} items={d.glowOctas} />
+      <Inst geo={GEO.vine} mat={mats.deco} items={d.vines} />
+      <Inst geo={GEO.leaf} mat={mats.deco} items={d.leaves} />
+      <Inst geo={GEO.ice_spire} mat={mats.decoA} items={d.iceSpires} />
+      <Inst geo={GEO.crystal} mat={mats.decorGlow} items={d.crystals} />
+      <Inst geo={GEO.flower} mat={mats.deco} items={d.flowers} />
+      <Inst geo={GEO.pod} mat={mats.decorGlow} items={d.pods} />
+      <Inst geo={GEO.lamp} mat={mats.deco} items={d.lamps} />
+      <Inst geo={GEO.bolt} mat={mats.decorGlow} items={d.bolts} />
+      <Inst geo={GEO.sphere} mat={mats.decoA} items={d.spheresA} />
+      <Inst geo={GEO.sphere} mat={mats.glow} items={d.lights} />
+      <Inst geo={GEO.banner} mat={mats.deco} items={d.banners} />
+      <Inst geo={GEO.arrow} mat={mats.glow} items={d.arrows} />
+      <SignInst items={d.signs} mat={mats.sign} />
+      {d.decor.map(({ p, items }, i) => {
+        const solidMat = !p.e && (p.a ?? 1) >= 1
+        const mat = p.e ? mats.decorGlow : solidMat ? mats.deco : mats.decoA
+        return (
+          <Inst
+            key={i}
+            geo={GEO_BY[p.k] || GEO.sphere}
+            mat={mat}
+            items={items}
+          />
+        )
+      })}
+      {d.dots && <points geometry={d.dots} material={mats.dots} />}
+      {d.parts && <points geometry={d.parts} material={mats.parts} />}
+      {d.sparks && <points geometry={d.sparks} material={mats.sparks} />}
+      {Object.entries(d.fxGeos).map(([k, geo]) =>
+        geo ? <points key={k} geometry={geo} material={mats.fx[k]} /> : null
+      )}
+    </>
+  )
+}
+
+function disposeMats(mats) {
+  for (const k in mats) {
+    const v = mats[k]
+    if (!v) continue
+    if (v.isMaterial) v.dispose()
+    else if (typeof v === 'object') {
+      for (const sk in v) v[sk]?.dispose?.()
+    }
+  }
+}
+
+function Way({ way, world = null, focused, detailActive = false, worldRadius = 110, forceFocusDetail = false, wayDistRef }) {
   const id = way.theme.id
   const focusU = useMemo(() => ({ value: 1 }), [])
   const detailU = useMemo(() => ({ value: 0 }), [])
   const mats = useMemo(() => createWayMaterials(id, focusU, detailU), [id, focusU, detailU])
-  const d = useMemo(() => build(way), [way])
+  const d = useMemo(() => buildExterior(way), [way])
   const extGroupRef = useRef()
+  const extFineRef = useRef()
+  const lmFineRef = useRef()
   const intGroupRef = useRef()
-  const vidaGroupRef = useRef()
-  const glbRegistry = useMemo(() => ({ interior: new Set(), exterior: new Set(), none: new Set() }), [])
-  const glbPresets = useMemo(() => ({
-    extMetal: { focusU, detailU, lod: 'exterior', scaleLod: false, registry: glbRegistry },
-    extFlora: { focusU, detailU, lod: 'exterior', scaleLod: true, registry: glbRegistry },
-    extFloraGlow: { focusU, detailU, lod: 'exterior', scaleLod: true, isGlow: true, registry: glbRegistry },
-    intDeco: { focusU, detailU, lod: 'interior', scaleLod: true, camFade: [1.9, 2.7], registry: glbRegistry },
-    intDecoA: { focusU, detailU, lod: 'interior', scaleLod: true, camFade: [1.9, 2.7], isTranslucent: true, opacity: 0.84, registry: glbRegistry },
-    intGlow: { focusU, detailU, lod: 'interior', scaleLod: true, camFade: [1.9, 2.7], isGlow: true, registry: glbRegistry },
-  }), [focusU, detailU, glbRegistry])
+
+  useEffect(() => () => {
+    d.tube?.dispose?.()
+    d.extCore?.dispose?.()
+    d.extCable?.dispose?.()
+    disposeMats(mats)
+  }, [d, mats])
 
   const pulseRings = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'ring'), [d.lmPulseMeta])
   const pulseCyls = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'cyl'), [d.lmPulseMeta])
   const pulseLights = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'light'), [d.lmPulseMeta])
 
-  useFrame(({ camera }, dt) => {
+  useFrame((_, dt) => {
     const h = Math.min(dt, 0.1)
     const f = THREE.MathUtils.damp(focusU.value, focused ? 1 : 0, 11, h)
     focusU.value = f
@@ -4095,20 +4021,8 @@ function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail =
     let targetDet = 0
     if (forceFocusDetail && focused) {
       targetDet = 1
-    } else if (d.samples.length) {
-      const cx = camera.position.x
-      const cy = camera.position.y
-      const cz = camera.position.z
-      let minD2 = Infinity
-      for (let i = 0; i < d.samples.length; i++) {
-        const p = d.samples[i]
-        const dx = cx - p.x
-        const dy = cy - p.y
-        const dz = cz - p.z
-        const d2 = dx * dx + dy * dy + dz * dz
-        if (d2 < minD2) minD2 = d2
-      }
-      const dist = Math.max(0, Math.sqrt(minD2) - way.params.radius)
+    } else if (detailActive) {
+      const dist = wayDistRef.current[way.idx] ?? Infinity
       const rInt = way.params.radius * 6.0 + worldRadius * 0.08
       const rExt = way.params.radius * 13.0 + worldRadius * 0.3
       targetDet = 1 - THREE.MathUtils.smoothstep(dist, rInt, rExt)
@@ -4119,10 +4033,11 @@ function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail =
     else if (det > 0.995 && targetDet >= 0.999) det = 1
     detailU.value = det
 
-    if (intGroupRef.current) intGroupRef.current.visible = det > 0.01
+    const showNearExt = detailActive || det > 0.03
+    if (intGroupRef.current) intGroupRef.current.visible = detailActive && det > 0.01
     if (extGroupRef.current) extGroupRef.current.visible = det < 0.99
-    // Mini mundo interior: visible de cerca o mientras el camino esté en foco (diorama visto por el cristal)
-    if (vidaGroupRef.current) vidaGroupRef.current.visible = det > 0.05 || focused
+    if (extFineRef.current) extFineRef.current.visible = showNearExt
+    if (lmFineRef.current) lmFineRef.current.visible = showNearExt
 
     const intDepth = f >= 0.98 && det >= 0.98
     mats.deco.depthWrite = intDepth
@@ -4134,7 +4049,6 @@ function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail =
     mats.hull.depthWrite = intDepth
     mats.panel.depthWrite = intDepth
     mats.neonRim.depthWrite = intDepth
-    glbRegistry.interior.forEach((m) => { m.depthWrite = intDepth })
 
     const extDepth = f >= 0.98 && det <= 0.02
     mats.extCore.depthWrite = extDepth
@@ -4143,12 +4057,10 @@ function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail =
     mats.extFlora.depthWrite = extDepth
     mats.extFloraGlow.depthWrite = extDepth
     mats.extRuins.depthWrite = extDepth
-    glbRegistry.exterior.forEach((m) => { m.depthWrite = extDepth })
 
     const lmDepth = f >= 0.98
     mats.lmDeco.depthWrite = lmDepth
     mats.lmGlow.depthWrite = lmDepth
-    glbRegistry.none.forEach((m) => { m.depthWrite = lmDepth })
   })
 
   return (
@@ -4156,104 +4068,163 @@ function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail =
       {/* Tubo de cristal principal (siempre visible, adapta brillo y ruido por uDetail) */}
       {d.tube && <mesh geometry={d.tube} material={mats.tube} />}
 
-      {/* Landmarks, nudos y siluetas de eventos (siempre visibles) */}
+      {/* Landmarks, nudos y siluetas de eventos (esenciales siempre; detalle fino solo de cerca) */}
       <group>
         <Inst geo={GEO.mouthNeon} mat={mats.lmGlow} items={d.mouthRings} />
         <Inst geo={GEO.torus} mat={mats.lmGlow} items={d.lmRings} />
-        <Inst geo={GEO.cyl} mat={mats.lmDeco} items={d.lmSolids} cast />
-        <Inst geo={GEO.cone} mat={mats.lmDeco} items={d.lmCones} cast />
-        <Inst geo={GEO.box} mat={mats.lmDeco} items={d.lmBoxes} cast />
-        <Inst geo={GEO.octa} mat={mats.lmDeco} items={d.lmOctas} cast />
-        <Inst geo={GEO.sphere} mat={mats.lmGlass} items={d.lmSpheres} />
-        <Inst geo={GEO.sphere} mat={mats.lmDecoA} items={d.lmSpheresA} />
-        <Inst geo={GEO.cyl} mat={mats.lmGlass} items={d.lmDiscs} />
-        <Inst geo={GEO.funnel} mat={mats.lmGlass} items={d.lmFunnels} />
+        <Inst geo={GEO.cyl} mat={mats.lmDeco} items={d.lmSolids} />
         <Inst geo={GEO.sphere} mat={mats.lmGlow} items={d.lmLights} />
-        <Inst geo={GEO.banner} mat={mats.lmDeco} items={d.lmBanners} />
-        <SpinRings meta={d.lmSpinMeta} mat={mats.lmGlow} />
-        <SpinBlades meta={d.lmBladeMeta} mat={mats.lmDeco} />
-        <PulseInst geo={GEO.torus} mat={mats.lmGlow} items={pulseRings} />
-        <PulseInst geo={GEO.cyl} mat={mats.lmDecoA} items={pulseCyls} />
-        <PulseInst geo={GEO.sphere} mat={mats.lmGlow} items={pulseLights} />
+        <SpinRings meta={d.lmSpinMeta} mat={mats.lmGlow} detailU={detailU} />
+        <group ref={lmFineRef} visible={false}>
+          <Inst geo={GEO.cone} mat={mats.lmDeco} items={d.lmCones} />
+          <Inst geo={GEO.box} mat={mats.lmDeco} items={d.lmBoxes} />
+          <Inst geo={GEO.octa} mat={mats.lmDeco} items={d.lmOctas} />
+          <Inst geo={GEO.sphere} mat={mats.lmGlass} items={d.lmSpheres} />
+          <Inst geo={GEO.sphere} mat={mats.lmDecoA} items={d.lmSpheresA} />
+          <Inst geo={GEO.cyl} mat={mats.lmGlass} items={d.lmDiscs} />
+          <Inst geo={GEO.funnel} mat={mats.lmGlass} items={d.lmFunnels} />
+          <Inst geo={GEO.banner} mat={mats.lmDeco} items={d.lmBanners} />
+          <SpinBlades meta={d.lmBladeMeta} mat={mats.lmDeco} detailU={detailU} />
+          <PulseInst geo={GEO.torus} mat={mats.lmGlow} items={pulseRings} detailU={detailU} />
+          <PulseInst geo={GEO.cyl} mat={mats.lmDecoA} items={pulseCyls} detailU={detailU} />
+          <PulseInst geo={GEO.sphere} mat={mats.lmGlow} items={pulseLights} detailU={detailU} />
+        </group>
       </group>
 
-      {/* Capa EXTERIOR: tira de neón interior, abrazaderas, andamios, cables, flora bioluminiscente, penachos simples */}
+      {/* Capa EXTERIOR: tira de neón y penachos siempre; pilones/abrazaderas/cables/flora de cerca */}
       <group ref={extGroupRef}>
         {d.extCore && <mesh geometry={d.extCore} material={mats.extCore} />}
-        {d.extCable && <mesh geometry={d.extCable} material={mats.extCable} />}
-        <Inst geo={GEO.extClamp} mat={mats.extMetal} model="clamp" glbOpts={glbPresets.extMetal} items={d.extClamps} />
-        <Inst geo={GEO.pylon} mat={mats.extMetal} model="pylon" glbOpts={glbPresets.extMetal} items={d.extPylons} cast />
-        <Inst geo={GEO.tree} mat={mats.extFlora} model="tree" glbOpts={glbPresets.extFlora} items={d.extFlora} />
-        <Inst geo={GEO.mushroom} mat={mats.extFloraGlow} model="mushroom" glbOpts={glbPresets.extFloraGlow} items={d.extFloraGlow} />
-        <Inst geo={GEO.ruinPillar} mat={mats.extRuins} items={d.extRuins} />
         <Inst geo={GEO.plume} mat={mats.extPlume} items={d.extPlumes} />
-        <PulseInst geo={GEO.plume} mat={mats.extPlume} items={d.extPulseMeta} />
+        <group ref={extFineRef} visible={false}>
+          {d.extCable && <mesh geometry={d.extCable} material={mats.extCable} />}
+          <Inst geo={GEO.pylon} mat={mats.extMetal} items={d.extPylons} />
+          <Inst geo={GEO.extClamp} mat={mats.extMetal} items={d.extClamps} />
+          <Inst geo={GEO.tree} mat={mats.extFlora} items={d.extFlora} />
+          <Inst geo={GEO.mushroom} mat={mats.extFloraGlow} items={d.extFloraGlow} />
+          <Inst geo={GEO.ruinPillar} mat={mats.extRuins} items={d.extRuins} />
+          <PulseInst geo={GEO.plume} mat={mats.extPlume} items={d.extPulseMeta} detailU={detailU} />
+        </group>
       </group>
 
-      {/* Capa INTERIOR cinematográfica: paneles, pista de chevrones, barras de luz, estelas, chispas, props y FX */}
-      <group ref={intGroupRef} visible={false}>
-        {d.floor && <mesh geometry={d.floor} material={mats.floor} receiveShadow />}
-        {d.rail && <mesh geometry={d.rail} material={mats.rail} />}
-        <Inst geo={GEO.ribFrame} mat={mats.hull} items={d.ribFrames} cast />
-        <Inst geo={GEO.ribNeon} mat={mats.neonRim} items={d.neonRims} />
-        <PanelInst items={d.panelPods} mat={mats.panel} />
-        <Inst geo={GEO.lightBar} mat={mats.lightBar} items={d.lightBars} />
-        <WindStreaksInst items={d.windStreaks} mat={mats.windStreak} />
-        <Inst geo={GEO.cyl} mat={mats.deco} items={d.solids} cast />
-        <Inst geo={GEO.cone} mat={mats.deco} items={d.cones} cast />
-        <Inst geo={GEO.box} mat={mats.deco} items={d.boxes} cast />
-        <Inst geo={GEO.octa} mat={mats.deco} items={d.octas} cast />
-        <Inst geo={GEO.octa} mat={mats.decorGlow} items={d.glowOctas} />
-        <Inst geo={GEO.vine} mat={mats.deco} items={d.vines} cast />
-        <Inst geo={GEO.leaf} mat={mats.deco} items={d.leaves} cast />
-        <Inst geo={GEO.ice_spire} mat={mats.decoA} model="ice_spire" glbOpts={glbPresets.intDecoA} items={d.iceSpires} />
-        <Inst geo={GEO.crystal} mat={mats.decorGlow} model="crystal" glbOpts={glbPresets.intGlow} items={d.crystals} />
-        <Inst geo={GEO.flower} mat={mats.deco} model="flower" glbOpts={glbPresets.intDeco} items={d.flowers} />
-        <Inst geo={GEO.pod} mat={mats.decorGlow} model="pod" glbOpts={glbPresets.intGlow} items={d.pods} />
-        <Inst geo={GEO.lamp} mat={mats.deco} model="lamp" glbOpts={glbPresets.intDeco} items={d.lamps} cast />
-        <Inst geo={GEO.bolt} mat={mats.decorGlow} items={d.bolts} />
-        <Inst geo={GEO.sphere} mat={mats.decoA} items={d.spheresA} />
-        <Inst geo={GEO.sphere} mat={mats.glow} items={d.lights} />
-        <Inst geo={GEO.banner} mat={mats.deco} items={d.banners} />
-        <Inst geo={GEO.arrow} mat={mats.glow} items={d.arrows} />
-        <SignInst items={d.signs} mat={mats.sign} />
-        {d.decor.map(({ p, items }, i) => {
-          const solidMat = !p.e && (p.a ?? 1) >= 1
-          const mat = p.e ? mats.decorGlow : solidMat ? mats.deco : mats.decoA
-          const glbOpts = p.e ? glbPresets.intGlow : solidMat ? glbPresets.intDeco : glbPresets.intDecoA
-          return (
-            <Inst
-              key={i}
-              geo={GEO_BY[p.k] || GEO.sphere}
-              mat={mat}
-              model={MODEL_FOR_KEY[p.k] || null}
-              glbOpts={glbOpts}
-              items={items}
-              cast={solidMat}
-            />
-          )
-        })}
-        {d.dots && <points geometry={d.dots} material={mats.dots} frustumCulled={false} />}
-        <points geometry={d.parts} material={mats.parts} frustumCulled={false} />
-        {d.sparks && <points geometry={d.sparks} material={mats.sparks} frustumCulled={false} />}
-        {Object.entries(d.fxGeos).map(([k, geo]) =>
-          geo ? <points key={k} geometry={geo} material={mats.fx[k]} frustumCulled={false} /> : null
-        )}
-      </group>
-
-      {/* Mini mundo del tema (vida/<tema>.jsx): todo dentro del volumen del tubo */}
-      <group ref={vidaGroupRef}>
-        <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
-      </group>
+      {/* Capa INTERIOR + Mini mundo del tema (montados bajo demanda solo en máx 2 ways cercanos/enfocados) */}
+      {detailActive && (
+        <>
+          <group ref={intGroupRef}>
+            <WayInterior way={way} mats={mats} />
+          </group>
+          <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
+        </>
+      )}
     </group>
   )
 }
 
-export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false }) {
-  useFrame(({ clock }) => {
-    SHARED_TIME.value = clock.elapsedTime
+const MAX_ACTIVE_VIDA = 2
+
+export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false }) {
+  const wayMetas = useMemo(() => world.ways.map((w) => {
+    const pts = []
+    for (const s of w.segments) {
+      const nSamp = Math.max(3, Math.ceil(s.length / 8))
+      for (let i = 0; i <= nSamp; i++) pts.push(s.curve.getPointAt(i / nSamp))
+    }
+    const sphere = new THREE.Box3().setFromPoints(pts).getBoundingSphere(new THREE.Sphere())
+    const flat = new Float32Array(pts.length * 3)
+    for (let i = 0; i < pts.length; i++) {
+      flat[i * 3] = pts[i].x
+      flat[i * 3 + 1] = pts[i].y
+      flat[i * 3 + 2] = pts[i].z
+    }
+    return { idx: w.idx, radius: w.params.radius, flat, sphere }
+  }), [world])
+
+  const wayDistRef = useRef([])
+  const mountedRef = useRef(new Set())
+  const [mountedIds, setMountedIds] = useState(() => new Set())
+  const lastEvalRef = useRef(-10)
+  const prevFocusRef = useRef(focusWay)
+  const prevForceRef = useRef(forceFocusDetail)
+
+  useFrame(({ camera, clock }) => {
+    const t = clock.elapsedTime
+    SHARED_TIME.value = t
     VIDA_BUS.sim = sim
+
+    const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail
+    if (!focusChanged && t - lastEvalRef.current < 0.12) return
+    lastEvalRef.current = t
+    prevFocusRef.current = focusWay
+    prevForceRef.current = forceFocusDetail
+
+    const cx = camera.position.x
+    const cy = camera.position.y
+    const cz = camera.position.z
+    const curMounted = mountedRef.current
+    const dists = wayDistRef.current
+
+    const candidates = []
+    for (let i = 0; i < wayMetas.length; i++) {
+      const m = wayMetas[i]
+      const isFocus = focusWay === m.idx
+      const enterDist = (focusWay != null && !isFocus) ? (m.radius * 2.5 + 2.5) : (m.radius * 7.5 + worldRadius * 0.09)
+      const exitDist = enterDist * 1.35
+      const sp = m.sphere
+      const dxC = cx - sp.center.x
+      const dyC = cy - sp.center.y
+      const dzC = cz - sp.center.z
+      const centerDist = Math.sqrt(dxC * dxC + dyC * dyC + dzC * dzC)
+      const isMounted = curMounted.has(m.idx)
+      const limit = isMounted ? exitDist : enterDist
+
+      let dist = Infinity
+      if (centerDist - sp.radius <= limit || (isFocus && forceFocusDetail)) {
+        const arr = m.flat
+        let minD2 = Infinity
+        for (let k = 0; k < arr.length; k += 3) {
+          const dx = cx - arr[k]
+          const dy = cy - arr[k + 1]
+          const dz = cz - arr[k + 2]
+          const d2 = dx * dx + dy * dy + dz * dz
+          if (d2 < minD2) minD2 = d2
+        }
+        dist = Math.max(0, Math.sqrt(minD2) - m.radius)
+      }
+      dists[m.idx] = dist
+      if ((isFocus && forceFocusDetail) || dist < limit) {
+        candidates.push({ idx: m.idx, dist, isFocus })
+      }
+    }
+
+    candidates.sort((a, b) => {
+      if (a.isFocus !== b.isFocus) return a.isFocus ? -1 : 1
+      return a.dist - b.dist
+    })
+
+    const desired = new Set()
+    for (let i = 0; i < candidates.length && desired.size < MAX_ACTIVE_VIDA; i++) {
+      desired.add(candidates[i].idx)
+    }
+
+    // Desmontaje inmediato al salir y montaje diferido (máx 1 way por tick) para evitar tirones
+    let changed = false
+    const next = new Set()
+    for (const id of curMounted) {
+      if (desired.has(id)) next.add(id)
+      else changed = true
+    }
+    for (const id of desired) {
+      if (!next.has(id)) {
+        next.add(id)
+        changed = true
+        break
+      }
+    }
+    if (changed) {
+      mountedRef.current = next
+      setMountedIds(next)
+    }
   })
+
   return (
     <>
       {world.ways.map((w) => (
@@ -4262,20 +4233,23 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
           way={w}
           world={world}
           focused={focusWay == null || focusWay === w.idx}
+          detailActive={mountedIds.has(w.idx)}
           worldRadius={worldRadius}
           forceFocusDetail={forceFocusDetail}
+          wayDistRef={wayDistRef}
         />
       ))}
       {world.circuits.map((c) => {
-        const active = focusWay == null || c.ways.some((w) => w.idx === focusWay)
+        const isFocusedCircuit = focusWay == null || c.ways.some((w) => w.idx === focusWay)
+        if (cameraOnBall && !isFocusedCircuit) return null
         return (
-          <WorldHtml key={c.idx} position={c.mid.clone().add(new THREE.Vector3(0, 2.4, 0))} center distanceFactor={22} zIndexRange={[5, 0]}>
+          <WorldHtml key={c.idx} position={[c.mid.x, c.mid.y + 2.4, c.mid.z]} center distanceFactor={22} zIndexRange={[5, 0]}>
             <div
               className="tag"
               style={{
                 borderColor: VISUALS[c.theme.id].rail,
-                opacity: active ? 1 : 0.16,
-                filter: active ? 'none' : 'saturate(0.3) brightness(0.65)',
+                opacity: isFocusedCircuit ? 1 : 0.16,
+                filter: isFocusedCircuit ? 'none' : 'saturate(0.3) brightness(0.65)',
                 transition: 'opacity 0.25s ease, filter 0.25s ease',
               }}
             >

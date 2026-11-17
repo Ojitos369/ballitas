@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Stars, Environment, Lightformer, GradientTexture } from '@react-three/drei'
+import { OrbitControls, Stars, Environment, Lightformer, GradientTexture, PerformanceMonitor } from '@react-three/drei'
 import {
   EffectComposer,
   Bloom,
@@ -17,6 +17,7 @@ import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Bollita from './Bollita.jsx'
 import PovPanel from '../Panels/PovPanel.jsx'
+import { StatsProbe } from './StatsOverlay.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -57,6 +58,9 @@ const povLookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
 const povLookQuat = new THREE.Quaternion()
 const povLookDirTmp = new THREE.Vector3()
 const upRefVec = new THREE.Vector3()
+const rollMat = new THREE.Matrix4()
+const viewDir = new THREE.Vector3()
+const WALL_UP_RATE = 2.6 // suavizado del giro de cámara con la pared (más bajo = menos mareo)
 
 const KEY_TO_ACTION = {
   arrowleft: 'left',
@@ -182,6 +186,8 @@ function NebulaDome({ r }) {
     fog: false,
   }), [])
 
+  useEffect(() => () => mat.dispose(), [mat])
+
   useFrame((_, dt) => {
     mat.uniforms.uTime.value += dt
   })
@@ -244,6 +250,12 @@ function ConstellationDome({ r }) {
     return { lineGeo: lg, pointGeo: pg, dotTex: makeConstellationDotTex() }
   }, [r])
 
+  useEffect(() => () => {
+    lineGeo.dispose()
+    pointGeo.dispose()
+    dotTex?.dispose()
+  }, [lineGeo, pointGeo, dotTex])
+
   useFrame((_, dt) => {
     if (groupRef.current) groupRef.current.rotation.y += dt * 0.004
   })
@@ -271,7 +283,8 @@ function ConstellationDome({ r }) {
 }
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
-function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, pointerLockedRef, gyroActiveRef, onCanvasReady }) {
+function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
+  const followUp = useRef(new THREE.Vector3(0, 1, 0))
   const controls = useRef()
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
@@ -511,9 +524,11 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
         povFwd.copy(povLastFwd.current)
       }
 
-      // Up interpolado con peso dominante de Y mundial para evitar roll y giros bruscos
+      // En el tubo el up es el de la pared (la cámara gira con la pista); con horizonte estable (H)
+      // o fuera del tubo, peso dominante de Y mundial para evitar roll y giros bruscos.
+      const onWall = selected.phase === 'travel' && !horizonRef.current
       if (selected.up && selected.up.lengthSq() > 1e-6) {
-        const upWeight = selected.phase === 'travel' ? 0.28 : 0.45
+        const upWeight = onWall ? 1 : selected.phase === 'travel' ? 0.28 : 0.45
         povTargetUp.copy(Y_AXIS).multiplyScalar(1 - upWeight).addScaledVector(selected.up, upWeight)
         if (povTargetUp.lengthSq() < 1e-4) povTargetUp.copy(Y_AXIS)
         else povTargetUp.normalize()
@@ -526,7 +541,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
         povQuat.current.copy(camera.quaternion)
         povInit.current = true
       } else {
-        povUp.current.lerp(povTargetUp, 1 - Math.exp(-3.5 * h)).normalize()
+        povUp.current.lerp(povTargetUp, 1 - Math.exp(-(onWall ? WALL_UP_RATE : 3.5) * h))
+        if (povUp.current.lengthSq() < 1e-6) povUp.current.copy(povTargetUp)
+        povUp.current.normalize()
       }
 
       povRight.crossVectors(povFwd, povUp.current)
@@ -561,7 +578,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
       povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 24 : 12) * h))
       camera.quaternion.copy(povQuat.current)
 
-      const upShift = selected.phase === 'travel' ? -0.06 : 0.08
+      const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
       povEye.copy(selected.pos).addScaledVector(povFwd, 0.14)
       if (selected.up) povEye.addScaledVector(selected.up, upShift)
       camera.position.lerp(povEye, 1 - Math.exp(-18 * h))
@@ -582,6 +599,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
         t.camQuat = [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w]
         t.bollitaDir = [povFwd.x, povFwd.y, povFwd.z]
         t.bollitaPos = [selected.pos.x, selected.pos.y, selected.pos.z]
+        t.horizon = Boolean(horizonRef.current)
+        t.camUp = [povUp.current.x, povUp.current.y, povUp.current.z]
       }
     } else if (follow && selected && selected.phase !== 'gone') {
       if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current !== selected) {
@@ -619,10 +638,19 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
       camera.position.add(mov)
 
       const hasDir = Boolean(selected.dir && selected.dir.lengthSq() > 1e-4)
-      if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
+      // en el tubo, "arriba" es hacia el eje (la pared por la que rueda), suavizado; H lo fija al mundo
+      const wallFollow = selected.phase === 'travel' && !horizonRef.current && Boolean(selected.up)
+      if (wallFollow) {
+        followUp.current.lerp(selected.up, 1 - Math.exp(-WALL_UP_RATE * h))
+        if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(selected.up)
+        followUp.current.normalize()
+        upRefVec.copy(followUp.current)
+      } else if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
         upRefVec.copy(selected.up).normalize()
+        followUp.current.copy(upRefVec)
       } else {
         upRefVec.copy(Y_AXIS)
+        followUp.current.copy(Y_AXIS)
       }
       if (hasDir) {
         sideVec.crossVectors(selected.dir, upRefVec)
@@ -682,6 +710,16 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
           if (d2 > 1e-6) sideVec.normalize()
           else sideVec.copy(upRefVec)
           camera.position.copy(np).addScaledVector(sideVec, minPlanetR)
+        }
+      }
+
+      // Pista espacial: la cámara rueda con la pared (OrbitControls la vuelve a poner con Y cada frame,
+      // así que el giro se aplica aquí tras su update y sólo mientras el usuario no la maneja).
+      if (wallFollow && !userActive.current) {
+        viewDir.copy(c.target).sub(camera.position)
+        if (viewDir.lengthSq() > 1e-6 && viewDir.normalize().cross(followUp.current).lengthSq() > 0.01) {
+          rollMat.lookAt(camera.position, c.target, followUp.current)
+          camera.quaternion.setFromRotationMatrix(rollMat)
         }
       }
     } else if (modo.current !== 'libre') {
@@ -745,48 +783,49 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
   )
 }
 
-// Luz principal con sombras. El área de sombra acompaña al objetivo de la cámara para tener detalle donde se mira.
-// Solo proyectan/reciben las mallas que lo declaren (castShadow / receiveShadow) en Nodes, Paths y Bollita.
-function Sol({ r }) {
+// Luz principal con sombras. Solo proyecta sombras al seguir una bollita / POV para ahorrar GPU en vista general.
+function Sol({ r, shadowsOn, selected }) {
   const luz = useRef()
   const controls = useThree((s) => s.controls)
   useFrame(() => {
-    if (!controls) return
-    luz.current.target.position.copy(controls.target)
+    if (!luz.current) return
+    const tgt = shadowsOn && selected && selected.phase !== 'gone' ? selected.pos : controls?.target
+    if (!tgt) return
+    luz.current.target.position.copy(tgt)
     luz.current.target.updateMatrixWorld()
-    luz.current.position.copy(controls.target).addScaledVector(SOL_DIR, r)
+    luz.current.position.copy(tgt).addScaledVector(SOL_DIR, r)
   })
   return (
     <directionalLight
       ref={luz}
-      castShadow
+      castShadow={shadowsOn}
       intensity={1.35}
       color="#ffe6c4"
-      shadow-mapSize={[2048, 2048]}
-      shadow-bias={-0.0003}
+      shadow-mapSize={[512, 512]}
+      shadow-bias={-0.0005}
       shadow-normalBias={0.03}
-      shadow-radius={2.5}
+      shadow-radius={1.5}
     >
-      <orthographicCamera attach="shadow-camera" args={[-45, 45, 45, -45, 1, r * 2.5]} />
+      <orthographicCamera attach="shadow-camera" args={[-16, 16, 16, -16, 1, r * 2.5]} />
     </directionalLight>
   )
 }
 
-function PostFX({ dofOn, selected }) {
+function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
   const dofTarget = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(() => {
-    if (!dofOn || !dofRef.current?.target) return
+    if (!dofOn || !ultraQuality || !dofRef.current?.target) return
     if (selected && selected.phase !== 'gone') dofRef.current.target.copy(selected.pos)
     else if (controls) dofRef.current.target.copy(controls.target)
   })
 
   return (
     <EffectComposer multisampling={0}>
-      <SMAA />
-      {dofOn && (
+      {highQuality && <SMAA />}
+      {ultraQuality && dofOn && (
         <DepthOfField
           ref={dofRef}
           target={dofTarget}
@@ -795,16 +834,16 @@ function PostFX({ dofOn, selected }) {
           resolutionScale={0.5}
         />
       )}
-      <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.32} />
-      <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />
-      <Vignette eskil={false} offset={0.22} darkness={0.48} />
-      <Noise opacity={0.025} />
+      <Bloom mipmapBlur luminanceThreshold={highQuality ? 1.1 : 1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
+      {highQuality && <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />}
+      <Vignette eskil={false} offset={0.22} darkness={highQuality ? 0.48 : 0.45} />
+      {highQuality && <Noise opacity={0.025} />}
       <ToneMapping mode={TONE_MAPPING_AGX} middleGrey={0.52} />
     </EffectComposer>
   )
 }
 
-export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, onSelect, onExitPov }) {
+export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
@@ -821,6 +860,40 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
   const [gyroActive, setGyroActive] = useState(false)
   const gyroActiveRef = useRef(false)
   const [gyroNote, setGyroNote] = useState(null)
+  // Horizonte estable (tecla H): la cámara mantiene el up del mundo en vez de girar con la pared.
+  const [horizon, setHorizon] = useState(false)
+  const horizonRef = useRef(false)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key.toLowerCase() !== 'h') return
+      horizonRef.current = !horizonRef.current
+      setHorizon(horizonRef.current)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const cameraOnBall = Boolean((povActive || follow) && selected && selected.phase !== 'gone')
+  const [dpr, setDpr] = useState(1)
+  const [lowPerf, setLowPerf] = useState(false)
+  const highQualityFx = cameraOnBall && !lowPerf
+  const ultraQualityFx = highQualityFx && dpr >= 1.25
+
+  const handlePerfDecline = useCallback(() => {
+    setDpr((prev) => Math.max(0.6, Number((prev - 0.15).toFixed(2))))
+    setLowPerf(true)
+  }, [])
+  const handlePerfIncline = useCallback(() => {
+    setDpr((prev) => Math.min(1.5, Number((prev + 0.15).toFixed(2))))
+    setLowPerf(false)
+  }, [])
+  const handlePerfChange = useCallback(({ factor }) => {
+    const next = Number((0.6 + factor * 0.9).toFixed(2))
+    setDpr((prev) => (Math.abs(prev - next) >= 0.08 ? next : prev))
+    setLowPerf(factor < 0.65)
+  }, [])
 
   const handleCanvasReady = useCallback((dom) => {
     canvasDomRef.current = dom
@@ -1020,18 +1093,28 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
     <>
       <Canvas
       shadows="soft"
-      dpr={[1, 1.5]}
+      dpr={dpr}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
       onPointerMissed={() => { if (!povActive) onSelect(null) }}
     >
+      <PerformanceMonitor
+        ms={120}
+        iterations={3}
+        flipflops={3}
+        bounds={() => [30, 55]}
+        step={0.2}
+        onDecline={handlePerfDecline}
+        onIncline={handlePerfIncline}
+        onChange={handlePerfChange}
+      />
       <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
 
       {/* fondo: cúpula oscura + nebulosa FBM + estrellas, centradas en el mundo */}
       <group position={center}>
         {/* radio 12r + zoom máximo 6r < far 20r: la cúpula nunca se recorta */}
         <mesh scale={r * 12}>
-          <sphereGeometry args={[1, 32, 16]} />
+          <sphereGeometry args={[1, 24, 12]} />
           <meshBasicMaterial side={THREE.BackSide} depthWrite={false} fog={false}>
             <GradientTexture stops={[0, 0.55, 1]} colors={['#0d1124', '#060812', '#020307']} />
           </meshBasicMaterial>
@@ -1041,7 +1124,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
         <Stars
           radius={r * 8}
           depth={r * 2}
-          count={2500}
+          count={1200}
           factor={Math.max(1.5, r * 0.035)}
           saturation={0.25}
           fade
@@ -1050,12 +1133,12 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       </group>
 
       {/* Iluminación con contraste: clave cálida + relleno frío tenue */}
-      <Sol r={r} />
+      <Sol r={r} shadowsOn={cameraOnBall} selected={selected} />
       <hemisphereLight args={['#9bb6f0', '#161124', 0.22]} />
       <directionalLight position={[-1, 0.25, -1]} intensity={0.25} color="#6d92e8" />
 
       {/* entorno generado en local (sin HDR de red): reflejos sutiles en cristal y esferas */}
-      <Environment resolution={256} frames={1} environmentIntensity={0.45}>
+      <Environment resolution={128} frames={1} environmentIntensity={0.45}>
         <color attach="background" args={['#06091a']} />
         <Lightformer form="rect" intensity={1.6} color="#dce8ff" position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[12, 12, 1]} />
         <Lightformer form="rect" intensity={0.9} color="#7ea6f5" position={[-8, 2, 4]} rotation-y={Math.PI / 2} scale={[10, 4, 1]} />
@@ -1065,7 +1148,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} sim={sim} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
+      <Paths world={sim.world} sim={sim} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} />
       {bollitas.map((b) => (
         <Bollita
           key={b.id}
@@ -1088,9 +1171,11 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
         povControlRef={povControlRef}
         pointerLockedRef={pointerLockedRef}
         gyroActiveRef={gyroActiveRef}
+        horizonRef={horizonRef}
         onCanvasReady={handleCanvasReady}
       />
-      <PostFX dofOn={dofOn} selected={selected} />
+      <PostFX dofOn={dofOn} selected={selected} highQuality={highQualityFx} ultraQuality={ultraQualityFx} />
+      <StatsProbe active={showStats} onSample={onStatsSample} />
     </Canvas>
     <PovPanel
       active={povActive}
@@ -1103,6 +1188,18 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       onToggleGyro={handleToggleGyro}
       onExitPov={() => onExitPov?.()}
     />
+    {cameraOnBall && (
+      <div
+        className="hint-horizonte"
+        style={{
+          position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', zIndex: 90,
+          padding: '3px 10px', borderRadius: 10, fontSize: 11, pointerEvents: 'none',
+          background: 'rgba(8, 12, 28, 0.62)', color: '#cfe0ff', border: '1px solid rgba(150, 180, 255, 0.25)',
+        }}
+      >
+        H · {horizon ? 'Horizonte estable' : 'Cámara pegada a la pared'}
+      </div>
+    )}
     </>
   )
 }
