@@ -7,6 +7,7 @@ import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
+import { pistaWarmup } from './vida/pista.jsx'
 import Precompilado from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 
@@ -565,7 +566,7 @@ const hot = (c, k = 1.25) => new THREE.Color(c).multiplyScalar(k)
 function createTubeMat(id, focusU, detailU) {
   const V = VISUALS[id]
   const atmo = V.cine?.atmo ?? { mode: 0, c1: V.glass, c2: V.rail }
-  const isIrid = id === 'cristal' || id === 'mar' || id === 'nubes' || id === 'jardin'
+  // Sin iridiscencia: era el término más caro de un cristal que ahora es discreto (casi invisible por dentro).
   const m = new THREE.MeshPhysicalMaterial({
     color: V.glass,
     vertexColors: true,
@@ -586,8 +587,6 @@ function createTubeMat(id, focusU, detailU) {
     specularColor: new THREE.Color('#eef7ff'),
     clearcoat: 1.0,
     clearcoatRoughness: 0.045,
-    iridescence: isIrid ? 0.52 : 0.22,
-    iridescenceIOR: 1.33,
     envMapIntensity: 1.85,
     depthWrite: false,
     side: THREE.DoubleSide,
@@ -621,6 +620,9 @@ function createTubeMat(id, focusU, detailU) {
         varying vec2 vTubeUv;
         varying vec3 vTubeWorldNormal;`
       )
+      // Por dentro se descartan las caras que miran al eje (el frente del tubo): el propio tubo no tapa el
+      // techo y se sigue viendo el resto del circuito. Uniform y no material.side: cambiar side recompila.
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (uDetail > 0.5 && gl_FrontFacing) discard;')
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
@@ -1152,7 +1154,7 @@ function buildExteriorBase(way) {
     const frames = getSegFrames(s)
     const ev = s.event || (EVENT_ACCENTS[s.kind] ? s.kind : null)
     const tubeTint = ev ? WHITE_COL.clone().lerp(new THREE.Color(EVENT_ACCENTS[ev]), 0.62) : null
-    tubes.push(buildFramesTubeGeo(frames, R, 12, { uvScaleX: 0.25, color: WHITE_COL, eventColor: tubeTint }))
+    tubes.push(buildFramesTubeGeo(frames, R, 8, { uvScaleX: 0.25, color: WHITE_COL, eventColor: tubeTint }))
     const coreRad = Math.max(0.145, R * 0.148)
     const coreBase = routeColor(extNeonHex, s.route, 1.45)
     const coreCol = ev ? coreBase.clone().lerp(hot(EVENT_ACCENTS[ev], 1.4), 0.45) : coreBase
@@ -1348,6 +1350,17 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
   )
 }
 
+// Programas de las capas cercanas montados ocultos desde el inicio: el precalentado de Scene los compila
+// y enlaza en el mapa, y la primera entrada a Camino/Ballita no espera su enlace (cientos de ms en ANGLE).
+function Precalentar() {
+  const { group, mats } = useMemo(() => {
+    const mats = createWayMaterials('neon', { value: 1 }, { value: 1 })
+    return { mats, group: pistaWarmup([mats.extMetal, mats.extFlora, mats.extFloraGlow, mats.extRuins]) }
+  }, [])
+  useEffect(() => () => disposeMats(mats), [mats])
+  return <primitive object={group} visible={false} />
+}
+
 const MAX_ACTIVE_VIDA = 2
 const MAX_ACTIVE_NEAR = 3
 
@@ -1509,6 +1522,7 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
         />
       ))}
       <Puertas world={world} />
+      <Precalentar />
       {world.circuits.map((c) => {
         const isFocusedCircuit = focusWay == null || c.ways.some((w) => w.idx === focusWay)
         if (cameraOnBall && !isFocusedCircuit) return null

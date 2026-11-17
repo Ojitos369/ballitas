@@ -34,7 +34,7 @@ function countInstanced(scene) {
  * (sombras + escena principal + postproceso) y las lee/reinicia en priority 0.
  */
 export function StatsProbe({ active, onSample = NOOP }) {
-  const { gl, scene } = useThree()
+  const { gl, scene, camera } = useThree()
   const accRef = useRef({
     frames: 0,
     dtSum: 0,
@@ -49,7 +49,7 @@ export function StatsProbe({ active, onSample = NOOP }) {
 
   useEffect(() => {
     if (!active) return undefined
-    window.__ballitasDebug = { scene, gl }
+    window.__ballitasDebug = { scene, gl, camera }
     const prevAutoReset = gl.info.autoReset
     gl.info.autoReset = false
     gl.info.reset()
@@ -66,7 +66,7 @@ export function StatsProbe({ active, onSample = NOOP }) {
     return () => {
       gl.info.autoReset = prevAutoReset
     }
-  }, [active, gl])
+  }, [active, gl, scene, camera])
 
   useFrame(() => {
     if (!active) return

@@ -956,12 +956,19 @@ function PostFX({ dofOn, selected, highQuality }) {
   const camera = useThree((s) => s.camera)
   const scene = useThree((s) => s.scene)
   useEffect(() => {
-    const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 1))
+    // con plazo: si los cuadros no dejan hueco libre, sin timeout no llegaba a correr nunca
+    const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 800 }) : (f) => setTimeout(f, 1)
     // Además, compila en paralelo todo lo montado aunque esté oculto (LOD de nodos, pieles, variantes
     // cercanas): sin esto, acercarse por primera vez (Camino/Ballita) esperaba su enlace dentro del cuadro.
     const t = setTimeout(() => idle(() => {
       if (warm.current === 0) warm.current = 1
-      precompilar(gl, scene, camera, scene)
+      // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
+      // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
+      precompilar(gl, scene, camera, scene).then(() => {
+        const pend = (gl.info.programs ?? []).slice()
+        const next = () => { pend.shift()?.getUniforms(); if (pend.length) idle(next) }
+        idle(next)
+      })
     }), 2500)
     return () => clearTimeout(t)
   }, [gl, camera, scene])

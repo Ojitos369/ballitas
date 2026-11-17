@@ -12,9 +12,9 @@ import { Instanced, markShared } from './base.jsx'
 // Bandas de la sección en U (las mismas que TRACK_U de tools/assets/generate_textures.py).
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
 const TRACK_TILE = 4 // unidades de mundo por repetición de la textura en V
-const CURB = 0.24
-const SHOULDER = 0.42
-const STEP = 0.7 // muestreo a lo largo del carril
+const CURB = 0.17
+const SHOULDER = 0.15 // arcén corto: el suelo existe solo bajo lo recorrible (techo libre)
+const STEP = 0.9 // muestreo a lo largo del carril
 const CHEV_K = 0.15 // curvatura (1/u) a partir de la cual una curva lleva flechas antes
 
 // Colores por tema: asfalto, bordillo A/B, pintura, terreno del arcén y mecanismos.
@@ -37,7 +37,11 @@ const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
 const texCache = new Map()
 function trackTex(file, fallback, repeatT = true) {
   if (texCache.has(file)) return texCache.get(file)
-  const tex = new THREE.DataTexture(new Uint8Array(fallback), 1, 1)
+  // Lienzo 1×1 de reserva (no DataTexture: esa ruta de subida no acepta luego una imagen)
+  const c = document.createElement('canvas'); c.width = c.height = 1
+  const cx = c.getContext('2d'); cx.fillStyle = `rgb(${fallback[0]},${fallback[1]},${fallback[2]})`; cx.fillRect(0, 0, 1, 1)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.NoColorSpace
   tex.wrapS = THREE.ClampToEdgeWrapping
   tex.wrapT = repeatT ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping
   tex.anisotropy = 8
@@ -56,8 +60,9 @@ const matCache = new Map()
 function trackMat(themeId) {
   if (matCache.has(themeId)) return matCache.get(themeId)
   const P = pal(themeId)
-  const m = new THREE.MeshStandardMaterial({
-    color: '#ffffff', roughness: 0.82, metalness: 0.04, side: THREE.DoubleSide,
+  // Lambert: enlace del shader y relleno mucho más baratos que Standard; para asfalto mate basta.
+  const m = new THREE.MeshLambertMaterial({
+    color: '#ffffff', side: THREE.DoubleSide,
     normalMap: trackTex('track_normal.png', [128, 128, 255, 255]), normalScale: new THREE.Vector2(0.45, 0.45),
   })
   const U = {
@@ -231,7 +236,7 @@ let MECH_MAT = null
 function mechMat() {
   if (MECH_MAT) return MECH_MAT
   // DoubleSide: la flecha lateral se espeja con escala X negativa
-  const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4, metalness: 0.1, side: THREE.DoubleSide })
+  const m = new THREE.MeshLambertMaterial({ color: '#ffffff', side: THREE.DoubleSide })
   m.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\ntotalEmissiveRadiance += vColor * 0.55;\n#endif')
   }
@@ -267,6 +272,21 @@ function mechItems(way) {
     }
   }
   return items
+}
+
+/** Mallas mínimas con los materiales de la pista, para compilar y enlazar sus programas antes de la
+ *  primera entrada (todos los temas comparten programa: solo cambian uniforms). */
+export function pistaWarmup(extra = []) {
+  const g = new THREE.Group()
+  const tiny = new THREE.PlaneGeometry(0.01, 0.01)
+  tiny.setAttribute('aChev', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
+  g.add(new THREE.Mesh(tiny, trackMat('neon')))
+  for (const mat of [mechMat(), ...extra]) {
+    const im = new THREE.InstancedMesh(tiny, mat, 1)
+    im.setColorAt(0, new THREE.Color('#ffffff'))
+    g.add(im)
+  }
+  return g
 }
 
 export default function Pista({ way }) {
