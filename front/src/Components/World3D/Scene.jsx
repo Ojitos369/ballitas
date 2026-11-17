@@ -1065,7 +1065,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
+      <Paths world={sim.world} sim={sim} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
       {bollitas.map((b) => (
         <Bollita
           key={b.id}
