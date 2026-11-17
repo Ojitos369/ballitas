@@ -225,7 +225,7 @@ export class Sim {
         this.travelStep(b, dt)
         break
     }
-    b.p = Math.min(100, b.p); b.e = Math.min(100, b.e)
+    b.p = clamp(b.p, 0, 100); b.e = clamp(b.e, 0, 100)
     this.watch(b)
   }
 
@@ -297,8 +297,19 @@ export class Sim {
 
   goDest(b) {
     const g = b.genome; const t = g.traits
+    const destinos = this.world.nodes[b.node].destinos
+    const viable = destinos.filter((s) => {
+      const path = cityPath(this.world.nodes[b.node], b.vert, s.vert)
+      let distance = 0
+      for (let i = 1; i < path.length; i++) {
+        distance += this.world.nodes[b.node].verts[path[i - 1]].dir.angleTo(this.world.nodes[b.node].verts[path[i]].dir) * NODE_R
+      }
+      const time = distance / this.cruise(b)
+      return b.e - DRAIN_E * time + s.de > 0 && b.p - DRAIN_P * time + s.dp > 0
+    })
+    const options = viable.length ? viable : destinos
     let best = null; let bs = -Infinity
-    for (const s of this.world.nodes[b.node].destinos) {
+    for (const s of options) {
       const gain = (s.dp * (1 - b.p / 100) + s.de * (1 - b.e / 100)) / 20
       const sc = g.prefs[s.idx] * 0.8 + t.apetito * gain * 3 + this.rng() * (0.2 + t.curiosidad) * 0.9
       if (sc > bs) { bs = sc; best = s }
@@ -356,7 +367,7 @@ export class Sim {
     const riskLevel = (way.theme.risk + (route.profile?.thrill ?? 0.5)) * 0.5
     const riskScore = (t.valentia - 0.45) * riskLevel * 1.8 - (b.p < 28 ? riskLevel * 0.8 : 0)
 
-    const seenRoute = b.visitedRoutes[route.idx] || 0
+    const seenRoute = Math.max(0, (b.visitedRoutes[route.idx] || 0) - (halfFactor < 1 && b.route === route ? 1 : 0))
     const noveltyNode = b.visited.includes(way.to) ? 0 : 0.45
     const curiosityScore = t.curiosidad * ((1 / (1 + seenRoute)) * 1.15 + noveltyNode)
 
@@ -421,6 +432,11 @@ export class Sim {
       b.snap = Math.max(b.snap, 0.2)
     }
     const prevRoute = b.route
+    if (prev && b.sw) {
+      b.lane = nearestLane(seg, b.ang)
+      b.sw = null
+      b.rail = b.off
+    }
     b.seg = seg; b.segT = 0
     if (!b.sw) b.lane = nearestLane(seg, b.ang) // el carril sigue al más cercano en ángulo
     if (seg.route >= 0) {

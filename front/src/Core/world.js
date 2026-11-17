@@ -321,6 +321,7 @@ const ensureFrames = (seg) => { if (!seg._fr) sampleChain([seg], false) }
 // Equivalente a Curve.getUtoTmapping sobre la caché ya calculada, sin asignaciones.
 function arcParamAt(fr, u) {
   const lengths = fr.arcLengths; const last = lengths.length - 1
+  if (last <= 0 || !Number.isFinite(u)) return 0
   const target = clamp(u, 0, 1) * lengths[last]
   let low = 0; let high = last
   while (low <= high) {
@@ -330,13 +331,14 @@ function arcParamAt(fr, u) {
     else return i / last
   }
   const before = lengths[high]; const after = lengths[low]
-  return (high + (target - before) / (after - before)) / last
+  const fraction = after > before ? (target - before) / (after - before) : 0
+  return (high + fraction) / last
 }
 
 // Marco sobre la pared a ángulo `angle` y avance `u`. Ver el contrato al inicio del archivo.
 export function wallFrame(seg, angle, u, rho = seg.air ? 0 : seg.radius - BALL_R, out = {}) {
   ensureFrames(seg)
-  u = clamp(u, 0, 1)
+  u = Number.isFinite(u) ? clamp(u, 0, 1) : 0
   const fr = seg._fr; const f = u * fr.n; const i = Math.min(fr.n - 1, Math.floor(f)); const k = f - i; const A = fr.D
   const T = out.tangent || (out.tangent = new THREE.Vector3())
   T.fromArray(fr.T, i * 3); FRAME_TMP.fromArray(fr.T, (i + 1) * 3); T.lerp(FRAME_TMP, k).normalize()
@@ -577,7 +579,8 @@ function buildCity(world, node, def, rng) {
 // ───────────────────────── formas de los obstáculos ─────────────────────────
 // Cada forma devuelve los puntos de paso entre A y B. Ta/Tb: tangente pactada con el tramo vecino.
 const basis = (A, B) => {
-  const C = B.clone().sub(A); const L = C.length(); const c = C.clone().divideScalar(L)
+  const C = B.clone().sub(A); const L = C.length()
+  const c = L < 1e-6 ? new THREE.Vector3(0, 0, 1) : C.clone().divideScalar(L)
   const u = new THREE.Vector3().crossVectors(c, Math.abs(c.y) > 0.95 ? X : Y).normalize()
   return { C, L, c, u, v: new THREE.Vector3().crossVectors(u, c) } // v apunta "arriba" respecto a la cuerda
 }

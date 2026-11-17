@@ -32,11 +32,22 @@ const BASE = {
   rizo: ['¡Cabeza abajo!', '¡Otra vuelta!'],
   caida: ['¡Aaaah, caigo!', '¡Al vacío!'],
   embudo: ['Vueltas y vueltas…', 'Me mareo…'],
+  geiser: ['¡Al chorro del géiser!', '¡Arriba voy!'],
+  erupcion: ['¡Erupción! ¡A volar!', '¡El cráter me lanza!'],
+  turbina: ['¡Viento de lado!', '¡Qué impulso!'],
+  hielo_resbaloso: ['¡Qué rápido patina!', '¡A toda velocidad!'],
+  pantano: ['Uy, qué pegajoso…', 'Me frena el pantano…'],
+  portal: ['¡Salto espacial!', '¡Teletransporte!'],
+  cascada: ['¡Por la cascada!', '¡Agua va!'],
+  carril: ['¡Cambio de carril por {m}!', '¡Por la pared gracias a {m}!'],
+  falla: ['¡Uy, me caí en {m}!', '¡Falló {m}!', '¡Al suelo otra vez por {m}!'],
 }
 
 const EMOJI = {
   nace: '👋', llega: '📍', ganaP: '⭐', ganaE: '⚡', camino: '🧭', hambre: '😴', miedo: '😟', muere: '💤',
   canon: '💥', trampolin: '🤸', rizo: '➰', caida: '🪂', embudo: '🌪️',
+  geiser: '⛲', erupcion: '🌋', turbina: '💨', hielo_resbaloso: '🧊', pantano: '🫧',
+  portal: '🟣', cascada: '🌊', carril: '↔️', falla: '😵',
 }
 
 export function archetype(genome) {
