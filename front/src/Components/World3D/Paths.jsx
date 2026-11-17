@@ -1349,6 +1349,9 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
           {/* la vida va dentro del interior: montada de antemano (precarga) no se ve hasta que hay detalle */}
           <group ref={intGroupRef}>
             <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
+            {/* neón y fauna también en detalle (POV/seguir), donde el exterior cercano ya está oculto */}
+            <Neon way={way} time={SHARED_TIME} getFrames={getSegFrames} sample={sampleCurveFrame} />
+            <Fauna way={way} time={SHARED_TIME} getFrames={getSegFrames} sample={sampleCurveFrame} />
           </group>
         </Precompilado>
       )}
