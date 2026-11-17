@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Stars, Environment, Lightformer, GradientTexture } from '@react-three/drei'
+import { OrbitControls, Stars, Environment, Lightformer, GradientTexture, PerformanceMonitor } from '@react-three/drei'
 import {
   EffectComposer,
   Bloom,
@@ -16,6 +16,8 @@ import { NODE_R, mulberry32 } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Bollita from './Bollita.jsx'
+import PovPanel from '../Panels/PovPanel.jsx'
+import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
 
 const STEP = 0.05
@@ -24,8 +26,15 @@ const POV_FOV = 75
 const POV_FOV_MIN = 45
 const POV_FOV_MAX = 100
 const POV_PITCH_MAX = THREE.MathUtils.degToRad(80)
-const POV_SENS = 0.0045
-const POV_RETURN_DELAY = 2000
+const POV_ROLL_MAX = THREE.MathUtils.degToRad(45)
+const POV_SENS = 0.0048
+const POV_LOCK_SENS = 0.0026
+const POV_KEY_YAW_SPEED = 1.9
+const POV_KEY_PITCH_SPEED = 1.5
+const POV_KEY_ROLL_SPEED = 1.3
+const POV_JOY_YAW_SPEED = 2.0
+const POV_JOY_PITCH_SPEED = 1.6
+const NOOP = () => {}
 const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
 const SEGUIR_DIST = 3.6 // distancia cómoda detrás/encima de la bollita (0.55x en tubos)
@@ -48,7 +57,47 @@ const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
 const povLookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
 const povLookQuat = new THREE.Quaternion()
+const povLookDirTmp = new THREE.Vector3()
 const upRefVec = new THREE.Vector3()
+const rollMat = new THREE.Matrix4()
+const viewDir = new THREE.Vector3()
+const WALL_UP_RATE = 2.6 // suavizado del giro de cámara con la pared (más bajo = menos mareo)
+
+const KEY_TO_ACTION = {
+  arrowleft: 'left',
+  a: 'left',
+  j: 'left',
+  arrowright: 'right',
+  d: 'right',
+  l: 'right',
+  arrowup: 'up',
+  w: 'up',
+  i: 'up',
+  arrowdown: 'down',
+  s: 'down',
+  k: 'down',
+  q: 'rollL',
+  e: 'rollR',
+}
+
+function wrapAngle(a) {
+  return ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+}
+
+function createPovState() {
+  return {
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    fov: POV_FOV,
+    joyX: 0,
+    joyY: 0,
+    gyroYaw: 0,
+    gyroPitch: 0,
+    gyroReset: true,
+    centerRequested: false,
+  }
+}
 
 const NEBULA_VERT = /* glsl */ `
   varying vec3 vDir;
@@ -138,6 +187,8 @@ function NebulaDome({ r }) {
     fog: false,
   }), [])
 
+  useEffect(() => () => mat.dispose(), [mat])
+
   useFrame((_, dt) => {
     mat.uniforms.uTime.value += dt
   })
@@ -200,6 +251,12 @@ function ConstellationDome({ r }) {
     return { lineGeo: lg, pointGeo: pg, dotTex: makeConstellationDotTex() }
   }, [r])
 
+  useEffect(() => () => {
+    lineGeo.dispose()
+    pointGeo.dispose()
+    dotTex?.dispose()
+  }, [lineGeo, pointGeo, dotTex])
+
   useFrame((_, dt) => {
     if (groupRef.current) groupRef.current.rotation.y += dt * 0.004
   })
@@ -227,8 +284,10 @@ function ConstellationDome({ r }) {
 }
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
-function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false }) {
+function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
+  const followUp = useRef(new THREE.Vector3(0, 1, 0))
   const controls = useRef()
+  const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
@@ -241,21 +300,25 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
   const hasPrevPos = useRef(false)
   const povQuat = useRef(new THREE.Quaternion())
   const povUp = useRef(new THREE.Vector3(0, 1, 0))
+  const povLastFwd = useRef(new THREE.Vector3(0, 0, 1))
   const povInit = useRef(false)
-  const povYaw = useRef(0)
-  const povPitch = useRef(0)
-  const povFov = useRef(POV_FOV)
   const povDragging = useRef(false)
-  const povLastInteract = useRef(0)
+  const keysRef = useRef(new Set())
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
 
   useEffect(() => {
-    if (!povActive) {
-      povYaw.current = 0
-      povPitch.current = 0
-      povFov.current = POV_FOV
+    onCanvasReady?.(gl.domElement)
+  }, [gl, onCanvasReady])
+
+  useEffect(() => {
+    const resetState = () => {
+      Object.assign(povControlRef.current, createPovState())
       povDragging.current = false
-      return
+      keysRef.current.clear()
+    }
+    if (!povActive) {
+      resetState()
+      return undefined
     }
     const dom = gl.domElement
     const prevCursor = dom.style.cursor
@@ -266,90 +329,131 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
     let pointerId = null
     let lastX = 0
     let lastY = 0
-    let moved = false
+    let totalDist2 = 0
+
+    const centerLook = () => {
+      const st = povControlRef.current
+      st.yaw = 0
+      st.pitch = 0
+      st.roll = 0
+      st.gyroYaw = 0
+      st.gyroPitch = 0
+      st.gyroReset = true
+    }
 
     const onPointerDown = (e) => {
+      if (document.pointerLockElement === dom) return
       if (e.pointerType === 'mouse' && e.button !== 0) return
       if (pointerId !== null) return
       pointerId = e.pointerId
       lastX = e.clientX
       lastY = e.clientY
-      moved = false
+      totalDist2 = 0
+      try { dom.setPointerCapture(e.pointerId) } catch {}
     }
 
     const onPointerMove = (e) => {
+      if (document.pointerLockElement === dom) return
       if (e.pointerId !== pointerId) return
       const dx = e.clientX - lastX
       const dy = e.clientY - lastY
-      if (!moved && dx * dx + dy * dy < 16) return
-      if (!moved) {
-        moved = true
-        povDragging.current = true
-        dom.style.cursor = 'grabbing'
-        try { dom.setPointerCapture(e.pointerId) } catch {}
-      }
       lastX = e.clientX
       lastY = e.clientY
-      povYaw.current = THREE.MathUtils.clamp(povYaw.current + dx * POV_SENS, -Math.PI, Math.PI)
-      povPitch.current = THREE.MathUtils.clamp(povPitch.current + dy * POV_SENS, -POV_PITCH_MAX, POV_PITCH_MAX)
-      povLastInteract.current = performance.now()
+      totalDist2 += dx * dx + dy * dy
+      if (!povDragging.current && totalDist2 >= 2) {
+        povDragging.current = true
+        dom.style.cursor = 'grabbing'
+      }
+      if (dx !== 0 || dy !== 0) {
+        const st = povControlRef.current
+        st.yaw = wrapAngle(st.yaw + dx * POV_SENS)
+        st.pitch = THREE.MathUtils.clamp(st.pitch + dy * POV_SENS, -POV_PITCH_MAX, POV_PITCH_MAX)
+      }
     }
 
     const endDrag = (e) => {
       if (e.pointerId !== pointerId) return
       pointerId = null
-      if (moved) {
-        try { dom.releasePointerCapture(e.pointerId) } catch {}
-        povLastInteract.current = performance.now()
-      }
+      try {
+        if (dom.hasPointerCapture?.(e.pointerId)) dom.releasePointerCapture(e.pointerId)
+      } catch {}
       povDragging.current = false
       dom.style.cursor = 'grab'
     }
 
-    const onDblClick = () => {
-      povYaw.current = 0
-      povPitch.current = 0
+    const onLockedMouseMove = (e) => {
+      if (document.pointerLockElement !== dom) return
+      const mx = e.movementX || 0
+      const my = e.movementY || 0
+      if (mx === 0 && my === 0) return
+      const st = povControlRef.current
+      st.yaw = wrapAngle(st.yaw - mx * POV_LOCK_SENS)
+      st.pitch = THREE.MathUtils.clamp(st.pitch - my * POV_LOCK_SENS, -POV_PITCH_MAX, POV_PITCH_MAX)
     }
+
+    const onDblClick = () => centerLook()
 
     const onWheel = (e) => {
       e.preventDefault()
-      povFov.current = THREE.MathUtils.clamp(povFov.current + e.deltaY * 0.03, POV_FOV_MIN, POV_FOV_MAX)
+      const st = povControlRef.current
+      st.fov = THREE.MathUtils.clamp(st.fov + e.deltaY * 0.03, POV_FOV_MIN, POV_FOV_MAX)
     }
 
     const onKeyDown = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      if (e.key === 'r' || e.key === 'R') {
-        povYaw.current = 0
-        povPitch.current = 0
+      const k = e.key.toLowerCase()
+      if (k === 'r') {
+        centerLook()
+        return
+      }
+      const action = KEY_TO_ACTION[k]
+      if (action) {
+        if (e.key.startsWith('Arrow')) e.preventDefault()
+        keysRef.current.add(action)
       }
     }
 
+    const onKeyUp = (e) => {
+      const action = KEY_TO_ACTION[e.key.toLowerCase()]
+      if (action) keysRef.current.delete(action)
+    }
+
+    const onBlur = () => {
+      pointerId = null
+      povDragging.current = false
+      keysRef.current.clear()
+      dom.style.cursor = 'grab'
+    }
+
     dom.addEventListener('pointerdown', onPointerDown)
-    dom.addEventListener('pointermove', onPointerMove)
-    dom.addEventListener('pointerup', endDrag)
-    dom.addEventListener('pointercancel', endDrag)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', endDrag)
+    window.addEventListener('pointercancel', endDrag)
+    window.addEventListener('blur', onBlur)
+    document.addEventListener('mousemove', onLockedMouseMove)
     dom.addEventListener('dblclick', onDblClick)
     dom.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       dom.removeEventListener('pointerdown', onPointerDown)
-      dom.removeEventListener('pointermove', onPointerMove)
-      dom.removeEventListener('pointerup', endDrag)
-      dom.removeEventListener('pointercancel', endDrag)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', endDrag)
+      window.removeEventListener('pointercancel', endDrag)
+      window.removeEventListener('blur', onBlur)
+      document.removeEventListener('mousemove', onLockedMouseMove)
       dom.removeEventListener('dblclick', onDblClick)
       dom.removeEventListener('wheel', onWheel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
       dom.style.cursor = prevCursor
       dom.style.touchAction = prevTouchAction
-      povDragging.current = false
-      povYaw.current = 0
-      povPitch.current = 0
-      povFov.current = POV_FOV
+      resetState()
     }
-  }, [povActive, gl])
+  }, [povActive, gl, povControlRef])
 
   // Posición de la vista general: encaja el mundo también en pantallas verticales.
   const casa = () => {
@@ -365,40 +469,73 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
   }, [])
 
   useFrame((_, dt) => {
-    if (suspend) return
     const c = controls.current
     const h = Math.min(dt, 0.1)
+    if (suspend) { vuelta.current = true; return }
+    if (vuelta.current) { // al salir del camino: se vuelve a la vista general con transición
+      vuelta.current = false; hasPrevPos.current = false; manualOrbit.current = false; modo.current = 'volviendo'
+      c.target.copy(camera.position).addScaledVector(camera.getWorldDirection(sideVec), mundo.r * 0.1)
+    }
     cineClock.current += h
 
     let targetFov = FOV
     let targetNear = NEAR_DEFAULT
+    if (!povActive && typeof window !== 'undefined' && window.__bollitasPov?.active) {
+      window.__bollitasPov.active = false
+    }
     if (povActive) {
-      targetFov = povFov.current
-      targetNear = NEAR_POV
+      const st = povControlRef.current
       if (modo.current !== 'pov' || ultima.current !== selected) {
         modo.current = 'pov'
         ultima.current = selected
         povInit.current = false
-        povYaw.current = 0
-        povPitch.current = 0
-        povFov.current = POV_FOV
+        Object.assign(st, createPovState())
         povDragging.current = false
+        keysRef.current.clear()
       }
 
-      if (!povDragging.current && performance.now() - povLastInteract.current > POV_RETURN_DELAY) {
-        povYaw.current = Math.abs(povYaw.current) < 1e-4 ? 0 : THREE.MathUtils.damp(povYaw.current, 0, 3.5, h)
-        povPitch.current = Math.abs(povPitch.current) < 1e-4 ? 0 : THREE.MathUtils.damp(povPitch.current, 0, 3.5, h)
+      if (st.centerRequested) {
+        st.yaw = 0
+        st.pitch = 0
+        st.roll = 0
+        st.gyroYaw = 0
+        st.gyroPitch = 0
+        st.gyroReset = true
+        st.centerRequested = false
       }
+
+      const keys = keysRef.current
+      const yawInput = (keys.has('right') ? -1 : 0) + (keys.has('left') ? 1 : 0)
+      const pitchInput = (keys.has('up') ? 1 : 0) + (keys.has('down') ? -1 : 0)
+      const rollInput = (keys.has('rollL') ? 1 : 0) + (keys.has('rollR') ? -1 : 0)
+      if (yawInput !== 0) st.yaw = wrapAngle(st.yaw + yawInput * POV_KEY_YAW_SPEED * h)
+      if (pitchInput !== 0) {
+        st.pitch = THREE.MathUtils.clamp(st.pitch + pitchInput * POV_KEY_PITCH_SPEED * h, -POV_PITCH_MAX, POV_PITCH_MAX)
+      }
+      if (rollInput !== 0) {
+        st.roll = THREE.MathUtils.clamp(st.roll + rollInput * POV_KEY_ROLL_SPEED * h, -POV_ROLL_MAX, POV_ROLL_MAX)
+      }
+
+      if (st.joyX !== 0 || st.joyY !== 0) {
+        st.yaw = wrapAngle(st.yaw - st.joyX * POV_JOY_YAW_SPEED * h)
+        st.pitch = THREE.MathUtils.clamp(st.pitch - st.joyY * POV_JOY_PITCH_SPEED * h, -POV_PITCH_MAX, POV_PITCH_MAX)
+      }
+
+      targetFov = st.fov
+      targetNear = NEAR_POV
 
       if (selected.dir && selected.dir.lengthSq() > 1e-6) {
         povFwd.copy(selected.dir).normalize()
+        povLastFwd.current.copy(povFwd)
       } else {
-        povFwd.set(0, 0, 1)
+        povFwd.copy(povLastFwd.current)
       }
 
-      // Up interpolado para evitar roll brusco en rizos/embudos
+      // En el tubo el up es el de la pared (la cámara gira con la pista); con horizonte estable (H)
+      // o fuera del tubo, peso dominante de Y mundial para evitar roll y giros bruscos.
+      const onWall = selected.phase === 'travel' && !horizonRef.current
       if (selected.up && selected.up.lengthSq() > 1e-6) {
-        const upWeight = selected.phase === 'travel' ? 0.3 : 0.65
+        const upWeight = onWall ? 1 : selected.phase === 'travel' ? 0.28 : 0.45
         povTargetUp.copy(Y_AXIS).multiplyScalar(1 - upWeight).addScaledVector(selected.up, upWeight)
         if (povTargetUp.lengthSq() < 1e-4) povTargetUp.copy(Y_AXIS)
         else povTargetUp.normalize()
@@ -411,7 +548,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
         povQuat.current.copy(camera.quaternion)
         povInit.current = true
       } else {
-        povUp.current.lerp(povTargetUp, 1 - Math.exp(-3.5 * h)).normalize()
+        povUp.current.lerp(povTargetUp, 1 - Math.exp(-(onWall ? WALL_UP_RATE : 3.5) * h))
+        if (povUp.current.lengthSq() < 1e-6) povUp.current.copy(povTargetUp)
+        povUp.current.normalize()
       }
 
       povRight.crossVectors(povFwd, povUp.current)
@@ -422,20 +561,54 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
       povOrthoUp.crossVectors(povRight, povFwd).normalize()
       povMat.makeBasis(povRight, povOrthoUp, sideVec.copy(povFwd).negate())
       povTargetQuat.setFromRotationMatrix(povMat)
-      if (povYaw.current !== 0 || povPitch.current !== 0) {
-        povLookEuler.set(povPitch.current, povYaw.current, 0, 'YXZ')
+
+      const totalYaw = wrapAngle(st.yaw + (gyroActiveRef.current ? st.gyroYaw : 0))
+      const totalPitch = THREE.MathUtils.clamp(
+        st.pitch + (gyroActiveRef.current ? st.gyroPitch : 0),
+        -POV_PITCH_MAX,
+        POV_PITCH_MAX,
+      )
+      const totalRoll = st.roll
+      if (totalYaw !== 0 || totalPitch !== 0 || totalRoll !== 0) {
+        povLookEuler.set(totalPitch, totalYaw, totalRoll, 'YXZ')
         povLookQuat.setFromEuler(povLookEuler)
         povTargetQuat.multiply(povLookQuat)
       }
-      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(povDragging.current ? 18 : 10) * h))
+      const interacting = povDragging.current
+        || yawInput !== 0
+        || pitchInput !== 0
+        || rollInput !== 0
+        || st.joyX !== 0
+        || st.joyY !== 0
+        || pointerLockedRef.current
+        || gyroActiveRef.current
+      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 24 : 12) * h))
       camera.quaternion.copy(povQuat.current)
 
-      const upShift = selected.phase === 'travel' ? -0.06 : 0.08
+      const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
       povEye.copy(selected.pos).addScaledVector(povFwd, 0.14)
       if (selected.up) povEye.addScaledVector(selected.up, upShift)
       camera.position.lerp(povEye, 1 - Math.exp(-18 * h))
       c.target.copy(povEye).addScaledVector(povFwd, 2)
       hasPrevPos.current = false
+
+      if (typeof window !== 'undefined') {
+        const t = window.__bollitasPov || (window.__bollitasPov = {})
+        camera.getWorldDirection(povLookDirTmp)
+        t.active = true
+        t.yaw = totalYaw
+        t.pitch = totalPitch
+        t.roll = totalRoll
+        t.fov = camera.fov
+        t.pointerLocked = Boolean(document.pointerLockElement === gl.domElement)
+        t.gyroActive = Boolean(gyroActiveRef.current)
+        t.camDir = [povLookDirTmp.x, povLookDirTmp.y, povLookDirTmp.z]
+        t.camQuat = [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w]
+        t.bollitaDir = [povFwd.x, povFwd.y, povFwd.z]
+        t.bollitaPos = [selected.pos.x, selected.pos.y, selected.pos.z]
+        t.horizon = Boolean(horizonRef.current)
+        t.camUp = [povUp.current.x, povUp.current.y, povUp.current.z]
+      }
     } else if (follow && selected && selected.phase !== 'gone') {
       if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current !== selected) {
         modo.current = 'entrando'
@@ -472,10 +645,19 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
       camera.position.add(mov)
 
       const hasDir = Boolean(selected.dir && selected.dir.lengthSq() > 1e-4)
-      if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
+      // en el tubo, "arriba" es hacia el eje (la pared por la que rueda), suavizado; H lo fija al mundo
+      const wallFollow = selected.phase === 'travel' && !horizonRef.current && Boolean(selected.up)
+      if (wallFollow) {
+        followUp.current.lerp(selected.up, 1 - Math.exp(-WALL_UP_RATE * h))
+        if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(selected.up)
+        followUp.current.normalize()
+        upRefVec.copy(followUp.current)
+      } else if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
         upRefVec.copy(selected.up).normalize()
+        followUp.current.copy(upRefVec)
       } else {
         upRefVec.copy(Y_AXIS)
+        followUp.current.copy(Y_AXIS)
       }
       if (hasDir) {
         sideVec.crossVectors(selected.dir, upRefVec)
@@ -535,6 +717,16 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
           if (d2 > 1e-6) sideVec.normalize()
           else sideVec.copy(upRefVec)
           camera.position.copy(np).addScaledVector(sideVec, minPlanetR)
+        }
+      }
+
+      // Pista espacial: la cámara rueda con la pared (OrbitControls la vuelve a poner con Y cada frame,
+      // así que el giro se aplica aquí tras su update y sólo mientras el usuario no la maneja).
+      if (wallFollow && !userActive.current) {
+        viewDir.copy(c.target).sub(camera.position)
+        if (viewDir.lengthSq() > 1e-6 && viewDir.normalize().cross(followUp.current).lengthSq() > 0.01) {
+          rollMat.lookAt(camera.position, c.target, followUp.current)
+          camera.quaternion.setFromRotationMatrix(rollMat)
         }
       }
     } else if (modo.current !== 'libre') {
@@ -598,48 +790,49 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false 
   )
 }
 
-// Luz principal con sombras. El área de sombra acompaña al objetivo de la cámara para tener detalle donde se mira.
-// Solo proyectan/reciben las mallas que lo declaren (castShadow / receiveShadow) en Nodes, Paths y Bollita.
-function Sol({ r }) {
+// Luz principal con sombras. Solo proyecta sombras al seguir una bollita / POV para ahorrar GPU en vista general.
+function Sol({ r, shadowsOn, selected }) {
   const luz = useRef()
   const controls = useThree((s) => s.controls)
   useFrame(() => {
-    if (!controls) return
-    luz.current.target.position.copy(controls.target)
+    if (!luz.current) return
+    const tgt = shadowsOn && selected && selected.phase !== 'gone' ? selected.pos : controls?.target
+    if (!tgt) return
+    luz.current.target.position.copy(tgt)
     luz.current.target.updateMatrixWorld()
-    luz.current.position.copy(controls.target).addScaledVector(SOL_DIR, r)
+    luz.current.position.copy(tgt).addScaledVector(SOL_DIR, r)
   })
   return (
     <directionalLight
       ref={luz}
-      castShadow
+      castShadow={shadowsOn}
       intensity={1.35}
       color="#ffe6c4"
-      shadow-mapSize={[2048, 2048]}
-      shadow-bias={-0.0003}
+      shadow-mapSize={[512, 512]}
+      shadow-bias={-0.0005}
       shadow-normalBias={0.03}
-      shadow-radius={2.5}
+      shadow-radius={1.5}
     >
-      <orthographicCamera attach="shadow-camera" args={[-45, 45, 45, -45, 1, r * 2.5]} />
+      <orthographicCamera attach="shadow-camera" args={[-16, 16, 16, -16, 1, r * 2.5]} />
     </directionalLight>
   )
 }
 
-function PostFX({ dofOn, selected }) {
+function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
   const dofTarget = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(() => {
-    if (!dofOn || !dofRef.current?.target) return
+    if (!dofOn || !ultraQuality || !dofRef.current?.target) return
     if (selected && selected.phase !== 'gone') dofRef.current.target.copy(selected.pos)
     else if (controls) dofRef.current.target.copy(controls.target)
   })
 
   return (
     <EffectComposer multisampling={0}>
-      <SMAA />
-      {dofOn && (
+      {highQuality && <SMAA />}
+      {ultraQuality && dofOn && (
         <DepthOfField
           ref={dofRef}
           target={dofTarget}
@@ -648,76 +841,291 @@ function PostFX({ dofOn, selected }) {
           resolutionScale={0.5}
         />
       )}
-      <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.32} />
-      <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />
-      <Vignette eskil={false} offset={0.22} darkness={0.48} />
-      <Noise opacity={0.025} />
+      <Bloom mipmapBlur luminanceThreshold={highQuality ? 1.1 : 1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
+      {highQuality && <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />}
+      <Vignette eskil={false} offset={0.22} darkness={highQuality ? 0.48 : 0.45} />
+      {highQuality && <Noise opacity={0.025} />}
       <ToneMapping mode={TONE_MAPPING_AGX} middleGrey={0.52} />
     </EffectComposer>
   )
 }
 
-function PovHint({ active }) {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    if (!active) { setVisible(false); return }
-    setVisible(true)
-    const id = setTimeout(() => setVisible(false), 4500)
-    return () => clearTimeout(id)
-  }, [active])
-
-  if (!visible) return null
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 24,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '7px 14px',
-        borderRadius: 999,
-        background: 'rgba(10, 14, 28, 0.72)',
-        border: '1px solid rgba(155, 182, 240, 0.25)',
-        color: '#dce8ff',
-        fontSize: 13,
-        letterSpacing: '0.02em',
-        backdropFilter: 'blur(8px)',
-        pointerEvents: 'none',
-        zIndex: 30,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      Arrastra para mirar · R centra · Esc sale
-    </div>
-  )
-}
-
-export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, vista = 'mapa', focusWay = null, activeWay = null, routeIndex = 0, seekIndex = null, caminoSpeed = 0.16, caminoPaused = false, onSelect, onSelectWay }) {
+export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', focusWay = null, activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
   const cameraWay = activeWay ?? (selected && selected.phase !== 'gone' ? (selected.seg?.way ?? selected.way ?? null) : null)
+  const focusWay = activeWay?.idx ?? null
   const camino = vista === 'camino'
+  const caminoOn = Boolean(camino && cameraWay)
   const forceFocusDetail = Boolean(camino || ((follow || pov) && selected && selected.phase !== 'gone'))
   const focusedWay = camino ? cameraWay?.idx ?? focusWay : (vista === 'mapa' ? focusWay : (selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null))
+
+  const povControlRef = useRef(createPovState())
+  const canvasDomRef = useRef(null)
+  const [pointerLocked, setPointerLocked] = useState(false)
+  const pointerLockedRef = useRef(false)
+  const wasLockedRef = useRef(false)
+  const suppressNextEscRef = useRef(false)
+  const [gyroActive, setGyroActive] = useState(false)
+  const gyroActiveRef = useRef(false)
+  const [gyroNote, setGyroNote] = useState(null)
+  // Horizonte estable (tecla H): la cámara mantiene el up del mundo en vez de girar con la pared.
+  const [horizon, setHorizon] = useState(false)
+  const horizonRef = useRef(false)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key.toLowerCase() !== 'h') return
+      horizonRef.current = !horizonRef.current
+      setHorizon(horizonRef.current)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const cameraOnBall = Boolean((povActive || follow) && selected && selected.phase !== 'gone')
+  const [dpr, setDpr] = useState(1)
+  const [lowPerf, setLowPerf] = useState(false)
+  const highQualityFx = cameraOnBall && !lowPerf
+  const ultraQualityFx = highQualityFx && dpr >= 1.25
+
+  const handlePerfDecline = useCallback(() => {
+    setDpr((prev) => Math.max(0.6, Number((prev - 0.15).toFixed(2))))
+    setLowPerf(true)
+  }, [])
+  const handlePerfIncline = useCallback(() => {
+    setDpr((prev) => Math.min(1.5, Number((prev + 0.15).toFixed(2))))
+    setLowPerf(false)
+  }, [])
+  const handlePerfChange = useCallback(({ factor }) => {
+    const next = Number((0.6 + factor * 0.9).toFixed(2))
+    setDpr((prev) => (Math.abs(prev - next) >= 0.08 ? next : prev))
+    setLowPerf(factor < 0.65)
+  }, [])
+
+  const handleCanvasReady = useCallback((dom) => {
+    canvasDomRef.current = dom
+  }, [])
+
+  // Limpia estados de bloqueo y giroscopio al salir de POV.
+  useEffect(() => {
+    if (povActive) return
+    setGyroActive(false)
+    gyroActiveRef.current = false
+    setGyroNote(null)
+    suppressNextEscRef.current = false
+    const dom = canvasDomRef.current
+    if (dom && document.pointerLockElement === dom) {
+      try { document.exitPointerLock?.() } catch {}
+    }
+  }, [povActive])
+
+  // Sincroniza el estado de Pointer Lock y gestiona Esc en dos pasos (1º suelta cursor, 2º sale de POV).
+  useEffect(() => {
+    if (!povActive) return undefined
+    let suppressTimer = null
+
+    const onLockChange = () => {
+      const dom = canvasDomRef.current
+      const locked = Boolean(dom && document.pointerLockElement === dom)
+      if (wasLockedRef.current && !locked) {
+        suppressNextEscRef.current = true
+        if (suppressTimer) clearTimeout(suppressTimer)
+        suppressTimer = setTimeout(() => { suppressNextEscRef.current = false }, 220)
+      }
+      wasLockedRef.current = locked
+      pointerLockedRef.current = locked
+      setPointerLocked(locked)
+      if (dom) dom.style.cursor = locked ? 'none' : 'grab'
+    }
+
+    const onLockError = () => {
+      wasLockedRef.current = false
+      pointerLockedRef.current = false
+      setPointerLocked(false)
+    }
+
+    const onEscapeCapture = (e) => {
+      if (e.key !== 'Escape') return
+      if (document.pointerLockElement) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation?.()
+        suppressNextEscRef.current = false
+        try { document.exitPointerLock?.() } catch {}
+        return
+      }
+      if (suppressNextEscRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation?.()
+        suppressNextEscRef.current = false
+        return
+      }
+      if (onExitPov) {
+        e.preventDefault()
+        e.stopPropagation()
+        onExitPov()
+      }
+    }
+
+    document.addEventListener('pointerlockchange', onLockChange)
+    document.addEventListener('pointerlockerror', onLockError)
+    window.addEventListener('keydown', onEscapeCapture, true)
+    return () => {
+      if (suppressTimer) clearTimeout(suppressTimer)
+      document.removeEventListener('pointerlockchange', onLockChange)
+      document.removeEventListener('pointerlockerror', onLockError)
+      window.removeEventListener('keydown', onEscapeCapture, true)
+      wasLockedRef.current = false
+      pointerLockedRef.current = false
+      setPointerLocked(false)
+    }
+  }, [povActive, onExitPov])
+
+  // Giroscopio (DeviceOrientation) opcional activado por el usuario.
+  useEffect(() => {
+    if (!povActive || !gyroActive) {
+      gyroActiveRef.current = false
+      povControlRef.current.gyroYaw = 0
+      povControlRef.current.gyroPitch = 0
+      return undefined
+    }
+    gyroActiveRef.current = true
+    povControlRef.current.gyroReset = true
+    let gotReading = false
+    const deg2rad = Math.PI / 180
+    const qBase = new THREE.Quaternion()
+    const zee = new THREE.Vector3(0, 0, 1)
+    const euler = new THREE.Euler()
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5))
+    const q0 = new THREE.Quaternion()
+    const qDev = new THREE.Quaternion()
+    const qRel = new THREE.Quaternion()
+    const relEuler = new THREE.Euler()
+
+    const onOrient = (e) => {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return
+      if (!gotReading) {
+        gotReading = true
+        setGyroNote(null)
+      }
+      const alpha = (e.alpha ?? 0) * deg2rad
+      const beta = (e.beta ?? 0) * deg2rad
+      const gamma = (e.gamma ?? 0) * deg2rad
+      const orient = (window.screen?.orientation?.angle ?? window.orientation ?? 0) * deg2rad
+      euler.set(beta, alpha, -gamma, 'YXZ')
+      qDev.setFromEuler(euler)
+      qDev.multiply(q1)
+      qDev.multiply(q0.setFromAxisAngle(zee, -orient))
+
+      if (povControlRef.current.gyroReset) {
+        qBase.copy(qDev).invert()
+        povControlRef.current.gyroReset = false
+        povControlRef.current.gyroYaw = 0
+        povControlRef.current.gyroPitch = 0
+        return
+      }
+      qRel.copy(qBase).multiply(qDev)
+      relEuler.setFromQuaternion(qRel, 'YXZ')
+      povControlRef.current.gyroYaw = wrapAngle(relEuler.y)
+      povControlRef.current.gyroPitch = THREE.MathUtils.clamp(relEuler.x, -POV_PITCH_MAX, POV_PITCH_MAX)
+    }
+
+    const onScreenOrient = () => {
+      povControlRef.current.gyroReset = true
+    }
+
+    const noDataTimer = setTimeout(() => {
+      if (!gotReading) setGyroNote('Sin lecturas de giroscopio en este dispositivo')
+    }, 1500)
+
+    window.addEventListener('deviceorientation', onOrient)
+    window.addEventListener('orientationchange', onScreenOrient)
+    return () => {
+      clearTimeout(noDataTimer)
+      window.removeEventListener('deviceorientation', onOrient)
+      window.removeEventListener('orientationchange', onScreenOrient)
+      gyroActiveRef.current = false
+      povControlRef.current.gyroYaw = 0
+      povControlRef.current.gyroPitch = 0
+    }
+  }, [povActive, gyroActive])
+
+  const handleCenter = useCallback(() => {
+    povControlRef.current.centerRequested = true
+  }, [])
+
+  const handleTogglePointerLock = useCallback(() => {
+    const dom = canvasDomRef.current
+    if (!dom) return
+    if (document.pointerLockElement === dom) {
+      try { document.exitPointerLock?.() } catch {}
+      return
+    }
+    if (!dom.requestPointerLock) return
+    try {
+      const res = dom.requestPointerLock()
+      if (res && typeof res.catch === 'function') res.catch(() => {})
+    } catch {}
+  }, [])
+
+  const handleToggleGyro = useCallback(async () => {
+    if (gyroActive) {
+      setGyroActive(false)
+      setGyroNote(null)
+      return
+    }
+    if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) {
+      setGyroNote('Giroscopio no disponible')
+      return
+    }
+    const DOE = window.DeviceOrientationEvent
+    if (typeof DOE.requestPermission === 'function') {
+      try {
+        const perm = await DOE.requestPermission()
+        if (perm !== 'granted') {
+          setGyroNote('Permiso de giroscopio denegado')
+          return
+        }
+      } catch {
+        setGyroNote('No se pudo activar el giroscopio')
+        return
+      }
+    }
+    setGyroNote(null)
+    setGyroActive(true)
+  }, [gyroActive])
 
   return (
     <>
       <Canvas
       shadows="soft"
-      dpr={[1, 1.5]}
+      dpr={dpr}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
-      onPointerMissed={() => onSelect(null)}
+      onPointerMissed={() => { if (!povActive && !camino) onSelect(null) }}
     >
+      <PerformanceMonitor
+        ms={120}
+        iterations={3}
+        flipflops={3}
+        bounds={() => [30, 55]}
+        step={0.2}
+        onDecline={handlePerfDecline}
+        onIncline={handlePerfIncline}
+        onChange={handlePerfChange}
+      />
       <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
 
       {/* fondo: cúpula oscura + nebulosa FBM + estrellas, centradas en el mundo */}
       <group position={center}>
         {/* radio 12r + zoom máximo 6r < far 20r: la cúpula nunca se recorta */}
         <mesh scale={r * 12}>
-          <sphereGeometry args={[1, 32, 16]} />
+          <sphereGeometry args={[1, 24, 12]} />
           <meshBasicMaterial side={THREE.BackSide} depthWrite={false} fog={false}>
             <GradientTexture stops={[0, 0.55, 1]} colors={['#0d1124', '#060812', '#020307']} />
           </meshBasicMaterial>
@@ -727,7 +1135,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
         <Stars
           radius={r * 8}
           depth={r * 2}
-          count={2500}
+          count={1200}
           factor={Math.max(1.5, r * 0.035)}
           saturation={0.25}
           fade
@@ -736,12 +1144,12 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       </group>
 
       {/* Iluminación con contraste: clave cálida + relleno frío tenue */}
-      <Sol r={r} />
+      <Sol r={r} shadowsOn={cameraOnBall} selected={selected} />
       <hemisphereLight args={['#9bb6f0', '#161124', 0.22]} />
       <directionalLight position={[-1, 0.25, -1]} intensity={0.25} color="#6d92e8" />
 
       {/* entorno generado en local (sin HDR de red): reflejos sutiles en cristal y esferas */}
-      <Environment resolution={256} frames={1} environmentIntensity={0.45}>
+      <Environment resolution={128} frames={1} environmentIntensity={0.45}>
         <color attach="background" args={['#06091a']} />
         <Lightformer form="rect" intensity={1.6} color="#dce8ff" position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[12, 12, 1]} />
         <Lightformer form="rect" intensity={0.9} color="#7ea6f5" position={[-8, 2, 4]} rotation-y={Math.PI / 2} scale={[10, 4, 1]} />
@@ -751,15 +1159,60 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} focusWay={focusedWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
+      <Paths world={sim.world} sim={sim} focusWay={focusedWay} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
       {bollitas.map((b) => (
-        <Bollita key={b.id} b={b} sim={sim} selected={selected === b} pov={pov && selected === b} worldRadius={r} onSelect={onSelect} />
+        <Bollita
+          key={b.id}
+          b={b}
+          sim={sim}
+          selected={selected === b}
+          pov={pov && selected === b}
+          povMode={povActive}
+          worldRadius={r}
+          onSelect={povActive ? NOOP : onSelect}
+        />
       ))}
-      <CameraRig mundo={mundo} nodes={sim.world.nodes} selected={selected} follow={follow} pov={pov} cine={cine} suspend={camino} />
-      <VistaCamino mundo={sim.world} way={cameraWay} routeIndex={routeIndex} seekIndex={seekIndex} speed={caminoSpeed} paused={caminoPaused} active={camino} selectable={vista === 'mapa'} onSelectWay={onSelectWay} />
-      <PostFX dofOn={dofOn} selected={selected} />
+      <CameraRig
+        mundo={mundo}
+        nodes={sim.world.nodes}
+        selected={selected}
+        follow={follow}
+        pov={pov}
+        cine={cine}
+        suspend={caminoOn}
+        povControlRef={povControlRef}
+        pointerLockedRef={pointerLockedRef}
+        gyroActiveRef={gyroActiveRef}
+        horizonRef={horizonRef}
+        onCanvasReady={handleCanvasReady}
+      />
+      <PostFX dofOn={dofOn} selected={selected} highQuality={highQualityFx} ultraQuality={ultraQualityFx} />
+      <StatsProbe active={showStats} onSample={onStatsSample} />
+      <VistaCamino way={cameraWay} routeIndex={routeIndex} seek={seek} speed={caminoSpeed} paused={caminoPaused} active={caminoOn} progressRef={progressRef} />
     </Canvas>
-    <PovHint active={povActive} />
+    <PovPanel
+      active={povActive}
+      povControlRef={povControlRef}
+      pointerLocked={pointerLocked}
+      gyroActive={gyroActive}
+      gyroNote={gyroNote}
+      onCenter={handleCenter}
+      onTogglePointerLock={handleTogglePointerLock}
+      onToggleGyro={handleToggleGyro}
+      onExitPov={() => onExitPov?.()}
+    />
+    {cameraOnBall && (
+      <div
+        className="hint-horizonte"
+        style={{
+          position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', zIndex: 90,
+          padding: '3px 10px', borderRadius: 10, fontSize: 11, pointerEvents: 'none',
+          background: 'rgba(8, 12, 28, 0.62)', color: '#cfe0ff', border: '1px solid rgba(150, 180, 255, 0.25)',
+        }}
+      >
+        H · {horizon ? 'Horizonte estable' : 'Cámara pegada a la pared'}
+      </div>
+    )}
     </>
   )
 }

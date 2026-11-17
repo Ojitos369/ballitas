@@ -1,16 +1,20 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
-import { BALL_R } from '../../Core/world.js'
+import { BALL_R, wallFrame } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
 import WorldHtml from './WorldHtml.jsx'
 import {
   buildSkin,
+  createClayBodyMaterial,
+  GEO as SKIN_GEO,
   getBodyTexture,
   getChibiTextures,
   getEmotionTexture,
+  getIrisTexture,
+  getMat as getSkinMat,
   SkinAccessory,
   SkinMouth,
 } from './skins.js'
@@ -21,7 +25,9 @@ const vx = new THREE.Vector3()
 const vy = new THREE.Vector3()
 const vz = new THREE.Vector3()
 const vTmp = new THREE.Vector3()
+const frameFwd = new THREE.Vector3()
 const prevDirMap = new WeakMap()
+const smooth01 = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c) }
 
 // Expresiones chibi extendidas (heredan FACES y añaden emociones por evento/situación)
 const CHIBI_FACES = {
@@ -37,16 +43,22 @@ const CHIBI_FACES = {
 // Geometrías compartidas entre todas las bollitas para rendimiento con decenas de instancias
 const SHARED_GEO = {
   click: new THREE.SphereGeometry(1, 8, 6),
-  body: new THREE.SphereGeometry(1, 24, 18),
-  eye: new THREE.SphereGeometry(1, 14, 12),
-  brow: new THREE.BoxGeometry(0.32, 1, 0.06),
-  pupil: new THREE.SphereGeometry(1, 10, 8),
-  catchlight: new THREE.SphereGeometry(1, 6, 6),
-  sparkle: new THREE.PlaneGeometry(0.24, 0.24),
-  blush: new THREE.PlaneGeometry(0.32, 0.22),
-  sweat: new THREE.SphereGeometry(0.085, 8, 8),
-  tongue: new THREE.SphereGeometry(0.065, 8, 6),
-  limb: new THREE.SphereGeometry(1, 8, 8),
+  body: SKIN_GEO.body,
+  eye: new THREE.SphereGeometry(1, 18, 14),
+  iris: SKIN_GEO.irisDisc,
+  zenArc: new THREE.TorusGeometry(0.145, 0.028, 10, 22, Math.PI),
+  stitchArm: new THREE.CapsuleGeometry(0.026, 0.22, 6, 12),
+  brow: (() => {
+    const g = new THREE.CapsuleGeometry(0.5, 1.8, 6, 12)
+    g.rotateZ(Math.PI / 2)
+    return g
+  })(),
+  catchlight: new THREE.SphereGeometry(1, 10, 8),
+  sparkle: new THREE.PlaneGeometry(0.22, 0.22),
+  blush: new THREE.PlaneGeometry(0.34, 0.24),
+  sweat: new THREE.SphereGeometry(0.085, 10, 8),
+  tongue: new THREE.SphereGeometry(0.065, 10, 8),
+  limb: new THREE.SphereGeometry(1, 14, 12),
   ring: new THREE.TorusGeometry(1.3, 0.014, 6, 32),
   flash: new THREE.SphereGeometry(1, 12, 10),
   extOrb: new THREE.SphereGeometry(1, 14, 10),
@@ -92,6 +104,7 @@ function getSharedMats() {
     sweat: new THREE.MeshBasicMaterial({ color: '#7fd8ff' }),
     tongue: new THREE.MeshBasicMaterial({ color: '#ff7aa2' }),
     ring: new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, toneMapped: false }),
+    darkLine: new THREE.MeshBasicMaterial({ color: '#2c1328' }),
   }
   return sharedMats
 }
@@ -144,12 +157,13 @@ function resolveExpression(b, g) {
 }
 
 // Una bollita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Bollita({ b, sim, selected, pov = false, worldRadius = 110, onSelect }) {
+export default function Bollita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
   const root = useRef(); const bodyGroup = useRef()
   const orbGroupRef = useRef(); const extOrbRef = useRef(); const extHaloRef = useRef()
-  const eyeL = useRef(); const eyeR = useRef()
+  const eyeL = useRef(); const eyeR = useRef(); const zenEyesRef = useRef()
   const browL = useRef(); const browR = useRef(); const mouth = useRef()
   const blush = useRef(); const sweat = useRef(); const ring = useRef(); const pupils = useRef()
+  const pupilL = useRef(); const pupilR = useRef()
   const sparkleL = useRef(); const sparkleR = useRef(); const tongue = useRef()
   const footL = useRef(); const footR = useRef(); const handL = useRef(); const handR = useRef()
   const flash = useRef(); const emoSprite = useRef()
@@ -160,23 +174,30 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
   const dialogState = useRef({ init: false, nextCheck: 0 })
   const emoState = useRef({ kind: null, until: 0, start: 0, lastSeg: null, lastPhase: null })
   const microState = useRef({ nextWink: 5 + (b.id % 6), winkUntil: 0, nextBlep: 7 + (b.id % 5), blepUntil: 0 })
+  // carril: aterrizaje (squash), inclinación en curvas y voltereta al cambiar de pared
+  const laneFx = useRef({ squash: 0, lean: 0, up: new THREE.Vector3(0, 1, 0), prevT: new THREE.Vector3(), hasPrev: false, hadSw: false, wasAir: false })
 
   const g = b.genome.traits
   const color = useMemo(() => bodyColor(b.genome), [b])
   const skin = useMemo(() => buildSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyTex = useMemo(() => getBodyTexture(skin), [skin])
+  const bodyMat = useMemo(() => createClayBodyMaterial(bodyTex, 0.72), [bodyTex])
   const mats = useMemo(() => getSharedMats(), [])
   const chibiTex = useMemo(() => getChibiTextures(), [])
 
-  const limbMat = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.45 }), [color])
+  const limbMat = useMemo(() => getSkinMat(skin.baseColor, 0.72, 0.02), [skin.baseColor])
   const blushMat = useMemo(() => new THREE.MeshBasicMaterial({
     color: skin.blushColor,
     map: chibiTex.blush,
     transparent: true,
-    opacity: 0.4,
+    opacity: 0.45,
     depthWrite: false,
   }), [skin.blushColor, chibiTex.blush])
-  const pupilMat = useMemo(() => new THREE.MeshBasicMaterial({ color: skin.pupilColor }), [skin.pupilColor])
+  const irisMat = useMemo(() => new THREE.MeshBasicMaterial({
+    map: getIrisTexture(skin.eyeStyle, skin.irisTop, skin.irisBot, skin.pupilColor),
+    transparent: true,
+    alphaTest: 0.08,
+  }), [skin.eyeStyle, skin.irisTop, skin.irisBot, skin.pupilColor])
   const browMat = useMemo(() => new THREE.MeshBasicMaterial({ color: skin.browColor }), [skin.browColor])
   const flashMat = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#ffffff',
@@ -209,23 +230,51 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     toneMapped: false,
   }), [color])
 
+  const [nearCam, setNearCam] = useState(false)
+  const nearCamRef = useRef(false)
+
+  useEffect(() => () => {
+    bodyMat.dispose()
+    blushMat.dispose()
+    irisMat.dispose()
+    browMat.dispose()
+    flashMat.dispose()
+    emoMat.dispose()
+    extOrbMat.dispose()
+    extHaloMat.dispose()
+  }, [bodyMat, blushMat, irisMat, browMat, flashMat, emoMat, extOrbMat, extHaloMat])
+
   const r = BALL_R * (0.86 + g.apetito * 0.14)
-  // Ojos chibi más grandes y expresivos
-  const eyeSize = 0.23 + g.sociabilidad * 0.08
-  const pupilR = Math.max(0.085, skin.pupilSize * 1.45)
+  const eyeSize = 0.255 + g.sociabilidad * 0.065
+  const irisR = Math.max(0.18, eyeSize * 0.78)
   const phase0 = b.id * 1.7
+  const isCyclops = skin.eyeStyle === 'cyclops'
+  const isZen = skin.eyeStyle === 'zen'
+  const isAsym = skin.eyeStyle === 'asym'
 
   useFrame(({ camera, clock }, dt) => {
     const cdt = Math.min(dt, 0.1)
     const k = 1 - Math.exp(-9 * cdt)
     const t = clock.elapsedTime
 
-    // 1. Expresión viva según evento y situación
+    const rIntro = r * 14 + worldRadius * 0.12
+    const rExter = r * 24 + worldRadius * 0.36
+    const camDist = camera.position.distanceTo(b.pos)
+    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
+    const nextNear = nearCamRef.current ? camDist < 42 : camDist < 36
+    if (nextNear !== nearCamRef.current) {
+      nearCamRef.current = nextNear
+      setNearCam(nextNear)
+    }
+
+    // 1. Expresión viva según evento y situación (solo si el cuerpo es visible o está seleccionada)
     const F = resolveExpression(b, g)
     const c = cur.current
-    for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce', 'sparkle']) {
-      const target = F[key] ?? 0
-      c[key] += (target - c[key]) * k
+    if (extFactor < 0.96 || selected) {
+      for (const key of ['eye', 'brow', 'mouth', 'blush', 'sweat', 'bounce', 'sparkle']) {
+        const target = F[key] ?? 0
+        c[key] += (target - c[key]) * k
+      }
     }
 
     // 2. Tamaño dentro de tubos (~0.55x) con transición suave
@@ -277,21 +326,93 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
       }
     }
 
-    // 3. Squash & stretch elástico chibi
+    // 3a. Marco del carril (world.wallFrame): up hacia el eje del tubo, avance por la tangente
+    const fx = laneFx.current
+    let upV = b.up
+    let fwdV = b.dir
+    let flip = 0
+    const sw = b.phase === 'travel' ? b.sw : null
+    if (b.phase === 'travel' && b.seg?.lanes) {
+      const F = wallFrame(b.seg, b.ang ?? 0, b.segT, b.off ?? 0)
+      // suavizado del up: girar con la pared sin marear
+      if (fx.hasPrev) fx.up.lerp(F.up, k)
+      else fx.up.copy(F.up)
+      if (fx.up.lengthSq() < 1e-6) fx.up.copy(F.up)
+      fx.up.normalize()
+      frameFwd.copy(F.tangent)
+      if (fx.hasPrev) {
+        // inclinación hacia dentro de la curva (aceleración lateral ≈ giro de la tangente · velocidad)
+        const turn = vTmp.copy(F.tangent).sub(fx.prevT).dot(F.side) / Math.max(cdt, 1e-3)
+        const leanT = THREE.MathUtils.clamp(turn * (b.speed ?? 0) * 0.006, -0.55, 0.55)
+        fx.lean += (leanT - fx.lean) * k
+      }
+      fx.prevT.copy(F.tangent)
+      fx.hasPrev = true
+      // squash al despegar de un mecanismo y al aterrizar en la pared
+      if (sw && !fx.hadSw) fx.squash = 0.7
+      if ((fx.hadSw && !sw) || (fx.wasAir && !b.seg.air)) fx.squash = 1
+      fx.hadSw = Boolean(sw)
+      fx.wasAir = Boolean(b.seg.air)
+      upV = fx.up
+      fwdV = frameFwd
+      if (sw) {
+        const x = smooth01(sw.t)
+        if (sw.style === 'salto') flip = x * Math.PI * 2 // voltereta al cruzar el interior del tubo
+        else if (sw.style === 'caida') flip = -x * Math.PI
+        else if (sw.style === 'portal') s *= 1 - 0.85 * Math.sin(Math.PI * smooth01((sw.t - 0.3) / 0.4))
+      }
+    } else {
+      fx.hasPrev = false
+      fx.hadSw = false
+      fx.wasAir = false
+      fx.lean *= 1 - k
+    }
+    fx.squash = Math.max(0, fx.squash - cdt * 3.2)
+    if (bodyGroup.current) bodyGroup.current.rotation.set(flip, 0, fx.lean)
+
+    // 3b. Squash & stretch elástico chibi
     const bob = Math.sin(t * 4.5 * c.bounce + phase0)
     const vs = s * tubeScale
     const speedStretch = b.speed > 0.5 ? 1 + Math.min(b.speed / 36, 0.32) : 1 + bob * 0.075 * c.bounce
     const side = 1 / Math.sqrt(speedStretch)
-    root.current.scale.set(vs * side, vs * side, vs * speedStretch)
+    const sqY = 1 - 0.3 * fx.squash
+    const sqXZ = 1 + 0.15 * fx.squash
+    root.current.scale.set(vs * side * sqXZ, vs * side * sqY, vs * speedStretch * sqXZ)
 
-    // Rebote en destino y ajuste a pared en tubos al ser más pequeña
     const hop = b.phase === 'at' ? Math.abs(bob) * 0.14 * c.bounce : 0
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
-    root.current.position.copy(b.pos).addScaledVector(b.up, hop + wallOffset)
+    root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
+
+    // Si la bollita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
+    const bodyVisible = !pov && extFactor < 0.96
+    if (bodyGroup.current) bodyGroup.current.visible = bodyVisible
+    if (orbGroupRef.current) {
+      const showOrb = extFactor > 0.015 && s > 0.02
+      orbGroupRef.current.visible = showOrb
+      if (showOrb) {
+        orbGroupRef.current.position.copy(b.pos)
+        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
+        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
+        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
+        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
+        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
+        if (extHaloRef.current) {
+          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
+          extHaloRef.current.scale.set(haloS, haloS, 1)
+        }
+        extOrbMat.opacity = extFactor * 0.96
+        extHaloMat.opacity = extFactor * 0.86
+      }
+    }
+    if (ring.current) { ring.current.visible = selected && !pov; if (selected && !pov) ring.current.rotation.z = t * 2 }
+    if (!bodyVisible && !selected) {
+      if (emoSprite.current) emoSprite.current.visible = false
+      return
+    }
 
     // 4. Orientación suave
-    vy.copy(b.up)
-    vz.copy(b.dir).addScaledVector(vy, -b.dir.dot(vy))
+    vy.copy(upV)
+    vz.copy(fwdV).addScaledVector(vy, -fwdV.dot(vy))
     if (vz.lengthSq() > 1e-6 && vy.lengthSq() > 1e-6) {
       vz.normalize(); vx.crossVectors(vy, vz).normalize(); vy.crossVectors(vz, vx)
       m4.makeBasis(vx, vy, vz)
@@ -326,41 +447,76 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     }
     vTmp.copy(b.dir).sub(prevDir)
     prevDir.lerp(b.dir, Math.min(1, cdt * 6))
-    let lookX = THREE.MathUtils.clamp(-vTmp.dot(vx) * 0.45, -0.055, 0.055)
-    let lookY = THREE.MathUtils.clamp(vTmp.dot(vy) * 0.35, -0.04, 0.04)
+    let lookX = THREE.MathUtils.clamp(-vTmp.dot(vx) * 0.45, -0.05, 0.05)
+    let lookY = THREE.MathUtils.clamp(vTmp.dot(vy) * 0.35, -0.035, 0.035)
     if (b.speed < 0.4) {
-      lookX += Math.sin(t * 1.1 + phase0) * 0.035
-      lookY += Math.cos(t * 0.8 + phase0) * 0.02
+      lookX += Math.sin(t * 1.1 + phase0) * 0.03
+      lookY += Math.cos(t * 0.8 + phase0) * 0.018
     }
+
+    const zenClosed = isZen && c.eye < 1.28 && b.mood !== 'asustada'
+    if (zenEyesRef.current) zenEyesRef.current.visible = zenClosed
 
     const eyeScaleYL = Math.max(0.08, c.eye * blink * (isWinking ? 0.12 : 1))
     const eyeScaleYR = Math.max(0.08, c.eye * blink)
-    const eyeRBase = eyeSize + 0.05
-    eyeL.current.scale.set(eyeRBase * skin.eyeScaleX * skin.eyeAsym[0], eyeRBase * eyeScaleYL * skin.eyeScaleY * skin.eyeAsym[0], eyeRBase * 0.52)
-    eyeR.current.scale.set(eyeRBase * skin.eyeScaleX * skin.eyeAsym[1], eyeRBase * eyeScaleYR * skin.eyeScaleY * skin.eyeAsym[1], eyeRBase * 0.52)
+    const eyeRBase = eyeSize + 0.045
 
-    if (F.dizzy) {
-      const spin = t * 8
-      pupils.current.position.set(Math.cos(spin) * 0.045, Math.sin(spin) * 0.045, 0.07)
-    } else {
-      pupils.current.position.set(lookX, (c.eye < 0.5 ? -0.025 : 0) + lookY, 0.07)
+    if (eyeL.current) {
+      eyeL.current.visible = !zenClosed
+      eyeL.current.scale.set(
+        eyeRBase * skin.eyeScaleX * skin.eyeAsym[0],
+        eyeRBase * eyeScaleYL * skin.eyeScaleY * skin.eyeAsym[0],
+        eyeRBase * 0.52,
+      )
+    }
+    if (eyeR.current) {
+      eyeR.current.visible = !zenClosed && !isCyclops && !isAsym
+      eyeR.current.scale.set(
+        eyeRBase * skin.eyeScaleX * skin.eyeAsym[1],
+        eyeRBase * eyeScaleYR * skin.eyeScaleY * skin.eyeAsym[1],
+        eyeRBase * 0.52,
+      )
     }
 
-    const spVis = c.sparkle > 0.35 && blink > 0.5
+    if (pupils.current) {
+      pupils.current.visible = !zenClosed
+      if (F.dizzy) {
+        const spin = t * 8
+        pupils.current.position.set(Math.cos(spin) * 0.04, Math.sin(spin) * 0.04, 0.065)
+      } else {
+        pupils.current.position.set(lookX, (c.eye < 0.5 ? -0.022 : 0) + lookY, 0.065)
+      }
+    }
+    if (pupilL.current) pupilL.current.scale.set(1, Math.max(0.15, blink * (isWinking ? 0.18 : 1)), 1)
+    if (pupilR.current) {
+      pupilR.current.visible = !isCyclops && !isAsym
+      pupilR.current.scale.set(1, Math.max(0.15, blink), 1)
+    }
+
+    const spVis = c.sparkle > 0.35 && blink > 0.5 && !zenClosed
     const spPulse = 0.85 + Math.sin(t * 7 + phase0) * 0.25
-    if (sparkleL.current && sparkleR.current) {
+    if (sparkleL.current) {
       sparkleL.current.visible = spVis && !isWinking
-      sparkleR.current.visible = spVis
       sparkleL.current.scale.setScalar(c.sparkle * spPulse)
+    }
+    if (sparkleR.current) {
+      sparkleR.current.visible = spVis && !isCyclops && !isAsym
       sparkleR.current.scale.setScalar(c.sparkle * spPulse)
     }
 
-    browL.current.rotation.z = -c.brow - skin.browBaseTilt
-    browR.current.rotation.z = c.brow + skin.browBaseTilt
-    browL.current.position.y = browR.current.position.y = 0.46 + (c.eye - 1) * 0.13
+    if (browL.current) {
+      browL.current.rotation.z = -c.brow - skin.browBaseTilt
+      browL.current.position.y = (isCyclops ? 0.54 : 0.47) + (c.eye - 1) * 0.12
+    }
+    if (browR.current) {
+      browR.current.visible = !isCyclops
+      browR.current.rotation.z = c.brow + skin.browBaseTilt
+      browR.current.position.y = 0.47 + (c.eye - 1) * 0.12
+    }
+
     mouth.current.scale.set(skin.mouthWidth, Math.max(0.25, Math.abs(c.mouth) + 0.15), 1)
     if (tongue.current) tongue.current.visible = isBlep
-    blushMat.opacity = Math.min(0.92, Math.max(0.15, c.blush * 0.78 * skin.blushBoost))
+    blushMat.opacity = Math.min(0.92, Math.max(0.18, c.blush * 0.78 * skin.blushBoost))
     sweat.current.visible = c.sweat > 0.5
 
     // 7. Animación de patitas y manitas chibi
@@ -369,13 +525,21 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
     const stride = walking ? Math.sin(t * 14 + phase0) * 0.22 : (b.phase === 'at' ? Math.abs(bob) * 0.12 : 0)
     if (footL.current && footR.current) {
       const tuck = rolling ? 0.55 : 1
-      footL.current.position.set(-0.34, -0.92 * tuck + (walking ? Math.max(0, stride) * 0.4 : stride * 0.3), 0.18 + (walking ? stride : rolling ? -0.3 : 0))
-      footR.current.position.set(0.34, -0.92 * tuck + (walking ? Math.max(0, -stride) * 0.4 : stride * 0.3), 0.18 + (walking ? -stride : rolling ? -0.3 : 0))
+      footL.current.position.set(-0.34, -0.9 * tuck + (walking ? Math.max(0, stride) * 0.4 : stride * 0.3), 0.22 + (walking ? stride : rolling ? -0.3 : 0))
+      footR.current.position.set(0.34, -0.9 * tuck + (walking ? Math.max(0, -stride) * 0.4 : stride * 0.3), 0.22 + (walking ? -stride : rolling ? -0.3 : 0))
     }
     if (handL.current && handR.current) {
       const wave = F === CHIBI_FACES.alegria || F === CHIBI_FACES.risa ? Math.sin(t * 10 + phase0) * 0.22 : 0
-      handL.current.position.set(-0.92, -0.14 + Math.abs(wave), 0.22 - (rolling ? 0.25 : 0))
-      handR.current.position.set(0.92, -0.14 + Math.abs(wave), 0.22 - (rolling ? 0.25 : 0))
+      if (skin.hasPrayerHands && !rolling) {
+        handL.current.position.set(-0.085, -0.22 + Math.abs(wave) * 0.25, 0.94)
+        handR.current.position.set(0.085, -0.22 + Math.abs(wave) * 0.25, 0.94)
+      } else if (skin.hasDrumstick && !rolling) {
+        handL.current.position.set(-0.24, -0.28, 0.91)
+        handR.current.position.set(0.22, -0.24, 0.92)
+      } else {
+        handL.current.position.set(-0.82, -0.18 + Math.abs(wave), 0.38 - (rolling ? 0.28 : 0))
+        handR.current.position.set(0.82, -0.18 + Math.abs(wave), 0.38 - (rolling ? 0.28 : 0))
+      }
     }
 
     // 8. Efectos sprite sobre la cabeza (corazón, estrella, gota, ¿?, !)
@@ -425,102 +589,129 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
       dialogState.current.nextCheck = t + 0.12
       actualizarDialogoVivo(b, sim, dialogState.current)
     }
-
-    if (ring.current) { ring.current.visible = selected && !pov; ring.current.rotation.z = t * 2 }
-
-    // 10. LOD exterior: orbe luminoso visible a distancia dentro de los tubos y en planetas
-    const camDist = camera.position.distanceTo(root.current.position)
-    const rIntro = r * 14 + worldRadius * 0.12
-    const rExter = r * 24 + worldRadius * 0.36
-    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
-    if (bodyGroup.current) bodyGroup.current.visible = !pov && extFactor < 0.96
-    if (orbGroupRef.current) {
-      const showOrb = extFactor > 0.015 && s > 0.02
-      orbGroupRef.current.visible = showOrb
-      if (showOrb) {
-        orbGroupRef.current.position.copy(b.pos)
-        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
-        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
-        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
-        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
-        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
-        if (extHaloRef.current) {
-          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
-          extHaloRef.current.scale.set(haloS, haloS, 1)
-        }
-        extOrbMat.opacity = extFactor * 0.96
-        extHaloMat.opacity = extFactor * 0.86
-      }
-    }
   })
 
   const liveThought = obtenerGlobo(b, sim)
   const talking = liveThought && liveThought.until > sim.t
+  const eyeX = isCyclops ? 0 : 0.34
+  const eyeY = isCyclops ? 0.16 : 0.13
 
   return (
     <>
     <group
       ref={root}
-      onClick={(e) => (e.stopPropagation(), onSelect(b))}
-      onPointerOver={() => (document.body.style.cursor = 'pointer')}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onClick={(e) => { if (!pov && !povMode) { e.stopPropagation(); onSelect(b) } }}
+      onPointerOver={() => { if (!pov && !povMode) document.body.style.cursor = 'pointer' }}
+      onPointerOut={() => { if (!pov && !povMode) document.body.style.cursor = '' }}
     >
       {/* zona de clic generosa; sin sombra */}
-      <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} />
+      <mesh geometry={SHARED_GEO.click} material={mats.click} scale={r * 2.2} visible={!pov && !povMode} />
       <group ref={bodyGroup} scale={r} visible={!pov}>
-        <mesh geometry={SHARED_GEO.body} castShadow>
-          <meshStandardMaterial map={bodyTex} roughness={0.32} />
-        </mesh>
+        <mesh geometry={SHARED_GEO.body} material={bodyMat} scale={skin.bodyScale} castShadow />
 
-        {/* Ojos chibi grandes y brillantes */}
-        {[-1, 1].map((sg) => (
-          <group key={sg}>
+        {/* Ojos chibi grandes con iris degradado y doble reflejo */}
+        <mesh
+          ref={eyeL}
+          geometry={SHARED_GEO.eye}
+          material={mats.eye}
+          position={[-eyeX, eyeY, 0.85]}
+          scale={[1, 1, 0.55]}
+        />
+        <mesh
+          ref={browL}
+          geometry={SHARED_GEO.brow}
+          material={browMat}
+          position={[-eyeX, 0.47, 0.86]}
+          scale={[0.17, skin.browThick * 0.72, 0.045]}
+        />
+        <mesh
+          ref={eyeR}
+          geometry={SHARED_GEO.eye}
+          material={mats.eye}
+          position={[0.34, 0.13, 0.85]}
+          scale={[1, 1, 0.55]}
+        />
+        <mesh
+          ref={browR}
+          geometry={SHARED_GEO.brow}
+          material={browMat}
+          position={[0.34, 0.47, 0.86]}
+          scale={[0.17, skin.browThick * 0.72, 0.045]}
+        />
+
+        {/* Ojos cerrados serenos (Monje zen) */}
+        <group ref={zenEyesRef} visible={isZen}>
+          {[-1, 1].map((sg) => (
             <mesh
-              ref={sg < 0 ? eyeL : eyeR}
-              geometry={SHARED_GEO.eye}
-              material={mats.eye}
-              position={[sg * 0.35, 0.14, 0.86]}
-              scale={[1, 1, 0.55]}
+              key={sg}
+              geometry={SHARED_GEO.zenArc}
+              material={mats.darkLine}
+              position={[sg * 0.34, 0.14, 0.94]}
+              rotation={[0, sg * 0.24, Math.PI]}
             />
+          ))}
+        </group>
+
+        {/* Ojo derecho cosido en X (Zombi asimétrico) */}
+        {isAsym && (
+          <group position={[0.35, 0.13, 0.94]} rotation={[0, 0.25, 0]}>
+            <mesh geometry={SHARED_GEO.stitchArm} material={mats.darkLine} rotation={[0, 0, Math.PI / 4]} />
+            <mesh geometry={SHARED_GEO.stitchArm} material={mats.darkLine} rotation={[0, 0, -Math.PI / 4]} />
+          </group>
+        )}
+
+        {/* Iris degradado, pupila, doble reflejo y sparkle */}
+        <group ref={pupils}>
+          <group ref={pupilL} position={[-eyeX, eyeY, 0.985]} rotation={[0, isCyclops ? 0 : -0.24, 0]}>
+            <mesh geometry={SHARED_GEO.iris} material={irisMat} scale={irisR * (isCyclops ? 1.32 : 1)} />
+            {skin.hasCatchlight && (
+              <>
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[-0.045, 0.055, irisR * 0.3]}
+                  scale={[irisR * 0.34, irisR * 0.28, irisR * 0.15]}
+                />
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[0.04, -0.048, irisR * 0.3]}
+                  scale={irisR * 0.15}
+                />
+              </>
+            )}
             <mesh
-              ref={sg < 0 ? browL : browR}
-              geometry={SHARED_GEO.brow}
-              material={browMat}
-              position={[sg * 0.35, 0.46, 0.86]}
-              scale={[1, skin.browThick, 1]}
+              ref={sparkleL}
+              geometry={SHARED_GEO.sparkle}
+              material={mats.sparkle}
+              position={[0.05, 0.05, irisR * 0.36]}
             />
           </group>
-        ))}
-
-        {/* Pupilas con doble reflejo y sparkle */}
-        <group ref={pupils}>
-          {[-1, 1].map((sg) => (
-            <group key={sg} position={[sg * 0.35, 0.14, 0.99]}>
-              <mesh geometry={SHARED_GEO.pupil} material={pupilMat} scale={pupilR} />
-              {skin.hasCatchlight && (
-                <>
-                  <mesh
-                    geometry={SHARED_GEO.catchlight}
-                    material={mats.catchlight}
-                    position={[0.03, 0.036, pupilR * 0.72]}
-                    scale={pupilR * 0.36}
-                  />
-                  <mesh
-                    geometry={SHARED_GEO.catchlight}
-                    material={mats.catchlight}
-                    position={[-0.025, -0.028, pupilR * 0.74]}
-                    scale={pupilR * 0.18}
-                  />
-                </>
-              )}
-              <mesh
-                ref={sg < 0 ? sparkleL : sparkleR}
-                geometry={SHARED_GEO.sparkle}
-                material={mats.sparkle}
-                position={[0.04, 0.04, pupilR * 0.86]}
-              />
-            </group>
-          ))}
+          <group ref={pupilR} position={[0.34, 0.13, 0.985]} rotation={[0, 0.24, 0]}>
+            <mesh geometry={SHARED_GEO.iris} material={irisMat} scale={irisR} />
+            {skin.hasCatchlight && (
+              <>
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[-0.045, 0.055, irisR * 0.3]}
+                  scale={[irisR * 0.34, irisR * 0.28, irisR * 0.15]}
+                />
+                <mesh
+                  geometry={SHARED_GEO.catchlight}
+                  material={mats.catchlight}
+                  position={[0.04, -0.048, irisR * 0.3]}
+                  scale={irisR * 0.15}
+                />
+              </>
+            )}
+            <mesh
+              ref={sparkleR}
+              geometry={SHARED_GEO.sparkle}
+              material={mats.sparkle}
+              position={[0.05, 0.05, irisR * 0.36]}
+            />
+          </group>
         </group>
 
         {/* Boquita chibi y lengüita */}
@@ -543,8 +734,9 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
               key={sg}
               geometry={SHARED_GEO.blush}
               material={blushMat}
-              position={[sg * 0.58, -0.06, 0.79]}
-              rotation={[0, sg * 0.72, 0]}
+              position={[sg * 0.56, -0.09, 0.8]}
+              rotation={[0, sg * 0.68, 0]}
+              scale={skin.cheekPuff}
             />
           ))}
         </group>
@@ -552,11 +744,11 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
         {/* Gota de sudor */}
         <mesh ref={sweat} geometry={SHARED_GEO.sweat} material={mats.sweat} position={[0.72, 0.58, 0.5]} />
 
-        {/* Pequeñas patitas y manitas chibi */}
-        <mesh ref={footL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.34, -0.92, 0.18]} scale={[0.19, 0.12, 0.24]} />
-        <mesh ref={footR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.34, -0.92, 0.18]} scale={[0.19, 0.12, 0.24]} />
-        <mesh ref={handL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.92, -0.14, 0.22]} scale={[0.13, 0.13, 0.15]} />
-        <mesh ref={handR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.92, -0.14, 0.22]} scale={[0.13, 0.13, 0.15]} />
+        {/* Pequeñas patitas y manitas chibi redondeadas */}
+        <mesh ref={footL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.34, -0.9, 0.22]} scale={[0.18, 0.12, 0.22]} />
+        <mesh ref={footR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.34, -0.9, 0.22]} scale={[0.18, 0.12, 0.22]} />
+        <mesh ref={handL} geometry={SHARED_GEO.limb} material={limbMat} position={[-0.82, -0.18, 0.38]} scale={[0.13, 0.13, 0.15]} />
+        <mesh ref={handR} geometry={SHARED_GEO.limb} material={limbMat} position={[0.82, -0.18, 0.38]} scale={[0.13, 0.13, 0.15]} />
 
         {/* Accesorios del skin */}
         <SkinAccessory skin={skin} />
@@ -568,7 +760,7 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
       <mesh ref={ring} geometry={SHARED_GEO.ring} material={mats.ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} scale={r} visible={false} />
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
-      {(selected || talking) && !pov && (
+      {(selected || (talking && nearCam)) && !pov && (
         <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
           <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 155, fontSize: 11 }}>
             {selected && <b>{b.name}</b>}
@@ -583,9 +775,9 @@ export default function Bollita({ b, sim, selected, pov = false, worldRadius = 1
         ref={extOrbRef}
         geometry={SHARED_GEO.extOrb}
         material={extOrbMat}
-        onClick={(e) => (e.stopPropagation(), onSelect(b))}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onClick={(e) => { if (!pov && !povMode) { e.stopPropagation(); onSelect(b) } }}
+        onPointerOver={() => { if (!pov && !povMode) document.body.style.cursor = 'pointer' }}
+        onPointerOut={() => { if (!pov && !povMode) document.body.style.cursor = '' }}
       />
       <sprite ref={extHaloRef} material={extHaloMat} raycast={() => null} />
     </group>

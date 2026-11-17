@@ -1,48 +1,78 @@
-const VIEWS = [
-  ['mapa', 'Mapa', '1'],
-  ['camino', 'Camino', '2'],
-  ['externa', 'Bollita · externa', '3'],
-  ['interna', 'Bollita · interna', 'V'],
-]
+import { useEffect, useMemo } from 'react'
+import { perfilRuta } from '../World3D/Vistas.jsx'
 
-export default function ViewTabs({ vista, setVista, sim, focusWay, setFocusWay, routeIndex, setRouteIndex, selected, paused, setPaused, caminoSpeed, setCaminoSpeed, seekTo, onFollow }) {
-  const way = focusWay == null ? null : sim.world.ways[focusWay]
-  const route = way?.routes?.[routeIndex % (way.routes.length || 1)]
-  const events = route?.segments?.map((s, i) => ({ s, i })).filter(({ s }) => s.event) ?? []
-  const [eventCursor, setEventCursor] = useState(0)
-  useEffect(() => setEventCursor(0), [route])
-  const jumpEvent = (delta) => {
+const VIEWS = [['mapa', 'Mapa', '1'], ['camino', 'Camino', '2'], ['bollita', 'Bollita', '3']]
+const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0)
+
+// Pestañas de vista + ficha contextual (mapa: camino resaltado; camino: recorrido; bollita: ayuda).
+export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRouteIndex, selected, punto, paused, setPaused, caminoSpeed, setCaminoSpeed, seekTo, onFollow, progressRef }) {
+  const nodes = sim.world.nodes
+  const perfil = useMemo(() => perfilRuta(way, routeIndex), [way, routeIndex])
+  const { route, segs, total } = perfil
+  const events = segs.map((q, i) => ({ q, i })).filter(({ q }) => q.seg.event)
+  const prog = progressRef?.current
+  const actual = prog ? segs.findIndex((q) => prog.d <= q.start + q.length) : -1
+  const ri = way ? routeIndex % way.routes.length : 0
+  const jump = (dir) => {
     if (!events.length) return
-    const next = (eventCursor + delta + events.length) % events.length
-    setEventCursor(next)
-    seekTo(events[next].i)
+    const p = progressRef?.current
+    const actual = p ? segs.findIndex((q) => p.d <= q.start + q.length) : -1
+    const next = dir > 0 ? events.find((e) => e.i > actual) ?? events[0] : [...events].reverse().find((e) => e.i < actual) ?? events.at(-1)
+    seekTo(next.i)
   }
-  const cameraView = vista === 'externa' || vista === 'interna'
+  useEffect(() => {
+    if (vista !== 'camino') return undefined
+    const onKey = (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+      e.preventDefault()
+      jump(e.key === 'ArrowRight' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+  const enVivo = way ? sim.bollitas.filter((b) => b.phase === 'travel' && b.way === way) : []
+  const posBollita = (b) => {
+    const k = segs.findIndex((q) => q.seg === b.seg)
+    return k < 0 ? null : pct(segs[k].start + b.segT * segs[k].length, total)
+  }
+
   return <>
     <nav className="vistas-tabs" aria-label="Vistas del mundo" role="tablist">
-      {VIEWS.map(([id, label, key]) => <button key={id} role="tab" aria-selected={vista === id} className={vista === id ? 'activa' : ''}
-        onClick={() => { if (id === 'camino' && !way && selected?.way) { setFocusWay(selected.way.idx); const ri = selected.way.routes.findIndex((r) => r === selected.route); setRouteIndex(Math.max(0, ri)) } setVista(id) }}>
+      {VIEWS.map(([id, label, key]) => <button key={id} role="tab" aria-selected={vista === id} className={vista === id ? 'activa' : ''} onClick={() => goVista(id)}>
         {label}<kbd>{key}</kbd>
       </button>)}
     </nav>
-    {vista === 'mapa' && focusWay != null && way && <div className="vista-toast">
-      <strong>{way.theme.emoji} {way.theme.name}</strong><span>{sim.world.nodes[way.from].name} → {sim.world.nodes[way.to].name}</span>
-      <button onClick={() => setVista('camino')}>Entrar al camino</button>
+    {vista === 'mapa' && way && <div className="vista-toast">
+      <strong>{way.theme.emoji} {way.theme.name}</strong><span>{nodes[way.from].name} → {nodes[way.to].name}</span>
+      <button onClick={() => goVista('camino')}>Entrar al camino</button>
     </div>}
-    {vista === 'camino' && way && <aside className="camino-panel">
-      <header><small>RECORRIDO · {sim.world.nodes[way.from].name} → {sim.world.nodes[way.to].name}</small><button onClick={() => setVista('mapa')}>Salir ×</button></header>
+    {vista === 'camino' && !way && <div className="vista-toast"><span>Elige un camino en el mapa (tubo o etiqueta) o selecciona una bollita en ruta.</span><button onClick={() => goVista('mapa')}>Volver al mapa</button></div>}
+    {vista === 'camino' && way && <aside className="camino-panel" aria-label="Recorrido del camino">
+      <header><small>RECORRIDO · {nodes[way.from].name} → {nodes[way.to].name}</small><button onClick={() => goVista('mapa')}>Salir ×</button></header>
       <h2>{way.theme.emoji} {way.theme.name}</h2>
-      <div className="ruta-tabs">{way.routes.map((r, i) => <button key={r.idx} aria-pressed={i === routeIndex} onClick={() => setRouteIndex(i)}>Ruta {r.name}</button>)}</div>
-      {route && <><p>{route.profile.label} · {route.profile.speed} · {route.length.toFixed(0)} u</p>
-        <div className="camino-controls"><button onClick={() => setPaused(!paused)}>{paused ? '▶ Reanudar' : 'Ⅱ Pausar'}</button><label>Velocidad <input type="range" min="0.03" max="0.6" step="0.01" value={caminoSpeed} onChange={(e) => setCaminoSpeed(Number(e.target.value))} /></label></div>
-        <div className="evento-nav"><button disabled={!events.length} onClick={() => jumpEvent(-1)}>← Evento</button><span>{events.length ? `${eventCursor + 1}/${events.length} · ${events[eventCursor]?.s.name}` : 'Sin eventos'}</span><button disabled={!events.length} onClick={() => jumpEvent(1)}>Evento →</button></div>
-        <h3>Tramos y eventos</h3><ol className="tramos">{route.segments.map((s, i) => <li key={s.i} onClick={() => seekTo(i)}><span>{i + 1}. {s.emoji} {s.name}</span><small>{route.length ? Math.round(route.segments.slice(0, i + 1).reduce((n, q) => n + q.length, 0) / route.length * 100) : 0}%</small></li>)}</ol>
-        <h3>Bollitas en este camino</h3><div className="bollitas-camino">{sim.bollitas.filter((b) => b.phase === 'travel' && b.way?.idx === way.idx).map((b) => <button key={b.id} onClick={() => onFollow(b)}>{b.name} · {b.route?.name ?? '—'}</button>)}</div>
+      <div className="ruta-tabs">{way.routes.map((r, i) => <button key={r.idx} aria-pressed={i === ri} onClick={() => setRouteIndex(i)}>Ruta {r.name}</button>)}</div>
+      {route && <>
+        <p>{route.profile.label} · {route.profile.speed} · {route.length.toFixed(0)} u{prog ? ` · ${pct(prog.d, total)}%` : ''}</p>
+        <div className="camino-controls">
+          <button onClick={() => setPaused(!paused)}>{paused ? '▶ Reanudar' : 'Ⅱ Pausar'}</button>
+          <label>Velocidad <input type="range" min="0.01" max="0.3" step="0.005" value={caminoSpeed} onChange={(e) => setCaminoSpeed(Number(e.target.value))} /></label>
+        </div>
+        <div className="evento-nav">
+          <button disabled={!events.length} onClick={() => jump(-1)}>← Evento</button>
+          <span>{events.length ? `${events.length} evento${events.length > 1 ? 's' : ''}` : 'Sin eventos'}</span>
+          <button disabled={!events.length} onClick={() => jump(1)}>Evento →</button>
+        </div>
+        <h3>Tramos y eventos</h3>
+        <ol className="tramos">{segs.map((q, i) => <li key={q.seg.idx} className={i === actual ? 'actual' : ''} onClick={() => seekTo(i)}>
+          <span>{i + 1}. {q.seg.emoji} {q.seg.name}{q.seg.event ? ' ⚡' : ''}
+            {q.seg.switches?.length > 0 && <small> · {q.seg.switches.map((s) => `${s.emoji} ${s.name} ${pct(q.start + s.u * q.length, total)}%`).join(' · ')}</small>}
+          </span>
+          <small>{pct(q.start, total)}%</small>
+        </li>)}</ol>
+        <h3>Bollitas en este camino</h3>
+        <div className="bollitas-camino">{enVivo.length ? enVivo.map((b) => <button key={b.id} onClick={() => onFollow(b)}>{b.name}{b.route ? ` · ${b.route.name}` : ''}{posBollita(b) != null ? ` · ${posBollita(b)}%` : ''}</button>) : <small>Nadie por aquí ahora.</small>}</div>
       </>}
     </aside>}
-    {cameraView && selected && <div className="vista-toast vista-bollita"><strong>{selected.name}</strong><span>{vista === 'interna' ? 'Punto de vista interno' : 'Seguimiento externo'} · V cambia vista · Esc mapa</span></div>}
-    {vista === 'camino' && !way && <div className="vista-toast"><span>Elige un camino en el mapa o selecciona una bollita en ruta.</span><button onClick={() => setVista('mapa')}>Volver al mapa</button></div>}
+    {vista === 'bollita' && selected && <div className="vista-toast vista-bollita"><strong>{selected.name}</strong><span>{punto === 'interna' ? 'Punto de vista interno' : 'Seguimiento externo'} · V alterna · Esc mapa</span></div>}
   </>
 }
-import { useEffect, useState } from 'react'
-

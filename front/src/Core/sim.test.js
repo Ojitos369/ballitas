@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Sim, POP } from './sim.js'
-import { mulberry32, cityPath, NODE_R, OBSTACLES } from './world.js'
+import { Sim, POP, TIME_SCALE } from './sim.js'
+import {
+  mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
+  MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff,
+} from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
 
@@ -74,15 +77,16 @@ test('tramos: continuos, del puerto de salida al de entrada, sin atravesar nodos
   }
 })
 
-test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y sin atravesar nodos ajenos', () => {
+test('separación 3D: tubos de ways distintos >= 4.0 (fuera de 18u de nodos) y sin atravesar nodos ajenos', () => {
   const STEPS = 28
+  const TRIM = 18
   const waySamples = world.ways.map((w) => {
     const pts = []
     for (const s of w.segments) {
       for (let k = 0; k <= STEPS; k++) {
         const u = k / STEPS
-        if (s.kind === 'salida' && u * s.length < 12) continue
-        if (s.kind === 'llegada' && (1 - u) * s.length < 12) continue
+        if (s.kind === 'salida' && u * s.length < TRIM) continue
+        if (s.kind === 'llegada' && (1 - u) * s.length < TRIM) continue
         pts.push({ p: s.curve.getPointAt(u), r: s.radius, s })
       }
     }
@@ -98,7 +102,7 @@ test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y s
       for (const s of w1.segments) {
         for (const p of s.curve.getSpacedPoints(30)) {
           const d = p.distanceTo(n.pos)
-          assert.ok(d > NODE_R + 3, `${w1.id} ${s.kind} cerca de nodo ajeno ${n.name}: ${d.toFixed(2)}`)
+          assert.ok(d > NODE_R + 6, `${w1.id} ${s.kind} cerca de nodo ajeno ${n.name}: ${d.toFixed(2)}`)
         }
       }
     }
@@ -106,7 +110,7 @@ test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y s
       const w2 = world.ways[j]
       for (const h1 of w1.junctions) {
         for (const h2 of w2.junctions) {
-          assert.ok(h1.pos.distanceTo(h2.pos) >= 10, `hubs cercanos ${w1.id} y ${w2.id}`)
+          assert.ok(h1.pos.distanceTo(h2.pos) >= 24, `hubs cercanos ${w1.id} y ${w2.id}`)
         }
       }
       for (const a of waySamples[i]) {
@@ -117,7 +121,7 @@ test('separación 3D: tubos de ways distintos >= 2.0 (fuera de 12u de nodos) y s
       }
     }
   }
-  assert.ok(minClearance >= 2.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 2.0 (${minPair})`)
+  assert.ok(minClearance >= 4.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 4.0 (${minPair})`)
 })
 
 test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN', () => {
@@ -182,4 +186,151 @@ test('planeación anticipada: b.plan, memoria de rutas y sensibilidad a energía
   const uE = sim.planUtility(b, way, way.routes[0], dEnergia, peers, 1)
   const uP = sim.planUtility(b, way, way.routes[0], dPuntos, peers, 1)
   assert.ok(uE.total > uP.total, 'con poca energía prefiere destino de energía')
+})
+
+test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiempos de viaje 2-3x', () => {
+  assert.ok(WORLD_SCALE >= 2.5 && WORLD_SCALE <= 3.0)
+  assert.ok(TUBE_SCALE >= 1.6 && TUBE_SCALE <= 2.0)
+  assert.ok(TIME_SCALE >= 2.0 && TIME_SCALE <= 3.0)
+  for (let i = 0; i < world.nodes.length; i++) {
+    for (let j = i + 1; j < world.nodes.length; j++) {
+      const d = world.nodes[i].pos.distanceTo(world.nodes[j].pos)
+      assert.ok(d >= 200, `nodos muy cerca: ${d.toFixed(1)}`)
+    }
+  }
+  for (const r of world.routes) {
+    assert.equal(r.kinds.length, 6, '3 obstáculos por mitad')
+    assert.equal(r.segments.length, 8)
+    assert.ok(r.segments[2].event && r.segments[5].event, 'evento al centro de cada mitad')
+    assert.ok(r.segments[1].radius / BALL_R >= 3.8, 'tubo amplio respecto a la bollita')
+  }
+
+  // Medir duración real de viaje por circuito y supervivencia energética
+  const sim = new Sim({ rng: mulberry32(19) })
+  const entered = new Map()
+  const durations = []
+  for (let i = 0; i < 3000; i++) {
+    for (const b of sim.bollitas) {
+      if (b.phase === 'travel' && !entered.has(b.id)) entered.set(b.id, sim.t)
+      else if (b.phase !== 'travel' && b.phase !== 'dying' && b.phase !== 'gone' && entered.has(b.id)) {
+        durations.push(sim.t - entered.get(b.id))
+        entered.delete(b.id)
+      }
+      if (b.phase === 'dying' || b.phase === 'gone') entered.delete(b.id)
+    }
+    sim.tick(0.1)
+  }
+  assert.ok(durations.length >= 10, `pocos viajes completados: ${durations.length}`)
+  const avgDur = durations.reduce((s, d) => s + d, 0) / durations.length
+  assert.ok(avgDur >= 25 && avgDur <= 65, `duración media de viaje fuera de rango 2-3x: ${avgDur.toFixed(1)}s`)
+})
+
+test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y todos conectan', () => {
+  for (const w of world.ways) {
+    const themeKeys = new Set(Object.keys(THEME_MECHS[w.theme.id]))
+    for (const s of w.segments) {
+      const ids = s.lanes.map((l) => l.id)
+      assert.ok(ids.length >= 2 && ids.length <= 4 && ids.includes(0) && new Set(ids).size === ids.length, `${w.id} ${s.kind} carriles`)
+      if (s.air || s.kind === 'salida' || s.kind === 'llegada') assert.equal(ids.length, 4)
+      for (const l of s.lanes) assert.ok(l.angle >= 0 && l.angle < Math.PI * 2 && l.width > 0 && Number.isFinite(l.offset))
+      for (const sw of s.switches) {
+        assert.ok(ids.includes(sw.from) && ids.includes(sw.to) && sw.from !== sw.to, `${w.id} ${s.kind} switch ${sw.from}->${sw.to}`)
+        assert.ok(MECHANISMS[sw.kind], `mecanismo desconocido ${sw.kind}`)
+        assert.ok(sw.kind === s.event || sw.kind === s.kind || themeKeys.has(sw.kind), `${sw.kind} no pertenece al tramo ${s.kind} de ${w.theme.id}`)
+        assert.ok(sw.u > 0 && sw.u <= sw.uEnd && sw.uEnd <= 1 && sw.duration > 0)
+        assert.ok(['salto', 'pared', 'portal'].includes(sw.style) && sw.reward && sw.fail >= 0 && sw.fail < 0.5)
+      }
+      if (s.event) assert.ok(s.switches.some((sw) => sw.kind === s.event), `el evento ${s.event} es un mecanismo de cambio`)
+
+      // marco sobre la pared: up unitario hacia el eje, perpendicular a la tangente, sin saltos al avanzar
+      for (const l of s.lanes) {
+        let prev = null
+        for (let k = 0; k <= 120; k++) {
+          const u = k / 120
+          const F = laneFrame(s, l.id, u)
+          assert.ok(Math.abs(F.up.length() - 1) < 1e-6 && Math.abs(F.up.dot(F.tangent)) < 1e-6)
+          assert.ok(Math.abs(F.wall.distanceTo(F.axis) - s.radius) < 1e-6)
+          assert.ok(Math.abs(F.pos.distanceTo(F.axis) - (s.air ? 0 : s.radius - BALL_R)) < 1e-6)
+          if (!s.air) assert.ok(F.up.dot(F.axis.clone().sub(F.pos)) > 0, 'up apunta al eje')
+          if (prev) {
+            const turn = prev.tangent.angleTo(F.tangent)
+            const frameTurn = prev.dir.angleTo(F.dir)
+            assert.ok(frameTurn <= turn * 1.3 + 0.1,`${w.id} ${s.kind} carril ${l.id}: salto del marco en u=${u.toFixed(3)} (marco=${frameTurn.toFixed(3)}, tangente=${turn.toFixed(3)})`)
+          }
+          prev = F
+        }
+      }
+      // continuidad de la pared entre tramos con tangente continua (uniones fork/cross/merge incluidas)
+      for (const i of s.next) {
+        const n = w.segments[i]
+        if (s.curve.getTangentAt(1).angleTo(n.curve.getTangentAt(0)) > 0.05) continue
+        for (const l of s.lanes) {
+          const a = laneAngle(s, l.id, 1)
+          const d = wallFrame(s, a, 1, s.radius - BALL_R).pos.distanceTo(wallFrame(n, a, 0, n.radius - BALL_R).pos)
+          assert.ok(d < 0.3, `${w.id} ${s.kind}->${n.kind}: la pared salta ${d.toFixed(3)}`)
+        }
+      }
+    }
+    // todos los carriles conectan: desde el suelo de la salida se alcanza cada carril de cada tramo
+    const key = (s, id) => `${s.i}:${id}`
+    const seen = new Set([key(w.segments[0], 0)]); const q = [[w.segments[0], 0]]
+    while (q.length) {
+      const [s, id] = q.pop()
+      const push = (t, tid) => { if (!seen.has(key(t, tid))) { seen.add(key(t, tid)); q.push([t, tid]) } }
+      for (const sw of s.switches) if (sw.from === id) push(s, sw.to)
+      for (const i of s.next) {
+        const n = w.segments[i]
+        const to = nearestLane(n, laneAngle(s, id, 1))
+        assert.ok(n.lanes.some((l) => l.id === to))
+        push(n, to)
+      }
+    }
+    for (const s of w.segments) for (const l of s.lanes) assert.ok(seen.has(key(s, l.id)), `${w.id} ${s.kind}: carril ${l.id} inalcanzable`)
+  }
+})
+
+test('bollita en carril: pegada a la pared, sin atravesar el cristal, continua, usa y falla mecanismos', () => {
+  const sim = new Sim({ rng: mulberry32(5) })
+  const DT = 0.02
+  const prev = new Map()
+  const used = new Set()
+  let starts = 0; let fails = 0; let tube = 0; let glued = 0; let ceiling = 0
+  for (let i = 0; i < 6000; i++) {
+    sim.tick(DT)
+    for (const b of sim.bollitas) {
+      const p = prev.get(b.id)
+      if (b.phase !== 'travel') { prev.delete(b.id); continue }
+      const s = b.seg
+      assert.ok(Number.isFinite(b.ang + b.off + b.rail), 'carril sin NaN')
+      if (b.sw && (!p || p.sw !== b.sw)) { starts++; used.add(b.sw.s.kind) }
+      if (b.sw?.failed && !(p && p.failed)) fails++
+      if (b.snap <= 0) {
+        const axis = s.curve.getPointAt(b.segT)
+        const d = b.pos.distanceTo(axis)
+        assert.ok(Math.abs(d - b.off) < 1e-3, `posición fuera de su marco de pared en ${s.kind} u=${b.segT.toFixed(4)} (${d.toFixed(3)} vs ${b.off.toFixed(3)})`)
+        if (!s.air) {
+          assert.ok(d + BALL_R <= s.radius + 1e-3, `atraviesa el cristal en ${s.kind}: ${(d + BALL_R).toFixed(3)} > ${s.radius}`)
+          if (!b.sw) {
+            tube++
+            if (Math.abs(d - (s.radius - BALL_R)) < 0.1) glued++
+            if (Math.abs(angDiff(b.ang, Math.PI)) < 0.6) ceiling++
+          }
+        }
+      }
+      if (p && p.way === b.way) {
+        assert.ok(Math.abs(angDiff(p.ang, b.ang)) < 1.5, `salto de ángulo ${angDiff(p.ang, b.ang).toFixed(3)} en ${s.kind}`)
+        assert.ok(Math.abs(p.off - b.off) < 1, 'salto radial')
+        // (en esquinas cerradas el punto de la pared barre más rápido que el eje: se excluyen)
+        if (p.seg === s && p.snap <= 0 && b.snap <= 0 && !['embudo', 'cascada', 'zigzag'].includes(s.kind)) {
+          assert.ok(p.pos.distanceTo(b.pos) < 4.5,`salto de posición ${p.pos.distanceTo(b.pos).toFixed(3)} en ${s.kind}`)
+        }
+      }
+      prev.set(b.id, { way: b.way, seg: s, ang: b.ang, off: b.off, snap: b.snap, pos: b.pos.clone(), sw: b.sw, failed: !!b.sw?.failed })
+    }
+  }
+  assert.ok(tube > 0 && glued / tube > 0.75, `pegada a la pared sólo ${(100 * glued / tube).toFixed(1)}% del tiempo`)
+  assert.ok(starts >= 20, `pocos cambios de carril: ${starts}`)
+  assert.ok(used.size >= 6, `pocos tipos de mecanismo: ${[...used].join(',')}`)
+  assert.ok(fails >= 1, 'algún mecanismo falla')
+  assert.ok(ceiling > 0, 'alguna vez rueda por el techo')
 })
