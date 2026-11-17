@@ -1157,6 +1157,9 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       dpr={vista === 'mapa' ? dpr : Math.min(dpr, DPR_CERCA)}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
+      // En producción no se lee el log de cada programa: getProgramInfoLog espera la compilación en el primer
+      // uso (~130 ms al entrar a Camino) aunque el enlace paralelo (KHR_parallel_shader_compile) siga en curso.
+      onCreated={({ gl }) => { gl.debug.checkShaderErrors = import.meta.env.DEV }}
       onPointerMissed={() => { if (!povActive && !camino) onSelect(null) }}
     >
       <PerformanceMonitor
