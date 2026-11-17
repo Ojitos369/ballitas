@@ -773,12 +773,11 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
       <mesh ref={ring} geometry={SHARED_GEO.ring} material={mats.ring} position={[0, -r * 0.98, 0]} rotation={[Math.PI / 2, 0, 0]} scale={r} visible={false} />
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
-      {(selected || (talking && nearCam)) && !pov && (
-        <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={4} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 120 }}>
-          <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 120, fontSize: 9, borderWidth: 2, padding: '1px 6px', borderRadius: 10 }}>
-            {selected && <b>{b.name}</b>}
-            {talking && <span>{liveThought.emoji} {liveThought.text}</span>}
-            {selected && !talking && <span>{FACES[b.mood]?.emoji} {b.mood}</span>}
+      {/* solo el diálogo, encima de la cabeza: nombre y ánimo ya están en la ficha y tapaban a la ballita */}
+      {talking && (selected || nearCam) && !pov && (
+        <WorldHtml position={[0, r * 2.4 + 0.35, 0]} center distanceFactor={2.2} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 110 }}>
+          <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 110, fontSize: 8, borderWidth: 1.5, padding: '1px 5px', borderRadius: 8, opacity: 0.92 }}>
+            <span>{liveThought.emoji} {liveThought.text}</span>
           </div>
         </WorldHtml>
       )}
