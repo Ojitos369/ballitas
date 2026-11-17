@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Sim } from '../../Core/sim.js'
 import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
@@ -56,7 +56,7 @@ export default function Main() {
     }
     if (id === 'ballita') {
       let b = selected
-      if (!b || b.phase === 'gone') b = sim.ballitas.find((o) => o.phase !== 'dying' && o.phase !== 'gone')
+      if (!b || b.phase === 'gone' || b.phase === 'dying') b =sim.ballitas.find((o) => o.phase !== 'dying' && o.phase !== 'gone')
       if (!b) return
       setSelected(b)
       if (p) setPunto(p)
@@ -69,9 +69,9 @@ export default function Main() {
     const onKey = (e) => {
       if (e.key === 'F3') { e.preventDefault(); setShowStats((v) => !v); return }
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape') { if (!document.pointerLockElement) setVista('mapa'); return }
       const tag = e.target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.target?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'Escape') { if (!document.pointerLockElement) setVista('mapa'); return }
       const k = e.key.toLowerCase()
       if (k === 'c') setCine((v) => !v)
       else if (k === '1') goVista('mapa')
@@ -94,21 +94,24 @@ export default function Main() {
     }
   }
   const followBallita = (b) => {
-    if (!b) return
+    if (!b || b.phase === 'dying' || b.phase === 'gone') return
     setSelected(b)
     setPunto('externa')
     setVista('ballita')
   }
   // Si la ballita seguida muere, se vuelve sola al mapa.
   useEffect(() => {
-    if (selected?.phase === 'gone' && enBallita) setVista('mapa')
+    if (selected?.phase !== 'gone') return
+    if (enBallita) setVista('mapa')
+    setSelected(null)
   })
+  const exitPov = useCallback(() => setVista('mapa'), [])
 
   return (
     <div className="app">
       <Scene sim={sim} ballitas={sim.ballitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} showStats={showStats} onStatsSample={setStats}
         vista={vista} activeWay={activeWay} routeIndex={routeIndex} seek={seek} caminoSpeed={caminoSpeed} caminoPaused={caminoPaused} progressRef={progressRef}
-        onSelect={select} onSelectWay={pickWay} onExitPov={() => setVista('mapa')} />
+        onSelect={select} onSelectWay={pickWay} onExitPov={exitPov} />
       {showStats && <StatsHud stats={stats} />}
       <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBallita={followBallita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       <ViewTabs vista={vista} goVista={goVista} sim={sim} way={activeWay} routeIndex={routeIndex} setRouteIndex={(i) => { setRouteIndex(i); setSeek(null) }}

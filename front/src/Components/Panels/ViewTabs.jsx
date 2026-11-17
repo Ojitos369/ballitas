@@ -24,6 +24,8 @@ export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRout
     if (vista !== 'camino') return undefined
     const onKey = (e) => {
       if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+      const t = e.target
+      if (t?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t?.tagName)) return
       e.preventDefault()
       jump(e.key === 'ArrowRight' ? 1 : -1)
     }
