@@ -1,6 +1,6 @@
 // Registro de módulos de vida por tema. Cada archivo <id>.jsx se edita de forma independiente;
 // aquí solo se enlaza el id del tema con su componente (contrato en README.md).
-import { createElement, useEffect, useRef } from 'react'
+import { createElement, useLayoutEffect, useRef } from 'react'
 import { VidaGuard, disposeObject3D } from './base.jsx'
 import sombrio from './sombrio.jsx'
 import bosque from './bosque.jsx'
@@ -35,7 +35,8 @@ export const VIDA_PERF = {
 export function VidaDeCamino(props) {
   const id = props.way?.theme?.id
   const wrapRef = useRef(null)
-  useEffect(() => {
+  // Layout y no pasivo: al desmontar, r3f desengancha los hijos antes de los efectos pasivos y el traverse quedaba vacío (fuga).
+  useLayoutEffect(() => {
     VIDA_PERF.active += 1
     VIDA_PERF.totalMounts += 1
     VIDA_PERF.mountTimes.push(performance.now())

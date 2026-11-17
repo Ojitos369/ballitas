@@ -49,13 +49,12 @@ function disposeMaterialAndOwnedMaps(mat) {
   mat.dispose?.()
 }
 
-/** Libera geometrías y materiales NO compartidos dentro de un subárbol Object3D al desmontar. */
+/** Libera geometrías (todas) y materiales NO compartidos dentro de un subárbol Object3D al desmontar. */
 export function disposeObject3D(root) {
   if (!root) return
   root.traverse((obj) => {
-    if (obj.geometry && !obj.geometry.userData?.shared) {
-      obj.geometry.dispose?.()
-    }
+    // También las compartidas: dispose solo libera los buffers GPU y three los vuelve a subir si se reutilizan.
+    obj.geometry?.dispose?.()
     if (obj.material) {
       if (Array.isArray(obj.material)) {
         for (let i = 0; i < obj.material.length; i++) disposeMaterialAndOwnedMaps(obj.material[i])
@@ -460,8 +459,9 @@ export function Instanced({ geo, mat, items, castShadow = false, receiveShadow =
 // ═══════════════════════════ TEXTO EN CANVAS (CACHEADO) ═══════════════════════════
 const textCache = new Map()
 const matCache = new Map()
-const MAX_TEXT_CACHE = 128
-const MAX_MAT_CACHE = 160
+// Topes bajos: los carteles en uso están retenidos (refs); esto solo acota los de vidas ya desmontadas (~1 MB GPU c/u).
+const MAX_TEXT_CACHE = 24
+const MAX_MAT_CACHE = 32
 let cacheEpoch = 0
 let cacheEpochPending = false
 

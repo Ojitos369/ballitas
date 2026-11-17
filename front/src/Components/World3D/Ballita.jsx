@@ -14,6 +14,8 @@ import {
   getChibiTextures,
   getEmotionTexture,
   getIrisTexture,
+  retainIrisTex,
+  releaseIrisTex,
   getMat as getSkinMat,
   SkinAccessory,
   SkinMouth,
@@ -203,6 +205,12 @@ export default function Ballita({ b, sim, selected, pov = false, povMode = false
     transparent: true,
     alphaTest: 0.08,
   }), [skin.eyeStyle, skin.irisTop, skin.irisBot, skin.pupilColor])
+  // Retiene el iris mientras viva la ballita: la caché solo poda (y libera) los de ballitas muertas.
+  useEffect(() => {
+    const tex = irisMat.map
+    retainIrisTex(tex)
+    return () => releaseIrisTex(tex)
+  }, [irisMat])
   const browMat = useMemo(() => new THREE.MeshBasicMaterial({ color: skin.browColor }), [skin.browColor])
   const flashMat = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#ffffff',

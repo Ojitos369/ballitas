@@ -102,7 +102,8 @@ export const PATTERN_LABEL = {
 
 // ═══════════════════════════ CATÁLOGO `SKIN_PARTS` ═══════════════════════════
 
-const part = (id, label, emoji, category, defaults = {}) => ({ id, label, emoji, category, defaults })
+// Los defaults también se exponen arriba: los consumidores leen `pieza.tilt`/`pieza.thick` directo (antes daba NaN).
+const part = (id, label, emoji, category, defaults = {}) => ({ ...defaults, id, label, emoji, category, defaults })
 
 export const SKIN_PARTS = {
   body: {
@@ -719,7 +720,8 @@ export function createClayBodyMaterial(map, roughness = 0.72) {
 // ═══════════════════════════ TEXTURAS PROCEDURALES (CUERPO, IRIS, CALAVERA) ═══════════════════════════
 
 const texCache = new Map()
-const MAX_TEX = 64
+// Tope bajo: las vivas están retenidas (refs) y no cuentan; esto solo acota las de ballitas ya muertas.
+const MAX_TEX = 16
 
 function bodyTexKey(skin) {
   return `${skin.seed}|${skin.patternType}|${skin.baseColor}|${skin.accentColor}`
@@ -897,7 +899,7 @@ function makeCanvasTex(size, drawFn) {
 
 const irisTexCache = new Map()
 const irisTexMeta = new WeakMap()
-const MAX_IRIS_TEX = 64
+const MAX_IRIS_TEX = 16
 
 function irisTexKey(eyeStyle, irisTop, irisBot, pupilColor) {
   return `${eyeStyle}|${irisTop}|${irisBot}|${pupilColor}`
@@ -914,12 +916,12 @@ function pruneIrisTexCache(protectEpoch = -1) {
   }
 }
 
-function retainIrisTex(tex) {
+export function retainIrisTex(tex) {
   const entry = tex && irisTexMeta.get(tex)
   if (entry) entry.refs += 1
 }
 
-function releaseIrisTex(tex) {
+export function releaseIrisTex(tex) {
   const entry = tex && irisTexMeta.get(tex)
   if (entry && entry.refs > 0) entry.refs -= 1
   pruneIrisTexCache()

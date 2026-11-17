@@ -163,6 +163,13 @@ const NEBULA_FRAG = /* glsl */ `
 
 // Paso variable (troceado a STEP como máximo): con paso fijo la ballita avanzaba a saltos, muy visible de cerca.
 function SimDriver({ sim, speed }) {
+  const clock = useThree((s) => s.clock)
+  // Pestaña oculta: rAF se detiene (la sim se pausa sola); al volver se descarta el hueco para que nada salte.
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'visible') clock.getDelta() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [clock])
   useFrame((_, dt) => {
     for (let t = Math.min(dt, 0.1) * speed; t > 0; t -= STEP) sim.tick(Math.min(t, STEP))
   })
@@ -795,6 +802,13 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 function Sol({ r, shadowsOn, selected }) {
   const luz = useRef()
   const controls = useThree((s) => s.controls)
+  // castShadow fijo: alternarlo cambia el hash de luces y recompila todos los shaders (cuadros de segundos).
+  // Fuera de la vista de ballita la sombra ni se renderiza ni se ve.
+  useEffect(() => {
+    if (!luz.current) return
+    luz.current.shadow.autoUpdate = shadowsOn
+    luz.current.shadow.intensity = shadowsOn ? 1 : 0
+  }, [shadowsOn])
   useFrame(() => {
     if (!luz.current) return
     const tgt = shadowsOn && selected && selected.phase !== 'gone' ? selected.pos : controls?.target
@@ -806,7 +820,7 @@ function Sol({ r, shadowsOn, selected }) {
   return (
     <directionalLight
       ref={luz}
-      castShadow={shadowsOn}
+      castShadow
       intensity={1.35}
       color="#ffe6c4"
       shadow-mapSize={[512, 512]}
@@ -819,6 +833,8 @@ function Sol({ r, shadowsOn, selected }) {
   )
 }
 
+const CA_ON = [0.00045, 0.00045]
+const CA_OFF = [0, 0]
 function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
@@ -832,7 +848,8 @@ function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
 
   return (
     <EffectComposer multisampling={0}>
-      {highQuality && <SMAA />}
+      {/* Composición fija: montar/desmontar efectos recrea el EffectPass y recompila; la calidad alta solo cambia props */}
+      <SMAA />
       {ultraQuality && dofOn && (
         <DepthOfField
           ref={dofRef}
@@ -842,10 +859,10 @@ function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
           resolutionScale={0.5}
         />
       )}
-      <Bloom mipmapBlur luminanceThreshold={highQuality ? 1.1 : 1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
-      {highQuality && <ChromaticAberration offset={[0.00045, 0.00045]} radialModulation modulationOffset={0.35} />}
+      <Bloom mipmapBlur luminanceThreshold={1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
+      <ChromaticAberration offset={highQuality ? CA_ON : CA_OFF} radialModulation modulationOffset={0.35} />
       <Vignette eskil={false} offset={0.22} darkness={highQuality ? 0.48 : 0.45} />
-      {highQuality && <Noise opacity={0.025} />}
+      <Noise opacity={highQuality ? 0.025 : 0} />
       <ToneMapping mode={TONE_MAPPING_AGX} middleGrey={0.52} />
     </EffectComposer>
   )
