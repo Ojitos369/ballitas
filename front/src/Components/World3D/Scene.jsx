@@ -16,6 +16,7 @@ import { NODE_R, mulberry32 } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Bollita from './Bollita.jsx'
+import { VistaCamino } from './Vistas.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -226,7 +227,7 @@ function ConstellationDome({ r }) {
 }
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
-function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
+function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false }) {
   const controls = useRef()
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
@@ -364,6 +365,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
   }, [])
 
   useFrame((_, dt) => {
+    if (suspend) return
     const c = controls.current
     const h = Math.min(dt, 0.1)
     cineClock.current += h
@@ -584,7 +586,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
   return (
     <OrbitControls
       ref={controls}
-      enabled={!povActive}
+      enabled={!povActive && !suspend}
       makeDefault
       enableDamping
       dampingFactor={0.08}
@@ -690,13 +692,15 @@ function PovHint({ active }) {
   )
 }
 
-export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, onSelect }) {
+export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, vista = 'mapa', focusWay = null, activeWay = null, routeIndex = 0, seekIndex = null, caminoSpeed = 0.16, caminoPaused = false, onSelect, onSelectWay }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
-  const forceFocusDetail = Boolean((follow || pov) && selected && selected.phase !== 'gone')
-  const focusWay = selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null
+  const cameraWay = activeWay ?? (selected && selected.phase !== 'gone' ? (selected.seg?.way ?? selected.way ?? null) : null)
+  const camino = vista === 'camino'
+  const forceFocusDetail = Boolean(camino || ((follow || pov) && selected && selected.phase !== 'gone'))
+  const focusedWay = camino ? cameraWay?.idx ?? focusWay : (vista === 'mapa' ? focusWay : (selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null))
 
   return (
     <>
@@ -747,11 +751,12 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
+      <Paths world={sim.world} focusWay={focusedWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
       {bollitas.map((b) => (
         <Bollita key={b.id} b={b} sim={sim} selected={selected === b} pov={pov && selected === b} worldRadius={r} onSelect={onSelect} />
       ))}
-      <CameraRig mundo={mundo} nodes={sim.world.nodes} selected={selected} follow={follow} pov={pov} cine={cine} />
+      <CameraRig mundo={mundo} nodes={sim.world.nodes} selected={selected} follow={follow} pov={pov} cine={cine} suspend={camino} />
+      <VistaCamino mundo={sim.world} way={cameraWay} routeIndex={routeIndex} seekIndex={seekIndex} speed={caminoSpeed} paused={caminoPaused} active={camino} selectable={vista === 'mapa'} onSelectWay={onSelectWay} />
       <PostFX dofOn={dofOn} selected={selected} />
     </Canvas>
     <PovHint active={povActive} />
