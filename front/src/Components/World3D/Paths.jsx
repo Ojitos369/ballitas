@@ -3992,7 +3992,7 @@ function disposeMats(mats) {
   }
 }
 
-function Way({ way, world = null, focused, detailActive = false, worldRadius = 110, forceFocusDetail = false, wayDistRef }) {
+function Way({ way, world = null, focused, detailActive = false, worldRadius = 110, forceFocusDetail = false, wayDistRef, onPickWay }) {
   const id = way.theme.id
   const focusU = useMemo(() => ({ value: 1 }), [])
   const detailU = useMemo(() => ({ value: 0 }), [])
@@ -4073,7 +4073,7 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
   return (
     <group>
       {/* Tubo de cristal principal (siempre visible, adapta brillo y ruido por uDetail) */}
-      {d.tube && <mesh geometry={d.tube} material={mats.tube} />}
+      {d.tube && <mesh geometry={d.tube} material={mats.tube} onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(way) } : undefined} />}
 
       {/* Túnel-banda del hábitat: celosía blanca, cristal en rejilla, pasarelas y luces de ciudad */}
       <TunelBanda way={way} mats={tunelMats} nearRef={tunelNearRef} />
@@ -4131,7 +4131,7 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
 
 const MAX_ACTIVE_VIDA = 2
 
-export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false }) {
+export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
   const wayMetas = useMemo(() => world.ways.map((w) => {
     const pts = []
     for (const s of w.segments) {
@@ -4247,6 +4247,7 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
           worldRadius={worldRadius}
           forceFocusDetail={forceFocusDetail}
           wayDistRef={wayDistRef}
+          onPickWay={onPickWay}
         />
       ))}
       {world.circuits.map((c) => {
@@ -4261,7 +4262,9 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
                 opacity: isFocusedCircuit ? 1 : 0.16,
                 filter: isFocusedCircuit ? 'none' : 'saturate(0.3) brightness(0.65)',
                 transition: 'opacity 0.25s ease, filter 0.25s ease',
+                ...(onPickWay ? { pointerEvents: 'auto', cursor: 'pointer' } : null),
               }}
+              onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(c.ways[0]) } : undefined}
             >
               {c.theme.emoji} {c.theme.name.replace('Camino ', '')}
             </div>
