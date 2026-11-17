@@ -11,6 +11,7 @@ exacta entre albedo, normal (tangent-space OpenGL +Y) y emissive.
 from __future__ import annotations
 
 import math
+import sys
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -755,6 +756,37 @@ def gen_asphalt() -> tuple[np.ndarray, np.ndarray]:
     return albedo, normal
 
 
+# Bandas de la sección de pista en U (deben coincidir con TRACK_U de vida/pista.jsx):
+# arcén | bordillo | asfalto | bordillo | arcén. V tilea cada TRACK_TILE (4) unidades de mundo.
+TRACK_U = (0.16, 0.26, 0.74, 0.84)
+
+
+def gen_track() -> tuple[np.ndarray, np.ndarray]:
+    """Máscara de pista 128x256 (no es color: el shader pone los colores del tema).
+    R: grano (asfalto fino, arcén más suave), G: bordillo alternado (1 = color A),
+    B: pintura (línea central discontinua y líneas de borde)."""
+    w, h = 128, 256
+    fine = (0.55 * periodic_fbm(h, 16, 3, seed=2101) + 0.45 * periodic_value_noise(h, 64, seed=2102))[:, :w]
+    soft = periodic_fbm(h, 6, 3, seed=2103)[:, :w]
+    u = (np.arange(w, dtype=np.float32) + 0.5) / w
+    v = (np.arange(h, dtype=np.float32) + 0.5) / h
+    uu, vv = np.meshgrid(u, v)
+    a0, a1, a2, a3 = TRACK_U
+    shoulder = (uu < a0) | (uu > a3)
+    grain = np.where(shoulder, 0.72 + 0.28 * soft, 0.84 + 0.16 * fine)
+    # 8 bloques de bordillo por tile (0,5 u cada uno), borde suavizado de 1 px
+    ph = (vv * 8.0) % 2.0
+    curb = smoothstep(0.0, 0.03, ph) * (1.0 - smoothstep(0.97, 1.0, ph))
+    ax = 0.5 / w
+    dash = smoothstep(0.012 + ax, 0.012 - ax, np.abs(uu - 0.5)) * smoothstep(0.0, 0.02, (vv * 2.0) % 1.0) * (1.0 - smoothstep(0.48, 0.5, (vv * 2.0) % 1.0))
+    edge = np.maximum(smoothstep(0.007 + ax, 0.007 - ax, np.abs(uu - (a1 + 0.012))), smoothstep(0.007 + ax, 0.007 - ax, np.abs(uu - (a2 - 0.012))))
+    paint = np.maximum(dash, edge)
+    rgb = np.stack([grain, curb, paint], axis=-1)
+    layout = np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8)
+    height = np.where(shoulder, 0.5 * soft, 0.35 * fine) + 0.25 * paint
+    return layout, height_to_normal(height.astype(np.float32), strength=2.2)
+
+
 # ---------------------------------------------------------------------------
 # Verificación de tiling (mosaico 2x2)
 # ---------------------------------------------------------------------------
@@ -773,9 +805,21 @@ def make_2x2_preview(path: Path, tile_x: bool = True, tile_y: bool = True) -> No
     canvas.save(PREVIEW_DIR / f"tile2x2_{path.name}", format="PNG", optimize=True)
 
 
+def save_track() -> list[tuple[str, int]]:
+    layout, normal = gen_track()
+    out = []
+    for fname, arr in (("track_layout.png", layout), ("track_normal.png", normal)):
+        out.append((fname, save_png_optimized(arr, OUT_DIR / fname, mode="RGB")))
+    return out
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    if "--pista" in sys.argv:  # solo las texturas de pista, sin regenerar el resto
+        for fname, b in save_track():
+            print(f"  {fname:24s} {b / 1024.0:6.1f} KB")
+        return
 
     themes = {
         "sombrio": gen_sombrio,
@@ -824,6 +868,8 @@ def main() -> None:
     for fname, arr in (("asphalt.png", a_alb), ("asphalt_normal.png", a_nrm)):
         p = OUT_DIR / fname
         report.append((fname, save_png_optimized(arr, p, mode="RGB")))
+
+    report.extend(save_track())
 
     # Previews 2x2 de verificación de costuras
     preview_targets = [

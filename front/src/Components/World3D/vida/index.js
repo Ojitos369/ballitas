@@ -1,29 +1,9 @@
-// Registro de módulos de vida por tema. Cada archivo <id>.jsx se edita de forma independiente;
-// aquí solo se enlaza el id del tema con su componente (contrato en README.md).
+// Contenido de cerca de cada camino: solo la pista de carreras del tema y sus mecanismos (pista.jsx).
+// Los antiguos dioramas por tema (gradas, carteles, criaturas, ciudad) se retiraron para dejar el tubo
+// limpio; viven en el historial de git si hace falta recuperar alguna pieza.
 import { createElement, useLayoutEffect, useRef } from 'react'
 import { VidaGuard, disposeObject3D } from './base.jsx'
-import sombrio from './sombrio.jsx'
-import bosque from './bosque.jsx'
-import mar from './mar.jsx'
-import desierto from './desierto.jsx'
-import hielo from './hielo.jsx'
-import volcan from './volcan.jsx'
-import cristal from './cristal.jsx'
-import nubes from './nubes.jsx'
-import neon from './neon.jsx'
-import jardin from './jardin.jsx'
-import Ciudad from './ciudad.jsx'
-
-export const VIDA = { sombrio, bosque, mar, desierto, hielo, volcan, cristal, nubes, neon, jardin }
-
-function VidaVacia() {
-  return null
-}
-
-/** getVida(themeId) -> componente `Vida({ way, world, detail, focused, time })` (o uno vacío). */
-export function getVida(themeId) {
-  return VIDA[themeId] ?? VidaVacia
-}
+import Pista from './pista.jsx'
 
 export const VIDA_PERF = {
   active: 0,
@@ -31,7 +11,7 @@ export const VIDA_PERF = {
   mountTimes: [],
 }
 
-/** Monta el módulo del tema del `way` dentro de un VidaGuard (un fallo no tumba la escena). */
+/** Monta la pista del `way` dentro de un VidaGuard (un fallo no tumba la escena). */
 export function VidaDeCamino(props) {
   const id = props.way?.theme?.id
   const wrapRef = useRef(null)
@@ -52,8 +32,7 @@ export function VidaDeCamino(props) {
   return createElement(
     'group',
     { ref: wrapRef },
-    createElement(VidaGuard, { themeId: id }, createElement(getVida(id), props)),
-    createElement(VidaGuard, { themeId: `${id}:ciudad` }, createElement(Ciudad, props)),
+    createElement(VidaGuard, { themeId: id }, createElement(Pista, props)),
   )
 }
 
