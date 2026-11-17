@@ -1553,7 +1553,7 @@ export function generateSkin(genome, arch, options = {}) {
     baseHue: bodyHue,
     accentHue,
     accentLight,
-    baseColor,
+    baseColor: bodyColor,
     accentColor,
     softColor,
     deepColor,
