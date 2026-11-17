@@ -353,7 +353,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     }
 
     const onPointerMove = (e) => {
-      if (document.pointerLockElement === dom) return
+      if (document.pointerLockElement === dom) { pointerId = null; povDragging.current = false; return }
       if (e.pointerId !== pointerId) return
       const dx = e.clientX - lastX
       const dy = e.clientY - lastY
@@ -458,8 +458,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
   // Posición de la vista general: encaja el mundo también en pantallas verticales.
   const casa = () => {
     const v = THREE.MathUtils.degToRad(FOV / 2)
-    const h = Math.min(v, Math.atan(Math.tan(v) * camera.aspect))
-    return off.copy(mundo.center).addScaledVector(VISTA_DIR, mundo.r / Math.sin(h))
+    const h = Math.min(v, Math.atan(Math.tan(v) * Math.max(0.3, camera.aspect || 1)))
+    // maxDistance de OrbitControls es r*6: si la casa lo supera, 'volviendo' nunca termina.
+    return off.copy(mundo.center).addScaledVector(VISTA_DIR, Math.min(mundo.r / Math.sin(h), mundo.r * 5.8))
   }
 
   useLayoutEffect(() => {
@@ -483,7 +484,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     if (!povActive && typeof window !== 'undefined' && window.__ballitasPov?.active) {
       window.__ballitasPov.active = false
     }
-    if (povActive) {
+    if (povActive && selected?.phase !== 'gone') {
       const st = povControlRef.current
       if (modo.current !== 'pov' || ultima.current !== selected) {
         modo.current = 'pov'
@@ -855,7 +856,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
-  const cameraWay = activeWay ?? (selected && selected.phase !== 'gone' ? (selected.seg?.way ?? selected.way ?? null) : null)
+  const cameraWay = activeWay ?? (vista !== 'camino' && selected && selected.phase !== 'gone' ? (selected.seg?.way ?? selected.way ?? null) : null)
   const focusWay = activeWay?.idx ?? null
   const camino = vista === 'camino'
   const caminoOn = Boolean(camino && cameraWay)

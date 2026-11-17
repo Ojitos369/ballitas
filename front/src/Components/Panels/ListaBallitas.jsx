@@ -110,6 +110,7 @@ export default function ListaBallitas({ sim, vivas, selected, onSelect, follow, 
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
+        e.stopImmediatePropagation()
         setOpen(false)
         btnRef.current?.focus()
       }

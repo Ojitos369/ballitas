@@ -47,7 +47,7 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
   useEffect(() => {
     if (!active || !perfil.total) return
     const s = st.current
-    s.d = 0; s.goal = null; s.fly = 0; s.yaw = 0; s.pitch = 0
+    s.d = 0; s.goal = null; s.fly = 0; s.yaw = 0; s.pitch = 0; s.initQ = false
     s.p0.copy(camera.position); s.q0.copy(camera.quaternion)
     const dA = Math.min(radius * 6, perfil.total * 0.1)
     muestrea(perfil, dA, _p, _t)
@@ -61,27 +61,33 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
     if (!seek || !perfil.segs[seek.i]) return
     const q = perfil.segs[seek.i]
     st.current.goal = q.start + q.length * 0.15
+    st.current.fly = 1 // un salto a evento cancela el vuelo inicial
   }, [seek, perfil])
 
   useEffect(() => {
     if (!active) return
     const el = gl.domElement
     const s = st.current
-    const down = (e) => { if (e.button === 0) s.drag = true }
+    let lx = 0; let ly = 0; let pid = null
+    const down = (e) => { if (e.button === 0 && pid === null) { s.drag = true; pid = e.pointerId; lx = e.clientX; ly = e.clientY } }
     const move = (e) => {
-      if (!s.drag) return
-      s.yaw -= e.movementX * 0.004
-      s.pitch = THREE.MathUtils.clamp(s.pitch - e.movementY * 0.004, -1.2, 1.2)
+      if (!s.drag || e.pointerId !== pid) return
+      s.yaw -= (e.clientX - lx) * 0.004
+      s.pitch = THREE.MathUtils.clamp(s.pitch - (e.clientY - ly) * 0.004, -1.2, 1.2)
+      lx = e.clientX; ly = e.clientY
     }
-    const up = () => { s.drag = false }
+    const up = () => { s.drag = false; pid = null }
     const wheel = (e) => { e.preventDefault(); s.goal = null; s.d = THREE.MathUtils.clamp(s.d - e.deltaY * perfil.total * 0.0002, 0, perfil.total) }
     el.addEventListener('pointerdown', down)
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    window.addEventListener('blur', up)
     el.addEventListener('wheel', wheel, { passive: false })
     return () => {
       el.removeEventListener('pointerdown', down); window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up); el.removeEventListener('wheel', wheel)
+      window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up)
+      window.removeEventListener('blur', up); el.removeEventListener('wheel', wheel); s.drag = false
     }
   }, [gl, active, perfil.total])
 
@@ -121,7 +127,7 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
         _m.lookAt(camera.position, _p, Y)
         _qA.setFromRotationMatrix(_m)
         camera.quaternion.copy(s.q0).slerp(_qA, e)
-        fov = THREE.MathUtils.lerp(camera.fov, FOV_DENTRO + 10, 0.1)
+        fov = FOV_DENTRO + 10
       } else { // 2) inmersión: de la boca al eje del tubo
         const e = sm((tt - FLY_A) / FLY_B, 0, 1)
         muestrea(perfil, radius * 6, _p, _t)
