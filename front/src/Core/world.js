@@ -73,36 +73,13 @@
 //   de curvatura progresiva (clotoide); ruta rápida = curvas abiertas, lenta = cerradas y con más relieve,
 //   espectacular = peraltes fuertes y saltos. Hélices, embudo y rizo entran/salen sin quiebros.
 //
-// ─── CARRILES SOBRE LA PARED (la pista es un riel 3D pegado al interior del tubo) ───
-//   segment.lanes[2-4] = { id (0..3, mismo id = mismo ángulo en todo el way), angle (0..2π alrededor
-//                          del eje; 0 = suelo en las uniones, π/2 y 3π/2 paredes, π techo), offset
-//                          (vaivén angular del carril: θ(u) = angle + offset·sin(πu), nominal en los
-//                          extremos), width (ancho del riel, unidades de mundo), name }
-//     Siempre existe el carril 0. Salida, llegada y tramos `air` tienen los 4 (son los tramos anchos
-//     de fork/merge); los obstáculos de cada ruta, de 2 a 4.
-//   segment.switches[] = { u (inicio, 0..1 a lo largo), uEnd (ancla de llegada estimada), from, to (ids
-//                          de lanes), kind (clave de MECHANISMS; si el tramo tiene `event`, es esa clave),
-//                          name (nombre temático del mini mundo), emoji, style ('salto': vuela por el
-//                          interior con arco | 'pared': rueda pegada a la pared | 'portal': teletransporte
-//                          corto), duration (s), risk, fail (probabilidad base de fallo), reward { p, e },
-//                          boost (multiplicador de velocidad al usarlo) }
-//     Ancla de un mecanismo para dibujarlo: laneFrame(seg, from, u) y laneFrame(seg, to, uEnd).
-//   Un carril que no existe en el tramo siguiente sigue por el más cercano en ángulo (nearestLane).
-//   Marcos: transporte paralelo del tubo (sin torsión), con la torsión residual repartida para que en
-//   cada unión (fork/cross/merge) el ángulo 0 apunte al suelo del mundo.
-//   wallFrame(seg, angle, u, rho?) y laneFrame(seg, laneId, u) -> { pos (centro de la ballita a `rho`
-//     del eje; por defecto radius - BALL_R, 0 en `air`), wall (punto del cristal), axis, dir (eje->pared),
-//     tangent, up (apunta al eje: la gravedad de la ballita es hacia su pared), side (= tangent × up), angle }
-//     wallFrame es el marco "crudo" del tubo. laneFrame es la SUPERFICIE del carril: su `pos` incluye el
-//     relieve (rho = radius - BALL_R - laneRelief), y `tangent`/`up` son la tangente y la normal reales de la
-//     superficie (relieve, vaivén y peralte incluidos); añade `relief` (altura en ese punto).
-//   Peralte: laneAngle ya incluye el giro del carril hacia la pared exterior en las curvas (0 en los
-//     extremos del tramo, para que las uniones sigan continuas). segmentCurvature(seg, u) -> { k, out }.
-//   Relieve: laneRelief(seg, laneId, u) -> altura (u de mundo, de la pared hacia el eje, 0..0.45·(radius -
-//     BALL_R), 0 en los extremos): firme base, lomas, badenes, rampa antes de cada mecanismo (cresta en
-//     switch.u y caída corta: la ballita despega) y saltos extra en la ruta espectacular.
-//     reliefSlope(seg, laneId, u) -> d(altura)/d(longitud). Los tramos `air` no tienen relieve.
-//
+// CAMINOS TRENZADOS
+// segment.lanes[3-5] = { id estable, roll, width, name }. Los caminos comparten puntas y
+// divergen en el tramo abierto. segment._braid conserva sus muestras 3D.
+// laneFrame(seg,id,u) -> {pos,road,surface,tangent,up,side,relief,roll} y alias axis/wall/dir/angle.
+// laneLength mide el camino; laneCurve devuelve su THREE.Curve.
+// switches = {u,uLand,uEnd,apex,from,to,kind,...}; el vuelo entre las anclas lo da switchArc(seg,sw,t).
+// El id se conserva entre tramos cuando existe; los cambios de camino ocurren al aterrizar de un arco.
 // Helpers: frameAt(curve, u), cityPath(node, a, b), slerpDir(a, b, t, out), mulberry32(seed),
 //          wallFrame, laneFrame, laneAngle, laneRelief, reliefSlope, segmentCurvature, nearestLane,
 //          lowestLane, angDiff. Constantes: GRID_LEN, FINISH_LEN, OUT_GATES, IN_GATES.
@@ -213,21 +190,23 @@ export const MECHANISMS = {
   hielo_resbaloso: { name: 'Hielo resbaloso', emoji: '🧊', style: 'pared', dur: 0.9, risk: 0.45, fail: 0.1, reward: { p: 1.8, e: -0.3 }, boost: 1.12 },
   canon: { name: 'Cañón', emoji: '💥', style: 'salto', dur: 0.9, risk: 0.95, fail: 0.2, reward: { p: 3.6, e: -1.2 }, boost: 1.25 },
   caida: { name: 'Caída libre', emoji: '🪂', style: 'salto', dur: 1.0, risk: 0.8, fail: 0.18, reward: { p: 2.6, e: -0.5 }, boost: 1.1 },
+  arbol: { name: 'Árbol puente', emoji: '🌳', style: 'salto', dur: 1.1, risk: 0.3, fail: 0.05, reward: { p: 1.1, e: 0.2 }, boost: 1.05 },
+  viento: { name: 'Ráfaga de viento', emoji: '💨', style: 'salto', dur: 0.9, risk: 0.4, fail: 0.08, reward: { p: 1.4, e: -0.1 }, boost: 1.1 },
 }
 // Mecanismos propios del paisaje de cada mini mundo (clave -> nombre temático).
 export const THEME_MECHS = {
   sombrio: { iman: 'Imán de sombras', remolino: 'Remolino umbrío', portal: 'Grieta-portal' },
-  bosque: { rampa: 'Tronco-rampa', tirolina: 'Liana-tirolina', resorte: 'Hongo-resorte' },
-  mar: { remolino: 'Remolino marino', geiser: 'Chorro de ballena', cinta: 'Corriente marina' },
-  desierto: { turbina: 'Tolvanera', rampa: 'Duna-rampa', resorte: 'Cactus-resorte' },
+  bosque: { rampa: 'Tronco-rampa', tirolina: 'Liana-tirolina', resorte: 'Hongo-resorte', arbol: 'Puente de árbol' },
+  mar: { remolino: 'Remolino marino', geiser: 'Chorro de ballena', cinta: 'Corriente marina', viento: 'Viento de cola' },
+  desierto: { turbina: 'Tolvanera', rampa: 'Duna-rampa', resorte: 'Cactus-resorte', viento: 'Viento del desierto' },
   hielo: { rampa: 'Ventisquero', cinta: 'Glaciar deslizante', bumper: 'Carámbano-bumper' },
   volcan: { erupcion: 'Erupción', geiser: 'Fumarola', rampa: 'Colada-rampa' },
   cristal: { portal: 'Prisma-portal', iman: 'Imán de cuarzo', bumper: 'Geoda-bumper' },
-  nubes: { turbina: 'Ráfaga', trampolin: 'Nube-trampolín', tirolina: 'Arcoíris-tirolina' },
+  nubes: { turbina: 'Ráfaga', trampolin: 'Nube-trampolín', tirolina: 'Arcoíris-tirolina', viento: 'Corriente de aire' },
   neon: { bumper: 'Bumper neón', portal: 'Portal neón', cinta: 'Cinta láser' },
-  jardin: { resorte: 'Flor-resorte', tirolina: 'Enredadera', trampolin: 'Nenúfar-trampolín' },
+  jardin: { resorte: 'Flor-resorte', tirolina: 'Enredadera', trampolin: 'Nenúfar-trampolín', arbol: 'Rama puente' },
 }
-export const LANE_NAMES = ['suelo', 'pared derecha', 'techo', 'pared izquierda']
+export const LANE_NAMES = ['suelo', 'pared derecha', 'techo', 'pared izquierda', 'espiral']
 
 const FLEX = ['rampa', 'horquilla', 'rizo', 'sacacorchos', 'trampolin', 'canon', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'geiser', 'erupcion'] // unen dos puntos cualesquiera
 const GRAV = ['espiral', 'caida', 'cascada', 'embudo'] // necesitan bajar
@@ -419,11 +398,43 @@ const lerpArr = (arr, u) => {
   const n = arr.length - 1; const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * n; const i = Math.min(n - 1, Math.floor(f))
   return arr[i] + (arr[i + 1] - arr[i]) * (f - i)
 }
-// Ángulo del carril: vaivén propio + peralte (en curva el carril sube hacia la pared exterior).
+
+// ───────────────────────── caminos trenzados ─────────────────────────
+export const LANE_W = +(BALL_R * 2.6).toFixed(2)
+export const BRAID_A = 4.6 // separación nominal (u) de cada camino respecto al central en el tramo abierto
+const BRAID_PAD = 4 // holgura del envolvente para ancho de pista, ballita y arcos
+const BRAID_MIN = 2.2 // distancia mínima entre caminos distintos donde ya están abiertos (env >= 0.5)
+const BRAID_RAMP = 18 // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
+export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon', 'tirabuzon_inv']
+
+// Apertura de la trenza en `u` (0 en las puntas y en las rectas de parrilla/meta, 1 con los caminos abiertos).
+// Sólo depende del largo y del tipo de tramo: la búsqueda de huecos la usa antes de construir los caminos.
+export function braidEnv(seg, u) {
+  const L = seg.length; const x = clamp(Number.isFinite(u) ? u : 0, 0, 1) * L
+  const a = seg.kind === 'salida' ? GRID_LEN + 2 : 0; const b = seg.kind === 'llegada' ? FINISH_LEN + 2 : 0
+  const r = Math.max(4, Math.min(BRAID_RAMP, (L - a - b) * 0.3))
+  return smooth01((x - a) / r) * smooth01((L - b - x) / r)
+}
+// Radio del envolvente de la trenza alrededor del eje (para separar pistas distintas).
+export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u) + BRAID_PAD)
+
+// Giro propio (rad) del camino alrededor de su avance; 0 (mod 2π) en las puntas.
+function rollAt(seg, lane, u) {
+  if (!lane || lane.roll === 'plano' || !seg._braid) return 0
+  const e = braidEnv(seg, u)
+  if (lane.roll === 'cabeza') return Math.PI * e
+  if (lane.roll === 'lado_der') return (Math.PI / 2) * e
+  if (lane.roll === 'lado_izq') return (-Math.PI / 2) * e
+  const [a, b] = seg._braid.full
+  return (lane.roll === 'tirabuzon' ? 1 : -1) * TAU * smooth01((clamp(u, 0, 1) - a) / (b - a))
+}
+export const laneRoll = (seg, laneId, u) => rollAt(seg, laneOf(seg, laneId), u)
+
+// Ángulo de la superficie del camino (convención de wallFrame: 0 = suelo, π = de cabeza): giro propio + peralte.
 export function laneAngle(seg, laneId, u) {
   const l = laneOf(seg, laneId)
   if (!l) return 0
-  const a = l.angle + l.offset * Math.sin(Math.PI * clamp(u, 0, 1))
+  const a = rollAt(seg, l, u)
   const bk = seg._bank
   if (!bk) return a
   const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y)
@@ -448,28 +459,101 @@ export function segmentCurvature(seg, u) {
   const x = lerpArr(c.x, u); const y = lerpArr(c.y, u)
   return { k: Math.hypot(x, y), out: Math.atan2(-y, -x) }
 }
-const LF_A = {}; const LF_B = {}
+// Centro del camino (sin relieve) en `u`, interpolado de las muestras de la trenza.
+function roadAt(seg, laneId, u, out) {
+  const br = seg._braid
+  if (!br) return out.copy(wallFrame(seg, 0, u, 0, LF_W).axis)
+  const P = br.P[laneOf(seg, laneId)?.id ?? 0] || br.P[0]
+  const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * br.N; const i = Math.min(br.N - 1, Math.floor(f)); const k = f - i; const j = i * 3
+  return out.set(P[j] + (P[j + 3] - P[j]) * k, P[j + 1] + (P[j + 4] - P[j + 1]) * k, P[j + 2] + (P[j + 5] - P[j + 2]) * k)
+}
+const LF_W = {}; const LF_P0 = new THREE.Vector3(); const LF_P1 = new THREE.Vector3()
+// Punto de la superficie (relieve incluido) y normal cruda (`up`, sin ortogonalizar) del camino en `u`.
+function surfAt(seg, laneId, u, out, up) {
+  const d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_W).dir
+  if (up) up.copy(d).negate()
+  roadAt(seg, laneId, u, out)
+  return seg.air ? out : out.addScaledVector(d, -laneRelief(seg, laneId, u))
+}
+// Marco del camino `laneId` en `u` (ver el contrato al inicio del archivo).
 export function laneFrame(seg, laneId, u, out = {}) {
   u = Number.isFinite(u) ? clamp(u, 0, 1) : 0
-  const rhoAt = (x) => (seg.air ? 0 : seg.radius - BALL_R - laneRelief(seg, laneId, x))
-  wallFrame(seg, laneAngle(seg, laneId, u), u, rhoAt(u), out)
-  if (!seg.air) {
-    // tangente y normal reales de la superficie (relieve, vaivén y peralte incluidos)
-    const du = Math.min(0.01, 0.4 / seg.length); const u0 = Math.max(0, u - du); const u1 = Math.min(1, u + du)
-    const p0 = wallFrame(seg, laneAngle(seg, laneId, u0), u0, rhoAt(u0), LF_A).pos
-    const p1 = wallFrame(seg, laneAngle(seg, laneId, u1), u1, rhoAt(u1), LF_B).pos
-    const T = FRAME_TMP.subVectors(p1, p0)
-    if (T.lengthSq() > 1e-10) {
-      out.tangent.copy(T.normalize())
-      out.up.addScaledVector(out.tangent, -out.up.dot(out.tangent)).normalize()
-      out.side.crossVectors(out.tangent, out.up).normalize()
-    }
-  }
+  const up = out.up || (out.up = new THREE.Vector3())
+  const surface = out.surface || (out.surface = new THREE.Vector3())
+  surfAt(seg, laneId, u, surface, up)
+  const road = out.road || (out.road = new THREE.Vector3())
+  roadAt(seg, laneId, u, road)
+  // tangente y normal reales de la superficie (relieve, trenza, giro y peralte incluidos)
+  const du = Math.min(0.01, 0.4 / seg.length); const u0 = Math.max(0, u - du); const u1 = Math.min(1, u + du)
+  const T = out.tangent || (out.tangent = new THREE.Vector3())
+  T.subVectors(surfAt(seg, laneId, u1, LF_P1), surfAt(seg, laneId, u0, LF_P0))
+  if (T.lengthSq() > 1e-12) T.normalize(); else segmentTangent(seg, u, T)
+  up.addScaledVector(T, -up.dot(T))
+  if (up.lengthSq() < 1e-10) canonDown(T, up).negate()
+  up.normalize()
+  out.side = (out.side || new THREE.Vector3()).crossVectors(T, up).normalize()
+  out.pos = (out.pos || new THREE.Vector3()).copy(surface).addScaledVector(up, BALL_R)
+  // alias del contrato viejo (tubo): axis = centro del camino, wall = superficie, dir = hacia la superficie
+  out.axis = road; out.wall = surface; out.dir = (out.dir || new THREE.Vector3()).copy(up).negate()
+  out.angle = laneAngle(seg, laneId, u); out.roll = laneRoll(seg, laneId, u)
   out.lane = laneOf(seg, laneId)
   out.relief = seg.air ? 0 : laneRelief(seg, laneId, u)
   return out
 }
-// Carril del tramo más cercano a un ángulo (así un carril que acaba sigue por el vecino).
+// Largo (u de mundo) del camino `laneId` del tramo (sin relieve).
+export function laneLength(seg, laneId) {
+  const br = seg._braid
+  if (!br) return seg.length
+  const id = laneOf(seg, laneId)?.id ?? 0
+  if (br.len[id] == null) {
+    const P = br.P[id]; let s = 0
+    for (let i = 1; i <= br.N; i++) s += Math.hypot(P[i * 3] - P[i * 3 - 3], P[i * 3 + 1] - P[i * 3 - 2], P[i * 3 + 2] - P[i * 3 - 1])
+    br.len[id] = s
+  }
+  return br.len[id]
+}
+// Curva (THREE.Curve) de la superficie del camino: getPoint(t) = laneFrame(seg, laneId, t).surface (t = `u` del
+// tramo, no longitud de arco del camino; getPointAt sí reparte por longitud). Cacheada por tramo y camino.
+class LaneCurve extends THREE.Curve {
+  constructor(seg, id) { super(); this.seg = seg; this.id = id; this.f = {}; this.arcLengthDivisions = clamp(Math.ceil(laneLength(seg, id)), 50, 1000) }
+  getPoint(t, out = new THREE.Vector3()) { return out.copy(laneFrame(this.seg, this.id, t, this.f).surface) }
+}
+export function laneCurve(seg, laneId) {
+  const id = laneOf(seg, laneId)?.id ?? 0
+  const c = seg._braid?.curves || (seg._braid ? (seg._braid.curves = []) : [])
+  return c[id] || (c[id] = new LaneCurve(seg, id))
+}
+
+// Arco balístico de un evento de intercambio: Bézier cúbica que despega por la normal del camino origen en
+// sw.u y aterriza por la normal del destino en sw.uLand (llega desde su lado "arriba"). t 0..1.
+const ARC_A = {}; const ARC_B = {}
+function arcCtrl(seg, sw) {
+  const A = laneFrame(seg, sw.from, sw.u, ARC_A); const B = laneFrame(seg, sw.to, sw.uLand, ARC_B)
+  const d = A.pos.distanceTo(B.pos); const h = sw.apex
+  return {
+    p0: A.pos.clone(), p3: B.pos.clone(), u0: A.up.clone(), u1: B.up.clone(),
+    p1: A.pos.clone().addScaledVector(A.up, h).addScaledVector(A.tangent, d * 0.3),
+    p2: B.pos.clone().addScaledVector(B.up, h).addScaledVector(B.tangent, -d * 0.3),
+  }
+}
+export function switchArc(seg, sw, t, out = {}) {
+  const c = sw._arc || (sw._arc = arcCtrl(seg, sw))
+  t = Number.isFinite(t) ? clamp(t, 0, 1) : 0
+  const s = 1 - t
+  const pos = out.pos || (out.pos = new THREE.Vector3())
+  pos.copy(c.p0).multiplyScalar(s * s * s).addScaledVector(c.p1, 3 * s * s * t).addScaledVector(c.p2, 3 * s * t * t).addScaledVector(c.p3, t * t * t)
+  const T = out.tangent || (out.tangent = new THREE.Vector3())
+  T.subVectors(c.p1, c.p0).multiplyScalar(3 * s * s).addScaledVector(FRAME_TMP.subVectors(c.p2, c.p1), 6 * s * t)
+    .addScaledVector(FRAME_TMP.subVectors(c.p3, c.p2), 3 * t * t)
+  if (T.lengthSq() < 1e-10) T.subVectors(c.p3, c.p0)
+  T.normalize()
+  const up = out.up || (out.up = new THREE.Vector3())
+  up.copy(c.u0).lerp(c.u1, smooth01(t)).addScaledVector(T, -up.dot(T))
+  if (up.lengthSq() < 1e-8) up.copy(c.u1)
+  up.normalize()
+  return out
+}
+// Camino del tramo más cercano a un ángulo (contrato viejo; los caminos ya no son ángulos de un tubo).
 export function nearestLane(seg, angle) {
   let best = 0; let bd = Infinity
   for (const l of seg.lanes || []) {
@@ -552,7 +636,7 @@ function buildSurface(s, rng) {
   for (const lane of s.lanes) {
     const feats = []
     for (let j = ri(rng, R.n[0], R.n[1]); j > 0; j--) {
-      feats.push({ c: (0.12 + rng() * 0.76) * L, w: 3 + rng() * 5, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * (rng() < 0.35 ? -1 : 1) })
+      feats.push({ c: (0.12 + rng() * 0.76) * L, w: 4 + rng() * 5, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * (rng() < 0.35 ? -1 : 1) })
     }
     // [cresta, altura, subida]: una rampa por estación (varios mecanismos en la misma u comparten rampa)
     const kicks = [...new Set((s.switchesByLane?.get(lane.id) || []).map((sw) => sw.u))].map((u) => [u * L, 0.3, 5])
@@ -572,36 +656,57 @@ function buildSurface(s, rng) {
 }
 
 // Carriles y mecanismos de un way (rng propio: no altera la generación de las rutas).
+function buildBraid(s) {
+  const N = clamp(Math.ceil(s.length / 1.5), 48, 1200)
+  const lanes = s.lanes; const P = lanes.map(() => new Float32Array((N + 1) * 3)); const env = new Float32Array(N + 1)
+  const tangent = new THREE.Vector3(); const ref = new THREE.Vector3(); const priorRef = new THREE.Vector3(); const side = new THREE.Vector3(); const center = new THREE.Vector3()
+  for (let i = 0; i <= N; i++) {
+    const u = i / N; const f = wallFrame(s, 0, u, 0, {})
+    center.copy(f.axis); segmentTangent(s, u, tangent)
+    if (i) ref.copy(priorRef).addScaledVector(tangent, -priorRef.dot(tangent))
+    else ref.crossVectors(tangent, Y)
+    if (ref.lengthSq() < 1e-8) ref.set(1, 0, 0).addScaledVector(tangent, -tangent.x)
+    ref.normalize(); side.crossVectors(tangent, ref).normalize()
+    priorRef.copy(ref)
+    env[i] = braidEnv(s, u)
+    for (let j = 0; j < lanes.length; j++) {
+      const lane = lanes[j]; const id = lane.id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
+      const ringCount = Math.max(1, lanes.length - 1)
+      const theta = id === 0 ? 0 : ((id - 1) * TAU / ringCount + u * TAU)
+      const radius = id === 0 ? 0 : BRAID_A * env[i]
+      const q = center.clone().addScaledVector(ref, Math.cos(theta) * radius).addScaledVector(side, Math.sin(theta) * radius)
+      q.toArray(dst, i * 3)
+    }
+  }
+  s._braid = { N, P, env, full: [BRAID_RAMP / s.length, 1 - BRAID_RAMP / s.length], len: [], curves: [] }
+}
+
 function buildLanes(way) {
   const rng = mulberry32(90000 + way.idx * 131)
-  const jit = (rng() - 0.5) * 0.5
-  const set = [0, Math.PI / 2 + jit, Math.PI, (3 * Math.PI) / 2 + jit].map(wrapAng)
+  const laneCount = 3 + Math.floor(rng() * 3)
   const theme = way.theme.id
   const mechs = Object.keys(THEME_MECHS[theme])
-  const width = +(BALL_R * 2.6).toFixed(2)
+  const width = LANE_W
   const mk = (s, u, from, to, kind, dur) => {
     const M = MECHANISMS[kind]; const sk = s.speedK ?? 1
     const duration = +(dur ?? (M.dur / Math.sqrt(sk)) * (s.drag > 2 ? 1.25 : 1)).toFixed(2)
     const span = (duration * (14 * sk + (s.boost || 0) * 0.4)) / s.length
     return {
-      u: +u.toFixed(3), uEnd: +Math.min(1, u + span).toFixed(3), from, to, kind,
+      u: +u.toFixed(3), uLand: +Math.min(0.94, u + Math.max(0.08, span)).toFixed(3), uEnd: +Math.min(0.94, u + Math.max(0.08, span)).toFixed(3), from, to, kind, apex: +(3.5 + Math.abs(to - from) * 0.6).toFixed(2),
       name: THEME_MECHS[theme][kind] || M.name, emoji: M.emoji, style: M.style, duration,
       risk: M.risk, fail: M.fail, reward: { ...M.reward }, boost: M.boost,
     }
   }
   way.segments.forEach((s, i) => {
-    let ids
-    if (s.air || s.kind === 'salida' || s.kind === 'llegada') ids = [0, 1, 2, 3]
-    else { const n = 2 + Math.floor(rng() * 3); ids = [0, ...shuffle([1, 2, 3], rng).slice(0, n - 1)].sort((x, y) => x - y) }
-    s.lanes = ids.map((id) => ({
-      id, angle: set[id], offset: s.air || id === 0 ? 0 : +((rng() - 0.5) * 0.6).toFixed(3), width, name: LANE_NAMES[id],
-    }))
+    const ids = Array.from({ length: laneCount }, (_, id) => id)
+    s.lanes = ids.map((id) => ({ id, roll: id === 0 ? 'plano' : ROLL_KINDS[1 + ((id - 1 + way.idx) % (ROLL_KINDS.length - 1))], angle: 0, offset: 0, width, name: LANE_NAMES[id] || `camino ${id + 1}` }))
+    buildBraid(s)
     s.switches = []
     if (s.air) {
       // el propio obstáculo aéreo catapulta: decide en qué pared aterriza
       const dur = clamp((s.length / (14 * (s.speedK ?? 1) + s.boost * 0.6)) * 0.8, 0.6, 3.5)
       for (const id of ids) {
-        const to = id === 0 ? [2, rng() < 0.5 ? 1 : 3] : [0, (id + 2) % 4]
+      const to = id === 0 ? [laneCount - 1] : [id === laneCount - 1 ? 0 : id + 1]
         for (const t of new Set(to)) if (t !== id) s.switches.push(mk(s, 0.12, id, t, s.kind, dur))
       }
       s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id)]))
@@ -611,17 +716,20 @@ function buildLanes(way) {
     let secondary = mechs[(i + 1) % mechs.length]
     if (secondary === primary) secondary = mechs[(i + 2) % mechs.length]
     const u1 = 0.22 + rng() * 0.12; const u2 = 0.62 + rng() * 0.14
-    const others = ids.filter((id) => id !== 0)
-    // estación 1: desde el suelo a cada pared/techo; estación 2: vuelta al suelo y un cruce entre paredes
-    others.forEach((id, j) => s.switches.push(mk(s, u1, 0, id, j === 0 ? primary : secondary)))
-    others.forEach((id, j) => s.switches.push(mk(s, u2, id, 0, j === 0 ? secondary : primary)))
-    if (others.length >= 2) s.switches.push(mk(s, u2, others[0], others[1], primary))
+    // Eventos en anillo entre caminos vecinos; algunos incluyen un salto extra.
+    for (let id = 0; id < laneCount; id++) {
+      const to = (id + 1) % laneCount
+      s.switches.push(mk(s, u1, id, to, id % 2 ? secondary : primary))
+      if (rng() < 0.35) s.switches.push(mk(s, u2, id, (id + 2) % laneCount, primary))
+    }
+    if (s.kind === 'salida') for (let id = 2; id < laneCount; id++) s.switches.push(mk(s, u1, 0, id, id % 2 ? secondary : primary))
     // Índice de estaciones por carril origen para que cada tick consulte sólo las
     // opciones de ese carril, ya ordenadas por posición.
     s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id).sort((a, b) => a.u - b.u)]))
   })
   const srng = mulberry32(91000 + way.idx * 37)
   for (const s of way.segments) buildSurface(s, srng)
+  for (const s of way.segments) for (const sw of s.switches) delete sw._arc
 }
 
 const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un nodo
@@ -630,7 +738,7 @@ const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un 
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 1
+export const WORLD_GEN = 2
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 export function buildWorld(seed = 369, onProgress = null) {
   const rng = mulberry32(seed)
@@ -961,13 +1069,13 @@ function sampleWayPoints(way, steps = 14) {
     for (let k = 0; k <= n; k++) {
       const u = k / n
       const trim = (s.kind === 'salida' && u * s.length < TRIM_LEN) || (s.kind === 'llegada' && (1 - u) * s.length < TRIM_LEN)
-      pts.push({ p: s.curve.getPointAt(u), r: s.radius, kind: s.kind, trim })
+      pts.push({ p: s.curve.getPointAt(u), r: braidRadius(s, u), kind: s.kind, trim })
     }
   }
   return pts
 }
 
-const SPATIAL_CELL = 12
+const SPATIAL_CELL = 24
 const CAND_ARC_DIV = +(globalThis.__AD ?? 48)
 // clave numérica de celda (sin cadenas): coordenadas de celda en ±1024
 const cellKey = (x, y, z) => ((x + 1024) * 2048 + (y + 1024)) * 2048 + (z + 1024)
@@ -996,7 +1104,7 @@ function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
   const baseTheta = ((circuit.idx * 0.6180339887 + (from < to ? 0 : 0.5)) % 1) * TAU
-  const N_ANG = 18
+  const N_ANG = 16
   let best = null; let bestScore = -Infinity
 
   const evalCand = (cand, steps) => {
@@ -1007,7 +1115,7 @@ function placeWay(world, circuit, from, to, placed) {
     for (const pt of pts) {
       for (const o of others) {
         const d2 = pt.p.distanceToSquared(o.pos)
-        if (d2 < nodeAcceptSq) minNode = Math.min(minNode, Math.sqrt(d2) - nodeMargin)
+        if (d2 < nodeAcceptSq) minNode = Math.min(minNode, Math.sqrt(d2) - pt.r - nodeMargin)
       }
       if (pt.kind !== 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R + pt.r) ** 2) return null
       if (pt.kind !== 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R + pt.r) ** 2) return null
@@ -1052,6 +1160,21 @@ function placeWay(world, circuit, from, to, placed) {
         indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
         return w
       }
+    }
+  }
+  // Si la búsqueda normal sólo encontró un respaldo, probar fases intermedias y más apertura de panza.
+  extraSearch: if (bestScore < 2.5) for (const salt of [3, 4]) for (const bow of [0, 120]) for (let k = 0; k < N_ANG; k += 3) {
+    const theta = (baseTheta + ((k + 0.375) / N_ANG) * TAU) % TAU
+    const bowExtra = bow * WORLD_SCALE
+    const cand = buildWay(world, circuit, from, to, theta, bowExtra, false, salt)
+    const coarse = evalCand(cand, 14); if (!coarse) continue
+    const res = coarse.minTube >= 0 && coarse.minNode >= 0 ? evalCand(cand, 28) : coarse
+    if (res && res.minTube >= 4 && res.minNode >= 1.5 && res.minHub >= 24) {
+      best = { theta, bowExtra, salt }; bestScore = 4; break extraSearch
+    }
+    if (res) {
+      const score = res.minTube < 4 ? res.minTube - 10 : Math.min(res.minTube, res.minNode + 1, res.minHub * 0.2)
+      if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt } }
     }
   }
   const chosen = best || { theta: baseTheta, bowExtra: 0, salt: 0 }

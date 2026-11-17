@@ -52,7 +52,7 @@
 import * as THREE from 'three'
 import {
   buildWorld, cityPath, slerpDir, NODE_R, BALL_R, OBSTACLES, KINDS,
-  wallFrame, laneAngle, nearestLane, lowestLane, angDiff,
+  wallFrame, laneFrame, laneLength, switchArc, laneAngle, nearestLane, lowestLane, angDiff,
   segmentTangent, laneRelief, reliefSlope, segmentCurvature,
 } from './world.js'
 import { voice, moodOf, archetype } from './personality.js'
@@ -180,7 +180,7 @@ export class Sim {
       // estado del balanceo en el tubo: `wall` va del eje a la ballita, `off` es su distancia al eje
       wall: up.clone().negate(), off: 0, rail: 0, roll: 0, snap: 0,
       lane: 0, ang: 0, sw: null, mechs: {},
-      hy: 0, vy: 0, airborne: false, impact: 0, slope: 0, lat: 0, latV: 0, edge: 0, onLane: true,
+      hy: 0, vy: 0, airborne: false, flight: null, impact: 0, slope: 0, lat: 0, latV: 0, edge: 0, onLane: true,
       thought: null, react: null, mood: 'feliz', speed: 0, cause: null,
     }
     b.arch = archetype(genome)
@@ -456,13 +456,13 @@ export class Sim {
     }
     const prevRoute = b.route
     if (prev && b.sw) {
-      b.lane = nearestLane(seg, b.ang)
+      b.lane = seg.lanes?.some((l) => l.id === b.lane) ? b.lane : nearestLane(seg, b.ang)
       b.sw = null
       b.rail = b.off
       this.resetSurface(b)
     }
     b.seg = seg; b.segT = 0
-    if (!b.sw) b.lane = nearestLane(seg, b.ang) // el carril sigue al más cercano en ángulo
+    if (!b.sw && !seg.lanes?.some((l) => l.id === b.lane)) b.lane = nearestLane(seg, b.ang)
     if (seg.route >= 0) {
       b.route = b.way.routes[seg.route]
       if (b.route !== prevRoute) b.visitedRoutes[b.route.idx] = (b.visitedRoutes[b.route.idx] || 0) + 1
@@ -508,16 +508,16 @@ export class Sim {
     b.p += L.theme.pps * PPS_K * dt
 
     let t0 = b.segT
-    b.segT += (b.speed * dt) / s.length
+    b.segT += (b.speed * dt) / laneLength(s, b.lane)
     while (b.segT >= 1) {
       if (!b.sw) this.checkSwitches(b, s, t0, 1) // los mecanismos del final del tramo también cuentan
       if (!s.next.length) return this.arrive(b)
-      const over = (b.segT - 1) * s.length
+      const over = (b.segT - 1) * laneLength(s, b.lane)
       this.enterSeg(b, this.pickNext(b))
-      s = b.seg; b.segT = over / s.length; t0 = 0
+      s = b.seg; b.segT = over / laneLength(s, b.lane); t0 = 0
     }
     if (!b.sw) this.checkSwitches(b, s, t0, b.segT)
-    const T = segmentTangent(s, b.segT, tmp2)
+    const T = laneFrame(s, b.lane, b.segT, b._frame || (b._frame = {})).tangent
 
     // pendiente real: el relieve inclina la pista hacia el eje (b.wall = dirección eje->pared)
     const rs = s.air || b.sw || b.airborne ? 0 : reliefSlope(s, b.lane, b.segT)
@@ -533,15 +533,27 @@ export class Sim {
 
     // carril: la ballita va pegada a su pared (o vuela entre paredes si hay un mecanismo en curso)
     this.laneStep(b, s, dt)
-    const F = wallFrame(s, b.ang, b.segT, b.off, b._frame || (b._frame = {}))
-    b.wall.copy(F.dir)
-    const down = tmp.copy(Y).addScaledVector(T, -T.y).negate()
-    b.roll = down.lengthSq() > 1e-4 ? Math.atan2(T.dot(tmp3.crossVectors(down, F.dir)), down.dot(F.dir)) : 0
-    this.place(b, F.pos, F.tangent, F.up, dt)
+    const F = laneFrame(s, b.lane, b.segT, b._frame || (b._frame = {}))
+    b.wall.copy(F.dir); b.roll = F.roll
+    const pos = tmp.copy(F.pos).addScaledVector(F.side, b.lat).addScaledVector(F.up, b.hy)
+    this.place(b, pos, F.tangent, F.up, dt)
   }
 
   // Sigue su carril o ejecuta el mecanismo en curso. Mantiene ang/off continuos y off <= radio útil.
   laneStep(b, s, dt) {
+    if (b.flight) {
+      const f = b.flight; f.t = Math.min(1, f.t + dt / f.dur)
+      const F = switchArc(s, f.sw, f.t, b._flightFrame || (b._flightFrame = {}))
+      b.airborne = true; b.off = 0; b.wall.copy(F.up).negate(); b.roll = 0
+      this.place(b, F.pos, F.tangent, F.up, dt)
+      if (f.t >= 1) {
+        b.lane = f.sw.to; b.flight = null; b.sw = null; b.airborne = false; b.impact = 1
+        if (f.failed) { b.speed *= 0.7; b.p -= 1 + f.sw.risk * 3 }
+        else { b.p += f.sw.reward.p; b.e += f.sw.reward.e; b.score += Math.max(0, f.sw.reward.p) }
+        this.resetSurface(b)
+      }
+      return
+    }
     const R = s.air ? 0 : s.radius - BALL_R
     b.rail += (R - b.rail) * Math.min(1, dt * RAIL_EASE)
     b.impact = Math.max(0, b.impact - dt * 3)
@@ -687,16 +699,16 @@ export class Sim {
   }
 
   startSwitch(b, s, sw) {
-    const a1 = laneAngle(s, sw.to, sw.uEnd)
+    const a1 = laneAngle(s, sw.to, sw.uLand ?? sw.uEnd)
     const d = angDiff(b.ang, a1)
     let da = d
     if (sw.kind === 'remolino') da += (d >= 0 ? 1 : -1) * TAU // el remolino da una vuelta entera pegada a la pared
     const h = sw.style === 'salto' ? clamp(0.25 + (0.6 * Math.abs(d)) / Math.PI, 0, 0.88) : sw.style === 'portal' ? 0.55 : 0
     const fail = this.rng() < sw.fail * (1.25 - b.genome.traits.valentia * 0.5)
     b.sw = { s: sw, t: 0, dur: sw.duration, style: sw.style, a0: b.ang, da, h, h0: 1, fail, failed: false }
-    b.lane = sw.to
+    b.flight = { sw, t: 0, dur: sw.duration, from: b.lane, to: sw.to, failed: fail }
     b.sw.h0 = b.rail > 1e-3 ? b.off / this.landBase(b, s) : 1 // parte de donde está (sin saltos)
-    b.airborne = false; b.vy = 0; b.lat = 0; b.latV = 0
+    b.airborne = true; b.vy = 0; b.lat = 0; b.latV = 0
     b.speed *= sw.boost
     b.mechs[sw.kind] = (b.mechs[sw.kind] || 0) + 1
     if (b.plan) b.plan.carril = `${sw.emoji} ${sw.name}`
