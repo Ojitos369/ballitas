@@ -203,6 +203,227 @@ const FX_TEX_GETTERS = {
   ring: getFxRingTex,
 }
 
+function getPanelAlbedoTex() {
+  return loadTex('panel_albedo.png', {
+    srgb: true,
+    repeat: [1, 1],
+    makeFallback: () => makeCanvas(512, 512, (ctx, w, h) => {
+      ctx.fillStyle = '#252d3d'
+      ctx.fillRect(0, 0, w, h)
+      // Grano metálico sutil
+      const rng = mulberry32(4109)
+      for (let i = 0; i < 420; i++) {
+        ctx.fillStyle = rng() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.08)'
+        ctx.fillRect(rng() * w, rng() * h, 12 + rng() * 48, 2)
+      }
+      // Placas modulares biseladas y ranuras oscuras
+      const pads = [[16, 16, 228, 228], [268, 16, 228, 228], [16, 268, 228, 228], [268, 268, 228, 228]]
+      for (const [x, y, pw, ph] of pads) {
+        const g = ctx.createLinearGradient(x, y, x + pw, y + ph)
+        g.addColorStop(0, '#364156')
+        g.addColorStop(0.5, '#273042')
+        g.addColorStop(1, '#1a202e')
+        ctx.fillStyle = g
+        ctx.beginPath()
+        ctx.roundRect(x, y, pw, ph, 14)
+        ctx.fill()
+        ctx.strokeStyle = '#0e131c'
+        ctx.lineWidth = 5
+        ctx.stroke()
+        ctx.strokeStyle = 'rgba(170,210,255,0.16)'
+        ctx.lineWidth = 2
+        ctx.strokeRect(x + 12, y + 12, pw - 24, ph - 24)
+        // Remaches en esquinas
+        ctx.fillStyle = '#4e5d78'
+        for (const [rx, ry] of [[x + 20, y + 20], [x + pw - 20, y + 20], [x + 20, y + ph - 20], [x + pw - 20, y + ph - 20]]) {
+          ctx.beginPath()
+          ctx.arc(rx, ry, 4, 0, TAU)
+          ctx.fill()
+        }
+      }
+    }),
+  })
+}
+
+function getPanelNormalTex() {
+  return loadTex('panel_normal.png', {
+    srgb: false,
+    repeat: [1, 1],
+    makeFallback: () => makeCanvas(512, 512, (ctx, w, h) => {
+      const hf = new Float32Array(w * h)
+      const pads = [[16, 16, 228, 228], [268, 16, 228, 228], [16, 268, 228, 228], [268, 268, 228, 228]]
+      for (const [px, py, pw, ph] of pads) {
+        for (let y = py; y < py + ph; y++) {
+          for (let x = px; x < px + pw; x++) {
+            const dx = Math.min(x - px, px + pw - 1 - x)
+            const dy = Math.min(y - py, py + ph - 1 - y)
+            const edge = Math.min(dx, dy)
+            const bevel = Math.min(1, edge / 14)
+            hf[y * w + x] = bevel * 0.75
+            if (edge > 22 && edge < 28) hf[y * w + x] -= 0.22
+          }
+        }
+      }
+      const img = ctx.createImageData(w, h)
+      const d = img.data
+      for (let y = 0; y < h; y++) {
+        const ym = (y - 1 + h) % h; const yp = (y + 1) % h
+        for (let x = 0; x < w; x++) {
+          const xm = (x - 1 + w) % w; const xp = (x + 1) % w
+          const dx = (hf[y * w + xp] - hf[y * w + xm]) * 2.2
+          const dy = (hf[yp * w + x] - hf[ym * w + x]) * 2.2
+          const len = Math.hypot(dx, dy, 1)
+          const idx = (y * w + x) * 4
+          d[idx] = Math.round(((-dx / len) * 0.5 + 0.5) * 255)
+          d[idx + 1] = Math.round(((-dy / len) * 0.5 + 0.5) * 255)
+          d[idx + 2] = Math.round(((1 / len) * 0.5 + 0.5) * 255)
+          d[idx + 3] = 255
+        }
+      }
+      ctx.putImageData(img, 0, 0)
+    }),
+  })
+}
+
+function getPanelEmissiveTex() {
+  return loadTex('panel_emissive.png', {
+    srgb: true,
+    repeat: [1, 1],
+    makeFallback: () => makeCanvas(512, 512, (ctx, w, h) => {
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.fillStyle = '#ffffff'
+      // Ranuras luminosas y micro-LEDs indicadores en blanco para teñir con aGlowColor
+      for (const [x, y] of [[36, 46], [288, 46], [36, 298], [288, 298]]) {
+        ctx.beginPath()
+        ctx.roundRect(x, y, 188, 12, 6)
+        ctx.fill()
+        ctx.beginPath()
+        ctx.roundRect(x + 28, y + 160, 74, 8, 4)
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(x + 150, y + 164, 7, 0, TAU)
+        ctx.fill()
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)'
+      ctx.lineWidth = 3
+      ctx.strokeRect(250, 24, 12, 464)
+    }),
+  })
+}
+
+function getChevronsRainbowTex() {
+  return loadTex('chevrons_rainbow.png', {
+    srgb: true,
+    repeat: [1, 1],
+    makeFallback: () => makeCanvas(256, 64, (ctx, w, h) => {
+      // Base metálica oscura con rieles laterales y guías naranjas
+      ctx.fillStyle = '#121824'
+      ctx.fillRect(0, 0, w, h)
+      ctx.fillStyle = '#252e42'
+      ctx.fillRect(0, 0, w, 6)
+      ctx.fillRect(0, h - 6, w, 6)
+      // Tiras luminosas de borde en naranja/ámbar cálido
+      ctx.fillStyle = '#ff9d3b'
+      ctx.fillRect(0, 6, w, 5)
+      ctx.fillRect(0, h - 11, w, 5)
+      // Pista central oscura con 2 paneles enmarcados y chevrones arcoíris hacia +X
+      ctx.fillStyle = '#0c111c'
+      ctx.fillRect(0, 12, w, h - 24)
+      const cols = ['#ff4d79', '#ff9b3d', '#ffe64d', '#4dffb8', '#38d6ff', '#b366ff']
+      for (let t = 0; t < 2; t++) {
+        const px = t * 128 + 10
+        ctx.fillStyle = '#171f30'
+        ctx.strokeStyle = 'rgba(130, 185, 255, 0.28)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.roundRect(px, 14, 108, h - 28, 6)
+        ctx.fill()
+        ctx.stroke()
+
+        for (let k = 0; k < 3; k++) {
+          const ox = px + 18 + k * 24
+          const grad = ctx.createLinearGradient(0, 18, 0, h - 18)
+          cols.forEach((c, idx) => grad.addColorStop(idx / (cols.length - 1), c))
+          ctx.strokeStyle = grad
+          ctx.lineWidth = 7
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
+          ctx.beginPath()
+          ctx.moveTo(ox, 19)
+          ctx.lineTo(ox + 18, h * 0.5)
+          ctx.lineTo(ox, h - 19)
+          ctx.stroke()
+        }
+      }
+    }),
+  })
+}
+
+function getLightbarTex() {
+  return loadTex('lightbar.png', {
+    srgb: false,
+    clamp: true,
+    makeFallback: () => makeCanvas(128, 16, (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h)
+      const g = ctx.createLinearGradient(0, 0, 0, h)
+      g.addColorStop(0, 'rgba(255,255,255,0.05)')
+      g.addColorStop(0.25, 'rgba(255,255,255,0.75)')
+      g.addColorStop(0.5, 'rgba(255,255,255,1.0)')
+      g.addColorStop(0.75, 'rgba(255,255,255,0.75)')
+      g.addColorStop(1, 'rgba(255,255,255,0.05)')
+      ctx.fillStyle = g
+      ctx.fillRect(6, 1, w - 12, h - 2)
+      // Clips oscuros en los extremos
+      ctx.fillStyle = 'rgba(20,24,34,0.9)'
+      ctx.fillRect(0, 0, 8, h)
+      ctx.fillRect(w - 8, 0, 8, h)
+    }),
+  })
+}
+
+function getStreakTex() {
+  return loadTex('streak.png', {
+    srgb: false,
+    clamp: true,
+    makeFallback: () => makeCanvas(128, 16, (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h)
+      const gx = ctx.createLinearGradient(0, 0, w, 0)
+      gx.addColorStop(0, 'rgba(255,255,255,0)')
+      gx.addColorStop(0.45, 'rgba(210,245,255,0.45)')
+      gx.addColorStop(0.85, 'rgba(255,255,255,0.98)')
+      gx.addColorStop(1, 'rgba(255,255,255,0)')
+      ctx.fillStyle = gx
+      ctx.beginPath()
+      ctx.moveTo(4, h * 0.5)
+      ctx.quadraticCurveTo(w * 0.72, 1, w - 3, h * 0.5)
+      ctx.quadraticCurveTo(w * 0.72, h - 1, 4, h * 0.5)
+      ctx.fill()
+    }),
+  })
+}
+
+function getSparkTex() {
+  return loadTex('spark.png', {
+    srgb: false,
+    clamp: true,
+    makeFallback: () => makeCanvas(32, 32, (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h)
+      const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 15)
+      g.addColorStop(0, 'rgba(255,255,255,1)')
+      g.addColorStop(0.3, 'rgba(255,220,160,0.85)')
+      g.addColorStop(0.7, 'rgba(255,140,40,0.3)')
+      g.addColorStop(1, 'rgba(255,90,0,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+      ctx.fillStyle = 'rgba(255,255,255,0.95)'
+      ctx.beginPath()
+      ctx.ellipse(16, 16, 13, 1.8, 0, 0, TAU)
+      ctx.fill()
+    }),
+  })
+}
+
 function seedFromId(id) {
   let h = 2166136261
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619)
@@ -376,6 +597,109 @@ function getSignAtlasTex() {
 
 // ═══════════════════════════ GEOMETRÍAS COMPARTIDAS ═══════════════════════════
 const base = (g) => (g.translate(0, 0.5, 0), g)
+
+function buildRibFrameGeo() {
+  const pts = [
+    new THREE.Vector2(0.985, -0.10),
+    new THREE.Vector2(1.03, -0.12),
+    new THREE.Vector2(1.078, -0.10),
+    new THREE.Vector2(1.078, -0.045),
+    new THREE.Vector2(1.045, -0.03),
+    new THREE.Vector2(1.045, 0.03),
+    new THREE.Vector2(1.078, 0.045),
+    new THREE.Vector2(1.078, 0.10),
+    new THREE.Vector2(1.03, 0.12),
+    new THREE.Vector2(0.985, 0.10),
+    new THREE.Vector2(0.985, -0.10),
+  ]
+  const g = new THREE.LatheGeometry(pts, 22)
+  g.rotateX(Math.PI / 2)
+  g.computeVertexNormals()
+  return g
+}
+
+function buildCurvedPanelGeo(arcHalf = 0.37, rIn = 0.992, rOut = 1.055, segs = 6) {
+  const pos = []
+  const uv = []
+  const idx = []
+  const pushRing = (r, z) => {
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs
+      const a = -arcHalf + t * arcHalf * 2
+      pos.push(Math.sin(a) * r, Math.cos(a) * r, z)
+      uv.push(z + 0.5, t)
+    }
+  }
+  // 4 arcos: 0=in-back, 1=in-front, 2=out-back, 3=out-front
+  pushRing(rIn, -0.5)
+  pushRing(rIn, 0.5)
+  pushRing(rOut, -0.5)
+  pushRing(rOut, 0.5)
+  const stride = segs + 1
+  for (let i = 0; i < segs; i++) {
+    const ib0 = i; const ib1 = i + 1
+    const if0 = stride + i; const if1 = stride + i + 1
+    const ob0 = stride * 2 + i; const ob1 = stride * 2 + i + 1
+    const of0 = stride * 3 + i; const of1 = stride * 3 + i + 1
+    // Cara interior (mira hacia el centro del tubo)
+    idx.push(ib0, if0, if1, ib0, if1, ib1)
+    // Cara exterior
+    idx.push(ob0, ob1, of1, ob0, of1, of0)
+    // Tapas frontal y trasera
+    idx.push(if0, of0, of1, if0, of1, if1)
+    idx.push(ib0, ib1, ob1, ib0, ob1, ob0)
+  }
+  // Tapas laterales
+  idx.push(0, stride * 2, stride * 3, 0, stride * 3, stride)
+  idx.push(segs, stride + segs, stride * 3 + segs, segs, stride * 3 + segs, stride * 2 + segs)
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
+}
+
+function buildLightBarGeo() {
+  const g = new THREE.CylinderGeometry(0.028, 0.028, 1.0, 6, 1, false)
+  g.rotateX(Math.PI / 2)
+  const uv = g.getAttribute('uv')
+  for (let i = 0; i < uv.count; i++) {
+    const u = uv.getX(i); const v = uv.getY(i)
+    uv.setXY(i, v, u)
+  }
+  uv.needsUpdate = true
+  return g
+}
+
+function buildStreakCardGeo() {
+  const p1 = new THREE.PlaneGeometry(1.0, 0.14)
+  const p2 = new THREE.PlaneGeometry(1.0, 0.14)
+  p2.rotateX(Math.PI / 2)
+  return mergeGeometries([p1, p2])
+}
+
+function buildBoltGeo() {
+  const pts = [
+    [0, 0, -0.5],
+    [0.14, 0.08, -0.18],
+    [-0.14, -0.06, 0.18],
+    [0, 0, 0.5],
+  ]
+  const parts = []
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = new THREE.Vector3(...pts[i])
+    const b = new THREE.Vector3(...pts[i + 1])
+    const dir = b.clone().sub(a)
+    const len = dir.length()
+    const seg = new THREE.CylinderGeometry(0.022, 0.022, len, 5)
+    seg.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, dir.normalize()))
+    seg.translate((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5)
+    parts.push(seg)
+  }
+  return mergeGeometries(parts)
+}
+
 const GEO = {
   cone: base(new THREE.ConeGeometry(0.5, 1, 10)),
   funnel: base(new THREE.ConeGeometry(0.5, 1, 28, 1, true)),
@@ -384,6 +708,13 @@ const GEO = {
   box: base(new THREE.BoxGeometry(1, 1, 1)),
   octa: base(new THREE.OctahedronGeometry(0.5)),
   torus: new THREE.TorusGeometry(1, 0.04, 6, 32), // radio 1: se escala al radio del tubo
+  ribNeon: new THREE.TorusGeometry(1, 0.025, 8, 32),
+  mouthNeon: new THREE.TorusGeometry(1, 0.056, 8, 32),
+  ribFrame: buildRibFrameGeo(),
+  panelPod: buildCurvedPanelGeo(),
+  lightBar: buildLightBarGeo(),
+  streakCard: buildStreakCardGeo(),
+  bolt: buildBoltGeo(),
   blade: (() => {
     const g = new THREE.BoxGeometry(0.18, 1.0, 0.04)
     g.translate(0, 0.5, 0)
@@ -410,19 +741,21 @@ const hot = (c, k = 1.25) => new THREE.Color(c).multiplyScalar(k)
 
 function createTubeMat(id, focusU) {
   const V = VISUALS[id]
+  const atmo = V.cine?.atmo ?? { mode: 0, c1: V.glass, c2: V.rail }
   const m = new THREE.MeshPhysicalMaterial({
     color: V.glass,
+    vertexColors: true,
     map: texAlbedo(id),
     normalMap: texNormal(id),
     normalScale: new THREE.Vector2(0.45, 0.45),
     emissive: new THREE.Color(V.rail),
     emissiveMap: texEmissive(id),
-    emissiveIntensity: 0.28,
+    emissiveIntensity: 0.24,
     transparent: true,
-    opacity: 0.22,
-    roughness: 0.08,
+    opacity: 0.19,
+    roughness: 0.07,
     metalness: 0.08,
-    envMapIntensity: 1.4,
+    envMapIntensity: 1.5,
     depthWrite: false,
     side: THREE.DoubleSide,
   })
@@ -432,13 +765,26 @@ function createTubeMat(id, focusU) {
     shader.uniforms.uFlowMap = { value: getFlowTex() }
     shader.uniforms.uThemeColor = { value: new THREE.Color(V.rail) }
     shader.uniforms.uGlassColor = { value: new THREE.Color(V.glass) }
+    shader.uniforms.uAtmoMode = { value: atmo.mode ?? 0 }
+    shader.uniforms.uAtmoA = { value: new THREE.Color(atmo.c1 ?? V.glass) }
+    shader.uniforms.uAtmoB = { value: new THREE.Color(atmo.c2 ?? V.rail) }
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vTubeUv;\nvarying vec3 vTubeWorldNormal;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTubeUv = uv;\nvec3 wTubeNorm = mat3(modelMatrix) * objectNormal;\nvTubeWorldNormal = length(wTubeNorm) > 1e-5 ? normalize(wTubeNorm) : vec3(0.0, 1.0, 0.0);')
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nuniform float uTime;\nuniform float uFocus;\nuniform sampler2D uFlowMap;\nuniform vec3 uThemeColor;\nuniform vec3 uGlassColor;\nvarying vec2 vTubeUv;\nvarying vec3 vTubeWorldNormal;'
+        `#include <common>
+        uniform float uTime;
+        uniform float uFocus;
+        uniform sampler2D uFlowMap;
+        uniform vec3 uThemeColor;
+        uniform vec3 uGlassColor;
+        uniform float uAtmoMode;
+        uniform vec3 uAtmoA;
+        uniform vec3 uAtmoB;
+        varying vec2 vTubeUv;
+        varying vec3 vTubeWorldNormal;`
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -446,24 +792,97 @@ function createTubeMat(id, focusU) {
         float focusGlow = mix(0.08, 1.0, uFocus);
         vec3 tubeViewDir = length(vViewPosition) > 1e-5 ? normalize(vViewPosition) : vec3(0.0, 0.0, 1.0);
         vec3 tubeNorm = length(normal) > 1e-5 ? normalize(normal) : vec3(0.0, 1.0, 0.0);
-        float tubeFresnel = pow(max(1e-4, 1.0 - abs(dot(tubeNorm, tubeViewDir))), 2.4);
+        float tubeFresnel = pow(max(1e-4, 1.0 - abs(dot(tubeNorm, tubeViewDir))), 2.3);
         vec2 flowUv = vec2(fract(vTubeUv.x * 0.45 - uTime * 0.75), fract(vTubeUv.y * 2.0));
         vec4 flowTex = texture2D(uFlowMap, flowUv);
         float wavePulse = smoothstep(0.55, 1.0, sin(vTubeUv.x * 1.4 - uTime * 3.2) * 0.5 + 0.5);
-        float flowMask = flowTex.a * (0.45 + 0.55 * wavePulse);
+        float flowMask = flowTex.a * (0.35 + 0.55 * wavePulse);
         float baseGrime = smoothstep(-0.25, -0.85, vTubeWorldNormal.y);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.45 + vec3(0.05, 0.04, 0.03), baseGrime * 0.45);
-        totalEmissiveRadiance = totalEmissiveRadiance * focusGlow + (uGlassColor * tubeFresnel * 0.35 + uThemeColor * flowMask * 0.95) * focusGlow;`
+
+        // Costuras sutiles de módulos de cristal y ambiente específico por tema (0..9)
+        float seamX = smoothstep(0.95, 1.0, abs(cos(vTubeUv.x * 3.14159 * 0.9)));
+        float seamY = smoothstep(0.96, 1.0, abs(cos(vTubeUv.y * 6.28318 * 4.0)));
+        float seamMask = max(seamX, seamY) * 0.14;
+        vec3 atmoGlow = vec3(0.0);
+        float atmoAlpha = 0.0;
+
+        if (uAtmoMode < 0.5) {
+          // 0 sombrio: niebla violeta ondulante
+          float fogWave = sin(vTubeUv.x * 1.1 - uTime * 0.8 + sin(vTubeUv.y * 12.56)) * 0.5 + 0.5;
+          atmoGlow = mix(uAtmoA, uAtmoB, fogWave) * (0.28 * fogWave);
+          atmoAlpha = fogWave * 0.08;
+        } else if (uAtmoMode < 1.5) {
+          // 1 bosque: reflejos orgánicos de dosel
+          float dapple = sin(vTubeUv.x * 2.2 + vTubeUv.y * 18.84 + uTime * 0.7) * cos(vTubeUv.x * 1.3 - uTime * 0.5);
+          float m = smoothstep(0.2, 0.85, dapple * 0.5 + 0.5);
+          atmoGlow = mix(uAtmoA, uAtmoB, m) * 0.22 * m;
+        } else if (uAtmoMode < 2.5) {
+          // 2 mar: cáusticas acuáticas animadas
+          float c1 = sin(vTubeUv.x * 3.6 - uTime * 1.4 + sin(vTubeUv.y * 18.84 + uTime));
+          float c2 = cos(vTubeUv.x * 2.8 + vTubeUv.y * 25.12 - uTime * 1.8);
+          float caust = pow(clamp(1.0 - abs(c1 + c2) * 0.45, 0.0, 1.0), 3.0);
+          atmoGlow = mix(uAtmoA, uAtmoB, caust) * caust * 0.45;
+          atmoAlpha = caust * 0.08;
+        } else if (uAtmoMode < 3.5) {
+          // 3 desierto: ondas de calor y arena flotante
+          float shimmer = sin(vTubeUv.x * 4.0 - uTime * 3.8 + sin(vTubeUv.y * 12.56) * 2.0) * 0.5 + 0.5;
+          float sandBand = smoothstep(0.55, 0.98, shimmer) * (0.4 + 0.6 * smoothstep(0.2, -0.6, vTubeWorldNormal.y));
+          atmoGlow = mix(uAtmoA, uAtmoB, sandBand) * sandBand * 0.3;
+        } else if (uAtmoMode < 4.5) {
+          // 4 hielo: escarcha cristalina en bordes de costuras
+          float frostNoise = sin(vTubeUv.x * 11.0) * cos(vTubeUv.y * 37.7) * 0.5 + 0.5;
+          float frost = clamp(seamMask * 2.4 + frostNoise * tubeFresnel * 0.7, 0.0, 1.0);
+          atmoGlow = mix(uAtmoA, uAtmoB, frost) * frost * 0.38;
+          atmoAlpha = frost * 0.1;
+        } else if (uAtmoMode < 5.5) {
+          // 5 volcan: grietas incandescentes de lava en la parte baja
+          float crack = pow(clamp(1.0 - abs(sin(vTubeUv.x * 2.9 + sin(vTubeUv.y * 18.84) * 1.6)), 0.0, 1.0), 5.0);
+          float pulse = 0.65 + 0.35 * sin(uTime * 2.4 + vTubeUv.x * 1.7);
+          float lowMask = smoothstep(0.35, -0.75, vTubeWorldNormal.y);
+          atmoGlow = mix(uAtmoA, uAtmoB, crack) * crack * lowMask * pulse * 0.72;
+        } else if (uAtmoMode < 6.5) {
+          // 6 cristal: dispersión prismática iridiscente
+          float irid = fract(tubeFresnel * 1.8 + vTubeUv.x * 0.25 + uTime * 0.12);
+          vec3 prismCol = 0.5 + 0.5 * cos(6.28318 * (irid + vec3(0.0, 0.33, 0.67)));
+          atmoGlow = mix(uAtmoA, prismCol, 0.65) * tubeFresnel * 0.48;
+        } else if (uAtmoMode < 7.5) {
+          // 7 nubes: bruma luminosa y destellos de rayos
+          float cloudWisp = sin(vTubeUv.x * 1.5 - uTime * 0.9) * cos(vTubeUv.y * 6.28318 + uTime * 0.4) * 0.5 + 0.5;
+          float bolt = pow(max(0.0, sin(uTime * 5.2 + vTubeUv.x * 2.7)), 14.0) * smoothstep(0.7, 1.0, sin(vTubeUv.y * 25.12));
+          atmoGlow = uAtmoA * cloudWisp * 0.2 + uAtmoB * bolt * 0.95;
+          atmoAlpha = cloudWisp * 0.08;
+        } else if (uAtmoMode < 8.5) {
+          // 8 neon: cuadrícula de circuitos cibernéticos
+          float gx = smoothstep(0.92, 1.0, abs(cos(vTubeUv.x * 6.28318 * 1.2)));
+          float gy = smoothstep(0.92, 1.0, abs(cos(vTubeUv.y * 6.28318 * 8.0)));
+          float grid = max(gx, gy);
+          float scan = pow(max(0.0, sin(vTubeUv.x * 1.8 - uTime * 4.0)), 4.0);
+          atmoGlow = mix(uAtmoA, uAtmoB, scan) * grid * (0.32 + 0.45 * scan);
+        } else {
+          // 9 jardin: destello nacarado floral suave
+          float petalGlow = sin(vTubeUv.x * 1.8 - uTime * 1.1 + vTubeUv.y * 12.56) * 0.5 + 0.5;
+          atmoGlow = mix(uAtmoA, uAtmoB, petalGlow) * tubeFresnel * 0.32;
+        }
+
+        vec3 activeAccent = uThemeColor;
+        #ifdef USE_COLOR
+          float hasEvCol = clamp((1.0 - min(vColor.r, min(vColor.g, vColor.b))) * 2.5, 0.0, 1.0);
+          activeAccent = mix(uThemeColor, vColor, hasEvCol * 0.72);
+        #endif
+
+        totalEmissiveRadiance = totalEmissiveRadiance * focusGlow
+          + (uGlassColor * tubeFresnel * 0.32 + activeAccent * (flowMask * 0.65 + seamMask * 0.5) + atmoGlow) * focusGlow;`
       )
       .replace(
         '#include <dithering_fragment>',
         `float tubeLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
         gl_FragColor.rgb = mix(vec3(tubeLum), gl_FragColor.rgb, mix(0.25, 1.0, uFocus)) * mix(0.28, 1.0, uFocus);
-        gl_FragColor.a = clamp(gl_FragColor.a + tubeFresnel * 0.32 + flowMask * 0.5 + baseGrime * 0.12, 0.0, 0.92) * mix(0.15, 1.0, uFocus);
+        gl_FragColor.a = clamp(gl_FragColor.a + tubeFresnel * 0.28 + flowMask * 0.35 + baseGrime * 0.12 + seamMask * 0.3 + atmoAlpha, 0.0, 0.88) * mix(0.15, 1.0, uFocus);
         #include <dithering_fragment>`
       )
   }
-  m.customProgramCacheKey = () => 'tube-flow-focus-v3'
+  m.customProgramCacheKey = () => 'tube-flow-atmo-v4'
   return m
 }
 
@@ -721,11 +1140,209 @@ function createEventFxMat(texKey, focusU) {
   })
 }
 
+function createFloorMat(focusU) {
+  const m = new THREE.MeshStandardMaterial({
+    map: getChevronsRainbowTex(),
+    roughness: 0.42,
+    metalness: 0.52,
+    emissive: new THREE.Color('#ffffff'),
+    emissiveIntensity: 1.0,
+    side: THREE.DoubleSide,
+  })
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = SHARED_TIME
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 aFloorMeta;\nattribute vec3 aFloorAccent;\nvarying vec2 vFloorUv;\nvarying vec3 vFloorMeta;\nvarying vec3 vFloorAccent;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFloorUv = uv;\nvFloorMeta = aFloorMeta;\nvFloorAccent = aFloorAccent;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vFloorUv;\nvarying vec3 vFloorMeta;\nvarying vec3 vFloorAccent;')
+      .replace(
+        '#include <map_fragment>',
+        `vec2 fUv = vec2(fract(vFloorUv.x - uTime * vFloorMeta.x), vFloorUv.y);
+        vec4 sampledFloor = texture2D(map, fUv);
+        diffuseColor *= sampledFloor;`
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `vec2 feUv = vec2(fract(vFloorUv.x - uTime * vFloorMeta.x), vFloorUv.y);
+        vec4 feTex = texture2D(map, feUv);
+        float chevLum = max(feTex.r, max(feTex.g, feTex.b));
+        float railMask = smoothstep(0.24, 0.14, feUv.y) + smoothstep(0.76, 0.86, feUv.y);
+        float centerMask = smoothstep(0.22, 0.3, feUv.y) * smoothstep(0.78, 0.7, feUv.y);
+        float glowMask = smoothstep(0.26, 0.56, chevLum);
+        vec3 warmCol = mix(feTex.rgb, feTex.rgb * vec3(1.18, 0.92, 0.65), vFloorMeta.z * 0.55);
+        vec3 railEmissive = mix(feTex.rgb, vFloorAccent, 0.55) * railMask * glowMask * 1.15;
+        vec3 chevEmissive = warmCol * centerMask * glowMask * vFloorMeta.y;
+        totalEmissiveRadiance = (railEmissive + chevEmissive);`
+      )
+  }
+  m.customProgramCacheKey = () => 'floor-chevron-v1'
+  return withFocusFade(m, focusU, 0.16, 0.25, 0.25)
+}
+
+function createPanelMat(focusU) {
+  const m = new THREE.MeshStandardMaterial({
+    map: getPanelAlbedoTex(),
+    normalMap: getPanelNormalTex(),
+    normalScale: new THREE.Vector2(0.55, 0.55),
+    emissive: new THREE.Color('#ffffff'),
+    emissiveMap: getPanelEmissiveTex(),
+    emissiveIntensity: 1.15,
+    roughness: 0.36,
+    metalness: 0.72,
+  })
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 aGlowColor;\nvarying vec3 vPanelGlow;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPanelGlow = aGlowColor;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vPanelGlow;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vPanelGlow;')
+  }
+  m.customProgramCacheKey = () => 'panel-hull-v1'
+  return withCameraFade(withFocusFade(m, focusU, 0.16, 0.28, 0.25), 0.85, 1.55)
+}
+
+function createHullMat(focusU) {
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.78 })
+  return withCameraFade(withFocusFade(m, focusU, 0.16, 0.28, 0.25), 0.85, 1.55)
+}
+
+function createLightBarMat(focusU) {
+  const m = new THREE.MeshBasicMaterial({
+    map: getLightbarTex(),
+    transparent: true,
+    alphaTest: 0.05,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  return withCameraFade(withFocusFade(m, focusU, 0.14, 0.2, 0.25), 0.65, 1.35)
+}
+
+const STREAK_VERT = /* glsl */ `
+  attribute vec4 aStreak;
+  attribute vec3 aStreakCol;
+  uniform float uTime;
+  varying vec2 vStreakUv;
+  varying float vStreakAlpha;
+  varying vec3 vStreakCol;
+
+  void main() {
+    float seed = aStreak.x;
+    float spd = aStreak.y;
+    float span = aStreak.z;
+    float alpha = aStreak.w;
+
+    float life = fract(uTime * spd + seed);
+    float fade = sin(life * 3.14159265);
+    vec3 localPos = position;
+    localPos.x += (life - 0.5) * span;
+
+    vec4 mvPos = vec4(localPos, 1.0);
+    #ifdef USE_INSTANCING
+      mvPos = instanceMatrix * mvPos;
+    #endif
+    mvPos = modelViewMatrix * mvPos;
+
+    vStreakUv = uv;
+    vStreakAlpha = alpha * fade;
+    vStreakCol = aStreakCol;
+    gl_Position = projectionMatrix * mvPos;
+  }
+`
+
+const STREAK_FRAG = /* glsl */ `
+  uniform sampler2D uTex;
+  uniform float uFocus;
+  varying vec2 vStreakUv;
+  varying float vStreakAlpha;
+  varying vec3 vStreakCol;
+
+  void main() {
+    vec4 tex = texture2D(uTex, vStreakUv);
+    float a = tex.a * vStreakAlpha * mix(0.12, 1.0, uFocus);
+    if (a < 0.015) discard;
+    vec3 col = vStreakCol * tex.rgb;
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, mix(0.25, 1.0, uFocus)) * mix(0.22, 1.0, uFocus);
+    gl_FragColor = vec4(col, a);
+  }
+`
+
+function createWindStreakMat(focusU) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: SHARED_TIME,
+      uFocus: focusU,
+      uTex: { value: getStreakTex() },
+    },
+    vertexShader: STREAK_VERT,
+    fragmentShader: STREAK_FRAG,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  })
+}
+
+const SPARK_VERT = /* glsl */ `
+  attribute vec3 aDir;
+  attribute vec4 aParam;
+  attribute vec3 aColor;
+  uniform float uTime;
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    float seed = aParam.x;
+    float spd = aParam.y;
+    float span = aParam.z;
+    float sz = aParam.w;
+
+    float life = fract(uTime * spd + seed);
+    float fade = sin(life * 3.14159265);
+    vec3 p = position + aDir * ((life - 0.5) * span);
+    p.x += sin(uTime * 4.2 + seed * 31.0) * 0.08;
+    p.y += cos(uTime * 3.7 + seed * 23.0) * 0.08;
+
+    vColor = aColor;
+    vAlpha = fade * 0.92;
+    vec4 mvPos = modelViewMatrix * vec4(p, 1.0);
+    gl_PointSize = sz * (260.0 / max(-mvPos.z, 0.5));
+    gl_Position = projectionMatrix * mvPos;
+  }
+`
+
+function createSparkMat(focusU) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: SHARED_TIME,
+      uFocus: focusU,
+      uTex: { value: getSparkTex() },
+    },
+    vertexShader: SPARK_VERT,
+    fragmentShader: FX_FRAG,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+  })
+}
+
 function createWayMaterials(id, focusU) {
   const V = VISUALS[id]
   return {
     tube: createTubeMat(id, focusU),
     rail: createRailMat(focusU),
+    floor: createFloorMat(focusU),
+    hull: createHullMat(focusU),
+    panel: createPanelMat(focusU),
+    lightBar: createLightBarMat(focusU),
+    neonRim: withCameraFade(withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.2, 0.25), 0.7, 1.35),
+    windStreak: createWindStreakMat(focusU),
+    sparks: createSparkMat(focusU),
     glass: withCameraFade(withFocusFade(new THREE.MeshPhysicalMaterial({
       color: V.glass,
       normalMap: texNormal(id),
@@ -811,6 +1428,114 @@ function frameAt(T) {
   const N = new THREE.Vector3().crossVectors(T, Math.abs(T.y) > 0.9 ? X : Y).normalize()
   const B = new THREE.Vector3().crossVectors(T, N).normalize()
   return { N, B }
+}
+
+const _bMat = new THREE.Matrix4()
+function basisQuat(rx, ry, rz) {
+  _bMat.makeBasis(rx, ry, rz)
+  return new THREE.Quaternion().setFromRotationMatrix(_bMat)
+}
+
+function buildCurveFrames(curve, steps) {
+  const frames = []
+  const T0 = curve.getTangentAt(0)
+  let down = Y.clone().negate().addScaledVector(T0, T0.y)
+  if (down.lengthSq() < 0.02) down = frameAt(T0).N.clone().negate()
+  down.normalize()
+
+  let arc = 0
+  let prevP = curve.getPointAt(0)
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps
+    const pos = i === 0 ? prevP.clone() : curve.getPointAt(u)
+    if (i > 0) arc += pos.distanceTo(prevP)
+    prevP = pos
+    const T = curve.getTangentAt(u)
+    // Transporte paralelo de `down` + alineación suave hacia abajo en tramos no invertidos
+    down = down.clone().addScaledVector(T, -down.dot(T))
+    if (down.lengthSq() < 1e-5) down = frameAt(T).N.clone().negate()
+    down.normalize()
+
+    const wd = Y.clone().negate().addScaledVector(T, T.y)
+    if (wd.lengthSq() > 0.14) {
+      wd.normalize()
+      if (down.dot(wd) > 0.2) down.lerp(wd, 0.22).normalize()
+    }
+    const up = down.clone().negate()
+    const right = new THREE.Vector3().crossVectors(up, T)
+    if (right.lengthSq() < 1e-5) right.copy(frameAt(T).N)
+    else right.normalize()
+    frames.push({ pos, T, up, right, arc })
+  }
+  return frames
+}
+
+function sampleCurveFrame(frames, u) {
+  const fIdx = THREE.MathUtils.clamp(u, 0, 1) * (frames.length - 1)
+  const i0 = Math.floor(fIdx)
+  const i1 = Math.min(frames.length - 1, i0 + 1)
+  const alpha = fIdx - i0
+  const a = frames[i0]; const b = frames[i1]
+  const pos = a.pos.clone().lerp(b.pos, alpha)
+  const T = a.T.clone().lerp(b.T, alpha).normalize()
+  const up = a.up.clone().lerp(b.up, alpha)
+  up.addScaledVector(T, -up.dot(T))
+  if (up.lengthSq() < 1e-5) up.copy(a.up)
+  up.normalize()
+  const right = new THREE.Vector3().crossVectors(up, T).normalize()
+  return { pos, T, up, right }
+}
+
+const FLOOR_ANGS = [-0.50, -0.42, -0.30, 0.0, 0.30, 0.42, 0.50]
+const FLOOR_RADS = [0.962, 0.944, 0.974, 0.976, 0.974, 0.944, 0.962]
+
+function buildFloorSegmentGeo(s, frames, V, isFast, isSlow) {
+  const R = s.radius
+  const sk = s.speedK ?? 1
+  const density = isFast ? 0.42 : isSlow ? 0.18 : (sk >= 1.25 ? 0.4 : sk <= 0.85 ? 0.2 : 0.28)
+  const scroll = (isFast ? 0.95 : isSlow ? 0.34 : 0.58) * sk
+  const glowMult = isFast ? 1.32 : isSlow ? 0.9 : 1.12
+  const warmShift = isSlow ? 1.0 : 0.0
+  const evHex = s.event ? (EVENT_ACCENTS[s.event] ?? V.rail) : (V.cine?.floor ?? V.rail)
+  const acc = new THREE.Color(evHex)
+
+  const nCols = FLOOR_ANGS.length
+  const pos = []; const norm = []; const uv = []; const meta = []; const accent = []; const idx = []
+  const dir = new THREE.Vector3()
+  const down = new THREE.Vector3()
+
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i]
+    down.copy(f.up).negate()
+    const uCoord = f.arc * density
+    for (let k = 0; k < nCols; k++) {
+      const a = FLOOR_ANGS[k]
+      const rr = R * FLOOR_RADS[k]
+      dir.copy(down).multiplyScalar(Math.cos(a)).addScaledVector(f.right, Math.sin(a)).normalize()
+      pos.push(f.pos.x + dir.x * rr, f.pos.y + dir.y * rr, f.pos.z + dir.z * rr)
+      norm.push(-dir.x, -dir.y, -dir.z)
+      uv.push(uCoord, k / (nCols - 1))
+      meta.push(scroll, glowMult, warmShift)
+      accent.push(acc.r, acc.g, acc.b)
+    }
+  }
+  for (let i = 0; i < frames.length - 1; i++) {
+    for (let k = 0; k < nCols - 1; k++) {
+      const a = i * nCols + k
+      const b = (i + 1) * nCols + k
+      const c = i * nCols + k + 1
+      const d = (i + 1) * nCols + k + 1
+      idx.push(a, b, c, b, d, c)
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setAttribute('aFloorMeta', new THREE.Float32BufferAttribute(meta, 3))
+  g.setAttribute('aFloorAccent', new THREE.Float32BufferAttribute(accent, 3))
+  g.setIndex(idx)
+  return g
 }
 
 function pushFxPoint(buckets, texKey, pos, dir, mode, seed, speed, size, col) {
@@ -936,15 +1661,31 @@ function addSegmentEvent(s, V, out) {
   const c = s.curve
   const R = s.radius
   const accHex = EVENT_ACCENTS[ev] ?? V.rail
-  const accCol = hot(accHex, 1.35)
-  const { cones, cyls, lights, rings, spinMeta, bladeMeta, pulseMeta, discs, fxBuckets } = out
+  const accCol = hot(accHex, 1.48)
+  const { cones, cyls, lights, rings, mouthRings, ribFrames, spinMeta, bladeMeta, pulseMeta, discs, fxBuckets } = out
+
+  // Transición visible de entrada y salida de ambiente del evento (anillo de neón + marco + destello)
+  for (const uEdge of (s.air ? [0.02] : [0.015, 0.985])) {
+    const Pe = c.getPointAt(uEdge)
+    const Te = c.getTangentAt(uEdge)
+    const qe = aim(Z, Te)
+    if (!s.air && ribFrames) {
+      put(ribFrames, Pe, qe, R * 1.03, R * 1.03, 1.15, new THREE.Color(V.cine?.panel?.base ?? '#1c2233'))
+    }
+    if (mouthRings) {
+      put(mouthRings, Pe, qe, R * 1.06, R * 1.06, R * 1.06, accCol)
+    }
+    for (let k = 0; k < 6; k++) {
+      pushFxPoint(fxBuckets, 'ring', Pe, Te, 6, k / 6, 0.9, 0.28, new THREE.Color(accHex))
+    }
+  }
 
   // Teaser de curiosidad en la entrada del tramo: baliza pulsante + 2 luces guía
   const P0 = c.getPointAt(0.04)
   const T0 = c.getTangentAt(0.04)
   const { N: N0 } = frameAt(T0)
   const pulseRate = (s.speedK ?? 1) > 1.05 ? 6.0 : (s.speedK ?? 1) < 0.9 ? 2.4 : 4.0
-  pulseMeta.push({ pos: P0, q: aim(Z, T0), baseScale: [R * 1.32, R * 1.32, R * 1.32], amp: [0.14, 0.14, 0.14], freq: pulseRate, phase: s.idx * 0.7, c: accCol, kind: 'ring' })
+  pulseMeta.push({ pos: P0, q: aim(Z, T0), baseScale: [R * 1.24, R * 1.24, R * 1.24], amp: [0.16, 0.16, 0.16], freq: pulseRate, phase: s.idx * 0.7, c: accCol, kind: 'ring' })
   put(lights, P0.clone().addScaledVector(N0, R + 0.35), IDENT, 0.22, 0.22, 0.22, accCol)
   put(lights, P0.clone().addScaledVector(N0, -(R + 0.35)), IDENT, 0.22, 0.22, 0.22, accCol)
 
@@ -1018,7 +1759,7 @@ function addSegmentEvent(s, V, out) {
   } else if (ev === 'pantano') {
     for (const u of [0.25, 0.5, 0.75]) {
       const Pp = c.getPointAt(u)
-      put(cyls, Pp.clone().addScaledVector(Y, -R * 0.85), IDENT, R * 2.4, 0.16, R * 2.4, new THREE.Color('#3b5928'))
+      put(cyls, Pp.clone().addScaledVector(Y, -R * 1.12), IDENT, R * 1.85, 0.08, R * 1.85, new THREE.Color('#3b5928'))
       for (let i = 0; i < 6; i++) {
         const bp = Pp.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, -R * 0.65)
         pushFxPoint(fxBuckets, 'foam', bp, Y, 5, rng(), 0.28 + rng() * 0.2, 0.34 + rng() * 0.18, new THREE.Color('#9be066'))
@@ -1040,24 +1781,185 @@ function addSegmentEvent(s, V, out) {
   }
 }
 
-// ═══════════════════════════ BUILD WAY ═══════════════════════════
+// ═══════════════════════════ AMBIENTE INTERIOR Y BUILD WAY ═══════════════════════════
+const PANEL_SLOTS_EVEN = [0.88, -1.88]
+const PANEL_SLOTS_ODD = [-0.88, 1.88]
+const LIGHTBAR_ANGLES = [0.58, -0.58, 1.48, -1.48]
+const WHITE_COL = new THREE.Color('#ffffff')
+const PRISM_COLS = ['#7df9ff', '#ff7de9', '#a78bff', '#7dffb2'].map((h) => hot(h, 1.28))
+const PETAL_COLS = ['#ff88c2', '#ffd27a', '#ffc2df'].map((h) => hot(h, 1.2))
+
+function addWindAndSparksForSegment(s, V, frames, isFast, isSlow, out) {
+  const { windStreaks, sparkBucket } = out
+  const rng = mulberry32(s.idx * 3571 + 41)
+  const ev = s.event || (EVENT_ACCENTS[s.kind] ? s.kind : null)
+  const sk = s.speedK ?? 1
+  const intenseEv = ev === 'turbina' || ev === 'erupcion' || ev === 'geiser' || ev === 'canon' || ev === 'portal' || ev === 'hielo_resbaloso'
+  const mult = (intenseEv ? 2.1 : ev ? 1.45 : 1.0) * (isFast || sk >= 1.25 ? 1.45 : isSlow || sk <= 0.85 ? 0.55 : 1.0)
+
+  const themeAtmo = V.cine?.atmo ?? {}
+  const baseStreakHex = ev ? (EVENT_ACCENTS[ev] ?? themeAtmo.streak ?? '#5ce1ff') : (themeAtmo.streak ?? '#5ce1ff')
+  const baseSparkHex = ev === 'erupcion' || ev === 'canon' ? '#ff9438'
+    : ev === 'geiser' || ev === 'cascada' ? '#8ceeff'
+    : ev === 'turbina' ? '#ffe875'
+    : ev === 'portal' ? '#ea80fc'
+    : (themeAtmo.spark ?? '#ff9e42')
+
+  const nStreaks = Math.min(48, Math.max(2, Math.round(s.length * 0.52 * mult)))
+  const R = s.radius
+  for (let i = 0; i < nStreaks; i++) {
+    const u = 0.05 + rng() * 0.9
+    const f = frames ? sampleCurveFrame(frames, u) : (() => {
+      const T = s.curve.getTangentAt(u); const { N, B } = frameAt(T)
+      return { pos: s.curve.getPointAt(u), T, up: N, right: B }
+    })()
+    const ang = (rng() - 0.5) * Math.PI * 1.38 // laterales y cielo, evitando la pista inferior
+    const rad = R * (0.7 + rng() * 0.22)
+    const radialOut = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
+    const bin = new THREE.Vector3().crossVectors(f.T, radialOut).normalize()
+    const pos = f.pos.clone().addScaledVector(radialOut, rad)
+    const q = basisQuat(f.T, radialOut, bin)
+    const lenScale = (1.1 + rng() * 1.3) * (intenseEv || isFast ? 1.35 : 1.0)
+    const thickScale = (0.75 + rng() * 0.6)
+    const col = new THREE.Color(baseStreakHex).offsetHSL((rng() - 0.5) * 0.04, 0, (rng() - 0.5) * 0.1).multiplyScalar(intenseEv ? 1.32 : 1.15)
+    windStreaks.push({
+      m: new THREE.Matrix4().compose(pos, q, new THREE.Vector3(lenScale, thickScale, thickScale)),
+      c: col,
+      seed: rng(),
+      speed: (0.75 + rng() * 0.85) * sk * (intenseEv ? 1.45 : 1.0),
+      span: 2.2 + rng() * 2.2,
+      alpha: (intenseEv ? 0.72 : isSlow ? 0.34 : 0.52),
+    })
+  }
+
+  const nSparks = Math.min(54, Math.max(2, Math.round(s.length * 0.58 * mult)))
+  for (let i = 0; i < nSparks; i++) {
+    const u = 0.04 + rng() * 0.92
+    const f = frames ? sampleCurveFrame(frames, u) : (() => {
+      const T = s.curve.getTangentAt(u); const { N, B } = frameAt(T)
+      return { pos: s.curve.getPointAt(u), T, up: N, right: B }
+    })()
+    const ang = (rng() - 0.5) * TAU
+    const rad = R * (0.25 + rng() * 0.58)
+    const p = f.pos.clone().addScaledVector(f.up, Math.cos(ang) * rad).addScaledVector(f.right, Math.sin(ang) * rad)
+    const col = new THREE.Color(baseSparkHex).offsetHSL((rng() - 0.5) * 0.05, 0, (rng() - 0.5) * 0.08).multiplyScalar(intenseEv ? 1.35 : 1.2)
+    pushFxPoint(
+      { spark: sparkBucket },
+      'spark',
+      p,
+      f.T,
+      rng(),
+      (0.55 + rng() * 0.85) * sk * (intenseEv ? 1.35 : 1.0),
+      2.0 + rng() * 2.4,
+      0.18 + rng() * 0.16,
+      col
+    )
+  }
+}
+
+function addThemeBayProps(themeId, f, R, bayIdx, bayLen, rng, out) {
+  const { solids, cones, boxes, spheresA, lights, glowOctas, bolts, fxBuckets, sparkBucket } = out
+  const side = bayIdx % 2 === 0 ? 1 : -1
+
+  if (themeId === 'sombrio') {
+    if (bayIdx % 2 === 0) {
+      const lp = f.pos.clone().addScaledVector(f.right, side * R * 1.06).addScaledVector(f.up, R * 0.2)
+      put(boxes, lp, IDENT, 0.18, 0.28, 0.18, new THREE.Color('#211730'))
+      put(lights, lp.clone().addScaledVector(Y, -0.05), IDENT, 0.22, 0.22, 0.22, hot('#c57aff', 1.35))
+    }
+    if (bayIdx % 3 === 0) {
+      pushFxPoint(fxBuckets, 'smoke', f.pos.clone().addScaledVector(f.up, -R * 0.25), Y, 5, rng(), 0.22, 0.85, new THREE.Color('#4a2475'))
+    }
+  } else if (themeId === 'bosque') {
+    // Lianas abrazando el cristal y hojas + luciérnagas dentro del tubo
+    const ang = side * (0.45 + rng() * 0.5)
+    const dir = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
+    const vp = f.pos.clone().addScaledVector(dir, R * 1.015)
+    const qVine = aim(Y, f.T.clone().addScaledVector(f.right, side * 0.35).normalize())
+    put(solids, vp, qVine, 0.055, bayLen * 0.85, 0.055, new THREE.Color('#2c7a38'))
+    if (bayIdx % 2 === 1) {
+      put(cones, vp.clone().addScaledVector(dir, 0.08), aim(Y, dir), 0.24, 0.34, 0.12, new THREE.Color('#53b848'))
+    }
+    pushFxPoint({ s: sparkBucket }, 's', f.pos.clone().addScaledVector(f.up, (rng() - 0.3) * R * 0.65).addScaledVector(f.right, (rng() - 0.5) * R * 0.7), f.T, rng(), 0.25, 1.1, 0.22, hot('#d4ff5a', 1.3))
+  } else if (themeId === 'mar') {
+    const bp = f.pos.clone().addScaledVector(f.right, (rng() - 0.5) * R * 1.1).addScaledVector(f.up, -R * 0.35)
+    pushFxPoint(fxBuckets, 'foam', bp, Y, 5, rng(), 0.38 + rng() * 0.25, 0.26 + rng() * 0.16, new THREE.Color('#bff3ff'))
+    if (bayIdx % 3 === 1) {
+      put(spheresA, f.pos.clone().addScaledVector(f.right, side * R * 0.82).addScaledVector(f.up, R * 0.32), IDENT, 0.18, 0.18, 0.18, new THREE.Color('#9cefff'))
+    }
+  } else if (themeId === 'desierto') {
+    if (bayIdx % 3 === 0) {
+      pushFxPoint(fxBuckets, 'smoke', f.pos.clone().addScaledVector(f.up, -R * 0.35), f.T, 3, rng(), 0.75, 0.7, new THREE.Color('#d9a45b'))
+    }
+  } else if (themeId === 'hielo') {
+    if (bayIdx % 2 === 0) {
+      const ang = side * (0.6 + rng() * 0.6)
+      const dir = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
+      const ip = f.pos.clone().addScaledVector(dir, R * 1.03)
+      put(cones, ip, aim(Y, dir), 0.22, 0.62, 0.22, new THREE.Color('#bceeff'))
+    }
+  } else if (themeId === 'volcan') {
+    const ep = f.pos.clone().addScaledVector(f.right, (rng() - 0.5) * R * 1.0).addScaledVector(f.up, -R * 0.45)
+    pushFxPoint(fxBuckets, 'ember', ep, Y, 1, rng(), 0.65 + rng() * 0.35, 0.24, new THREE.Color('#ff8429'))
+    if (bayIdx % 2 === 1) {
+      const lp = f.pos.clone().addScaledVector(f.right, side * R * 0.98).addScaledVector(f.up, -R * 0.35)
+      put(glowOctas, lp, IDENT, 0.2, 0.28, 0.2, hot('#ff4e1c', 1.35))
+    }
+  } else if (themeId === 'cristal') {
+    const ang = side * (0.55 + (bayIdx % 3) * 0.35)
+    const dir = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
+    const cp = f.pos.clone().addScaledVector(dir, R * 1.02)
+    put(glowOctas, cp, aim(Y, dir), 0.2, 0.56, 0.2, PRISM_COLS[bayIdx % PRISM_COLS.length])
+  } else if (themeId === 'nubes') {
+    if (bayIdx % 2 === 0) {
+      pushFxPoint(fxBuckets, 'smoke', f.pos.clone().addScaledVector(f.up, (rng() - 0.2) * R * 0.7), Y, 5, rng(), 0.24, 0.9, new THREE.Color('#e6f2ff'))
+    }
+    if (bayIdx % 3 === 1) {
+      const dir = f.up.clone().multiplyScalar(0.85).addScaledVector(f.right, side * 0.52).normalize()
+      const bp = f.pos.clone().addScaledVector(dir, R * 0.98)
+      put(bolts, bp, basisQuat(f.right, f.up, f.T), 0.9, 0.9, bayLen * 0.7, hot('#ffe97d', 1.38))
+    }
+  } else if (themeId === 'neon') {
+    if (bayIdx % 2 === 0) {
+      const np = f.pos.clone().addScaledVector(f.up, R * 0.96)
+      put(boxes, np, basisQuat(f.right, f.up, f.T), 0.14, 0.05, bayLen * 0.52, hot(bayIdx % 4 === 0 ? '#2bffe8' : '#ff2bd6', 1.35))
+    }
+  } else if (themeId === 'jardin') {
+    const ang = side * (0.55 + rng() * 0.6)
+    const dir = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
+    if (bayIdx % 2 === 0) {
+      put(spheresA, f.pos.clone().addScaledVector(dir, R * 1.04), IDENT, 0.24, 0.24, 0.24, PETAL_COLS[bayIdx % PETAL_COLS.length])
+    }
+    pushFxPoint({ s: sparkBucket }, 's', f.pos.clone().addScaledVector(f.up, (rng() - 0.3) * R * 0.7).addScaledVector(f.right, (rng() - 0.5) * R * 0.8), f.T, rng(), 0.32, 1.3, 0.22, PETAL_COLS[bayIdx % PETAL_COLS.length])
+  }
+}
+
 function build(way) {
-  const V = VISUALS[way.theme.id]
+  const themeId = way.theme.id
+  const V = VISUALS[themeId]
+  const cine = V.cine ?? {}
   const r = way.params.radius
   const ribBase = hot(V.rib, 1.25)
-  const mouthC = hot(V.rail, 1.85)
+  const mouthC = hot(V.rail, 1.65)
   const dim = hot(V.rib, 0.8)
   const archC = new THREE.Color(V.arch?.c ?? '#3a3f4a')
   const poleC = new THREE.Color(V.lamp?.pole ?? '#3a3f4a')
-  const lampC = hot(V.lamp?.c ?? V.rail, 1.32)
+  const lampC = hot(V.lamp?.c ?? V.rail, 1.28)
   const arrowC = hot(V.rail, 1.25)
   const bannerCols = (V.banner?.c ?? [V.rib, V.rail]).map((c) => new THREE.Color(c))
+  const panelBaseCol = new THREE.Color(cine.panel?.base ?? '#1e2536')
+  const panelGlowBase = cine.panel?.glow ?? V.rail
+  const barBaseHex = cine.bar ?? '#ff6028'
+  const neonBaseHex = cine.neon ?? V.rib
 
-  const tubes = []; const rails = []
-  const rings = []; const solids = []; const cones = []; const boxes = []; const octas = []
+  const tubes = []; const rails = []; const floors = []
+  const rings = []; const mouthRings = []; const ribFrames = []; const panelPods = []; const lightBars = []
+  const neonRims = []; const windStreaks = []
+  const solids = []; const cones = []; const boxes = []; const octas = []; const glowOctas = []; const bolts = []
   const spheres = []; const spheresA = []; const discs = []; const funnels = []; const dots = []
   const lights = []; const banners = []; const arrows = []; const signs = []
   const spinMeta = []; const bladeMeta = []; const pulseMeta = []
+  const sparkBucket = { pos: [], dir: [], param: [], col: [] }
   const fxBuckets = {
     spray: { pos: [], dir: [], param: [], col: [] },
     smoke: { pos: [], dir: [], param: [], col: [] },
@@ -1067,11 +1969,12 @@ function build(way) {
   }
 
   const solid = way.segments.filter((s) => !s.air)
+  const bayRng = mulberry32(way.idx * 8191 + 19)
 
   for (const s of way.segments) {
     const c = s.curve; const R = s.radius
-    const ribC = routeColor(V.rib, s.route, 1.25)
-    const railCol = routeColor(V.rail, s.route, 1.18)
+    const ribC = routeColor(neonBaseHex, s.route, 1.22)
+    const railCol = routeColor(V.rail, s.route, 0.85)
 
     // Perfil de ruta (rápida / lenta / espectacular)
     const prof = s.route >= 0 ? way.routes?.[s.route]?.profile : null
@@ -1079,10 +1982,11 @@ function build(way) {
     const isSlow = s.route >= 0 && (prof ? prof.speed === 'lenta' : s.route === 1)
     const isSpec = s.route >= 0 && !isFast && !isSlow
 
-    // Eventos + teasers de curiosidad
-    addSegmentEvent(s, V, { cones, cyls: solids, lights, rings, spinMeta, bladeMeta, pulseMeta, discs, fxBuckets })
+    // Eventos + teasers de curiosidad + anillos de transición
+    addSegmentEvent(s, V, { cones, cyls: solids, lights, rings, mouthRings, ribFrames, spinMeta, bladeMeta, pulseMeta, discs, fxBuckets })
 
     if (s.air) {
+      addWindAndSparksForSegment(s, V, null, isFast, isSlow, { windStreaks, sparkBucket })
       const P0 = c.getPoint(0); const T0 = c.getTangent(0); const P1 = c.getPoint(1); const T1 = c.getTangent(1)
       const n = Math.ceil(s.length / 0.9)
       for (let i = 1; i < n; i++) dots.push(...c.getPoint(i / n).toArray())
@@ -1092,17 +1996,17 @@ function build(way) {
       if (s.kind === 'trampolin') {
         const p = P0.clone().addScaledVector(Y, -0.35)
         put(solids, p, IDENT, R * 3.4, 0.3, R * 3.4, new THREE.Color(V.rib).multiplyScalar(0.5))
-        put(rings, p.clone().addScaledVector(Y, 0.3), aim(Z, Y), R * 1.7, R * 1.7, R * 1.7, mouthC)
-        put(rings, P0.clone().addScaledVector(T0, 0.9), aim(Z, T0), R * 1.35, R * 1.35, R * 1.35, mouthC)
+        put(mouthRings, p.clone().addScaledVector(Y, 0.3), aim(Z, Y), R * 1.7, R * 1.7, R * 1.7, mouthC)
+        put(mouthRings, P0.clone().addScaledVector(T0, 0.9), aim(Z, T0), R * 1.35, R * 1.35, R * 1.35, mouthC)
       } else if (s.kind === 'canon' || s.kind === 'erupcion') {
-        ;[[0.5, 1.15], [1.1, 1.3], [1.7, 1.5]].forEach(([b, k]) => put(rings, P0.clone().addScaledVector(T0, -b), aim(Z, T0), R * k, R * k, R * k, METAL))
-        put(rings, P0, aim(Z, T0), R * 1.2, R * 1.2, R * 1.2, hot('#ff7a2f', 1.9))
-        ;[0.8, 1.7].forEach((d, idx) => put(rings, P0.clone().addScaledVector(T0, d), aim(Z, T0), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), hot('#ff9a3c', 1.75)))
+        ;[[0.5, 1.15], [1.1, 1.3], [1.7, 1.5]].forEach(([b, k]) => put(ribFrames, P0.clone().addScaledVector(T0, -b), aim(Z, T0), R * k, R * k, 1.2, METAL))
+        put(mouthRings, P0, aim(Z, T0), R * 1.2, R * 1.2, R * 1.2, hot('#ff7a2f', 1.65))
+        ;[0.8, 1.7].forEach((d, idx) => put(mouthRings, P0.clone().addScaledVector(T0, d), aim(Z, T0), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), hot('#ff9a3c', 1.55)))
       } else {
-        put(rings, P0, aim(Z, T0), R * 1.12, R * 1.12, R * 1.12, mouthC)
+        put(mouthRings, P0, aim(Z, T0), R * 1.12, R * 1.12, R * 1.12, mouthC)
         put(solids, P0.clone().addScaledVector(Y, -R - 0.15), IDENT, R * 2.6, 0.18, R * 2.6, METAL)
       }
-      put(rings, P1, aim(Z, T1), R * 1.9, R * 1.9, R * 1.9, mouthC)
+      put(mouthRings, P1, aim(Z, T1), R * 1.9, R * 1.9, R * 1.9, mouthC)
       put(rings, P1, aim(Z, T1), R * 1.25, R * 1.25, R * 1.25, dim)
       put(rings, P1, aim(Z, T1), R * 0.6, R * 0.6, R * 0.6, dim)
       put(discs, P1, aim(Y, T1), R * 3.8, 0.04, R * 3.8)
@@ -1110,35 +2014,79 @@ function build(way) {
     }
 
     const steps = Math.min(240, Math.max(8, Math.ceil(s.length * 2.5)))
-    const tubeGeo = new THREE.TubeGeometry(c, steps, R, 10, false)
+    const frames = buildCurveFrames(c, steps)
+
+    const tubeGeo = new THREE.TubeGeometry(c, steps, R, 16, false)
     scaleTubeUvX(tubeGeo, s.length)
+    const ev = s.event || (EVENT_ACCENTS[s.kind] ? s.kind : null)
+    const tubeTint = ev ? WHITE_COL.clone().lerp(new THREE.Color(EVENT_ACCENTS[ev]), 0.62) : WHITE_COL
+    colorizeGeo(tubeGeo, tubeTint)
     tubes.push(tubeGeo)
 
-    const fr = c.computeFrenetFrames(steps, false); const pts = []
-    for (let i = 0; i <= steps; i++) {
-      const a = 0.9
-      pts.push(c.getPointAt(i / steps).addScaledVector(fr.normals[i], Math.cos(a) * R * 0.97).addScaledVector(fr.binormals[i], Math.sin(a) * R * 0.97))
-    }
-    const railGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), steps, 0.06, 4, false)
+    floors.push(buildFloorSegmentGeo(s, frames, V, isFast, isSlow))
+
+    const pts = frames.map((f) => f.pos.clone().addScaledVector(f.up, R * 0.99))
+    const railGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), steps, 0.018, 4, false)
     scaleTubeUvX(railGeo, s.length)
     colorizeGeo(railGeo, railCol)
     rails.push(railGeo)
 
-    // costillas + banderines/luces colgantes
-    const nRib = Math.max(1, Math.floor(s.length / 2.2))
-    for (let i = 0; i < nRib; i++) {
-      const u = (i + 0.5) / nRib
-      const P = c.getPointAt(u); const T = c.getTangentAt(u)
-      put(rings, P, aim(Z, T), R * 1.05, R * 1.05, R * 1.05, ribC)
+    // Cápsulas segmentadas: anillos nervados + borde neón + paneles opacos alternados + barras de luz + ambiente del tema
+    const baySpacing = isFast ? 2.15 : isSlow ? 2.65 : 2.38
+    const nBays = Math.max(1, Math.round(s.length / baySpacing))
+    const bayLen = s.length / nBays
+    const evGlowHex = ev ? (EVENT_ACCENTS[ev] ?? panelGlowBase) : panelGlowBase
+    const evBarHex = ev ? (EVENT_ACCENTS[ev] ?? barBaseHex) : barBaseHex
+    const panelGlowCol = hot(evGlowHex, 1.25)
+    const barCol = hot(evBarHex, isFast ? 1.38 : isSlow ? 1.08 : 1.26)
+    const bayNeonCol = ev ? hot(EVENT_ACCENTS[ev], 1.35) : ribC
+    const bayFrameCol = routeColor(panelBaseCol, s.route, 1.0)
+
+    for (let i = 1; i < nBays; i++) {
+      const u = i / nBays
+      const f = sampleCurveFrame(frames, u)
+      const q = basisQuat(f.right, f.up, f.T)
+      put(ribFrames, f.pos, q, R, R, 1.0, bayFrameCol)
+      put(neonRims, f.pos, q, R * 1.02, R * 1.02, R * 1.02, bayNeonCol)
+    }
+
+    for (let i = 0; i < nBays; i++) {
+      const u = (i + 0.5) / nBays
+      const f = sampleCurveFrame(frames, u)
+      const qBase = basisQuat(f.right, f.up, f.T)
+
+      // Módulos opacos alternados dejando amplias ventanas de cristal
+      const slots = i % 2 === 0 ? PANEL_SLOTS_EVEN : PANEL_SLOTS_ODD
+      for (const ang of slots) {
+        const qPod = qBase.clone().multiply(new THREE.Quaternion().setFromAxisAngle(Z, -ang))
+        panelPods.push({
+          m: new THREE.Matrix4().compose(f.pos, qPod, new THREE.Vector3(R, R, bayLen * 0.78)),
+          c: bayFrameCol,
+          glow: panelGlowCol,
+        })
+      }
+
+      // Barras de luz incrustadas en el interior del tubo
+      const barMask = i % 2 === 0 ? LIGHTBAR_ANGLES : [LIGHTBAR_ANGLES[0], LIGHTBAR_ANGLES[1]]
+      for (const ang of barMask) {
+        const dir = f.up.clone().multiplyScalar(Math.cos(ang)).addScaledVector(f.right, Math.sin(ang)).normalize()
+        const bp = f.pos.clone().addScaledVector(dir, R * 0.955)
+        const qBar = qBase.clone().multiply(new THREE.Quaternion().setFromAxisAngle(Z, -ang))
+        put(lightBars, bp, qBar, R, R, bayLen * 0.58, barCol)
+      }
+
+      addThemeBayProps(themeId, f, R, i, bayLen, bayRng, { solids, cones, boxes, spheresA, lights, glowOctas, bolts, fxBuckets, sparkBucket })
+
       if (i % 3 === 1 && s.length > 5) {
-        const { N } = frameAt(T)
         const sideSign = i % 2 === 0 ? 1 : -1
-        const bp = P.clone().addScaledVector(N, sideSign * R * 1.12).addScaledVector(Y, -R * 0.25)
+        const bp = f.pos.clone().addScaledVector(f.right, sideSign * R * 1.15).addScaledVector(Y, -R * 0.22)
         put(banners, bp, IDENT, 0.75, 0.75, 0.75, bannerCols[i % bannerCols.length])
-        const lCol = isSlow ? hot('#ffd99e', 1.28) : isSpec ? hot(bannerCols[i % bannerCols.length], 1.35) : lampC
+        const lCol = isSlow ? hot('#ffd99e', 1.24) : isSpec ? hot(bannerCols[i % bannerCols.length], 1.32) : lampC
         put(lights, bp.clone().addScaledVector(Y, -0.55), IDENT, 0.2, 0.2, 0.2, lCol)
       }
     }
+
+    addWindAndSparksForSegment(s, V, frames, isFast, isSlow, { windStreaks, sparkBucket })
 
     // acento visual por perfil de ruta
     if (isSlow && s.length > 5) {
@@ -1164,11 +2112,12 @@ function build(way) {
     }
 
     if (s.kind === 'salida' || s.kind === 'llegada') {
-      const baseU = s.kind === 'salida' ? 0.05 : 0.95
-      const stepU = s.kind === 'salida' ? 0.1 : -0.1
+      const baseU = s.kind === 'salida' ? 0.04 : 0.96
+      const stepU = s.kind === 'salida' ? 0.08 : -0.08
       for (let k = 0; k < 3; k++) {
         const u = THREE.MathUtils.clamp(baseU + k * stepU, 0.02, 0.98)
-        put(rings, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.22 + k * 0.08), R * (1.22 + k * 0.08), R * (1.22 + k * 0.08), mouthC)
+        const targetList = k === 0 ? mouthRings : rings
+        put(targetList, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), mouthC)
       }
     }
 
@@ -1310,10 +2259,13 @@ function build(way) {
   return {
     tube: tubes.length ? mergeGeometries(tubes) : null,
     rail: rails.length ? mergeGeometries(rails) : null,
-    rings, solids, cones, boxes, octas, spheres, spheresA, discs, funnels, decor,
+    floor: floors.length ? mergeGeometries(floors) : null,
+    ribFrames, neonRims, mouthRings, panelPods, lightBars, windStreaks,
+    rings, solids, cones, boxes, octas, glowOctas, bolts, spheres, spheresA, discs, funnels, decor,
     lights, banners, arrows, signs, spinMeta, bladeMeta, pulseMeta,
     dots: dots.length ? pointsGeo(dots) : null,
     parts: pointsGeo(pp),
+    sparks: buildFxGeo(sparkBucket),
     fxGeos: {
       spray: buildFxGeo(fxBuckets.spray),
       smoke: buildFxGeo(fxBuckets.smoke),
@@ -1341,6 +2293,59 @@ function Inst({ geo, mat, items, cast }) {
   }, [items])
   if (!items.length) return null
   return <instancedMesh ref={ref} args={[geo, mat, items.length]} castShadow={cast} receiveShadow={cast} frustumCulled={false} />
+}
+
+function PanelInst({ items, mat }) {
+  const ref = useRef()
+  const geo = useMemo(() => {
+    const g = GEO.panelPod.clone()
+    const glowArr = new Float32Array(items.length * 3)
+    items.forEach((it, i) => {
+      glowArr[i * 3] = it.glow.r
+      glowArr[i * 3 + 1] = it.glow.g
+      glowArr[i * 3 + 2] = it.glow.b
+    })
+    g.setAttribute('aGlowColor', new THREE.InstancedBufferAttribute(glowArr, 3))
+    return g
+  }, [items])
+  useLayoutEffect(() => {
+    const o = ref.current
+    if (!o) return
+    items.forEach((it, i) => { o.setMatrixAt(i, it.m); if (it.c) o.setColorAt(i, it.c) })
+    o.instanceMatrix.needsUpdate = true
+    if (o.instanceColor) o.instanceColor.needsUpdate = true
+  }, [items])
+  if (!items.length) return null
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
+}
+
+function WindStreaksInst({ items, mat }) {
+  const ref = useRef()
+  const geo = useMemo(() => {
+    const g = GEO.streakCard.clone()
+    const sArr = new Float32Array(items.length * 4)
+    const cArr = new Float32Array(items.length * 3)
+    items.forEach((it, i) => {
+      sArr[i * 4] = it.seed
+      sArr[i * 4 + 1] = it.speed
+      sArr[i * 4 + 2] = it.span
+      sArr[i * 4 + 3] = it.alpha
+      cArr[i * 3] = it.c.r
+      cArr[i * 3 + 1] = it.c.g
+      cArr[i * 3 + 2] = it.c.b
+    })
+    g.setAttribute('aStreak', new THREE.InstancedBufferAttribute(sArr, 4))
+    g.setAttribute('aStreakCol', new THREE.InstancedBufferAttribute(cArr, 3))
+    return g
+  }, [items])
+  useLayoutEffect(() => {
+    const o = ref.current
+    if (!o) return
+    items.forEach((it, i) => o.setMatrixAt(i, it.m))
+    o.instanceMatrix.needsUpdate = true
+  }, [items])
+  if (!items.length) return null
+  return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
 }
 
 function SignInst({ items, mat }) {
@@ -1467,17 +2472,30 @@ function Way({ way, focused }) {
     mats.decorGlow.depthWrite = writeDepth
     mats.rail.depthWrite = writeDepth
     mats.sign.depthWrite = writeDepth
+    mats.floor.depthWrite = writeDepth
+    mats.hull.depthWrite = writeDepth
+    mats.panel.depthWrite = writeDepth
+    mats.neonRim.depthWrite = writeDepth
   })
 
   return (
     <group>
       {d.tube && <mesh geometry={d.tube} material={mats.tube} />}
+      {d.floor && <mesh geometry={d.floor} material={mats.floor} receiveShadow />}
       {d.rail && <mesh geometry={d.rail} material={mats.rail} />}
+      <Inst geo={GEO.ribFrame} mat={mats.hull} items={d.ribFrames} cast />
+      <Inst geo={GEO.ribNeon} mat={mats.neonRim} items={d.neonRims} />
+      <Inst geo={GEO.mouthNeon} mat={mats.neonRim} items={d.mouthRings} />
+      <PanelInst items={d.panelPods} mat={mats.panel} />
+      <Inst geo={GEO.lightBar} mat={mats.lightBar} items={d.lightBars} />
+      <WindStreaksInst items={d.windStreaks} mat={mats.windStreak} />
       <Inst geo={GEO.torus} mat={mats.glow} items={d.rings} />
       <Inst geo={GEO.cyl} mat={mats.deco} items={d.solids} cast />
       <Inst geo={GEO.cone} mat={mats.deco} items={d.cones} cast />
       <Inst geo={GEO.box} mat={mats.deco} items={d.boxes} cast />
       <Inst geo={GEO.octa} mat={mats.deco} items={d.octas} cast />
+      <Inst geo={GEO.octa} mat={mats.decorGlow} items={d.glowOctas} />
+      <Inst geo={GEO.bolt} mat={mats.decorGlow} items={d.bolts} />
       <Inst geo={GEO.sphere} mat={mats.glass} items={d.spheres} />
       <Inst geo={GEO.sphere} mat={mats.decoA} items={d.spheresA} />
       <Inst geo={GEO.cyl} mat={mats.glass} items={d.discs} />
@@ -1497,6 +2515,7 @@ function Way({ way, focused }) {
       })}
       {d.dots && <points geometry={d.dots} material={mats.dots} frustumCulled={false} />}
       <points geometry={d.parts} material={mats.parts} frustumCulled={false} />
+      {d.sparks && <points geometry={d.sparks} material={mats.sparks} frustumCulled={false} />}
       {Object.entries(d.fxGeos).map(([k, geo]) =>
         geo ? <points key={k} geometry={geo} material={mats.fx[k]} frustumCulled={false} /> : null
       )}

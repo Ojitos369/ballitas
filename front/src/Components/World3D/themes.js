@@ -20,6 +20,13 @@ export const VISUALS = {
       { k: 'sphere', seed: 3, d: 0.25, off: [0.4, 2.2], y: [0, 0], w: [0.2, 0.34], h: [0.2, 0.34], c: ['#b784ff', '#7a5cff'], e: 1.3, a: 0.75 },
     ],
     parts: { n: 90, c: '#9b6bff', s: 0.1, kind: 'spores', vy: 0.18, vx: 0.15, amp: 0.65, freq: 1.1, a: 0.55, glow: 1.25 },
+    cine: {
+      panel: { base: '#1a1529', glow: '#b784ff' },
+      bar: '#c864ff',
+      neon: '#8a5cf0',
+      floor: '#9b6bff',
+      atmo: { kind: 'fog_lanterns', mode: 0, c1: '#4b1f7a', c2: '#c57aff', density: 1.0, spark: '#d39bff', streak: '#8d6bff' },
+    },
   },
   bosque: {
     glass: '#7fe09a', rib: '#4caf50', rail: '#9cff6b',
@@ -34,6 +41,13 @@ export const VISUALS = {
       { k: 'sphere', seed: 5, d: 0.3, off: [0, 0.2], y: [0, 0], w: [0.35, 0.6], h: [0.22, 0.34], c: ['#e53935', '#ff7043'], top: true },
     ],
     parts: { n: 80, c: '#d4ff5a', s: 0.12, kind: 'fireflies', vy: 0.08, vx: 0.12, amp: 0.9, freq: 1.6, a: 0.65, glow: 1.3 },
+    cine: {
+      panel: { base: '#192b1f', glow: '#a8ff60' },
+      bar: '#b9ff5a',
+      neon: '#52d67a',
+      floor: '#7fe09a',
+      atmo: { kind: 'vines_fireflies', mode: 1, c1: '#2e8b3c', c2: '#d4ff5a', density: 1.0, spark: '#d4ff5a', streak: '#7bf09b' },
+    },
   },
   mar: {
     glass: '#5fc4f0', rib: '#7fe0ff', rail: '#7fe0ff',
@@ -47,6 +61,13 @@ export const VISUALS = {
       { k: 'sphere', seed: 8, d: 0.4, off: [0.3, 3], y: [0, 0], w: [0.15, 0.4], h: [0.15, 0.4], c: ['#bff3ff'], e: 1.2, a: 0.5 },
     ],
     parts: { n: 95, c: '#bff3ff', s: 0.1, kind: 'bubbles', vy: 0.75, vx: 0.08, amp: 0.45, freq: 1.8, a: 0.55, glow: 1.2 },
+    cine: {
+      panel: { base: '#132838', glow: '#5ee7ff' },
+      bar: '#ff7a4d',
+      neon: '#4fd8ff',
+      floor: '#5fc4f0',
+      atmo: { kind: 'bubbles_caustics', mode: 2, c1: '#23b8eb', c2: '#bff3ff', density: 1.1, spark: '#9cf2ff', streak: '#4fe3ff' },
+    },
   },
   desierto: {
     glass: '#f0cf8a', rib: '#ffb347', rail: '#ffd27a',
@@ -61,6 +82,13 @@ export const VISUALS = {
       { k: 'octa', seed: 11, d: 0.25, off: [0, 0.8], y: [0, 0], w: [0.4, 0.8], h: [0.3, 0.6], c: ['#8d6e4b', '#a0805a'], tilt: 0.6 },
     ],
     parts: { n: 85, c: '#ffe2a8', s: 0.085, kind: 'sand', vy: 0.05, vx: 0.95, amp: 0.5, freq: 2.0, a: 0.5, glow: 1.15 },
+    cine: {
+      panel: { base: '#302318', glow: '#ffc866' },
+      bar: '#ff7b29',
+      neon: '#ffb347',
+      floor: '#ffd27a',
+      atmo: { kind: 'sand_heat', mode: 3, c1: '#e8a84a', c2: '#ffd98a', density: 1.0, spark: '#ffd27a', streak: '#ffcf70' },
+    },
   },
   hielo: {
     glass: '#bfeaff', rib: '#eaffff', rail: '#bff3ff',
@@ -73,6 +101,13 @@ export const VISUALS = {
       { k: 'sphere', seed: 13, d: 0.25, off: [0, 0.2], y: [0, 0], w: [0.5, 1], h: [0.4, 0.8], c: ['#e8f7ff'], top: true },
     ],
     parts: { n: 115, c: '#e8f9ff', s: 0.095, kind: 'snow', vy: -0.65, vx: 0.14, amp: 0.6, freq: 1.4, a: 0.65, glow: 1.15 },
+    cine: {
+      panel: { base: '#1a2c3b', glow: '#a8ecff' },
+      bar: '#6ce2ff',
+      neon: '#c4f5ff',
+      floor: '#9ee8ff',
+      atmo: { kind: 'frost_crystals', mode: 4, c1: '#9ce4ff', c2: '#ffffff', density: 1.05, spark: '#e6faff', streak: '#8be8ff' },
+    },
   },
   volcan: {
     glass: '#ff9a6a', rib: '#ff5a1f', rail: '#ff7a2f',
@@ -86,6 +121,13 @@ export const VISUALS = {
       { k: 'cone', seed: 16, d: 0.2, off: [0, 0.3], y: [0, 0], w: [0.3, 0.6], h: [1, 2.4], c: ['#5a2a1a'], top: true },
     ],
     parts: { n: 105, c: '#ff7b29', s: 0.105, kind: 'embers', vy: 1.05, vx: 0.2, amp: 0.55, freq: 2.4, a: 0.65, glow: 1.35 },
+    cine: {
+      panel: { base: '#271715', glow: '#ff6e30' },
+      bar: '#ff4e1c',
+      neon: '#ff7a2f',
+      floor: '#ff6a2b',
+      atmo: { kind: 'lava_embers', mode: 5, c1: '#ff3b14', c2: '#ffaa33', density: 1.15, spark: '#ff9033', streak: '#ff6830' },
+    },
   },
   cristal: {
     glass: '#b8a1ff', rib: '#a78bff', rail: '#b8a1ff',
@@ -98,6 +140,13 @@ export const VISUALS = {
       { k: 'sphere', seed: 18, d: 0.2, off: [0.5, 2.5], y: [0, 0], w: [0.18, 0.32], h: [0.18, 0.32], c: ['#e6dcff'], e: 1.35 },
     ],
     parts: { n: 90, c: '#d4c2ff', s: 0.105, kind: 'sparkles', vy: 0.12, vx: 0.1, amp: 0.5, freq: 2.2, a: 0.6, glow: 1.3 },
+    cine: {
+      panel: { base: '#1e1c36', glow: '#7df9ff' },
+      bar: '#d084ff',
+      neon: '#7df9ff',
+      floor: '#b8a1ff',
+      atmo: { kind: 'prisms', mode: 6, c1: '#7df9ff', c2: '#f08cff', density: 1.05, spark: '#e6dcff', streak: '#7df9ff' },
+    },
   },
   nubes: {
     glass: '#ffffff', rib: '#fff2a8', rail: '#fff2a8',
@@ -111,6 +160,13 @@ export const VISUALS = {
       { k: 'sphere', seed: 21, d: 0.25, off: [0.5, 3], y: [0, 0], w: [0.15, 0.3], h: [0.15, 0.3], c: ['#fff7b0'], e: 1.25 },
     ],
     parts: { n: 65, c: '#fff6cc', s: 0.12, kind: 'feathers', vy: -0.15, vx: 0.22, amp: 0.75, freq: 1.1, a: 0.55, glow: 1.15 },
+    cine: {
+      panel: { base: '#273042', glow: '#ffe985' },
+      bar: '#ffd54f',
+      neon: '#8fd4ff',
+      floor: '#fff2a8',
+      atmo: { kind: 'mist_lightning', mode: 7, c1: '#d8ecff', c2: '#ffe57f', density: 0.95, spark: '#ffe97d', streak: '#a6dcff' },
+    },
   },
   neon: {
     glass: '#2bffe8', rib: '#ff2bd6', rail: '#2bffe8',
@@ -119,11 +175,18 @@ export const VISUALS = {
     arch: { c: '#222a40' },
     landmark: { kind: 'neon_gate', c1: '#1c2233', c2: '#ff2bd6', glow: '#2bffe8' },
     props: [
-      { k: 'torus', seed: 22, d: 0.16, off: [0, 0], y: [0, 0], w: [1.5, 2.1], h: [1, 1], c: ['#ff2bd6', '#2bffe8', '#fff22b'], e: 1.35, ring: true },
+      { k: 'torus', seed: 22, d: 0.08, off: [0, 0], y: [0, 0], w: [1.32, 1.55], h: [1, 1], c: ['#ff2bd6', '#2bffe8', '#fff22b'], e: 1.25, ring: true },
       { k: 'cyl', seed: 23, d: 0.25, off: [0, 0.4], y: [0, 0], w: [0.1, 0.18], h: [1, 3], c: ['#2bffe8', '#ff2bd6'], e: 1.3 },
       { k: 'box', seed: 24, d: 0.2, off: [0.4, 2.4], y: [0, 0], w: [0.25, 0.5], h: [0.25, 0.5], c: ['#ff2bd6', '#2bffe8'], e: 1.3, tilt: 0.8 },
     ],
     parts: { n: 90, c: '#ff4be0', s: 0.1, kind: 'sparks', vy: 0.2, vx: 0.65, amp: 0.4, freq: 2.8, a: 0.6, glow: 1.35 },
+    cine: {
+      panel: { base: '#12182b', glow: '#2bffe8' },
+      bar: '#ff4e2b',
+      neon: '#2bffe8',
+      floor: '#ff2bd6',
+      atmo: { kind: 'circuit_grid', mode: 8, c1: '#2bffe8', c2: '#ff2bd6', density: 1.1, spark: '#ff8a3d', streak: '#2bffe8' },
+    },
   },
   jardin: {
     glass: '#ffd1e8', rib: '#ff8fb8', rail: '#ffd1e8',
@@ -137,5 +200,12 @@ export const VISUALS = {
       { k: 'sphere', seed: 26, d: 0.6, off: [0, 0.3], y: [0.75, 0.75], w: [0.25, 0.45], h: [0.25, 0.45], c: ['#ff6fa5', '#ffd24a', '#b06bff', '#ff8a5c'], top: true, tilt: 0.2 },
     ],
     parts: { n: 75, c: '#ffc2df', s: 0.11, kind: 'petals', vy: -0.35, vx: 0.25, amp: 0.85, freq: 1.3, a: 0.65, glow: 1.2 },
+    cine: {
+      panel: { base: '#212b25', glow: '#ff96c8' },
+      bar: '#ff85b3',
+      neon: '#a8f0c6',
+      floor: '#ffd1e8',
+      atmo: { kind: 'petals', mode: 9, c1: '#ff7cb8', c2: '#ffe07d', density: 1.0, spark: '#ffb8dc', streak: '#ffcfe6' },
+    },
   },
 }
