@@ -27,7 +27,7 @@ const FOV = 50
 const POV_FOV = 75
 const POV_FOV_MIN = 45
 const POV_FOV_MAX = 100
-const POV_PITCH_MAX = THREE.MathUtils.degToRad(65)
+const POV_PITCH_MAX = THREE.MathUtils.degToRad(20) // POV: giro libre a los lados, solo un poco arriba/abajo
 const POV_SENS = 0.0026
 const POV_LOCK_SENS = 0.0014
 const POV_KEY_YAW_SPEED = 1.2
@@ -568,14 +568,11 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       }
       povFwd.copy(povLastFwd.current)
 
-      // En el tubo el up es el de la pared (la cámara gira con la pista); con horizonte estable (H)
-      // o fuera del tubo, peso dominante de Y mundial para evitar roll y giros bruscos.
-      const onWall = selected.phase === 'travel' && !horizonRef.current
+      // POV: "abajo" es siempre la superficie a la que va pegada la ballita (suelo, pared o techo);
+      // si pasa al techo, el techo se vuelve el piso de la vista. No depende del horizonte estable (H) de Seguir.
+      const onWall = selected.phase === 'travel'
       if (selected.up && selected.up.lengthSq() > 1e-6) {
-        const upWeight = onWall ? 1 : selected.phase === 'travel' ? 0 : 0.45
-        povTargetUp.copy(Y_AXIS).multiplyScalar(1 - upWeight).addScaledVector(selected.up, upWeight)
-        if (povTargetUp.lengthSq() < 1e-4) povTargetUp.copy(Y_AXIS)
-        else povTargetUp.normalize()
+        povTargetUp.copy(selected.up).normalize()
       } else {
         povTargetUp.copy(Y_AXIS)
       }
