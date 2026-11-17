@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { VISUALS } from './themes.js'
+import Precompilado from './Precompilado.jsx'
 import { TAU, cityStyle, laneGapAt, makeWallBase, wallBaseInto, wallDirInto } from './vida/base.jsx'
 
 const SHELL_K = 1.03 // radio de la piel (× R), justo por fuera del cristal
@@ -304,8 +305,8 @@ export function TunelBanda({ way, mats, nearRef, active = true, nearActive = tru
   if (!active && !nearActive) return null
   return (
     <>
-      {active && <TunelBandaShell way={way} mat={mats.shell} />}
-      {nearActive && <TunelBandaNear way={way} mats={mats} nearRef={nearRef} />}
+      {active && <Precompilado><TunelBandaShell way={way} mat={mats.shell} /></Precompilado>}
+      {nearActive && <Precompilado><TunelBandaNear way={way} mats={mats} nearRef={nearRef} /></Precompilado>}
     </>
   )
 }

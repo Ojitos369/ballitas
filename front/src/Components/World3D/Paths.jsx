@@ -8,6 +8,7 @@ import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
 import { TunelBanda, createTunelMats } from './tunel.jsx'
+import Precompilado from './Precompilado.jsx'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -4196,17 +4197,19 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
         <Inst geo={GEO.plume} mat={mats.extPlume} items={d.extPlumes} />
       </group>
       {nearActive && (
-        <WayExteriorNear way={way} mats={mats} detailU={detailU} extFineRef={extFineRef} lmFineRef={lmFineRef} />
+        <Precompilado>
+          <WayExteriorNear way={way} mats={mats} detailU={detailU} extFineRef={extFineRef} lmFineRef={lmFineRef} />
+        </Precompilado>
       )}
 
       {/* Capa INTERIOR + Mini mundo del tema (montados bajo demanda solo en máx 2 ways cercanos/enfocados) */}
       {detailActive && (
-        <>
+        <Precompilado>
           <group ref={intGroupRef}>
             <WayInterior way={way} mats={mats} />
           </group>
           <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
-        </>
+        </Precompilado>
       )}
     </group>
   )

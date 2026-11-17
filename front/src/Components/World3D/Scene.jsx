@@ -20,6 +20,7 @@ import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
+import { precompilar } from './Precompilado.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -851,11 +852,19 @@ function PostFX({ dofOn, selected, highQuality }) {
   // Calentamiento: con el mapa ya pintado y el hilo libre, un cuadro con DoF activo compila sus
   // programas (CoC, Bokeh, Kawase, variante del EffectMaterial) para que la primera Ballita no los compile.
   const warm = useRef(0) // 0 pendiente, 1 este cuadro, 2 hecho
+  const gl = useThree((s) => s.gl)
+  const camera = useThree((s) => s.camera)
+  const scene = useThree((s) => s.scene)
   useEffect(() => {
     const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 1))
-    const t = setTimeout(() => idle(() => { if (warm.current === 0) warm.current = 1 }), 2500)
+    // Además, compila en paralelo todo lo montado aunque esté oculto (LOD de nodos, pieles, variantes
+    // cercanas): sin esto, acercarse por primera vez (Camino/Ballita) esperaba su enlace dentro del cuadro.
+    const t = setTimeout(() => idle(() => {
+      if (warm.current === 0) warm.current = 1
+      precompilar(gl, scene, camera, scene)
+    }), 2500)
     return () => clearTimeout(t)
-  }, [])
+  }, [gl, camera, scene])
 
   useFrame(() => {
     const e = dofRef.current
