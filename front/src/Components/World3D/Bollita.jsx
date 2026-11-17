@@ -49,6 +49,27 @@ const SHARED_GEO = {
   limb: new THREE.SphereGeometry(1, 8, 8),
   ring: new THREE.TorusGeometry(1.3, 0.014, 6, 32),
   flash: new THREE.SphereGeometry(1, 12, 10),
+  extOrb: new THREE.SphereGeometry(1, 14, 10),
+}
+
+let orbGlowTex = null
+function getOrbGlowTex() {
+  if (orbGlowTex) return orbGlowTex
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 64
+  const ctx = c.getContext('2d')
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 31)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.28, 'rgba(255,255,255,0.82)')
+  g.addColorStop(0.6, 'rgba(255,255,255,0.22)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 64, 64)
+  orbGlowTex = new THREE.CanvasTexture(c)
+  orbGlowTex.needsUpdate = true
+  return orbGlowTex
 }
 
 let sharedMats = null
@@ -123,8 +144,9 @@ function resolveExpression(b, g) {
 }
 
 // Una bollita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Bollita({ b, sim, selected, pov = false, onSelect }) {
+export default function Bollita({ b, sim, selected, pov = false, worldRadius = 110, onSelect }) {
   const root = useRef(); const bodyGroup = useRef()
+  const orbGroupRef = useRef(); const extOrbRef = useRef(); const extHaloRef = useRef()
   const eyeL = useRef(); const eyeR = useRef()
   const browL = useRef(); const browR = useRef(); const mouth = useRef()
   const blush = useRef(); const sweat = useRef(); const ring = useRef(); const pupils = useRef()
@@ -170,6 +192,22 @@ export default function Bollita({ b, sim, selected, pov = false, onSelect }) {
     opacity: 0,
     depthWrite: false,
   }), [])
+  const extOrbMat = useMemo(() => new THREE.MeshBasicMaterial({
+    color: color.clone().multiplyScalar(1.85),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    toneMapped: false,
+  }), [color])
+  const extHaloMat = useMemo(() => new THREE.SpriteMaterial({
+    map: getOrbGlowTex(),
+    color: color.clone().multiplyScalar(1.9),
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  }), [color])
 
   const r = BALL_R * (0.86 + g.apetito * 0.14)
   // Ojos chibi más grandes y expresivos
@@ -177,7 +215,7 @@ export default function Bollita({ b, sim, selected, pov = false, onSelect }) {
   const pupilR = Math.max(0.085, skin.pupilSize * 1.45)
   const phase0 = b.id * 1.7
 
-  useFrame(({ clock }, dt) => {
+  useFrame(({ camera, clock }, dt) => {
     const cdt = Math.min(dt, 0.1)
     const k = 1 - Math.exp(-9 * cdt)
     const t = clock.elapsedTime
@@ -389,12 +427,38 @@ export default function Bollita({ b, sim, selected, pov = false, onSelect }) {
     }
 
     if (ring.current) { ring.current.visible = selected && !pov; ring.current.rotation.z = t * 2 }
+
+    // 10. LOD exterior: orbe luminoso visible a distancia dentro de los tubos y en planetas
+    const camDist = camera.position.distanceTo(root.current.position)
+    const rIntro = r * 14 + worldRadius * 0.12
+    const rExter = r * 24 + worldRadius * 0.36
+    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
+    if (bodyGroup.current) bodyGroup.current.visible = !pov && extFactor < 0.96
+    if (orbGroupRef.current) {
+      const showOrb = extFactor > 0.015 && s > 0.02
+      orbGroupRef.current.visible = showOrb
+      if (showOrb) {
+        orbGroupRef.current.position.copy(b.pos)
+        if (b.phase !== 'travel') orbGroupRef.current.position.addScaledVector(b.up, r * 0.85)
+        const distBoost = 1 + THREE.MathUtils.clamp((camDist - 70) / 140, 0, 1.35)
+        const maxTubeOrb = b.phase === 'travel' ? (b.seg?.radius ?? 1.25) * 0.88 : r * 2.5
+        const orbR = Math.min(maxTubeOrb, r * (1.25 + 0.65 * extFactor) * distBoost) * s
+        if (extOrbRef.current) extOrbRef.current.scale.setScalar(orbR)
+        if (extHaloRef.current) {
+          const haloS = orbR * (3.6 + THREE.MathUtils.clamp(camDist / 70, 0, 3.4))
+          extHaloRef.current.scale.set(haloS, haloS, 1)
+        }
+        extOrbMat.opacity = extFactor * 0.96
+        extHaloMat.opacity = extFactor * 0.86
+      }
+    }
   })
 
   const liveThought = obtenerGlobo(b, sim)
   const talking = liveThought && liveThought.until > sim.t
 
   return (
+    <>
     <group
       ref={root}
       onClick={(e) => (e.stopPropagation(), onSelect(b))}
@@ -514,5 +578,17 @@ export default function Bollita({ b, sim, selected, pov = false, onSelect }) {
         </WorldHtml>
       )}
     </group>
+    <group ref={orbGroupRef} visible={false}>
+      <mesh
+        ref={extOrbRef}
+        geometry={SHARED_GEO.extOrb}
+        material={extOrbMat}
+        onClick={(e) => (e.stopPropagation(), onSelect(b))}
+        onPointerOver={() => (document.body.style.cursor = 'pointer')}
+        onPointerOut={() => (document.body.style.cursor = '')}
+      />
+      <sprite ref={extHaloRef} material={extHaloMat} raycast={() => null} />
+    </group>
+    </>
   )
 }

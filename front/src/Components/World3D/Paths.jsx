@@ -700,10 +700,106 @@ function buildBoltGeo() {
   return mergeGeometries(parts)
 }
 
+function strutBetween(a, b, rad = 0.036, radialSegs = 5) {
+  const dir = new THREE.Vector3().subVectors(b, a)
+  const len = dir.length()
+  const g = new THREE.CylinderGeometry(rad, rad, Math.max(len, 1e-3), radialSegs)
+  if (len > 1e-4) g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, dir.divideScalar(len)))
+  g.translate((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5)
+  return g
+}
+
+function buildExtClampGeo() {
+  const pts = [
+    new THREE.Vector2(0.99, -0.14),
+    new THREE.Vector2(1.06, -0.15),
+    new THREE.Vector2(1.13, -0.09),
+    new THREE.Vector2(1.13, 0.09),
+    new THREE.Vector2(1.06, 0.15),
+    new THREE.Vector2(0.99, 0.14),
+    new THREE.Vector2(0.99, -0.14),
+  ]
+  const ring = new THREE.LatheGeometry(pts, 18)
+  ring.rotateX(Math.PI / 2)
+  ring.computeVertexNormals()
+  return ring
+}
+
+function buildPylonGeo() {
+  const parts = []
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]]
+  const botR = 0.46
+  const topR = 0.28
+  const botP = corners.map(([sx, sz]) => new THREE.Vector3(sx * botR, 0.03, sz * botR))
+  const midP = corners.map(([sx, sz]) => new THREE.Vector3(sx * 0.37, 0.5, sz * 0.37))
+  const topP = corners.map(([sx, sz]) => new THREE.Vector3(sx * topR, 0.96, sz * topR))
+
+  // 4 patas inclinadas y 2 niveles de arriostramiento en celosía
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4
+    parts.push(strutBetween(botP[i], topP[i], 0.044, 5))
+    parts.push(strutBetween(botP[i], botP[j], 0.036, 5))
+    parts.push(strutBetween(midP[i], midP[j], 0.032, 5))
+    parts.push(strutBetween(topP[i], topP[j], 0.038, 5))
+    // Cruces diagonales en cada cara
+    parts.push(strutBetween(botP[i], midP[j], 0.022, 4))
+    parts.push(strutBetween(midP[i], topP[j], 0.022, 4))
+  }
+  // Cuna superior que abraza la base del tubo
+  parts.push(strutBetween(new THREE.Vector3(-0.42, 1.0, 0), new THREE.Vector3(0.42, 1.0, 0), 0.046, 5))
+  const pad = new THREE.CylinderGeometry(0.68, 0.74, 0.06, 6)
+  pad.translate(0, 0.03, 0)
+  parts.push(pad)
+  return mergeGeometries(parts)
+}
+
+function buildAlienTreeGeo() {
+  const parts = []
+  const b0 = new THREE.Vector3(0, 0, 0)
+  const b1 = new THREE.Vector3(0.08, 0.52, -0.05)
+  const b2 = new THREE.Vector3(-0.04, 0.96, 0.06)
+  const brA = new THREE.Vector3(0.32, 0.88, 0.14)
+  const brB = new THREE.Vector3(-0.28, 0.82, -0.16)
+  parts.push(strutBetween(b0, b1, 0.085, 6))
+  parts.push(strutBetween(b1, b2, 0.055, 6))
+  parts.push(strutBetween(b1, brA, 0.04, 5))
+  parts.push(strutBetween(b1, brB, 0.038, 5))
+  return mergeGeometries(parts)
+}
+
+function buildMushCapGeo() {
+  const pts = [
+    new THREE.Vector2(0.0, 0.28),
+    new THREE.Vector2(0.24, 0.25),
+    new THREE.Vector2(0.46, 0.12),
+    new THREE.Vector2(0.52, 0.0),
+    new THREE.Vector2(0.38, 0.02),
+    new THREE.Vector2(0.0, 0.06),
+  ]
+  const g = new THREE.LatheGeometry(pts, 12)
+  g.computeVertexNormals()
+  return g
+}
+
+function buildRuinPillarGeo() {
+  const parts = []
+  const p1 = new THREE.BoxGeometry(0.32, 1.0, 0.28)
+  p1.translate(-0.22, 0.5, 0)
+  const p2 = new THREE.BoxGeometry(0.28, 0.72, 0.26)
+  p2.rotateZ(0.08)
+  p2.translate(0.24, 0.36, 0.04)
+  const lintel = new THREE.BoxGeometry(0.92, 0.2, 0.32)
+  lintel.rotateZ(-0.14)
+  lintel.translate(0, 0.92, 0)
+  parts.push(p1, p2, lintel)
+  return mergeGeometries(parts)
+}
+
 const GEO = {
   cone: base(new THREE.ConeGeometry(0.5, 1, 10)),
   funnel: base(new THREE.ConeGeometry(0.5, 1, 28, 1, true)),
   cyl: base(new THREE.CylinderGeometry(0.5, 0.5, 1, 10)),
+  plume: base(new THREE.CylinderGeometry(0.34, 0.85, 1, 14, 1, true)),
   sphere: new THREE.SphereGeometry(0.5, 14, 10),
   box: base(new THREE.BoxGeometry(1, 1, 1)),
   octa: base(new THREE.OctahedronGeometry(0.5)),
@@ -711,6 +807,11 @@ const GEO = {
   ribNeon: new THREE.TorusGeometry(1, 0.025, 8, 32),
   mouthNeon: new THREE.TorusGeometry(1, 0.056, 8, 32),
   ribFrame: buildRibFrameGeo(),
+  extClamp: buildExtClampGeo(),
+  pylon: buildPylonGeo(),
+  alienTree: buildAlienTreeGeo(),
+  mushCap: buildMushCapGeo(),
+  ruinPillar: buildRuinPillarGeo(),
   panelPod: buildCurvedPanelGeo(),
   lightBar: buildLightBarGeo(),
   streakCard: buildStreakCardGeo(),
@@ -739,7 +840,7 @@ const GEO_BY = { cone: GEO.cone, cyl: GEO.cyl, sphere: GEO.sphere, box: GEO.box,
 // Multiplicadores moderados (1.1-1.35 base, ~1.9 solo en pulsos y bocas) para que el bloom no blanquee el color del tema.
 const hot = (c, k = 1.25) => new THREE.Color(c).multiplyScalar(k)
 
-function createTubeMat(id, focusU) {
+function createTubeMat(id, focusU, detailU) {
   const V = VISUALS[id]
   const atmo = V.cine?.atmo ?? { mode: 0, c1: V.glass, c2: V.rail }
   const m = new THREE.MeshPhysicalMaterial({
@@ -762,6 +863,7 @@ function createTubeMat(id, focusU) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED_TIME
     shader.uniforms.uFocus = focusU
+    shader.uniforms.uDetail = detailU
     shader.uniforms.uFlowMap = { value: getFlowTex() }
     shader.uniforms.uThemeColor = { value: new THREE.Color(V.rail) }
     shader.uniforms.uGlassColor = { value: new THREE.Color(V.glass) }
@@ -777,6 +879,7 @@ function createTubeMat(id, focusU) {
         `#include <common>
         uniform float uTime;
         uniform float uFocus;
+        uniform float uDetail;
         uniform sampler2D uFlowMap;
         uniform vec3 uThemeColor;
         uniform vec3 uGlassColor;
@@ -790,6 +893,7 @@ function createTubeMat(id, focusU) {
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float focusGlow = mix(0.08, 1.0, uFocus);
+        float det = clamp(uDetail, 0.0, 1.0);
         vec3 tubeViewDir = length(vViewPosition) > 1e-5 ? normalize(vViewPosition) : vec3(0.0, 0.0, 1.0);
         vec3 tubeNorm = length(normal) > 1e-5 ? normalize(normal) : vec3(0.0, 1.0, 0.0);
         float tubeFresnel = pow(max(1e-4, 1.0 - abs(dot(tubeNorm, tubeViewDir))), 2.3);
@@ -797,13 +901,15 @@ function createTubeMat(id, focusU) {
         vec4 flowTex = texture2D(uFlowMap, flowUv);
         float wavePulse = smoothstep(0.55, 1.0, sin(vTubeUv.x * 1.4 - uTime * 3.2) * 0.5 + 0.5);
         float flowMask = flowTex.a * (0.35 + 0.55 * wavePulse);
-        float baseGrime = smoothstep(-0.25, -0.85, vTubeWorldNormal.y);
+        float baseGrime = smoothstep(-0.25, -0.85, vTubeWorldNormal.y) * det;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.45 + vec3(0.05, 0.04, 0.03), baseGrime * 0.45);
+        vec3 extCrystalCol = mix(vec3(0.45, 0.78, 1.0), uGlassColor, 0.48);
+        diffuseColor.rgb = mix(extCrystalCol, diffuseColor.rgb, det);
 
         // Costuras sutiles de módulos de cristal y ambiente específico por tema (0..9)
         float seamX = smoothstep(0.95, 1.0, abs(cos(vTubeUv.x * 3.14159 * 0.9)));
         float seamY = smoothstep(0.96, 1.0, abs(cos(vTubeUv.y * 6.28318 * 4.0)));
-        float seamMask = max(seamX, seamY) * 0.14;
+        float seamMask = max(seamX, seamY) * mix(0.04, 0.14, det);
         vec3 atmoGlow = vec3(0.0);
         float atmoAlpha = 0.0;
 
@@ -871,65 +977,118 @@ function createTubeMat(id, focusU) {
           activeAccent = mix(uThemeColor, vColor, hasEvCol * 0.72);
         #endif
 
-        totalEmissiveRadiance = totalEmissiveRadiance * focusGlow
-          + (uGlassColor * tubeFresnel * 0.32 + activeAccent * (flowMask * 0.65 + seamMask * 0.5) + atmoGlow) * focusGlow;`
+        vec3 fresnelTint = mix(extCrystalCol, uGlassColor, det);
+        totalEmissiveRadiance = totalEmissiveRadiance * focusGlow * mix(0.25, 1.0, det)
+          + (fresnelTint * tubeFresnel * mix(0.62, 0.32, det) + activeAccent * (flowMask * mix(0.55, 0.65, det) + seamMask * 0.5) + atmoGlow * mix(0.16, 1.0, det)) * focusGlow;`
       )
       .replace(
         '#include <dithering_fragment>',
-        `float tubeLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+        `float detD = clamp(uDetail, 0.0, 1.0);
+        float tubeLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
         gl_FragColor.rgb = mix(vec3(tubeLum), gl_FragColor.rgb, mix(0.25, 1.0, uFocus)) * mix(0.28, 1.0, uFocus);
-        gl_FragColor.a = clamp(gl_FragColor.a + tubeFresnel * 0.28 + flowMask * 0.35 + baseGrime * 0.12 + seamMask * 0.3 + atmoAlpha, 0.0, 0.88) * mix(0.15, 1.0, uFocus);
+        float baseAlpha = mix(0.15, gl_FragColor.a, detD);
+        gl_FragColor.a = clamp(baseAlpha + tubeFresnel * mix(0.4, 0.28, detD) + flowMask * mix(0.28, 0.35, detD) + baseGrime * 0.12 + seamMask * 0.3 + atmoAlpha * detD, 0.0, 0.88) * mix(0.15, 1.0, uFocus);
         #include <dithering_fragment>`
       )
   }
-  m.customProgramCacheKey = () => 'tube-flow-atmo-v4'
+  m.customProgramCacheKey = () => 'tube-flow-atmo-v5'
   return m
 }
 
-function createRailMat(focusU) {
+function createRailMat(focusU, detailU) {
   const m = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: true })
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED_TIME
     shader.uniforms.uFocus = focusU
+    shader.uniforms.uDetail = detailU
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vRailUv;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRailUv = uv;')
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uFocus;\nvarying vec2 vRailUv;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uFocus;\nuniform float uDetail;\nvarying vec2 vRailUv;')
       .replace(
         '#include <opaque_fragment>',
         `float railPulse = pow(max(1e-4, sin(vRailUv.x * 1.6 - uTime * 3.6) * 0.5 + 0.5), 4.0) * uFocus;
         vec3 railLit = outgoingLight * (1.0 + railPulse * 0.72);
         float railLum = dot(railLit, vec3(0.299, 0.587, 0.114));
         outgoingLight = mix(vec3(railLum), railLit, mix(0.25, 1.0, uFocus)) * mix(0.18, 1.0, uFocus);
-        diffuseColor.a *= mix(0.14, 1.0, uFocus);
+        diffuseColor.a *= mix(0.14, 1.0, uFocus) * clamp(uDetail, 0.0, 1.0);
         #include <opaque_fragment>`
       )
   }
-  m.customProgramCacheKey = () => 'rail-pulse-focus-v3'
+  m.customProgramCacheKey = () => 'rail-pulse-focus-v4'
   return m
 }
 
-function withFocusFade(mat, focusU, minAlpha = 0.16, minBright = 0.25, minSat = 0.25) {
+function createExtCoreMat(focusU, detailU) {
+  const m = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: true })
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = SHARED_TIME
+    shader.uniforms.uFocus = focusU
+    shader.uniforms.uDetail = detailU
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vCoreUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCoreUv = uv;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uFocus;\nuniform float uDetail;\nvarying vec2 vCoreUv;')
+      .replace(
+        '#include <opaque_fragment>',
+        `float coreWave = pow(max(1e-4, sin(vCoreUv.x * 1.35 - uTime * 2.8) * 0.5 + 0.5), 3.0);
+        vec3 coreLit = outgoingLight * (0.85 + coreWave * 0.52);
+        float coreLum = dot(coreLit, vec3(0.299, 0.587, 0.114));
+        outgoingLight = mix(vec3(coreLum), coreLit, mix(0.25, 1.0, uFocus)) * mix(0.2, 1.0, uFocus);
+        float extA = 1.0 - clamp(uDetail, 0.0, 1.0);
+        diffuseColor.a *= mix(0.18, 1.0, uFocus) * extA;
+        if (diffuseColor.a < 0.01) discard;
+        #include <opaque_fragment>`
+      )
+  }
+  m.customProgramCacheKey = () => 'ext-core-flow-v1'
+  return m
+}
+
+// lod: 'none' (siempre visible), 'interior' (uDetail), 'exterior' (1 - uDetail)
+function withWayFade(mat, focusU, detailU, { minAlpha = 0.16, minBright = 0.25, minSat = 0.25, lod = 'none', scaleLod = false } = {}) {
   mat.transparent = true
   const prevCompile = mat.onBeforeCompile
   const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
   const focusParams = { value: new THREE.Vector3(minAlpha, minBright, minSat) }
+  const lodMode = lod === 'interior' ? 1 : lod === 'exterior' ? -1 : 0
+  const lodParams = { value: new THREE.Vector2(lodMode, scaleLod ? 1 : 0) }
   mat.onBeforeCompile = (shader, renderer) => {
     if (prevCompile) prevCompile(shader, renderer)
     shader.uniforms.uFocus = focusU
     shader.uniforms.uFocusParams = focusParams
+    shader.uniforms.uDetail = detailU
+    shader.uniforms.uLodParams = lodParams
+    if (scaleLod && lodMode !== 0) {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uDetail;\nuniform vec2 uLodParams;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          if (uLodParams.y > 0.5 && abs(uLodParams.x) > 0.5) {
+            float _lodF = clamp(uLodParams.x > 0.0 ? uDetail : (1.0 - uDetail), 0.0, 1.0);
+            transformed *= mix(0.32, 1.0, smoothstep(0.0, 0.65, _lodF));
+          }`
+        )
+    }
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uFocus;\nuniform vec3 uFocusParams;')
+      .replace('#include <common>', '#include <common>\nuniform float uFocus;\nuniform vec3 uFocusParams;\nuniform float uDetail;\nuniform vec2 uLodParams;')
       .replace(
         '#include <opaque_fragment>',
         `#include <opaque_fragment>
         float _fLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
         gl_FragColor.rgb = mix(vec3(_fLum), gl_FragColor.rgb, mix(uFocusParams.z, 1.0, uFocus)) * mix(uFocusParams.y, 1.0, uFocus);
-        gl_FragColor.a *= mix(uFocusParams.x, 1.0, uFocus);`
+        gl_FragColor.a *= mix(uFocusParams.x, 1.0, uFocus);
+        if (abs(uLodParams.x) > 0.5) {
+          float _lodA = clamp(uLodParams.x > 0.0 ? uDetail : (1.0 - uDetail), 0.0, 1.0);
+          gl_FragColor.a *= _lodA;
+          if (gl_FragColor.a < 0.008) discard;
+        }`
       )
   }
-  mat.customProgramCacheKey = () => `${prevKey ? `${prevKey}|` : ''}focus-fade-v1`
+  mat.customProgramCacheKey = () => `${prevKey ? `${prevKey}|` : ''}way-fade-v1${scaleLod && lodMode !== 0 ? '-sc' : ''}`
   return mat
 }
 
@@ -981,7 +1140,7 @@ export function withCameraFade(mat, minDist = 1.6, maxDist = 3.0) {
   return mat
 }
 
-function createSignMat(focusU) {
+function createSignMat(focusU, detailU) {
   const m = new THREE.MeshBasicMaterial({ map: getSignAtlasTex(), side: THREE.DoubleSide, transparent: true, alphaTest: 0.1 })
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -992,10 +1151,10 @@ function createSignMat(focusU) {
       .replace('#include <map_fragment>', 'vec4 sampledDiffuseColor = texture2D( map, vSignUv );\ndiffuseColor *= sampledDiffuseColor;')
   }
   m.customProgramCacheKey = () => 'sign-atlas-v2'
-  return withFocusFade(m, focusU, 0.16, 0.28, 0.25)
+  return withWayFade(m, focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'interior', scaleLod: true })
 }
 
-function createPartsMat(id, focusU) {
+function createPartsMat(id, focusU, detailU) {
   const { c, s, vy = 0, vx = 0.15, amp = 0.5, freq = 1.4, a = 0.6, glow = 1.25 } = VISUALS[id].parts
   const m = new THREE.PointsMaterial({
     color: hot(c, glow),
@@ -1031,7 +1190,7 @@ function createPartsMat(id, focusU) {
       )
   }
   m.customProgramCacheKey = () => 'parts-motion-v1'
-  return withFocusFade(m, focusU, 0.15, 0.2, 0.25)
+  return withWayFade(m, focusU, detailU, { minAlpha: 0.15, minBright: 0.2, minSat: 0.25, lod: 'interior' })
 }
 
 // Shader único y barato para todas las partículas de eventos (géiser, erupción, cascada, turbina, hielo, pantano, portal).
@@ -1110,12 +1269,14 @@ const FX_VERT = /* glsl */ `
 const FX_FRAG = /* glsl */ `
   uniform sampler2D uTex;
   uniform float uFocus;
+  uniform float uDetail;
   varying vec3 vColor;
   varying float vAlpha;
 
   void main() {
     vec4 tex = texture2D(uTex, gl_PointCoord);
-    float a = tex.a * vAlpha * mix(0.14, 1.0, uFocus);
+    float det = smoothstep(0.04, 0.95, clamp(uDetail, 0.0, 1.0));
+    float a = tex.a * vAlpha * mix(0.14, 1.0, uFocus) * det;
     if (a < 0.02) discard;
     vec3 col = vColor * tex.rgb;
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
@@ -1124,11 +1285,12 @@ const FX_FRAG = /* glsl */ `
   }
 `
 
-function createEventFxMat(texKey, focusU) {
+function createEventFxMat(texKey, focusU, detailU) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: SHARED_TIME,
       uFocus: focusU,
+      uDetail: detailU,
       uTex: { value: FX_TEX_GETTERS[texKey]() },
     },
     vertexShader: FX_VERT,
@@ -1140,7 +1302,7 @@ function createEventFxMat(texKey, focusU) {
   })
 }
 
-function createFloorMat(focusU) {
+function createFloorMat(focusU, detailU) {
   const m = new THREE.MeshStandardMaterial({
     map: getChevronsRainbowTex(),
     roughness: 0.42,
@@ -1177,10 +1339,10 @@ function createFloorMat(focusU) {
       )
   }
   m.customProgramCacheKey = () => 'floor-chevron-v1'
-  return withFocusFade(m, focusU, 0.16, 0.25, 0.25)
+  return withWayFade(m, focusU, detailU, { minAlpha: 0.16, minBright: 0.25, minSat: 0.25, lod: 'interior' })
 }
 
-function createPanelMat(focusU) {
+function createPanelMat(focusU, detailU) {
   const m = new THREE.MeshStandardMaterial({
     map: getPanelAlbedoTex(),
     normalMap: getPanelNormalTex(),
@@ -1200,15 +1362,15 @@ function createPanelMat(focusU) {
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vPanelGlow;')
   }
   m.customProgramCacheKey = () => 'panel-hull-v1'
-  return withCameraFade(withFocusFade(m, focusU, 0.16, 0.28, 0.25), 0.85, 1.55)
+  return withCameraFade(withWayFade(m, focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'interior' }), 0.85, 1.55)
 }
 
-function createHullMat(focusU) {
+function createHullMat(focusU, detailU) {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.78 })
-  return withCameraFade(withFocusFade(m, focusU, 0.16, 0.28, 0.25), 0.85, 1.55)
+  return withCameraFade(withWayFade(m, focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'interior' }), 0.85, 1.55)
 }
 
-function createLightBarMat(focusU) {
+function createLightBarMat(focusU, detailU) {
   const m = new THREE.MeshBasicMaterial({
     map: getLightbarTex(),
     transparent: true,
@@ -1217,7 +1379,7 @@ function createLightBarMat(focusU) {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   })
-  return withCameraFade(withFocusFade(m, focusU, 0.14, 0.2, 0.25), 0.65, 1.35)
+  return withCameraFade(withWayFade(m, focusU, detailU, { minAlpha: 0.14, minBright: 0.2, minSat: 0.25, lod: 'interior' }), 0.65, 1.35)
 }
 
 const STREAK_VERT = /* glsl */ `
@@ -1255,13 +1417,15 @@ const STREAK_VERT = /* glsl */ `
 const STREAK_FRAG = /* glsl */ `
   uniform sampler2D uTex;
   uniform float uFocus;
+  uniform float uDetail;
   varying vec2 vStreakUv;
   varying float vStreakAlpha;
   varying vec3 vStreakCol;
 
   void main() {
     vec4 tex = texture2D(uTex, vStreakUv);
-    float a = tex.a * vStreakAlpha * mix(0.12, 1.0, uFocus);
+    float det = smoothstep(0.04, 0.95, clamp(uDetail, 0.0, 1.0));
+    float a = tex.a * vStreakAlpha * mix(0.12, 1.0, uFocus) * det;
     if (a < 0.015) discard;
     vec3 col = vStreakCol * tex.rgb;
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
@@ -1270,11 +1434,12 @@ const STREAK_FRAG = /* glsl */ `
   }
 `
 
-function createWindStreakMat(focusU) {
+function createWindStreakMat(focusU, detailU) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: SHARED_TIME,
       uFocus: focusU,
+      uDetail: detailU,
       uTex: { value: getStreakTex() },
     },
     vertexShader: STREAK_VERT,
@@ -1315,11 +1480,12 @@ const SPARK_VERT = /* glsl */ `
   }
 `
 
-function createSparkMat(focusU) {
+function createSparkMat(focusU, detailU) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: SHARED_TIME,
       uFocus: focusU,
+      uDetail: detailU,
       uTex: { value: getSparkTex() },
     },
     vertexShader: SPARK_VERT,
@@ -1331,36 +1497,79 @@ function createSparkMat(focusU) {
   })
 }
 
-function createWayMaterials(id, focusU) {
+function createExtPlumeMat(focusU, detailU) {
+  const m = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  })
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = SHARED_TIME
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPlumeUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlumeUv = uv;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vPlumeUv;')
+      .replace(
+        '#include <opaque_fragment>',
+        `float vFade = sin(clamp(vPlumeUv.y, 0.0, 1.0) * 3.14159265);
+        float wisp = 0.72 + 0.28 * sin(vPlumeUv.y * 9.0 - uTime * 3.5 + vPlumeUv.x * 6.28318);
+        diffuseColor.a *= vFade * vFade * wisp;
+        #include <opaque_fragment>`
+      )
+  }
+  m.customProgramCacheKey = () => 'ext-plume-v1'
+  return withWayFade(m, focusU, detailU, { minAlpha: 0.14, minBright: 0.2, minSat: 0.25, lod: 'exterior' })
+}
+
+function createWayMaterials(id, focusU, detailU) {
   const V = VISUALS[id]
+  const makeGlass = (lod) => withCameraFade(withWayFade(new THREE.MeshPhysicalMaterial({
+    color: V.glass,
+    normalMap: texNormal(id),
+    normalScale: new THREE.Vector2(0.25, 0.25),
+    transparent: true,
+    opacity: 0.24,
+    roughness: 0.06,
+    metalness: 0.1,
+    envMapIntensity: 1.5,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  }), focusU, detailU, { minAlpha: 0.18, minBright: 0.25, minSat: 0.25, lod }), 1.4, 2.2)
+
   return {
-    tube: createTubeMat(id, focusU),
-    rail: createRailMat(focusU),
-    floor: createFloorMat(focusU),
-    hull: createHullMat(focusU),
-    panel: createPanelMat(focusU),
-    lightBar: createLightBarMat(focusU),
-    neonRim: withCameraFade(withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.2, 0.25), 0.7, 1.35),
-    windStreak: createWindStreakMat(focusU),
-    sparks: createSparkMat(focusU),
-    glass: withCameraFade(withFocusFade(new THREE.MeshPhysicalMaterial({
-      color: V.glass,
-      normalMap: texNormal(id),
-      normalScale: new THREE.Vector2(0.25, 0.25),
-      transparent: true,
-      opacity: 0.24,
-      roughness: 0.06,
-      metalness: 0.1,
-      envMapIntensity: 1.5,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }), focusU, 0.18, 0.25, 0.25), 1.4, 2.2),
-    deco: withCameraFade(withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.12, flatShading: true }), focusU, 0.16, 0.28, 0.25), 1.9, 2.7),
-    decoA: withCameraFade(withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }), focusU, 0.16, 0.28, 0.25), 1.9, 2.7),
-    glow: withCameraFade(withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.18, 0.25), 1.2, 1.9),
-    decorGlow: withCameraFade(withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.18, 0.25), 1.9, 2.7),
-    sign: withCameraFade(createSignMat(focusU), 1.7, 2.5),
-    dots: withFocusFade(new THREE.PointsMaterial({
+    tube: createTubeMat(id, focusU, detailU),
+    // Exterior (uDetail -> 0)
+    extCore: createExtCoreMat(focusU, detailU),
+    extMetal: withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.8 }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior' }),
+    extCable: withWayFade(new THREE.MeshStandardMaterial({ color: '#2b3447', roughness: 0.5, metalness: 0.72 }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior' }),
+    extFlora: withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.08, flatShading: true }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    extFloraGlow: withWayFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, detailU, { minAlpha: 0.16, minBright: 0.2, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    extRuins: withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.86, metalness: 0.22, flatShading: true }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    extPlume: createExtPlumeMat(focusU, detailU),
+    // Landmarks, nudos y siluetas de eventos (siempre visibles)
+    lmDeco: withCameraFade(withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.68, metalness: 0.18, flatShading: true }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25 }), 1.9, 2.7),
+    lmDecoA: withCameraFade(withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25 }), 1.9, 2.7),
+    lmGlow: withCameraFade(withWayFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, detailU, { minAlpha: 0.15, minBright: 0.2, minSat: 0.25 }), 1.2, 1.9),
+    lmGlass: makeGlass('none'),
+    // Interior (uDetail -> 1)
+    rail: createRailMat(focusU, detailU),
+    floor: createFloorMat(focusU, detailU),
+    hull: createHullMat(focusU, detailU),
+    panel: createPanelMat(focusU, detailU),
+    lightBar: createLightBarMat(focusU, detailU),
+    neonRim: withCameraFade(withWayFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, detailU, { minAlpha: 0.15, minBright: 0.2, minSat: 0.25, lod: 'interior' }), 0.7, 1.35),
+    windStreak: createWindStreakMat(focusU, detailU),
+    sparks: createSparkMat(focusU, detailU),
+    deco: withCameraFade(withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.12, flatShading: true }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'interior', scaleLod: true }), 1.9, 2.7),
+    decoA: withCameraFade(withWayFade(new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'interior', scaleLod: true }), 1.9, 2.7),
+    glow: withCameraFade(withWayFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, detailU, { minAlpha: 0.15, minBright: 0.18, minSat: 0.25, lod: 'interior', scaleLod: true }), 1.2, 1.9),
+    decorGlow: withCameraFade(withWayFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, detailU, { minAlpha: 0.15, minBright: 0.18, minSat: 0.25, lod: 'interior', scaleLod: true }), 1.9, 2.7),
+    sign: withCameraFade(createSignMat(focusU, detailU), 1.7, 2.5),
+    dots: withWayFade(new THREE.PointsMaterial({
       color: hot(V.rail, 1.25),
       map: getSparkleTex(),
       size: 0.13,
@@ -1370,14 +1579,14 @@ function createWayMaterials(id, focusU) {
       alphaTest: 0.02,
       depthWrite: false,
       toneMapped: false,
-    }), focusU, 0.16, 0.2, 0.25),
-    parts: createPartsMat(id, focusU),
+    }), focusU, detailU, { minAlpha: 0.16, minBright: 0.2, minSat: 0.25, lod: 'interior' }),
+    parts: createPartsMat(id, focusU, detailU),
     fx: {
-      spray: createEventFxMat('spray', focusU),
-      smoke: createEventFxMat('smoke', focusU),
-      ember: createEventFxMat('ember', focusU),
-      foam: createEventFxMat('foam', focusU),
-      ring: createEventFxMat('ring', focusU),
+      spray: createEventFxMat('spray', focusU, detailU),
+      smoke: createEventFxMat('smoke', focusU, detailU),
+      ember: createEventFxMat('ember', focusU, detailU),
+      foam: createEventFxMat('foam', focusU, detailU),
+      ring: createEventFxMat('ring', focusU, detailU),
     },
   }
 }
@@ -1662,7 +1871,11 @@ function addSegmentEvent(s, V, out) {
   const R = s.radius
   const accHex = EVENT_ACCENTS[ev] ?? V.rail
   const accCol = hot(accHex, 1.48)
-  const { cones, cyls, lights, rings, mouthRings, ribFrames, spinMeta, bladeMeta, pulseMeta, discs, fxBuckets } = out
+  const {
+    cones, lmCones, lmCyls, lmLights, lmRings, mouthRings, ribFrames,
+    lmSpinMeta, lmBladeMeta, lmPulseMeta, lmDiscs, fxBuckets,
+    extPlumes, extPulseMeta,
+  } = out
 
   // Transición visible de entrada y salida de ambiente del evento (anillo de neón + marco + destello)
   for (const uEdge of (s.air ? [0.02] : [0.015, 0.985])) {
@@ -1685,9 +1898,9 @@ function addSegmentEvent(s, V, out) {
   const T0 = c.getTangentAt(0.04)
   const { N: N0 } = frameAt(T0)
   const pulseRate = (s.speedK ?? 1) > 1.05 ? 6.0 : (s.speedK ?? 1) < 0.9 ? 2.4 : 4.0
-  pulseMeta.push({ pos: P0, q: aim(Z, T0), baseScale: [R * 1.24, R * 1.24, R * 1.24], amp: [0.16, 0.16, 0.16], freq: pulseRate, phase: s.idx * 0.7, c: accCol, kind: 'ring' })
-  put(lights, P0.clone().addScaledVector(N0, R + 0.35), IDENT, 0.22, 0.22, 0.22, accCol)
-  put(lights, P0.clone().addScaledVector(N0, -(R + 0.35)), IDENT, 0.22, 0.22, 0.22, accCol)
+  lmPulseMeta.push({ pos: P0, q: aim(Z, T0), baseScale: [R * 1.24, R * 1.24, R * 1.24], amp: [0.16, 0.16, 0.16], freq: pulseRate, phase: s.idx * 0.7, c: accCol, kind: 'ring' })
+  put(lmLights, P0.clone().addScaledVector(N0, R + 0.35), IDENT, 0.22, 0.22, 0.22, accCol)
+  put(lmLights, P0.clone().addScaledVector(N0, -(R + 0.35)), IDENT, 0.22, 0.22, 0.22, accCol)
 
   const Pmid = c.getPointAt(0.5)
   const Tmid = c.getTangentAt(0.5)
@@ -1696,9 +1909,10 @@ function addSegmentEvent(s, V, out) {
 
   if (ev === 'geiser') {
     const baseP = Pmid.clone().addScaledVector(Y, -R * 0.9)
-    put(cones, baseP, IDENT, R * 2.2, 0.75, R * 2.2, new THREE.Color('#475c6c'))
-    pulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.6, 2.8, R * 0.6], amp: [0.18, 2.4, 0.18], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.25), kind: 'cyl' })
-    pulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.25), q: aim(Z, Y), baseScale: [R * 1.1, R * 1.1, R * 1.1], amp: [0.9, 0.9, 0.9], freq: 2.2, phase: s.idx, c: new THREE.Color('#e0faff'), kind: 'ring' })
+    put(lmCones, baseP, IDENT, R * 2.2, 0.75, R * 2.2, new THREE.Color('#475c6c'))
+    lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.6, 2.8, R * 0.6], amp: [0.18, 2.4, 0.18], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.25), kind: 'cyl' })
+    lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.25), q: aim(Z, Y), baseScale: [R * 1.1, R * 1.1, R * 1.1], amp: [0.9, 0.9, 0.9], freq: 2.2, phase: s.idx, c: new THREE.Color('#e0faff'), kind: 'ring' })
+    extPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 0.5), q: IDENT, baseScale: [R * 0.72, 3.2, R * 0.72], amp: [0.22, 3.2, 0.22], freq: 2.2, phase: s.idx, c: hot('#7be8ff', 1.12) })
     for (let i = 0; i < 16; i++) {
       pushFxPoint(fxBuckets, 'spray', baseP.clone().addScaledVector(Y, 0.6), Y, 0, rng(), 1.0, 0.36 + rng() * 0.2, new THREE.Color('#b8f4ff'))
     }
@@ -1708,8 +1922,9 @@ function addSegmentEvent(s, V, out) {
   } else if (ev === 'erupcion') {
     const Pcr = c.getPointAt(0.14)
     const baseP = Pcr.clone().addScaledVector(Y, -R * 0.85)
-    put(cones, baseP, IDENT, R * 2.8, 1.35, R * 2.8, new THREE.Color('#2b1b17'))
-    pulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.1), q: IDENT, baseScale: [R * 0.85, R * 0.45, R * 0.85], amp: [0.22, 0.35, 0.22], freq: 3.1, phase: s.idx, c: hot('#ff5a1f', 1.65), kind: 'light' })
+    put(lmCones, baseP, IDENT, R * 2.8, 1.35, R * 2.8, new THREE.Color('#2b1b17'))
+    lmPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.1), q: IDENT, baseScale: [R * 0.85, R * 0.45, R * 0.85], amp: [0.22, 0.35, 0.22], freq: 3.1, phase: s.idx, c: hot('#ff5a1f', 1.65), kind: 'light' })
+    extPulseMeta.push({ pos: baseP.clone().addScaledVector(Y, 1.0), q: IDENT, baseScale: [R * 0.85, 3.0, R * 0.85], amp: [0.24, 2.8, 0.24], freq: 3.1, phase: s.idx, c: hot('#ff6b2b', 1.25) })
     for (let i = 0; i < 18; i++) {
       const dir = new THREE.Vector3((rng() - 0.5) * 0.7, 0.9 + rng() * 0.7, (rng() - 0.5) * 0.7).normalize()
       pushFxPoint(fxBuckets, 'ember', baseP.clone().addScaledVector(Y, 1.1), dir, 1, rng(), 0.75 + rng() * 0.4, 0.34 + rng() * 0.18, new THREE.Color('#ff8a2f'))
@@ -1720,7 +1935,8 @@ function addSegmentEvent(s, V, out) {
   } else if (ev === 'cascada') {
     for (const u of [0.28, 0.55, 0.78]) {
       const Pw = c.getPointAt(u)
-      put(discs, Pw.clone().addScaledVector(Y, -R - 0.15), IDENT, R * 3.1, 0.12, R * 3.1)
+      put(lmDiscs, Pw.clone().addScaledVector(Y, -R - 2.6), IDENT, R * 2.8, 0.12, R * 2.8)
+      put(extPlumes, Pw.clone().addScaledVector(Y, -R - 2.6), IDENT, R * 0.82, R * 1.4 + 2.5, R * 0.82, hot('#7be8ff', 1.05))
       for (let i = 0; i < 8; i++) {
         const offP = Pw.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, R * 1.6)
         pushFxPoint(fxBuckets, 'spray', offP, Y, 2, rng(), 0.65 + rng() * 0.35, 0.3 + rng() * 0.18, new THREE.Color('#a8ecff'))
@@ -1733,9 +1949,9 @@ function addSegmentEvent(s, V, out) {
     for (const u of [0.3, 0.7]) {
       const Pt = c.getPointAt(u)
       const Tt = c.getTangentAt(u)
-      put(rings, Pt, aim(Z, Tt), R * 1.38, R * 1.38, R * 1.38, METAL)
+      put(lmRings, Pt, aim(Z, Tt), R * 1.38, R * 1.38, R * 1.38, METAL)
       for (let k = 0; k < 4; k++) {
-        bladeMeta.push({ pos: Pt, axis: Tt, angle0: (k * Math.PI) / 2, speed: 5.5, len: R * 1.25, width: 0.22, c: hot('#ffe866', 1.25) })
+        lmBladeMeta.push({ pos: Pt, axis: Tt, angle0: (k * Math.PI) / 2, speed: 5.5, len: R * 1.25, width: 0.22, c: hot('#ffe866', 1.25) })
       }
       for (let i = 0; i < 10; i++) {
         const { N: Nt, B: Bt } = frameAt(Tt)
@@ -1759,7 +1975,7 @@ function addSegmentEvent(s, V, out) {
   } else if (ev === 'pantano') {
     for (const u of [0.25, 0.5, 0.75]) {
       const Pp = c.getPointAt(u)
-      put(cyls, Pp.clone().addScaledVector(Y, -R * 1.12), IDENT, R * 1.85, 0.08, R * 1.85, new THREE.Color('#3b5928'))
+      put(lmCyls, Pp.clone().addScaledVector(Y, -R * 1.12), IDENT, R * 1.85, 0.08, R * 1.85, new THREE.Color('#3b5928'))
       for (let i = 0; i < 6; i++) {
         const bp = Pp.clone().addScaledVector(Nmid, (rng() - 0.5) * R * 1.4).addScaledVector(Y, -R * 0.65)
         pushFxPoint(fxBuckets, 'foam', bp, Y, 5, rng(), 0.28 + rng() * 0.2, 0.34 + rng() * 0.18, new THREE.Color('#9be066'))
@@ -1772,8 +1988,8 @@ function addSegmentEvent(s, V, out) {
       const Tpt = c.getTangentAt(u)
       const q = aim(Z, Tpt)
       const e0 = new THREE.Euler().setFromQuaternion(q)
-      spinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: 0.6, sy: 1.5, sz: 1.2, scale: R * 1.55, c: hot('#ea80fc', 1.45) })
-      spinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: -0.9, sy: 1.1, sz: -1.6, scale: R * 1.18, c: hot('#4fe3ff', 1.4) })
+      lmSpinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: 0.6, sy: 1.5, sz: 1.2, scale: R * 1.55, c: hot('#ea80fc', 1.45) })
+      lmSpinMeta.push({ pos: Ppt, ex: e0.x, ey: e0.y, ez: e0.z, sx: -0.9, sy: 1.1, sz: -1.6, scale: R * 1.18, c: hot('#4fe3ff', 1.4) })
       for (let i = 0; i < 12; i++) {
         pushFxPoint(fxBuckets, 'ring', Ppt, Tpt, 6, rng(), 0.7 + rng() * 0.4, 0.3, new THREE.Color('#ea80fc'))
       }
@@ -1934,6 +2150,24 @@ function addThemeBayProps(themeId, f, R, bayIdx, bayLen, rng, out) {
   }
 }
 
+const EXT_NEON_HEX = {
+  sombrio: '#a24bff',
+  bosque: '#4dff7a',
+  mar: '#38d6ff',
+  desierto: '#ffb347',
+  hielo: '#7ce8ff',
+  volcan: '#ff6028',
+  cristal: '#c07eff',
+  nubes: '#ffe169',
+  neon: '#ff2bd6',
+  jardin: '#ff6fa5',
+}
+const EXT_CLAMP_COL = new THREE.Color('#232c3d')
+const EXT_PYLON_COL = new THREE.Color('#2c364b')
+const EXT_RUIN_COLS = [new THREE.Color('#4f352d'), new THREE.Color('#3c2e2c')]
+const EXT_TREE_COLS = [new THREE.Color('#192d38'), new THREE.Color('#20383a')]
+const EXT_FLORA_GLOW_COLS = ['#2ee8c4', '#4eff8c', '#45b8ff'].map((c) => hot(c, 1.15))
+
 function build(way) {
   const themeId = way.theme.id
   const V = VISUALS[themeId]
@@ -1951,14 +2185,21 @@ function build(way) {
   const panelGlowBase = cine.panel?.glow ?? V.rail
   const barBaseHex = cine.bar ?? '#ff6028'
   const neonBaseHex = cine.neon ?? V.rib
+  const extNeonHex = EXT_NEON_HEX[themeId] ?? V.rail
 
   const tubes = []; const rails = []; const floors = []
-  const rings = []; const mouthRings = []; const ribFrames = []; const panelPods = []; const lightBars = []
+  const extCores = []; const extCables = []; const extClamps = []; const extPylons = []
+  const extFlora = []; const extFloraGlow = []; const extRuins = []; const extPlumes = []; const extPulseMeta = []
+  const mouthRings = []; const ribFrames = []; const panelPods = []; const lightBars = []
   const neonRims = []; const windStreaks = []
   const solids = []; const cones = []; const boxes = []; const octas = []; const glowOctas = []; const bolts = []
-  const spheres = []; const spheresA = []; const discs = []; const funnels = []; const dots = []
+  const spheresA = []; const dots = []
   const lights = []; const banners = []; const arrows = []; const signs = []
-  const spinMeta = []; const bladeMeta = []; const pulseMeta = []
+  // Landmarks, nudos y siluetas de eventos (siempre visibles en exterior e interior)
+  const lmSolids = []; const lmCones = []; const lmBoxes = []; const lmOctas = []
+  const lmSpheres = []; const lmSpheresA = []; const lmDiscs = []; const lmFunnels = []
+  const lmRings = []; const lmLights = []; const lmBanners = []
+  const lmSpinMeta = []; const lmBladeMeta = []; const lmPulseMeta = []
   const sparkBucket = { pos: [], dir: [], param: [], col: [] }
   const fxBuckets = {
     spray: { pos: [], dir: [], param: [], col: [] },
@@ -1970,11 +2211,19 @@ function build(way) {
 
   const solid = way.segments.filter((s) => !s.air)
   const bayRng = mulberry32(way.idx * 8191 + 19)
+  const samples = []
+  const pFrom = way.segments[0]?.curve.getPoint(0)
+  const pTo = way.segments[way.segments.length - 1]?.curve.getPoint(1)
+  let pylonCount = 0
 
   for (const s of way.segments) {
     const c = s.curve; const R = s.radius
     const ribC = routeColor(neonBaseHex, s.route, 1.22)
     const railCol = routeColor(V.rail, s.route, 0.85)
+
+    // Muestras para cálculo rápido de distancia cámara -> camino en useFrame
+    const nSamp = Math.max(3, Math.ceil(s.length / 6))
+    for (let i = 0; i <= nSamp; i++) samples.push(c.getPointAt(i / nSamp))
 
     // Perfil de ruta (rápida / lenta / espectacular)
     const prof = s.route >= 0 ? way.routes?.[s.route]?.profile : null
@@ -1983,7 +2232,10 @@ function build(way) {
     const isSpec = s.route >= 0 && !isFast && !isSlow
 
     // Eventos + teasers de curiosidad + anillos de transición
-    addSegmentEvent(s, V, { cones, cyls: solids, lights, rings, mouthRings, ribFrames, spinMeta, bladeMeta, pulseMeta, discs, fxBuckets })
+    addSegmentEvent(s, V, {
+      cones, lmCones, lmCyls: lmSolids, lmLights, lmRings, mouthRings, ribFrames,
+      lmSpinMeta, lmBladeMeta, lmPulseMeta, lmDiscs, fxBuckets, extPlumes, extPulseMeta,
+    })
 
     if (s.air) {
       addWindAndSparksForSegment(s, V, null, isFast, isSlow, { windStreaks, sparkBucket })
@@ -1995,21 +2247,21 @@ function build(way) {
       }
       if (s.kind === 'trampolin') {
         const p = P0.clone().addScaledVector(Y, -0.35)
-        put(solids, p, IDENT, R * 3.4, 0.3, R * 3.4, new THREE.Color(V.rib).multiplyScalar(0.5))
+        put(lmSolids, p, IDENT, R * 3.4, 0.3, R * 3.4, new THREE.Color(V.rib).multiplyScalar(0.5))
         put(mouthRings, p.clone().addScaledVector(Y, 0.3), aim(Z, Y), R * 1.7, R * 1.7, R * 1.7, mouthC)
         put(mouthRings, P0.clone().addScaledVector(T0, 0.9), aim(Z, T0), R * 1.35, R * 1.35, R * 1.35, mouthC)
       } else if (s.kind === 'canon' || s.kind === 'erupcion') {
-        ;[[0.5, 1.15], [1.1, 1.3], [1.7, 1.5]].forEach(([b, k]) => put(ribFrames, P0.clone().addScaledVector(T0, -b), aim(Z, T0), R * k, R * k, 1.2, METAL))
+        ;[[0.5, 1.15], [1.1, 1.3], [1.7, 1.5]].forEach(([b, k]) => put(extClamps, P0.clone().addScaledVector(T0, -b), aim(Z, T0), R * k, R * k, 1.2, METAL))
         put(mouthRings, P0, aim(Z, T0), R * 1.2, R * 1.2, R * 1.2, hot('#ff7a2f', 1.65))
         ;[0.8, 1.7].forEach((d, idx) => put(mouthRings, P0.clone().addScaledVector(T0, d), aim(Z, T0), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), R * (1.28 + idx * 0.14), hot('#ff9a3c', 1.55)))
       } else {
         put(mouthRings, P0, aim(Z, T0), R * 1.12, R * 1.12, R * 1.12, mouthC)
-        put(solids, P0.clone().addScaledVector(Y, -R - 0.15), IDENT, R * 2.6, 0.18, R * 2.6, METAL)
+        put(lmSolids, P0.clone().addScaledVector(Y, -R - 0.15), IDENT, R * 2.6, 0.18, R * 2.6, METAL)
       }
       put(mouthRings, P1, aim(Z, T1), R * 1.9, R * 1.9, R * 1.9, mouthC)
-      put(rings, P1, aim(Z, T1), R * 1.25, R * 1.25, R * 1.25, dim)
-      put(rings, P1, aim(Z, T1), R * 0.6, R * 0.6, R * 0.6, dim)
-      put(discs, P1, aim(Y, T1), R * 3.8, 0.04, R * 3.8)
+      put(lmRings, P1, aim(Z, T1), R * 1.25, R * 1.25, R * 1.25, dim)
+      put(lmRings, P1, aim(Z, T1), R * 0.6, R * 0.6, R * 0.6, dim)
+      put(lmDiscs, P1, aim(Y, T1), R * 3.8, 0.04, R * 3.8)
       continue
     }
 
@@ -2030,6 +2282,69 @@ function build(way) {
     scaleTubeUvX(railGeo, s.length)
     colorizeGeo(railGeo, railCol)
     rails.push(railGeo)
+
+    // Tira de neón interior para vista exterior (color del tema legible a distancia)
+    const corePts = frames.map((f) => f.pos.clone().addScaledVector(f.up, -R * 0.12))
+    const coreRad = Math.max(0.145, R * 0.148)
+    const coreGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(corePts), Math.max(8, Math.round(steps * 0.65)), coreRad, 6, false)
+    scaleTubeUvX(coreGeo, s.length)
+    const coreBase = routeColor(extNeonHex, s.route, 1.45)
+    const coreCol = ev ? coreBase.lerp(hot(EVENT_ACCENTS[ev], 1.4), 0.45) : coreBase
+    colorizeGeo(coreGeo, coreCol)
+    extCores.push(coreGeo)
+
+    // Abrazaderas metálicas espaciadas de forma limpia para la vista exterior
+    const nClamps = Math.max(1, Math.round(s.length / 9.5))
+    for (let i = 1; i < nClamps; i++) {
+      const f = sampleCurveFrame(frames, i / nClamps)
+      put(extClamps, f.pos, basisQuat(f.right, f.up, f.T), R, R, 1.0, EXT_CLAMP_COL)
+    }
+
+    // Pilones de andamio de celosía + cables colgantes + flora/ruinas sutiles en las orillas
+    const nPyl = Math.max(1, Math.floor(s.length / 16))
+    const cableAnchorsL = []
+    const cableAnchorsR = []
+    for (let i = 0; i < nPyl; i++) {
+      const u = (i + 0.5) / nPyl
+      const f = sampleCurveFrame(frames, u)
+      const nearPort = (pFrom && f.pos.distanceTo(pFrom) < 5.5) || (pTo && f.pos.distanceTo(pTo) < 5.5)
+      if (!nearPort && Math.abs(f.T.y) < 0.72) {
+        const pylH = 6.2 + bayRng() * 4.8
+        const footPos = f.pos.clone().addScaledVector(Y, -R * 1.02 - pylH)
+        put(extPylons, footPos, IDENT, R * 1.45, pylH, R * 1.45, EXT_PYLON_COL)
+        cableAnchorsL.push(f.pos.clone().addScaledVector(Y, -R * 1.04).addScaledVector(f.right, R * 0.52))
+        cableAnchorsR.push(f.pos.clone().addScaledVector(Y, -R * 1.04).addScaledVector(f.right, -R * 0.52))
+
+        if (pylonCount % 2 === 0 && pylonCount < 10) {
+          const side = pylonCount % 4 === 0 ? 1 : -1
+          const bankPos = footPos.clone().addScaledVector(f.right, side * (R * 1.4 + 0.9))
+          const treeSc = 1.9 + bayRng() * 1.3
+          const treeQ = new THREE.Quaternion().setFromAxisAngle(Y, bayRng() * TAU)
+          put(extFlora, bankPos, treeQ, treeSc, treeSc, treeSc, EXT_TREE_COLS[pylonCount % EXT_TREE_COLS.length])
+          const glowCol = EXT_FLORA_GLOW_COLS[(way.idx + pylonCount) % EXT_FLORA_GLOW_COLS.length]
+          put(extFloraGlow, bankPos.clone().addScaledVector(Y, treeSc * 0.92), treeQ, treeSc * 0.85, treeSc * 0.85, treeSc * 0.85, glowCol)
+          put(extFloraGlow, bankPos.clone().addScaledVector(f.right, -side * 0.6).addScaledVector(Y, 0.15), IDENT, 0.75, 0.75, 0.75, glowCol)
+          if (bayRng() > 0.38) {
+            const ruinPos = footPos.clone().addScaledVector(f.right, -side * (R * 1.3 + 0.8))
+            const ruinQ = new THREE.Quaternion().setFromAxisAngle(Y, bayRng() * TAU)
+            put(extRuins, ruinPos, ruinQ, 1.5 + bayRng() * 0.9, 1.6 + bayRng() * 1.2, 1.5, EXT_RUIN_COLS[pylonCount % EXT_RUIN_COLS.length])
+          }
+        }
+        pylonCount++
+      }
+    }
+    for (const anchors of [cableAnchorsL, cableAnchorsR]) {
+      for (let i = 0; i < anchors.length - 1; i++) {
+        const a = anchors[i]; const b = anchors[i + 1]
+        const dist = a.distanceTo(b)
+        if (dist >= 6 && dist <= 24) {
+          const mid = a.clone().lerp(b, 0.5).addScaledVector(Y, -dist * 0.16)
+          const q1 = a.clone().lerp(mid, 0.5).addScaledVector(Y, -dist * 0.04)
+          const q2 = b.clone().lerp(mid, 0.5).addScaledVector(Y, -dist * 0.04)
+          extCables.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, q1, mid, q2, b]), 6, 0.042, 4, false))
+        }
+      }
+    }
 
     // Cápsulas segmentadas: anillos nervados + borde neón + paneles opacos alternados + barras de luz + ambiente del tema
     const baySpacing = isFast ? 2.15 : isSlow ? 2.65 : 2.38
@@ -2116,12 +2431,12 @@ function build(way) {
       const stepU = s.kind === 'salida' ? 0.08 : -0.08
       for (let k = 0; k < 3; k++) {
         const u = THREE.MathUtils.clamp(baseU + k * stepU, 0.02, 0.98)
-        const targetList = k === 0 ? mouthRings : rings
+        const targetList = k === 0 ? mouthRings : lmRings
         put(targetList, c.getPointAt(u), aim(Z, c.getTangentAt(u)), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), R * (1.2 + k * 0.08), mouthC)
       }
     }
 
-    // pilares con arcos y vigas
+    // pilares con arcos y vigas (detalle cercano interior)
     const nPost = Math.floor(s.length / 10)
     for (let i = 0; i < nPost; i++) {
       const u = (i + 0.5) / nPost
@@ -2188,38 +2503,41 @@ function build(way) {
       ctr.divideScalar(24)
       const d = B.clone().sub(ctr).normalize(); const h = -A.clone().sub(B).dot(d)
       const rad = A.clone().sub(B).addScaledVector(d, h).length()
-      if (h > 0.5) put(funnels, B.clone().addScaledVector(d, -h), aim(Y, d), rad * 2, h, rad * 2)
+      if (h > 0.5) put(lmFunnels, B.clone().addScaledVector(d, -h), aim(Y, d), rad * 2, h, rad * 2)
     } else if (s.kind === 'cascada' && !s.event) {
       let last = -9
       for (let i = 0; i <= 40; i++) {
-        if (Math.abs(c.getTangentAt(i / 40).y) < 0.3 && i - last > 3) { last = i; put(discs, c.getPointAt(i / 40).addScaledVector(Y, -R - 0.15), IDENT, R * 3.2, 0.14, R * 3.2) }
+        if (Math.abs(c.getTangentAt(i / 40).y) < 0.3 && i - last > 3) { last = i; put(lmDiscs, c.getPointAt(i / 40).addScaledVector(Y, -R - 0.15), IDENT, R * 3.2, 0.14, R * 3.2) }
       }
     }
   }
 
-  // Landmarks distintivos del tema
-  addLandmark(way, V, { cones, cyls: solids, boxes, octas, spheresA, lights, banners, rings, spinMeta, bladeMeta })
+  // Landmarks distintivos del tema (siempre visibles)
+  addLandmark(way, V, {
+    cones: lmCones, cyls: lmSolids, boxes: lmBoxes, octas: lmOctas, spheresA: lmSpheresA,
+    lights: lmLights, banners: lmBanners, rings: lmRings, spinMeta: lmSpinMeta, bladeMeta: lmBladeMeta,
+  })
 
   // nudos (junctions): esfera de cristal, núcleo emisivo y anillos giratorios según fork / cross / merge
   way.junctions.forEach((j, i) => {
-    put(spheres, j.pos, IDENT, r * 4)
+    put(lmSpheres, j.pos, IDENT, r * 4)
     if (j.kind === 'fork') {
-      put(lights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#4fe3ff', 1.35))
-      spinMeta.push({ pos: j.pos, ex: 0.45, ey: i * 0.7, ez: 0.2, sx: 0.9, sy: 1.3, sz: 0.3, scale: r * 2.45, c: hot('#4fe3ff', 1.3) })
-      spinMeta.push({ pos: j.pos, ex: -0.45, ey: i * 0.7, ez: -0.2, sx: -0.9, sy: 1.1, sz: -0.3, scale: r * 1.95, c: ribBase })
+      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#4fe3ff', 1.35))
+      lmSpinMeta.push({ pos: j.pos, ex: 0.45, ey: i * 0.7, ez: 0.2, sx: 0.9, sy: 1.3, sz: 0.3, scale: r * 2.45, c: hot('#4fe3ff', 1.3) })
+      lmSpinMeta.push({ pos: j.pos, ex: -0.45, ey: i * 0.7, ez: -0.2, sx: -0.9, sy: 1.1, sz: -0.3, scale: r * 1.95, c: ribBase })
     } else if (j.kind === 'cross') {
-      put(lights, j.pos, IDENT, r * 0.95, r * 0.95, r * 0.95, hot('#ffd859', 1.4))
-      spinMeta.push({ pos: j.pos, ex: 0, ey: 0, ez: 0, sx: 1.1, sy: 0.8, sz: 0.2, scale: r * 2.65, c: hot('#ffd859', 1.3) })
-      spinMeta.push({ pos: j.pos, ex: Math.PI / 2, ey: 0, ez: 0, sx: 0.2, sy: -1.2, sz: 0.9, scale: r * 2.15, c: ribBase })
-      spinMeta.push({ pos: j.pos, ex: 0, ey: Math.PI / 2, ez: 0.4, sx: -0.8, sy: 0.4, sz: 1.3, scale: r * 1.65, c: hot(V.rail, 1.3) })
+      put(lmLights, j.pos, IDENT, r * 0.95, r * 0.95, r * 0.95, hot('#ffd859', 1.4))
+      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: 0, ez: 0, sx: 1.1, sy: 0.8, sz: 0.2, scale: r * 2.65, c: hot('#ffd859', 1.3) })
+      lmSpinMeta.push({ pos: j.pos, ex: Math.PI / 2, ey: 0, ez: 0, sx: 0.2, sy: -1.2, sz: 0.9, scale: r * 2.15, c: ribBase })
+      lmSpinMeta.push({ pos: j.pos, ex: 0, ey: Math.PI / 2, ez: 0.4, sx: -0.8, sy: 0.4, sz: 1.3, scale: r * 1.65, c: hot(V.rail, 1.3) })
     } else {
-      put(lights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#7affb2', 1.35))
-      spinMeta.push({ pos: j.pos, ex: 0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: 1.4, sz: 0.4, scale: r * 2.5, c: hot('#7affb2', 1.28) })
-      spinMeta.push({ pos: j.pos, ex: -0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: -1.4, sz: -0.4, scale: r * 1.85, c: ribBase })
+      put(lmLights, j.pos, IDENT, r * 0.85, r * 0.85, r * 0.85, hot('#7affb2', 1.35))
+      lmSpinMeta.push({ pos: j.pos, ex: 0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: 1.4, sz: 0.4, scale: r * 2.5, c: hot('#7affb2', 1.28) })
+      lmSpinMeta.push({ pos: j.pos, ex: -0.3, ey: i * 0.5, ez: 0, sx: 0.4, sy: -1.4, sz: -0.4, scale: r * 1.85, c: ribBase })
     }
   })
 
-  // decoración alrededor de los tubos
+  // decoración alrededor de los tubos (solo interior)
   const total = solid.reduce((a, s) => a + s.length, 0)
   const pick = (t) => { for (const s of solid) { if ((t -= s.length) <= 0) return s } return solid[solid.length - 1] }
   const decor = solid.length
@@ -2247,7 +2565,7 @@ function build(way) {
       })
     : []
 
-  // partículas ambientales alrededor del recorrido
+  // partículas ambientales alrededor del recorrido (solo interior)
   const prng = mulberry32(way.idx * 977 + 5); const pp = []
   if (solid.length) {
     for (let i = 0; i < V.parts.n; i++) {
@@ -2257,12 +2575,18 @@ function build(way) {
   }
 
   return {
+    samples,
     tube: tubes.length ? mergeGeometries(tubes) : null,
     rail: rails.length ? mergeGeometries(rails) : null,
     floor: floors.length ? mergeGeometries(floors) : null,
+    extCore: extCores.length ? mergeGeometries(extCores) : null,
+    extCable: extCables.length ? mergeGeometries(extCables) : null,
+    extClamps, extPylons, extFlora, extFloraGlow, extRuins, extPlumes, extPulseMeta,
+    lmSolids, lmCones, lmBoxes, lmOctas, lmSpheres, lmSpheresA, lmDiscs, lmFunnels,
+    lmRings, lmLights, lmBanners, lmSpinMeta, lmBladeMeta, lmPulseMeta,
     ribFrames, neonRims, mouthRings, panelPods, lightBars, windStreaks,
-    rings, solids, cones, boxes, octas, glowOctas, bolts, spheres, spheresA, discs, funnels, decor,
-    lights, banners, arrows, signs, spinMeta, bladeMeta, pulseMeta,
+    solids, cones, boxes, octas, glowOctas, bolts, spheresA, decor,
+    lights, banners, arrows, signs,
     dots: dots.length ? pointsGeo(dots) : null,
     parts: pointsGeo(pp),
     sparks: buildFxGeo(sparkBucket),
@@ -2383,7 +2707,7 @@ function SpinRings({ meta, mat }) {
   }, [meta])
   useFrame(({ clock }) => {
     const o = ref.current
-    if (!o) return
+    if (!o || (o.parent && !o.parent.visible)) return
     const t = clock.elapsedTime
     for (let i = 0; i < meta.length; i++) {
       const it = meta[i]
@@ -2409,7 +2733,7 @@ function SpinBlades({ meta, mat }) {
   }, [meta])
   useFrame(({ clock }) => {
     const o = ref.current
-    if (!o) return
+    if (!o || (o.parent && !o.parent.visible)) return
     const t = clock.elapsedTime
     for (let i = 0; i < meta.length; i++) {
       const it = meta[i]
@@ -2436,7 +2760,7 @@ function PulseInst({ geo, mat, items }) {
   }, [items])
   useFrame(({ clock }) => {
     const o = ref.current
-    if (!o) return
+    if (!o || (o.parent && !o.parent.visible)) return
     const t = clock.elapsedTime
     for (let i = 0; i < items.length; i++) {
       const it = items[i]
@@ -2451,85 +2775,166 @@ function PulseInst({ geo, mat, items }) {
   return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
 }
 
-function Way({ way, focused }) {
+function Way({ way, focused, worldRadius = 110, forceFocusDetail = false }) {
   const id = way.theme.id
   const focusU = useMemo(() => ({ value: 1 }), [])
-  const mats = useMemo(() => createWayMaterials(id, focusU), [id, focusU])
+  const detailU = useMemo(() => ({ value: 0 }), [])
+  const mats = useMemo(() => createWayMaterials(id, focusU, detailU), [id, focusU, detailU])
   const d = useMemo(() => build(way), [way])
+  const extGroupRef = useRef()
+  const intGroupRef = useRef()
 
-  const pulseRings = useMemo(() => d.pulseMeta.filter((p) => p.kind === 'ring'), [d.pulseMeta])
-  const pulseCyls = useMemo(() => d.pulseMeta.filter((p) => p.kind === 'cyl'), [d.pulseMeta])
-  const pulseLights = useMemo(() => d.pulseMeta.filter((p) => p.kind === 'light'), [d.pulseMeta])
+  const pulseRings = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'ring'), [d.lmPulseMeta])
+  const pulseCyls = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'cyl'), [d.lmPulseMeta])
+  const pulseLights = useMemo(() => d.lmPulseMeta.filter((p) => p.kind === 'light'), [d.lmPulseMeta])
 
-  useFrame((_, dt) => {
-    const target = focused ? 1 : 0
-    const f = THREE.MathUtils.damp(focusU.value, target, 11, Math.min(dt, 0.1))
+  useFrame(({ camera }, dt) => {
+    const h = Math.min(dt, 0.1)
+    const f = THREE.MathUtils.damp(focusU.value, focused ? 1 : 0, 11, h)
     focusU.value = f
 
-    const writeDepth = f >= 0.98
-    mats.deco.depthWrite = writeDepth
-    mats.glow.depthWrite = writeDepth
-    mats.decorGlow.depthWrite = writeDepth
-    mats.rail.depthWrite = writeDepth
-    mats.sign.depthWrite = writeDepth
-    mats.floor.depthWrite = writeDepth
-    mats.hull.depthWrite = writeDepth
-    mats.panel.depthWrite = writeDepth
-    mats.neonRim.depthWrite = writeDepth
+    let targetDet = 0
+    if (forceFocusDetail && focused) {
+      targetDet = 1
+    } else if (d.samples.length) {
+      const cx = camera.position.x
+      const cy = camera.position.y
+      const cz = camera.position.z
+      let minD2 = Infinity
+      for (let i = 0; i < d.samples.length; i++) {
+        const p = d.samples[i]
+        const dx = cx - p.x
+        const dy = cy - p.y
+        const dz = cz - p.z
+        const d2 = dx * dx + dy * dy + dz * dz
+        if (d2 < minD2) minD2 = d2
+      }
+      const dist = Math.max(0, Math.sqrt(minD2) - way.params.radius)
+      const rInt = way.params.radius * 6.0 + worldRadius * 0.08
+      const rExt = way.params.radius * 13.0 + worldRadius * 0.3
+      targetDet = 1 - THREE.MathUtils.smoothstep(dist, rInt, rExt)
+    }
+
+    let det = THREE.MathUtils.damp(detailU.value, targetDet, 10, h)
+    if (det < 0.005 && targetDet <= 0.001) det = 0
+    else if (det > 0.995 && targetDet >= 0.999) det = 1
+    detailU.value = det
+
+    if (intGroupRef.current) intGroupRef.current.visible = det > 0.01
+    if (extGroupRef.current) extGroupRef.current.visible = det < 0.99
+
+    const intDepth = f >= 0.98 && det >= 0.98
+    mats.deco.depthWrite = intDepth
+    mats.glow.depthWrite = intDepth
+    mats.decorGlow.depthWrite = intDepth
+    mats.rail.depthWrite = intDepth
+    mats.sign.depthWrite = intDepth
+    mats.floor.depthWrite = intDepth
+    mats.hull.depthWrite = intDepth
+    mats.panel.depthWrite = intDepth
+    mats.neonRim.depthWrite = intDepth
+
+    const extDepth = f >= 0.98 && det <= 0.02
+    mats.extCore.depthWrite = extDepth
+    mats.extMetal.depthWrite = extDepth
+    mats.extCable.depthWrite = extDepth
+    mats.extFlora.depthWrite = extDepth
+    mats.extRuins.depthWrite = extDepth
+
+    const lmDepth = f >= 0.98
+    mats.lmDeco.depthWrite = lmDepth
+    mats.lmGlow.depthWrite = lmDepth
   })
 
   return (
     <group>
+      {/* Tubo de cristal principal (siempre visible, adapta brillo y ruido por uDetail) */}
       {d.tube && <mesh geometry={d.tube} material={mats.tube} />}
-      {d.floor && <mesh geometry={d.floor} material={mats.floor} receiveShadow />}
-      {d.rail && <mesh geometry={d.rail} material={mats.rail} />}
-      <Inst geo={GEO.ribFrame} mat={mats.hull} items={d.ribFrames} cast />
-      <Inst geo={GEO.ribNeon} mat={mats.neonRim} items={d.neonRims} />
-      <Inst geo={GEO.mouthNeon} mat={mats.neonRim} items={d.mouthRings} />
-      <PanelInst items={d.panelPods} mat={mats.panel} />
-      <Inst geo={GEO.lightBar} mat={mats.lightBar} items={d.lightBars} />
-      <WindStreaksInst items={d.windStreaks} mat={mats.windStreak} />
-      <Inst geo={GEO.torus} mat={mats.glow} items={d.rings} />
-      <Inst geo={GEO.cyl} mat={mats.deco} items={d.solids} cast />
-      <Inst geo={GEO.cone} mat={mats.deco} items={d.cones} cast />
-      <Inst geo={GEO.box} mat={mats.deco} items={d.boxes} cast />
-      <Inst geo={GEO.octa} mat={mats.deco} items={d.octas} cast />
-      <Inst geo={GEO.octa} mat={mats.decorGlow} items={d.glowOctas} />
-      <Inst geo={GEO.bolt} mat={mats.decorGlow} items={d.bolts} />
-      <Inst geo={GEO.sphere} mat={mats.glass} items={d.spheres} />
-      <Inst geo={GEO.sphere} mat={mats.decoA} items={d.spheresA} />
-      <Inst geo={GEO.cyl} mat={mats.glass} items={d.discs} />
-      <Inst geo={GEO.funnel} mat={mats.glass} items={d.funnels} />
-      <Inst geo={GEO.sphere} mat={mats.glow} items={d.lights} />
-      <Inst geo={GEO.banner} mat={mats.deco} items={d.banners} />
-      <Inst geo={GEO.arrow} mat={mats.glow} items={d.arrows} />
-      <SpinRings meta={d.spinMeta} mat={mats.glow} />
-      <SpinBlades meta={d.bladeMeta} mat={mats.deco} />
-      <PulseInst geo={GEO.torus} mat={mats.glow} items={pulseRings} />
-      <PulseInst geo={GEO.cyl} mat={mats.decoA} items={pulseCyls} />
-      <PulseInst geo={GEO.sphere} mat={mats.glow} items={pulseLights} />
-      <SignInst items={d.signs} mat={mats.sign} />
-      {d.decor.map(({ p, items }, i) => {
-        const solidMat = !p.e && (p.a ?? 1) >= 1
-        return <Inst key={i} geo={GEO_BY[p.k]} mat={p.e ? mats.decorGlow : solidMat ? mats.deco : mats.decoA} items={items} cast={solidMat} />
-      })}
-      {d.dots && <points geometry={d.dots} material={mats.dots} frustumCulled={false} />}
-      <points geometry={d.parts} material={mats.parts} frustumCulled={false} />
-      {d.sparks && <points geometry={d.sparks} material={mats.sparks} frustumCulled={false} />}
-      {Object.entries(d.fxGeos).map(([k, geo]) =>
-        geo ? <points key={k} geometry={geo} material={mats.fx[k]} frustumCulled={false} /> : null
-      )}
+
+      {/* Landmarks, nudos y siluetas de eventos (siempre visibles) */}
+      <group>
+        <Inst geo={GEO.mouthNeon} mat={mats.lmGlow} items={d.mouthRings} />
+        <Inst geo={GEO.torus} mat={mats.lmGlow} items={d.lmRings} />
+        <Inst geo={GEO.cyl} mat={mats.lmDeco} items={d.lmSolids} cast />
+        <Inst geo={GEO.cone} mat={mats.lmDeco} items={d.lmCones} cast />
+        <Inst geo={GEO.box} mat={mats.lmDeco} items={d.lmBoxes} cast />
+        <Inst geo={GEO.octa} mat={mats.lmDeco} items={d.lmOctas} cast />
+        <Inst geo={GEO.sphere} mat={mats.lmGlass} items={d.lmSpheres} />
+        <Inst geo={GEO.sphere} mat={mats.lmDecoA} items={d.lmSpheresA} />
+        <Inst geo={GEO.cyl} mat={mats.lmGlass} items={d.lmDiscs} />
+        <Inst geo={GEO.funnel} mat={mats.lmGlass} items={d.lmFunnels} />
+        <Inst geo={GEO.sphere} mat={mats.lmGlow} items={d.lmLights} />
+        <Inst geo={GEO.banner} mat={mats.lmDeco} items={d.lmBanners} />
+        <SpinRings meta={d.lmSpinMeta} mat={mats.lmGlow} />
+        <SpinBlades meta={d.lmBladeMeta} mat={mats.lmDeco} />
+        <PulseInst geo={GEO.torus} mat={mats.lmGlow} items={pulseRings} />
+        <PulseInst geo={GEO.cyl} mat={mats.lmDecoA} items={pulseCyls} />
+        <PulseInst geo={GEO.sphere} mat={mats.lmGlow} items={pulseLights} />
+      </group>
+
+      {/* Capa EXTERIOR: tira de neón interior, abrazaderas, andamios, cables, flora bioluminiscente, penachos simples */}
+      <group ref={extGroupRef}>
+        {d.extCore && <mesh geometry={d.extCore} material={mats.extCore} />}
+        {d.extCable && <mesh geometry={d.extCable} material={mats.extCable} />}
+        <Inst geo={GEO.extClamp} mat={mats.extMetal} items={d.extClamps} />
+        <Inst geo={GEO.pylon} mat={mats.extMetal} items={d.extPylons} cast />
+        <Inst geo={GEO.alienTree} mat={mats.extFlora} items={d.extFlora} />
+        <Inst geo={GEO.mushCap} mat={mats.extFloraGlow} items={d.extFloraGlow} />
+        <Inst geo={GEO.ruinPillar} mat={mats.extRuins} items={d.extRuins} />
+        <Inst geo={GEO.plume} mat={mats.extPlume} items={d.extPlumes} />
+        <PulseInst geo={GEO.plume} mat={mats.extPlume} items={d.extPulseMeta} />
+      </group>
+
+      {/* Capa INTERIOR cinematográfica: paneles, pista de chevrones, barras de luz, estelas, chispas, props y FX */}
+      <group ref={intGroupRef} visible={false}>
+        {d.floor && <mesh geometry={d.floor} material={mats.floor} receiveShadow />}
+        {d.rail && <mesh geometry={d.rail} material={mats.rail} />}
+        <Inst geo={GEO.ribFrame} mat={mats.hull} items={d.ribFrames} cast />
+        <Inst geo={GEO.ribNeon} mat={mats.neonRim} items={d.neonRims} />
+        <PanelInst items={d.panelPods} mat={mats.panel} />
+        <Inst geo={GEO.lightBar} mat={mats.lightBar} items={d.lightBars} />
+        <WindStreaksInst items={d.windStreaks} mat={mats.windStreak} />
+        <Inst geo={GEO.cyl} mat={mats.deco} items={d.solids} cast />
+        <Inst geo={GEO.cone} mat={mats.deco} items={d.cones} cast />
+        <Inst geo={GEO.box} mat={mats.deco} items={d.boxes} cast />
+        <Inst geo={GEO.octa} mat={mats.deco} items={d.octas} cast />
+        <Inst geo={GEO.octa} mat={mats.decorGlow} items={d.glowOctas} />
+        <Inst geo={GEO.bolt} mat={mats.decorGlow} items={d.bolts} />
+        <Inst geo={GEO.sphere} mat={mats.decoA} items={d.spheresA} />
+        <Inst geo={GEO.sphere} mat={mats.glow} items={d.lights} />
+        <Inst geo={GEO.banner} mat={mats.deco} items={d.banners} />
+        <Inst geo={GEO.arrow} mat={mats.glow} items={d.arrows} />
+        <SignInst items={d.signs} mat={mats.sign} />
+        {d.decor.map(({ p, items }, i) => {
+          const solidMat = !p.e && (p.a ?? 1) >= 1
+          return <Inst key={i} geo={GEO_BY[p.k]} mat={p.e ? mats.decorGlow : solidMat ? mats.deco : mats.decoA} items={items} cast={solidMat} />
+        })}
+        {d.dots && <points geometry={d.dots} material={mats.dots} frustumCulled={false} />}
+        <points geometry={d.parts} material={mats.parts} frustumCulled={false} />
+        {d.sparks && <points geometry={d.sparks} material={mats.sparks} frustumCulled={false} />}
+        {Object.entries(d.fxGeos).map(([k, geo]) =>
+          geo ? <points key={k} geometry={geo} material={mats.fx[k]} frustumCulled={false} /> : null
+        )}
+      </group>
     </group>
   )
 }
 
-export default function Paths({ world, focusWay = null }) {
+export default function Paths({ world, focusWay = null, worldRadius = 110, forceFocusDetail = false }) {
   useFrame(({ clock }) => {
     SHARED_TIME.value = clock.elapsedTime
   })
   return (
     <>
-      {world.ways.map((w) => <Way key={w.idx} way={w} focused={focusWay == null || focusWay === w.idx} />)}
+      {world.ways.map((w) => (
+        <Way
+          key={w.idx}
+          way={w}
+          focused={focusWay == null || focusWay === w.idx}
+          worldRadius={worldRadius}
+          forceFocusDetail={forceFocusDetail}
+        />
+      ))}
       {world.circuits.map((c) => {
         const active = focusWay == null || c.ways.some((w) => w.idx === focusWay)
         return (

@@ -695,6 +695,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
   const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
+  const forceFocusDetail = Boolean((follow || pov) && selected && selected.phase !== 'gone')
   const focusWay = selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null
 
   return (
@@ -746,9 +747,9 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} focusWay={focusWay} />
+      <Paths world={sim.world} focusWay={focusWay} worldRadius={r} forceFocusDetail={forceFocusDetail} />
       {bollitas.map((b) => (
-        <Bollita key={b.id} b={b} sim={sim} selected={selected === b} pov={pov && selected === b} onSelect={onSelect} />
+        <Bollita key={b.id} b={b} sim={sim} selected={selected === b} pov={pov && selected === b} worldRadius={r} onSelect={onSelect} />
       ))}
       <CameraRig mundo={mundo} nodes={sim.world.nodes} selected={selected} follow={follow} pov={pov} cine={cine} />
       <PostFX dofOn={dofOn} selected={selected} />
