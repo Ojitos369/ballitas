@@ -15,7 +15,7 @@ import Eventos, { eventosWarmup } from './eventos.jsx'
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
 const TRACK_TILE = 4 // unidades de mundo por repetición de la textura en V
 export const CURB = 0.17
-export const TERR = 0.9 // ancho de la berma de terreno a cada lado
+export const TERR = 0.55 // berma estrecha: menos de media calzada por lado
 const STEP = 1.5 // muestreo a lo largo del carril
 const CHEV_K = 0.12 // curvatura (1/u) a partir de la cual una curva lleva flechas antes
 
@@ -134,11 +134,11 @@ function trackMat(themeId) {
 function profile(H) {
   const E = H + CURB
   const top = [
-    [-(E + TERR), -0.16, 0], [-(E + TERR * 0.5), 0.06, 0.08], [-E, 0.025, TRACK_U[0]], [-H, 0.02, TRACK_U[1]],
+    [-(E + TERR), -0.08, 0], [-(E + TERR * 0.5), 0.025, 0.08], [-E, 0.025, TRACK_U[0]], [-H, 0.02, TRACK_U[1]],
     [0, 0, 0.5],
-    [H, 0.02, TRACK_U[2]], [E, 0.025, TRACK_U[3]], [E + TERR * 0.5, 0.06, 0.92], [E + TERR, -0.16, 1],
+    [H, 0.02, TRACK_U[2]], [E, 0.025, TRACK_U[3]], [E + TERR * 0.5, 0.025, 0.92], [E + TERR, -0.08, 1],
   ]
-  return { top, keelX: E + TERR * 0.55 }
+  return { top, keelX: E + 0.12 }
 }
 const RING = 12
 
@@ -157,7 +157,7 @@ function pushLaneStrip(seg, lane, out) {
     Ts.push(f.tangent.clone()); Ss.push(f.side.clone())
     const s = u * L
     const k = 1 + 0.35 * Math.sin(s * 0.37 + salt) + 0.2 * Math.sin(s * 1.13 + salt * 2)
-    const ring = [...top, [keelX, -0.7 * k, 1], [0, -1.35 * k, 0.5], [-keelX, -0.7 * k, 0]]
+    const ring = [...top, [keelX, -0.28 * k, 1], [0, -0.48 * k, 0.5], [-keelX, -0.28 * k, 0]]
     for (let j = 0; j < RING; j++) {
       const [x, y, ux] = ring[j]
       out.pos.push(

@@ -37,7 +37,7 @@ const POV_JOY_PITCH_SPEED = 0.9
 const NOOP = () => {}
 const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
-const SEGUIR_DIST = 3.6 // distancia cómoda detrás/encima de la ballita (0.55x en tubos)
+const SEGUIR_DIST = 4.6 // distancia detrás y encima de la ballita en caminos abiertos
 const MIN_DIST = 1.4
 const VISTA_DIR = new THREE.Vector3(0.55, 0.45, 0.7).normalize()
 const SOL_DIR = new THREE.Vector3(0.4, 0.8, 0.3).normalize()
@@ -55,6 +55,7 @@ const povEye = new THREE.Vector3()
 const povFwd = new THREE.Vector3()
 const povRight = new THREE.Vector3()
 const povOrthoUp = new THREE.Vector3()
+const collisionOrigin = new THREE.Vector3()
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -503,6 +504,11 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
   const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  const collisionRay = useMemo(() => new THREE.Raycaster(), [])
+  const collisionHits = useMemo(() => [], [])
+  const collisionMeshes = useRef([])
+  const collisionFrame = useRef(0)
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
   const ultima = useRef(null)
   const userActive = useRef(false)
@@ -863,7 +869,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.lerp(selected.dir, 1 - Math.exp(-fwdRate * h))
       if (fs.fwd.lengthSq() < 1e-6) fs.fwd.copy(selected.dir ?? Y_AXIS)
       fs.fwd.normalize()
-      const wallFollow = selected.phase === 'travel' && !horizonRef.current && Boolean(selected.up)
+      const wallFollow = selected.phase === 'travel' && Boolean(selected.up)
       if (wallFollow) {
         followUp.current.lerp(selected.up, 1 - Math.exp(-WALL_UP_RATE * h))
         if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(selected.up)
@@ -892,8 +898,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       // queda dentro del tubo aunque ruede por la pared o el techo; fuera, el de la vista
       // (tras un portal o un salto la posición se funde unos cuadros hacia el tubo: hasta llegar no hay riel)
       const ejeB = selected._frame?.axis
-      const enTubo = selected.phase === 'travel' && selected.seg && !selected.seg.air &&
-        (!ejeB || selected.pos.distanceToSquared(ejeB) < (selected.seg.radius * 1.3) ** 2)
+      // Los caminos ya son pistas abiertas: no hay tubo que limite la posición de la cámara.
+      const enTubo = false
       const segCam = enTubo ? selected.seg : null // en la ciudad b.seg conserva el último tramo: no cuenta
       if (segCam !== fs.seg) { fs.prevSeg = fs.seg; fs.seg = segCam }
       const upGoalPos = enTubo && selected.up ? selected.up : upRefVec
@@ -962,7 +968,28 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         }
       }
 
-      // Evita que la cámara se meta dentro de la esfera de un planeta al seguir (en el tubo ya la acota el cristal).
+      // Colisión de cámara contra la escena: recorta el brazo antes de atravesar una pista, berma u objeto.
+      if (!entrando && ++collisionFrame.current % 6 === 0) {
+        const delta = sideVec.copy(camera.position).sub(selected.pos)
+        const distance = delta.length()
+        if (distance > 0.7) {
+          if (!collisionMeshes.current.length) {
+            scene.traverse((o) => { if (o.isMesh && o.geometry?.name?.startsWith('pista:')) collisionMeshes.current.push(o) })
+          }
+          collisionOrigin.copy(selected.pos).addScaledVector(selected.up ?? Y_AXIS, 0.55)
+          delta.copy(camera.position).sub(collisionOrigin)
+          const rayLength = delta.length()
+          collisionRay.set(collisionOrigin, delta.normalize())
+          collisionRay.camera = camera
+          collisionRay.near = 0.55
+          collisionRay.far = rayLength
+          collisionHits.length = 0
+          collisionRay.intersectObjects(collisionMeshes.current, false, collisionHits)
+          const hit = collisionHits.find((x) => x.object.visible && !x.object.userData?.noCameraCollision)
+          if (hit) camera.position.addScaledVector(selected.up ?? Y_AXIS, Math.min(2.2, Math.max(0.65, 2.1 - hit.distance)))
+        }
+      }
+      // Evita que la cámara se meta dentro de la esfera de un planeta.
       const minPlanetR = NODE_R + 1.25
       for (let i = 0; !enTubo && i < nodes.length; i++) {
         const np = nodes[i].pos

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import * as WORLD from '../../Core/world.js'
 
 const Y = new THREE.Vector3(0, 1, 0)
 const sm = THREE.MathUtils.smoothstep
@@ -15,6 +16,26 @@ const _qA = new THREE.Quaternion()
 const _qB = new THREE.Quaternion()
 const _look = new THREE.Quaternion()
 const _eu = new THREE.Euler()
+const _orbit = new THREE.Vector3()
+
+function envolventeRuta(way, routeIndex) {
+  const route = way?.routes?.[routeIndex % (way?.routes?.length || 1)]
+  const box = new THREE.Box3()
+  const p = new THREE.Vector3()
+  for (const seg of route?.segments ?? []) {
+    if (seg.lanes?.length) {
+      for (const lane of seg.lanes) for (let i = 0; i <= 12; i++) {
+        const frame = WORLD.laneFrame(seg, lane.id, i / 12, {})
+        box.expandByPoint(frame.pos)
+      }
+    } else {
+      for (let i = 0; i <= 12; i++) box.expandByPoint(seg.curve.getPointAt(i / 12, p))
+    }
+  }
+  const sphere = box.getBoundingSphere(new THREE.Sphere())
+  sphere.radius = Math.max(sphere.radius * 1.18, way?.params?.radius ?? 2)
+  return sphere
+}
 
 // Ruta como lista de tramos con distancia acumulada (longitudes reales del mundo).
 export function perfilRuta(way, routeIndex) {
@@ -40,6 +61,7 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const perfil = useMemo(() => perfilRuta(way, routeIndex), [way, routeIndex])
+  const envelope = useMemo(() => envolventeRuta(way, routeIndex), [way, routeIndex])
   const st = useRef({ d: 0, goal: null, fly: 1, yaw: 0, pitch: 0, drag: false, up: new THREE.Vector3(0, 1, 0), q: new THREE.Quaternion(), p0: new THREE.Vector3(), q0: new THREE.Quaternion(), A: new THREE.Vector3(), initQ: false })
   const radius = way?.params?.radius ?? 2
 
@@ -49,13 +71,10 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
     const s = st.current
     s.d = 0; s.goal = null; s.fly = 0; s.yaw = 0; s.pitch = 0; s.initQ = false
     s.p0.copy(camera.position); s.q0.copy(camera.quaternion)
-    const dA = Math.min(radius * 6, perfil.total * 0.1)
-    muestrea(perfil, dA, _p, _t)
-    _u.copy(Y).addScaledVector(_t, -Y.dot(_t))
-    if (_u.lengthSq() < 1e-3) _u.set(1, 0, 0).addScaledVector(_t, -_t.x)
-    s.A.copy(_p).addScaledVector(_u.normalize(), radius * 4.5)
+    s.A.copy(envelope.center)
+    s.A.z += envelope.radius / Math.sin(THREE.MathUtils.degToRad((FOV_DENTRO + 10) / 2)) * 1.12
     s.up.copy(Y)
-  }, [active, perfil, camera, radius])
+  }, [active, perfil, camera, radius, envelope])
 
   useEffect(() => {
     if (!seek || !perfil.segs[seek.i]) return
@@ -105,42 +124,20 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
       }
     }
     muestrea(perfil, s.d, _p, _t)
-    _u.copy(Y).addScaledVector(_t, -Y.dot(_t))
-    if (_u.lengthSq() > 1e-3) s.up.lerp(_u.normalize(), 1 - Math.exp(-4 * h)).normalize()
-    _m.lookAt(_p, _t.clone().add(_p), s.up)
+    _orbit.copy(s.A).sub(envelope.center).applyEuler(_eu.set(s.pitch, s.yaw, 0, 'YXZ'))
+    const framedPos = _p.copy(envelope.center).add(_orbit)
+    _m.lookAt(framedPos, envelope.center, Y)
     _qB.setFromRotationMatrix(_m)
-    _look.setFromEuler(_eu.set(s.pitch, s.yaw, 0, 'YXZ'))
-    _qB.multiply(_look)
     if (!s.initQ) { s.q.copy(camera.quaternion); s.initQ = true }
     s.q.slerp(_qB, 1 - Math.exp(-10 * h))
-
-    let fov = FOV_DENTRO
+    const fov = FOV_DENTRO + 10
     if (s.fly < 1) {
       s.fly = Math.min(1, s.fly + h / (FLY_A + FLY_B))
-      const tt = s.fly * (FLY_A + FLY_B)
-      if (tt < FLY_A) { // 1) arco desde la pose actual hasta la boca
-        const e = sm(tt / FLY_A, 0, 1)
-        _u.copy(s.p0).lerp(s.A, 0.5).addScaledVector(Y, s.p0.distanceTo(s.A) * 0.18)
-        const a = 1 - e
-        camera.position.set(0, 0, 0).addScaledVector(s.p0, a * a).addScaledVector(_u, 2 * a * e).addScaledVector(s.A, e * e)
-        muestrea(perfil, radius * 6, _p, _t)
-        _m.lookAt(camera.position, _p, Y)
-        _qA.setFromRotationMatrix(_m)
-        camera.quaternion.copy(s.q0).slerp(_qA, e)
-        fov = FOV_DENTRO + 10
-      } else { // 2) inmersión: de la boca al eje del tubo
-        const e = sm((tt - FLY_A) / FLY_B, 0, 1)
-        muestrea(perfil, radius * 6, _p, _t)
-        _m.lookAt(s.A, _p, Y)
-        _qA.setFromRotationMatrix(_m)
-        camera.position.copy(s.A)
-        muestrea(perfil, s.d, _p, _t)
-        camera.position.lerp(_p, e)
-        camera.quaternion.copy(_qA).slerp(s.q, e)
-        fov = FOV_DENTRO + 10 * (1 - e)
-      }
+      const e = sm(s.fly, 0, 1)
+      camera.position.copy(s.p0).lerp(framedPos, e)
+      camera.quaternion.copy(s.q0).slerp(s.q, e)
     } else {
-      camera.position.copy(_p)
+      camera.position.copy(framedPos)
       camera.quaternion.copy(s.q)
     }
     camera.fov = THREE.MathUtils.lerp(camera.fov, fov, 1 - Math.exp(-6 * h))
