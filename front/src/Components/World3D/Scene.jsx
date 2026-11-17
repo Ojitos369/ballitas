@@ -43,6 +43,7 @@ const VISTA_DIR = new THREE.Vector3(0.55, 0.45, 0.7).normalize()
 const SOL_DIR = new THREE.Vector3(0.4, 0.8, 0.3).normalize()
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const TONE_MAPPING_AGX = 8 // ToneMappingMode.AGX en postprocessing 6.39
+const BlendFunction = { DST: 9, NORMAL: 23 } // postprocessing 6.39 (no es dependencia directa)
 const mov = new THREE.Vector3()
 const off = new THREE.Vector3()
 const lookAhead = new THREE.Vector3()
@@ -835,10 +836,21 @@ function Sol({ r, shadowsOn, selected }) {
 
 const CA_ON = [0.00045, 0.00045]
 const CA_OFF = [0, 0]
+// ultraQuality = capacidad (monta el DoF); dofOn = DoF activo en esta vista.
 function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
   const dofTarget = useMemo(() => new THREE.Vector3(), [])
+
+  // DoF siempre montado: apagarlo con DST lo saca del shader sin recrear el EffectMaterial
+  // (three guarda ambas variantes del programa en el mismo material) y se omiten sus pasadas.
+  useLayoutEffect(() => {
+    const e = dofRef.current
+    if (!e) return
+    if (!e.__update) e.__update = e.update
+    e.update = dofOn ? e.__update : () => {}
+    e.blendMode.blendFunction = dofOn ? BlendFunction.NORMAL : BlendFunction.DST
+  }, [dofOn, ultraQuality])
 
   useFrame(() => {
     if (!dofOn || !ultraQuality || !dofRef.current?.target) return
@@ -850,7 +862,7 @@ function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
     <EffectComposer multisampling={0}>
       {/* Composición fija: montar/desmontar efectos recrea el EffectPass y recompila; la calidad alta solo cambia props */}
       <SMAA />
-      {ultraQuality && dofOn && (
+      {ultraQuality && (
         <DepthOfField
           ref={dofRef}
           target={dofTarget}
@@ -1204,7 +1216,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         horizonRef={horizonRef}
         onCanvasReady={handleCanvasReady}
       />
-      <PostFX dofOn={dofOn} selected={selected} highQuality={highQualityFx} ultraQuality={ultraQualityFx} />
+      <PostFX dofOn={dofOn && ultraQualityFx} selected={selected} highQuality={highQualityFx} ultraQuality={!lowPerf && dpr >= 1.25} />
       <StatsProbe active={showStats} onSample={onStatsSample} />
       <VistaCamino way={cameraWay} routeIndex={routeIndex} seek={seek} speed={caminoSpeed} paused={caminoPaused} active={caminoOn} progressRef={progressRef} />
     </Canvas>
