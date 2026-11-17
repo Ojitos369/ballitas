@@ -1,0 +1,19 @@
+services:
+  ballitas-web:
+    build: .
+    command: ["/usr/bin/supervisord"]
+    container_name: ballitas-py
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - .:/usr/src/app
+    ports:
+      # 8378: libre en gcs (el túnel usa 8001, 8010, 8021, 8031, 8368-8377, 8388, 7880)
+      - "127.0.0.1:8378:8000"
+    networks:
+      - ballitas-net
+
+networks:
+  ballitas-net:
+    driver: bridge

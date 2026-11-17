@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Sim } from '../../Core/sim.js'
+import { iniciarBack } from '../../Core/api.js'
 import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
@@ -16,6 +17,7 @@ export default function Main() {
   const simRef = useRef(null)
   if (!simRef.current) simRef.current = new Sim()
   const sim = simRef.current
+  useEffect(() => { iniciarBack(sim) }, [sim])
   const progressRef = useRef(null)
   const [speed, setSpeed] = useState(1)
   const [selected, setSelected] = useState(null)
