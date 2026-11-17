@@ -40,7 +40,7 @@ const CHIBI_FACES = {
   alegria: { eye: 1.18, brow: 0.12, mouth: 1.0, blush: 0.85, sweat: 0, bounce: 1.55, sparkle: 0.85, happyArc: 0.3 },
 }
 
-// Geometrías compartidas entre todas las bollitas para rendimiento con decenas de instancias
+// Geometrías compartidas entre todas las ballitas para rendimiento con decenas de instancias
 const SHARED_GEO = {
   click: new THREE.SphereGeometry(1, 8, 6),
   body: SKIN_GEO.body,
@@ -156,8 +156,8 @@ function resolveExpression(b, g) {
   return CHIBI_FACES[b.mood] ?? CHIBI_FACES.feliz
 }
 
-// Una bollita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
-export default function Bollita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
+// Una ballita 3D chibi con cara viva. Lee su estado de `sim` en cada frame.
+export default function Ballita({ b, sim, selected, pov = false, povMode = false, worldRadius = 110, onSelect }) {
   const root = useRef(); const bodyGroup = useRef()
   const orbGroupRef = useRef(); const extOrbRef = useRef(); const extHaloRef = useRef()
   const eyeL = useRef(); const eyeR = useRef(); const zenEyesRef = useRef()
@@ -383,7 +383,7 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
     root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
 
-    // Si la bollita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
+    // Si la ballita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
     const bodyVisible = !pov && extFactor < 0.96
     if (bodyGroup.current) bodyGroup.current.visible = bodyVisible
     if (orbGroupRef.current) {

@@ -1,4 +1,4 @@
-# Generador de texturas de Bollitas
+# Generador de texturas de Ballitas
 
 Este directorio contiene el script procedural que produce las texturas y sprites usados por el juego en `public/tex/`, junto con sus mosaicos de verificación en `preview/`.
 

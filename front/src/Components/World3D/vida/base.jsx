@@ -105,9 +105,9 @@ const Y = new THREE.Vector3(0, 1, 0)
 // ═══════════════════════════ BUS DE DATOS EN VIVO ═══════════════════════════
 // Paths.jsx escribe aquí la simulación en cada frame; los módulos solo leen.
 export const VIDA_BUS = { sim: null }
-const NO_BOLLITAS = []
-export function getBollitas() {
-  return VIDA_BUS.sim?.bollitas ?? NO_BOLLITAS
+const NO_BALLITAS = []
+export function getBallitas() {
+  return VIDA_BUS.sim?.ballitas ?? NO_BALLITAS
 }
 
 // ═══════════════════════════ MARCOS DEL TUBO ═══════════════════════════
@@ -376,7 +376,7 @@ export function segPath(segs) {
  * opts:
  *   segments: array de segmentos o función (seg) => bool (por defecto todos los que tienen tubo)
  *   angle: [min, max] rango angular sobre la pared (por defecto [-0.62π, 0.62π]: piso y laderas)
- *   clear: margen angular extra (rad) libre alrededor de cada carril (por defecto el ancho de la bollita)
+ *   clear: margen angular extra (rad) libre alrededor de cada carril (por defecto el ancho de la ballita)
  *   offset: [min, max] en unidades de mundo desde la pared (por defecto [0, 0])
  *   u: [min, max] rango a lo largo de cada tramo (por defecto [0.04, 0.96])
  *   scale: [min, max] escala uniforme (por defecto [1, 1])
@@ -580,7 +580,7 @@ export function Billboard({ text, style, height = 0.5, position, quat, faceCamer
 /**
  * <Critter way segments count geo mat scale speed offset angle spread hop reactRadius colors seed />
  * Criaturas instanciadas que patrullan a lo largo del tubo (ida y vuelta suave), se balancean en la
- * pared y reaccionan a las bollitas cercanas: saltan (`hop`) y se apartan del carril.
+ * pared y reaccionan a las ballitas cercanas: saltan (`hop`) y se apartan del carril.
  *   segments: tramos por los que patrulla (por defecto los de la primera ruta)
  *   angle: ángulo central sobre la pared; spread: amplitud de su vaivén angular
  *   speed: unidades/s; range: tramo de arco [0..1] del camino que recorre cada una (por defecto todo)
@@ -609,13 +609,13 @@ export function Critter({
     if (!path.total || !mesh.visible) return
     const h = Math.min(dt, 0.1)
     const t = st.clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < state.length; i++) {
       const c = state[i]
       c.s += c.dir * c.v * h * (1 + c.excite * 1.5)
       if (c.s > path.total) { c.s = path.total; c.dir = -1 }
       if (c.s < 0) { c.s = 0; c.dir = 1 }
-      // Reacción a bollitas cercanas en el mismo camino
+      // Reacción a ballitas cercanas en el mismo camino
       let near = 0; let fleeDir = 0
       for (let k = 0; k < bolls.length; k++) {
         const b = bolls[k]
@@ -651,19 +651,19 @@ export function Critter({
 // ═══════════════════════════ ESCENARIO DE EVENTO ═══════════════════════════
 /**
  * <EventStage segment render />  monta contenido solo alrededor de un tramo y lleva su estado:
- *   stage = { phase: 'idle'|'teaser'|'climax'|'salida', k (avance 0..1 de la bollita líder),
- *             intensity (suavizada 0..1), bollita (o null) }
- * teaser: una bollita está en un tramo previo cuyo `next` incluye este; climax: está dentro;
+ *   stage = { phase: 'idle'|'teaser'|'climax'|'salida', k (avance 0..1 de la ballita líder),
+ *             intensity (suavizada 0..1), ballita (o null) }
+ * teaser: una ballita está en un tramo previo cuyo `next` incluye este; climax: está dentro;
  * salida: acaba de pasar al siguiente. `render(stage, info)` se llama una vez y debe leer `stage`
  * dentro de sus propios useFrame (es un objeto mutable estable, sin re-render).
  */
 export function EventStage({ segment, render, idle = 0.12 }) {
-  const stage = useMemo(() => ({ phase: 'idle', k: 0, intensity: idle, bollita: null }), [idle])
+  const stage = useMemo(() => ({ phase: 'idle', k: 0, intensity: idle, ballita: null }), [idle])
   const info = useMemo(() => ({ segment, frames: segFrames(segment), placement: (u, off = 0, a = 0) => placeAlong(segment, u, off, a) }), [segment])
   useFrame((_, dt) => {
     const h = Math.min(dt, 0.1)
     let phase = 'idle'; let k = 0; let who = null; let rank = 0
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]
       const s = b.seg
@@ -676,7 +676,7 @@ export function EventStage({ segment, render, idle = 0.12 }) {
     stage.intensity = THREE.MathUtils.damp(stage.intensity, target, 4, h)
     stage.phase = phase
     stage.k = k
-    stage.bollita = who
+    stage.ballita = who
   })
   const content = useMemo(() => render(stage, info), [render, stage, info])
   return <group>{content}</group>
@@ -836,7 +836,7 @@ export function CartelesDeRuta({ way, style = {}, angle = 1.0, u = 0.14, height 
       const first = rt.segments.find((s) => s.route >= 0 && !s.air) ?? rt.segments.find((s) => !s.air)
       if (!first) return null
       const p = placeAlong(first.seg, u, 0, angle)
-      const quat = p.quat.clone().multiply(flip) // de frente a la bollita que llega
+      const quat = p.quat.clone().multiply(flip) // de frente a la ballita que llega
       const top = p.pos.clone().addScaledVector(p.up, pole)
       return {
         key: rt.r, pos: p.pos, quat, top,

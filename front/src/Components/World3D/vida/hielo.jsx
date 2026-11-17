@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
-  CartelesDeRuta, EventStage, Instanced, buildSkyGeo, buildTerrainGeo, getBollitas,
+  CartelesDeRuta, EventStage, Instanced, buildSkyGeo, buildTerrainGeo, getBallitas,
   markShared, mulberry32, placeAlong, routeInfo, Soundless, useAutoDispose,
 } from './base.jsx'
 
@@ -143,7 +143,7 @@ function Penguin({ seg, way, routeIndex }) {
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
     let startled = false
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]
       if (b.phase === 'travel' && b.seg?.way === way && b.seg === seg && (b.segT ?? 0) > 0.48 && (b.segT ?? 0) < 0.78) { startled = true; break }

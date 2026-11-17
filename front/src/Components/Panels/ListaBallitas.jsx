@@ -32,7 +32,7 @@ function ubicacionCorta(b, sim) {
 
 const clampPct = (v) => Math.max(0, Math.min(100, Math.round(v)))
 
-const FilaBollita = memo(function FilaBollita({ b, sim, isSelected, isFollowing, onSelect, onFollow }) {
+const FilaBallita = memo(function FilaBallita({ b, sim, isSelected, isFollowing, onSelect, onFollow }) {
   const skin = useMemo(() => buildSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyCss = colorDe(b)
   const lugar = ubicacionCorta(b, sim)
@@ -83,7 +83,7 @@ const FilaBollita = memo(function FilaBollita({ b, sim, isSelected, isFollowing,
   )
 })
 
-export default function ListaBollitas({ sim, vivas, selected, onSelect, follow, onFollow }) {
+export default function ListaBallitas({ sim, vivas, selected, onSelect, follow, onFollow }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState('name')
@@ -157,7 +157,7 @@ export default function ListaBollitas({ sim, vivas, selected, onSelect, follow, 
         className="lista-btn"
         aria-expanded={open}
         aria-haspopup="true"
-        aria-controls="lista-bollitas-panel"
+        aria-controls="lista-ballitas-panel"
         onClick={() => setOpen((v) => !v)}
       >
         <span>☰ Lista</span>
@@ -166,9 +166,9 @@ export default function ListaBollitas({ sim, vivas, selected, onSelect, follow, 
 
       {open && (
         <section
-          id="lista-bollitas-panel"
+          id="lista-ballitas-panel"
           className="lista-panel"
-          aria-label="Lista de bollitas activas"
+          aria-label="Lista de ballitas activas"
         >
           <div className="lista-controles">
             <input
@@ -176,7 +176,7 @@ export default function ListaBollitas({ sim, vivas, selected, onSelect, follow, 
               type="search"
               className="lista-buscar"
               placeholder="Buscar nombre, arquetipo o lugar..."
-              aria-label="Buscar bollita"
+              aria-label="Buscar ballita"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -203,7 +203,7 @@ export default function ListaBollitas({ sim, vivas, selected, onSelect, follow, 
           ) : (
             <ul className="lista-filas">
               {items.map((b) => (
-                <FilaBollita
+                <FilaBallita
                   key={b.id}
                   b={b}
                   sim={sim}

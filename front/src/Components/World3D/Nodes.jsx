@@ -22,7 +22,7 @@ function useCityFade(ref) {
   }, [ref])
 }
 
-const U = BALL_R * 2 // unidad de la ciudad: una bollita de ancho
+const U = BALL_R * 2 // unidad de la ciudad: una ballita de ancho
 const ROAD_W = U * 1.18
 const ROAD_H = 0.085
 const UP = new THREE.Vector3(0, 1, 0)
@@ -32,7 +32,7 @@ const GREEN = '#5dffb0'
 const txt = (n) => (n > 0 ? '+' : '−') + Math.abs(n)
 
 // Actividad reciente por terminal (`${nodeIdx}:${vertIdx}:${kind}` -> { power, at })
-// La actualiza Bollita.jsx en useFrame sin provocar renders de React.
+// La actualiza Ballita.jsx en useFrame sin provocar renders de React.
 export const terminalPulse = new Map()
 
 export function getTerminals(node) {

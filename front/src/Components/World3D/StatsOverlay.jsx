@@ -49,7 +49,7 @@ export function StatsProbe({ active, onSample = NOOP }) {
 
   useEffect(() => {
     if (!active) return undefined
-    window.__bollitasDebug = { scene, gl }
+    window.__ballitasDebug = { scene, gl }
     const prevAutoReset = gl.info.autoReset
     gl.info.autoReset = false
     gl.info.reset()
@@ -122,7 +122,7 @@ export function StatsProbe({ active, onSample = NOOP }) {
         dpr: Number(gl.getPixelRatio().toFixed(2)),
         timestamp: now,
       }
-      window.__bollitasStats = sample
+      window.__ballitasStats = sample
       onSample(sample)
       st.frames = 0
       st.dtSum = 0

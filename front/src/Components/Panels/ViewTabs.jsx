@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from 'react'
 import { perfilRuta } from '../World3D/Vistas.jsx'
 
-const VIEWS = [['mapa', 'Mapa', '1'], ['camino', 'Camino', '2'], ['bollita', 'Bollita', '3']]
+const VIEWS = [['mapa', 'Mapa', '1'], ['camino', 'Camino', '2'], ['ballita', 'Ballita', '3']]
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0)
 
-// Pestañas de vista + ficha contextual (mapa: camino resaltado; camino: recorrido; bollita: ayuda).
+// Pestañas de vista + ficha contextual (mapa: camino resaltado; camino: recorrido; ballita: ayuda).
 export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRouteIndex, selected, punto, paused, setPaused, caminoSpeed, setCaminoSpeed, seekTo, onFollow, progressRef }) {
   const nodes = sim.world.nodes
   const perfil = useMemo(() => perfilRuta(way, routeIndex), [way, routeIndex])
@@ -30,8 +30,8 @@ export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRout
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
-  const enVivo = way ? sim.bollitas.filter((b) => b.phase === 'travel' && b.way === way) : []
-  const posBollita = (b) => {
+  const enVivo = way ? sim.ballitas.filter((b) => b.phase === 'travel' && b.way === way) : []
+  const posBallita = (b) => {
     const k = segs.findIndex((q) => q.seg === b.seg)
     return k < 0 ? null : pct(segs[k].start + b.segT * segs[k].length, total)
   }
@@ -46,7 +46,7 @@ export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRout
       <strong>{way.theme.emoji} {way.theme.name}</strong><span>{nodes[way.from].name} → {nodes[way.to].name}</span>
       <button onClick={() => goVista('camino')}>Entrar al camino</button>
     </div>}
-    {vista === 'camino' && !way && <div className="vista-toast"><span>Elige un camino en el mapa (tubo o etiqueta) o selecciona una bollita en ruta.</span><button onClick={() => goVista('mapa')}>Volver al mapa</button></div>}
+    {vista === 'camino' && !way && <div className="vista-toast"><span>Elige un camino en el mapa (tubo o etiqueta) o selecciona una ballita en ruta.</span><button onClick={() => goVista('mapa')}>Volver al mapa</button></div>}
     {vista === 'camino' && way && <aside className="camino-panel" aria-label="Recorrido del camino">
       <header><small>RECORRIDO · {nodes[way.from].name} → {nodes[way.to].name}</small><button onClick={() => goVista('mapa')}>Salir ×</button></header>
       <h2>{way.theme.emoji} {way.theme.name}</h2>
@@ -69,10 +69,10 @@ export default function ViewTabs({ vista, goVista, sim, way, routeIndex, setRout
           </span>
           <small>{pct(q.start, total)}%</small>
         </li>)}</ol>
-        <h3>Bollitas en este camino</h3>
-        <div className="bollitas-camino">{enVivo.length ? enVivo.map((b) => <button key={b.id} onClick={() => onFollow(b)}>{b.name}{b.route ? ` · ${b.route.name}` : ''}{posBollita(b) != null ? ` · ${posBollita(b)}%` : ''}</button>) : <small>Nadie por aquí ahora.</small>}</div>
+        <h3>Ballitas en este camino</h3>
+        <div className="ballitas-camino">{enVivo.length ? enVivo.map((b) => <button key={b.id} onClick={() => onFollow(b)}>{b.name}{b.route ? ` · ${b.route.name}` : ''}{posBallita(b) != null ? ` · ${posBallita(b)}%` : ''}</button>) : <small>Nadie por aquí ahora.</small>}</div>
       </>}
     </aside>}
-    {vista === 'bollita' && selected && <div className="vista-toast vista-bollita"><strong>{selected.name}</strong><span>{punto === 'interna' ? 'Punto de vista interno' : 'Seguimiento externo'} · V alterna · Esc mapa</span></div>}
+    {vista === 'ballita' && selected && <div className="vista-toast vista-ballita"><strong>{selected.name}</strong><span>{punto === 'interna' ? 'Punto de vista interno' : 'Seguimiento externo'} · V alterna · Esc mapa</span></div>}
   </>
 }

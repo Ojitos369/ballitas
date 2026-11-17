@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   BALL_R, Billboard, CartelesDeRuta, Critter, EventStage, Instanced,
-  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame,
+  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame,
   laneGap, makePlacement, markShared, maxHeight, mulberry32, placeAlong, placeAlongInto,
   routeInfo, scatter, segFrames, segPath, switchesOf, useAutoDispose, useWayBounds,
 } from './base.jsx'
@@ -483,7 +483,7 @@ function FinishFireworks({ seg }) {
   useFrame(({ clock }, dt) => {
     const mesh = sparksRef.current
     if (!mesh) return
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let hit = false
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]
@@ -562,7 +562,7 @@ function LaneSwitchMechanisms({ way }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < mechanisms.length; i++) {
       const m = mechanisms[i]
       let act = 0
@@ -691,7 +691,7 @@ function VolcanoMusicalGeyserStage({ seg, stage, G, M }) {
     const t = clock.elapsedTime
     const active = stage.phase === 'climax' ? 1 : stage.phase === 'teaser' ? 0.35 + stage.k * 0.65 : stage.intensity
 
-    // Puente de roca hexagonal que emerge suavemente para recibir la bollita
+    // Puente de roca hexagonal que emerge suavemente para recibir la ballita
     for (let i = 0; i < bridgeRefs.current.length; i++) {
       const br = bridgeRefs.current[i]
       if (!br) continue
@@ -861,7 +861,7 @@ function SkyDragons({ way }) {
     if (!mesh || !path.total) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < count; i++) {
       const d = state[i]
       let boost = 0
@@ -934,7 +934,7 @@ function VolcanoCrowdAndBehavior({ way, standItems }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
 
     if (crowdRef.current && crowd.length) {
       for (let i = 0; i < crowd.length; i++) {
@@ -1062,7 +1062,7 @@ function VolcanoSkyPhenomena({ way, detail }) {
     if (!path.total) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let maxSpd = 10
     for (let k = 0; k < bolls.length; k++) {
       if (bolls[k].way === way && (bolls[k].speed ?? 0) > maxSpd) maxSpd = bolls[k].speed
@@ -1109,7 +1109,7 @@ function VolcanoSkyPhenomena({ way, detail }) {
   )
 }
 
-// ═══════════════════════════ CRISTALES REACTIVOS A LA BOLLITA ═══════════════════════════
+// ═══════════════════════════ CRISTALES REACTIVOS A LA BALLITA ═══════════════════════════
 function ReactiveMagmaCrystals({ way }) {
   const G = getGeos()
   const beacons = useMemo(() => scatter(way, 30, mulberry32(way.idx * 899 + 41), {
@@ -1124,7 +1124,7 @@ function ReactiveMagmaCrystals({ way }) {
     const m = meshRef.current
     if (!m || !beacons.length) return
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < beacons.length; i++) {
       const bcn = beacons[i]
       let nearB = null; let nearK = 0

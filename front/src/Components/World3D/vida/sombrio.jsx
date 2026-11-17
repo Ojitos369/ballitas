@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced,
-  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame, laneGap,
+  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame, laneGap,
   makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo,
   scatter, segFrames, segPath, sampleFrameInto, makeFrame, switchesOf, useInstanced,
 } from './base.jsx'
@@ -57,7 +57,7 @@ function mergeParts(parts) {
   return m
 }
 
-// ───────────────────────── Elenco Chibi (estilo bollitas_chibi_hoja) ─────────────────────────
+// ───────────────────────── Elenco Chibi (estilo ballitas_chibi_hoja) ─────────────────────────
 function buildChibiGhostGeos() {
   // Cuerpo tintable blanco (se tiñe con instanceColor)
   const dome = new THREE.SphereGeometry(0.42, 10, 8).scale(1.0, 1.08, 0.96).translate(0, 0.56, 0)
@@ -792,7 +792,7 @@ function SombrioDioramaProps({ way }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     // Parpadeo de ojos en la oscuridad (suave y expresivo)
     for (let i = 0; i < built.eyePairs.length; i++) {
       const e = built.eyePairs[i]
@@ -815,7 +815,7 @@ function SombrioDioramaProps({ way }) {
     }
     if (built.flames.length) flameMesh.instanceMatrix.needsUpdate = true
 
-    // Público chibi en gradas salta cuando pasa una bollita por su tramo
+    // Público chibi en gradas salta cuando pasa una ballita por su tramo
     for (let i = 0; i < built.spectatorBodies.length; i++) {
       const sp = built.spectatorBodies[i]
       let active = false
@@ -942,9 +942,9 @@ function SombrioCast({ way }) {
   useFrame(({ clock }, dt) => {
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
 
-    // Fantasmas chibi patrullando y saludando/apartándose al paso de bollitas
+    // Fantasmas chibi patrullando y saludando/apartándose al paso de ballitas
     for (let i = 0; i < ghostData.length; i++) {
       const g = ghostData[i]
       g.s += g.dir * g.v * h * (1 + g.excite * 1.4)
@@ -1006,7 +1006,7 @@ function SombrioCast({ way }) {
       batWingMesh.instanceMatrix.needsUpdate = true
     }
 
-    // Cuervos: duermen con cabeceo lento y saltan cuando pasa una bollita
+    // Cuervos: duermen con cabeceo lento y saltan cuando pasa una ballita
     for (let i = 0; i < crowData.length; i++) {
       const c = crowData[i]
       let near = 0
@@ -1054,7 +1054,7 @@ function SombrioCast({ way }) {
 // ═══════════════════════════ EVENTOS PERSONALIZADOS POR RUTA ═══════════════════════════
 // Ruta A (r=0): Puertas encantadas que se abren + olas de ectoplasma
 // Ruta B (r=1): Puente espectral que se ensambla en tramos + espiral de velas doradas
-// Ruta C (r=2): Órgano de ojos gigantes y reflectores de estadio que cambian al color de la bollita
+// Ruta C (r=2): Órgano de ojos gigantes y reflectores de estadio que cambian al color de la ballita
 // Llegada: Fuegos artificiales espectrales al cruzar la meta
 function EventHauntedGate({ stage, info }) {
   const seg = info.segment
@@ -1184,9 +1184,9 @@ function EventOrganStage({ stage, info }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const speedFactor = stage.bollita ? THREE.MathUtils.clamp((stage.bollita.speed ?? 12) / 14, 0.7, 2.2) : 1
-    if (stage.bollita?.genome) {
-      reactMat.color.setHSL(stage.bollita.genome.hue, 0.85, 0.65)
+    const speedFactor = stage.ballita ? THREE.MathUtils.clamp((stage.ballita.speed ?? 12) / 14, 0.7, 2.2) : 1
+    if (stage.ballita?.genome) {
+      reactMat.color.setHSL(stage.ballita.genome.hue, 0.85, 0.65)
     } else {
       reactMat.color.set('#c87eff')
     }
@@ -1340,7 +1340,7 @@ function SwitchMechanism({ seg, sw }) {
 
   useFrame(({ clock }) => {
     if (!rotRef.current) return
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let near = false
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]

@@ -1,6 +1,6 @@
 # Vida por tema: cada camino es un diorama
 
-Esta carpeta da a cada camino su contenido único. La regla de fondo es que cada tubo de cristal es un terrario: dentro vive un mini mundo del tema, recorrido por la pista de la bollita. Desde fuera, a través del cristal, se lee como un mapa en miniatura iluminado; al seguir a una bollita o en POV, se recorre por dentro. Fuera del tubo solo quedan la estructura (abrazaderas, pilones, neón) y las siluetas de los landmarks monumentales que ya dibuja `Paths.jsx`. Lo que hoy sigue decorando el exterior (árboles, tribunas, carteles, props) debe migrar poco a poco a estos módulos.
+Esta carpeta da a cada camino su contenido único. La regla de fondo es que cada tubo de cristal es un terrario: dentro vive un mini mundo del tema, recorrido por la pista de la ballita. Desde fuera, a través del cristal, se lee como un mapa en miniatura iluminado; al seguir a una ballita o en POV, se recorre por dentro. Fuera del tubo solo quedan la estructura (abrazaderas, pilones, neón) y las siluetas de los landmarks monumentales que ya dibuja `Paths.jsx`. Lo que hoy sigue decorando el exterior (árboles, tribunas, carteles, props) debe migrar poco a poco a estos módulos.
 
 ## Archivos
 
@@ -16,24 +16,24 @@ Cada módulo exporta por defecto `Vida({ way, world, detail, focused, time })`, 
 - `way` es el sentido del circuito (ver el contrato de `Core/world.js`). Usa `routeInfo(way)` para leerlo cómodamente.
 - `world` es el mundo completo, útil para nombres de nodos y destinos.
 - `detail` es un objeto `{ value }` con el LOD de 0 a 1 (el mismo uniform `uDetail` que usan los materiales del tubo). Con 0 el camino se ve de lejos, como diorama; con 1 se está dentro. Se lee en `useFrame`. Nunca debe disparar un re-render.
-- `focused` vale true cuando no hay selección o cuando este camino es el de la bollita seleccionada.
+- `focused` vale true cuando no hay selección o cuando este camino es el de la ballita seleccionada.
 - `time` es un objeto `{ value }` con el reloj compartido en segundos.
 
-El grupo que envuelve al módulo es visible cuando `detail > 0.05` o cuando el camino está en foco. Así, sin selección, todos los dioramas se ven por el cristal, y al seguir a una bollita solo queda vivo su camino (más los cercanos). Dentro del módulo, el LOD fino lo decide cada tema: a detalle 0 basta con colores, luces cálidas y criaturas como puntos vivos; a detalle 1 va todo el detalle.
+El grupo que envuelve al módulo es visible cuando `detail > 0.05` o cuando el camino está en foco. Así, sin selección, todos los dioramas se ven por el cristal, y al seguir a una ballita solo queda vivo su camino (más los cercanos). Dentro del módulo, el LOD fino lo decide cada tema: a detalle 0 basta con colores, luces cálidas y criaturas como puntos vivos; a detalle 1 va todo el detalle.
 
 ## Geometría del interior
 
 El marco de cada tramo es el mismo que usa `Paths.jsx` para el piso y los rieles: `pos` en el eje, `T` tangente, `up` del suelo hacia el eje y `right = up × T`. Los marcos se calculan una vez y quedan en caché por tramo con `segFrames(seg)`. Esa función es una copia fiel de `buildCurveFrames` de `Paths.jsx`: si una cambia, la otra debe cambiar igual.
 
-Sobre la pared, un ángulo de 0 es el suelo, los ángulos positivos giran hacia `right` y ±π es el techo. `offset` es la distancia desde la pared hacia el eje. `seg.radius` es el radio interior del cristal, así que nada debe pasar de ahí. Como regla, el mini mundo ocupa como mucho `FILL` (60 %) de la sección. `maxHeight(seg)` da ese límite, y el cauce de cada carril queda libre para la bollita (`laneGap(seg, angle)` devuelve la distancia angular al carril más cercano). La escala es de miniatura: casitas, árboles y criaturas diminutos frente a la bollita, cuyo radio es `BALL_R`, de 0.5.
+Sobre la pared, un ángulo de 0 es el suelo, los ángulos positivos giran hacia `right` y ±π es el techo. `offset` es la distancia desde la pared hacia el eje. `seg.radius` es el radio interior del cristal, así que nada debe pasar de ahí. Como regla, el mini mundo ocupa como mucho `FILL` (60 %) de la sección. `maxHeight(seg)` da ese límite, y el cauce de cada carril queda libre para la ballita (`laneGap(seg, angle)` devuelve la distancia angular al carril más cercano). La escala es de miniatura: casitas, árboles y criaturas diminutos frente a la ballita, cuyo radio es `BALL_R`, de 0.5.
 
 Los tramos `air` (trampolín, cañón, caída, géiser, erupción, portal) no tienen tubo. Las utilidades los saltan. Si un tema quiere contenido ahí, debe colocarlo a mano alrededor de la curva.
 
 ## Carriles y mecanismos
 
-La pista es un riel 3D pegado a la pared interior en cualquier orientación (suelo, paredes, techo), y la gravedad de la bollita apunta a la pared por la que rueda. Los carriles los implementa otro agente en `world.js` y `sim.js` con este contrato: `segment.lanes[]` con `{ id, angle, offset, width }` y `segment.switches[]` con `{ u, from, to, kind, duration }`, más el helper `laneFrame(segment, laneId, u)`, que devuelve `{ pos, tangent, up, side }` con `up` hacia el eje. Mientras no exista, `base.jsx` supone un único carril 0 en el suelo y ofrece su propio `laneFrame`. En cuanto `world.js` exporte `laneFrame`, se usa ese automáticamente.
+La pista es un riel 3D pegado a la pared interior en cualquier orientación (suelo, paredes, techo), y la gravedad de la ballita apunta a la pared por la que rueda. Los carriles los implementa otro agente en `world.js` y `sim.js` con este contrato: `segment.lanes[]` con `{ id, angle, offset, width }` y `segment.switches[]` con `{ u, from, to, kind, duration }`, más el helper `laneFrame(segment, laneId, u)`, que devuelve `{ pos, tangent, up, side }` con `up` hacia el eje. Mientras no exista, `base.jsx` supone un único carril 0 en el suelo y ofrece su propio `laneFrame`. En cuanto `world.js` exporte `laneFrame`, se usa ese automáticamente.
 
-Los elementos del mini mundo son los mecanismos que cambian de carril a la bollita: rampas, trampolines, turbinas, portales, imanes, bumpers, compuertas, géiseres, cintas, hélices, tirolinas, resortes y remolinos. Cada uno debe ser parte coherente del paisaje, como un tronco-rampa o una liana-tirolina en el bosque, o una erupción que catapulta al carril superior en el volcán. Para cada `switch` del tramo, el módulo coloca el mecanismo de su `kind` en `u`, con la entrada anclada al carril `from` y la salida al carril `to` (ambos con `laneFrame`), y lo anima durante `duration`. Los anclajes deben quedar claros: un aro, una placa o una boca justo sobre el riel.
+Los elementos del mini mundo son los mecanismos que cambian de carril a la ballita: rampas, trampolines, turbinas, portales, imanes, bumpers, compuertas, géiseres, cintas, hélices, tirolinas, resortes y remolinos. Cada uno debe ser parte coherente del paisaje, como un tronco-rampa o una liana-tirolina en el bosque, o una erupción que catapulta al carril superior en el volcán. Para cada `switch` del tramo, el módulo coloca el mecanismo de su `kind` en `u`, con la entrada anclada al carril `from` y la salida al carril `to` (ambos con `laneFrame`), y lo anima durante `duration`. Los anclajes deben quedar claros: un aro, una placa o una boca justo sobre el riel.
 
 ## Utilidades de base.jsx
 
@@ -43,11 +43,11 @@ Los elementos del mini mundo son los mecanismos que cambian de carril a la bolli
 - `segPath(segs)` arma un camino continuo sobre varios tramos con `locate(s)` y `arcOf(seg, u)`.
 - `useInstanced(geo, mat, items)` e `<Instanced>` sirven para instanciar. Cada item lleva `{ pos, quat, scale, color }`, y las matrices se escriben solo cuando cambian los items.
 - `CanvasText(texto, estilo)`, `textMaterial(ct)` y `<Billboard>` dan carteles con textura y material en caché por texto y estilo. `faceCamera` usa el Billboard de drei.
-- `<Critter>` son criaturas instanciadas que patrullan el tubo con un vaivén suave, se balancean y reaccionan a las bollitas cercanas: saltan y se apartan de su ángulo de rodado.
+- `<Critter>` son criaturas instanciadas que patrullan el tubo con un vaivén suave, se balancean y reaccionan a las ballitas cercanas: saltan y se apartan de su ángulo de rodado.
 - `<EventStage segment render>` monta contenido alrededor de un tramo y mantiene un objeto `stage` con `phase` (`idle`, `teaser`, `climax` o `salida`), `k` e `intensity` suavizada. `render` se llama una vez, y sus hijos leen `stage` en su propio `useFrame`.
 - `buildTerrainGeo(seg, opts)` genera el piso ondulado suave que rodea la pista, con rampas hacia el cauce, fundido con la pared en los bordes y con colores de vértice. Se usa con un material `vertexColors` y `side: DoubleSide`.
 - `buildSkyGeo(seg, opts)` genera el casquete del "cielo" interior pegado a la pared, con un degradado de suelo a techo.
-- `getBollitas()` devuelve las bollitas vivas de la simulación (`Paths` las publica en `VIDA_BUS` en cada frame).
+- `getBallitas()` devuelve las ballitas vivas de la simulación (`Paths` las publica en `VIDA_BUS` en cada frame).
 - `Soundless` y `useSonido()` son marcadores explícitos: el juego no tiene audio.
 - `<CartelesDeRuta>` es el ejemplo común: un cartel miniatura por ruta, junto al carril, con el nombre del camino y la ruta con su perfil.
 

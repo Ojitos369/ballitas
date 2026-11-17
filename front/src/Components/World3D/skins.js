@@ -30,7 +30,7 @@ const msh = (props) => h('mesh', props || null)
 //    - `palette` (paleta armónica HSL derivada del genoma + ajuste por preset)
 //    - `parts` (árbol estructurado con parámetros de cada pieza elegida: id, label, color, scale, tilt, side...)
 //    - `partsSummary` (lista legible de piezas activas para UI)
-//    - Campos planos retrocompatibles consumidos por `Bollita.jsx` y `Detail.jsx`
+//    - Campos planos retrocompatibles consumidos por `Ballita.jsx` y `Detail.jsx`
 //      (`patternType`, `eyeStyle`, `irisTop`, `irisBot`, `pupilColor`, `mouthType`, `hatColor`, etc.).
 //    Los 6 personajes de referencia (`elfa`, `gatita`, `maga`, `pirata`, `zombi`, `ascetica`) son presets
 //    específicos dentro de este mismo catálogo genérico.
@@ -1367,8 +1367,8 @@ function buildGeneratedName(baseName, pieces, rng, isSheetPreset, presetId) {
   const hatName = SKIN_PARTS.hat[pieces.hat]?.label
   const earName = SKIN_PARTS.ears[pieces.ears]?.label
   const mainNoun = pieces.ears !== 'none'
-    ? earName.replace('Orejas ', 'Bollita ').replace('Cuernitos ', 'Bollita con cuernitos ')
-    : 'Bollita'
+    ? earName.replace('Orejas ', 'Ballita ').replace('Cuernitos ', 'Ballita con cuernitos ')
+    : 'Ballita'
   if (pieces.hat !== 'none') return `${mainNoun} con ${hatName.toLowerCase()}`
   return `${mainNoun} ${baseName.toLowerCase()}`
 }

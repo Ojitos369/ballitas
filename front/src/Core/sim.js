@@ -1,7 +1,7 @@
-// Simulación de bollitas: genoma, decisiones, vida/muerte y evolución genética.
-// Sin React ni render: la UI sólo lee `sim.bollitas` y llama `sim.tick(dt)`.
+// Simulación de ballitas: genoma, decisiones, vida/muerte y evolución genética.
+// Sin React ni render: la UI sólo lee `sim.ballitas` y llama `sim.tick(dt)`.
 //
-// ═══════════════════════════ CONTRATO: BOLLITA ═══════════════════════════
+// ═══════════════════════════ CONTRATO: BALLITA ═══════════════════════════
 // (la forma del mundo y WORLD_SCALE/TUBE_SCALE están al inicio de world.js)
 // Escala temporal:
 //   TIME_SCALE (2.5): factor objetivo de duración de viaje por circuito (~2-3x más tiempo para
@@ -13,7 +13,7 @@
 //   genome: { traits { valentia, curiosidad, apetito, sociabilidad, animo, velocidad }, hue,
 //             prefs[destino.idx], ways[way.idx], routes[route.idx], kinds[índice en OBSTACLES] }  (todo 0..1)
 //   pos, dir, up: THREE.Vector3 siempre válidos. En la ciudad `up` es la normal de la esfera; en un tubo
-//                 apunta de la pared al eje (la bollita rueda PEGADA a la pared por su carril: su gravedad
+//                 apunta de la pared al eje (la ballita rueda PEGADA a la pared por su carril: su gravedad
 //                 es hacia esa pared, sea suelo, pared o techo).
 //   phase, timer (segundos restantes estimados), dur (duración estimada de la fase)
 //   speed: velocidad actual (unidades/s); roll: ángulo (rad) entre su pared y el suelo del mundo, 0 = abajo;
@@ -37,8 +37,8 @@
 //   at      usando el destino (ya aplicó dp/de)
 //   toPort  va por carretera al puerto de salida hacia `way.to`
 //   travel  dentro del circuito `way`, en el tramo `seg`
-//   dying   animación de muerte          gone  se elimina de `sim.bollitas` en este mismo tick
-// sim = { world, bollitas[], t, stats { nacidas, muertas, mejorEdad, genMax }, feed[] { t, text }, pool[] }
+//   dying   animación de muerte          gone  se elimina de `sim.ballitas` en este mismo tick
+// sim = { world, ballitas[], t, stats { nacidas, muertas, mejorEdad, genMax }, feed[] { t, text }, pool[] }
 // sim.tick(dt), sim.favorites(b) -> { destino, way, route, kind }, sim.where(b) -> texto para el panel.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three'
@@ -63,7 +63,7 @@ const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos 
 const GRAV = 24
 const FRIC = 0.14
 const VMAX = 48
-const LANE_EASE = 3.5 // rapidez con la que la bollita sigue el vaivén de su carril
+const LANE_EASE = 3.5 // rapidez con la que la ballita sigue el vaivén de su carril
 const RAIL_EASE = 6 // rapidez con la que se pega a la pared (o se separa en el aire)
 const TAU = Math.PI * 2
 const smooth = (x) => x * x * (3 - 2 * x)
@@ -122,7 +122,7 @@ export class Sim {
     this.pop = pop
     this.t = 0
     this.nextId = 1
-    this.bollitas = []
+    this.ballitas = []
     this.pool = [] // muertas con su genoma: base de la selección
     this.spawnQueue = []
     this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }
@@ -159,13 +159,13 @@ export class Sim {
       log: [], flags: {},
       pos: node.pos.clone().addScaledVector(up, NODE_R + BALL_R),
       dir: new THREE.Vector3().crossVectors(up, Math.abs(up.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : Y).normalize(), up,
-      // estado del balanceo en el tubo: `wall` va del eje a la bollita, `off` es su distancia al eje
+      // estado del balanceo en el tubo: `wall` va del eje a la ballita, `off` es su distancia al eje
       wall: up.clone().negate(), off: 0, rail: 0, roll: 0, snap: 0,
       lane: 0, ang: 0, sw: null, mechs: {},
       thought: null, react: null, mood: 'feliz', speed: 0, cause: null,
     }
     b.arch = archetype(genome)
-    this.bollitas.push(b)
+    this.ballitas.push(b)
     this.stats.nacidas++
     this.stats.genMax = Math.max(this.stats.genMax, gen)
     this.say(b, 'nace')
@@ -187,12 +187,12 @@ export class Sim {
 
   tick(dt) {
     this.t += dt
-    for (const b of this.bollitas) this.step(b, dt)
-    for (let i = this.bollitas.length - 1; i >= 0; i--) {
-      if (this.bollitas[i].phase === 'gone') this.bollitas.splice(i, 1)
+    for (const b of this.ballitas) this.step(b, dt)
+    for (let i = this.ballitas.length - 1; i >= 0; i--) {
+      if (this.ballitas[i].phase === 'gone') this.ballitas.splice(i, 1)
     }
     // reaparece una nueva por cada muerta, tras un respiro
-    while (this.bollitas.length + this.spawnQueue.length < this.pop) this.spawnQueue.push(this.t + 1.5)
+    while (this.ballitas.length + this.spawnQueue.length < this.pop) this.spawnQueue.push(this.t + 1.5)
     this.spawnQueue = this.spawnQueue.filter((at) => (at <= this.t ? (this.spawn(), false) : true))
   }
 
@@ -251,7 +251,7 @@ export class Sim {
     b.mood = b.react ? b.react.mood : moodOf(b)
   }
 
-  // Coloca la bollita. Tras un cambio de fase (`snap`) la posición se funde en vez de saltar.
+  // Coloca la ballita. Tras un cambio de fase (`snap`) la posición se funde en vez de saltar.
   place(b, P, T, U, dt) {
     if (b.snap > 0) b.snap -= dt
     if (b.snap > 0) b.pos.lerp(P, Math.min(1, dt * 12)); else b.pos.copy(P)
@@ -326,7 +326,7 @@ export class Sim {
   // Conteo de compañeras por way, ruta y nodo para evaluar sociabilidad.
   peerCounts(self) {
     const byWay = new Map(); const byRoute = new Map(); const byNode = new Map()
-    for (const o of this.bollitas) {
+    for (const o of this.ballitas) {
       if (o === self || o.phase === 'dying' || o.phase === 'gone') continue
       if (o.way) byWay.set(o.way.idx, (byWay.get(o.way.idx) || 0) + 1)
       if (o.route) byRoute.set(o.route.idx, (byRoute.get(o.route.idx) || 0) + 1)
@@ -486,7 +486,7 @@ export class Sim {
     if (b.sw && !b.sw.failed) maxV *= 1.15
     b.speed = clamp(b.speed, minV, maxV)
 
-    // carril: la bollita va pegada a su pared (o vuela entre paredes si hay un mecanismo en curso)
+    // carril: la ballita va pegada a su pared (o vuela entre paredes si hay un mecanismo en curso)
     this.laneStep(b, s, dt)
     const F = wallFrame(s, b.ang, b.segT, b.off, b._frame || (b._frame = {}))
     b.wall.copy(F.dir)
@@ -565,7 +565,7 @@ export class Sim {
     if (!first) return
     const u = first.u
     const t = b.genome.traits
-    const peers = this.bollitas.filter((o) => o !== b && o.phase === 'travel' && o.seg === s)
+    const peers = this.ballitas.filter((o) => o !== b && o.phase === 'travel' && o.seg === s)
     let best = null
     let bs = 0.3 + (0.45 - t.valentia) * 0.5 + this.rng() * 0.3 // seguir por el mismo carril
     for (const sw of cands) {

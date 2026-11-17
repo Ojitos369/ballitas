@@ -129,8 +129,8 @@ test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN
   const kinds = new Set()
   for (let i = 0; i < 6000; i++) {
     sim.tick(0.1)
-    assert.ok(sim.bollitas.length <= POP)
-    for (const b of sim.bollitas) {
+    assert.ok(sim.ballitas.length <= POP)
+    for (const b of sim.ballitas) {
       assert.ok(Number.isFinite(b.pos.x + b.pos.y + b.pos.z + b.p + b.e + b.speed + b.roll), `NaN en ${b.phase}`)
       assert.ok(Math.abs(b.dir.length() - 1) < 1e-3 && Math.abs(b.up.length() - 1) < 1e-3)
       if (b.phase === 'travel') kinds.add(b.seg.kind)
@@ -139,7 +139,7 @@ test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN
   assert.ok(sim.stats.muertas > 0)
   assert.ok(sim.stats.nacidas > POP)
   assert.ok(sim.stats.genMax > 1)
-  assert.ok(sim.stats.mejorEdad > 120, 'una bollita adaptada vive minutos')
+  assert.ok(sim.stats.mejorEdad > 120, 'una ballita adaptada vive minutos')
   assert.ok(kinds.size >= OBSTACLES.length, 'recorren todo tipo de obstáculo')
 })
 
@@ -169,13 +169,13 @@ test('perfiles, eventos por ruta y segment.speedK/event', () => {
 test('planeación anticipada: b.plan, memoria de rutas y sensibilidad a energía/curiosidad', () => {
   const sim = new Sim({ rng: mulberry32(42) })
   for (let i = 0; i < 400; i++) sim.tick(0.1)
-  const withPlan = sim.bollitas.filter((b) => b.plan && b.plan.destino && b.plan.ruta && b.plan.razon)
-  assert.ok(withPlan.length >= 5, 'las bollitas generan b.plan con destino, ruta y razon')
-  const anyVisited = sim.bollitas.some((b) => Object.keys(b.visitedRoutes).length > 0)
-  assert.ok(anyVisited, 'las bollitas registran memoria de rutas visitadas')
+  const withPlan = sim.ballitas.filter((b) => b.plan && b.plan.destino && b.plan.ruta && b.plan.razon)
+  assert.ok(withPlan.length >= 5, 'las ballitas generan b.plan con destino, ruta y razon')
+  const anyVisited = sim.ballitas.some((b) => Object.keys(b.visitedRoutes).length > 0)
+  assert.ok(anyVisited, 'las ballitas registran memoria de rutas visitadas')
 
-  // Una bollita con hambre prefiere destinos de energía en la utilidad
-  const b = sim.bollitas[0]
+  // Una ballita con hambre prefiere destinos de energía en la utilidad
+  const b = sim.ballitas[0]
   b.e = 12
   b.genome.traits.apetito = 0.95
   const way = sim.world.waysFrom[b.node][0]
@@ -202,7 +202,7 @@ test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiem
     assert.equal(r.kinds.length, 6, '3 obstáculos por mitad')
     assert.equal(r.segments.length, 8)
     assert.ok(r.segments[2].event && r.segments[5].event, 'evento al centro de cada mitad')
-    assert.ok(r.segments[1].radius / BALL_R >= 3.8, 'tubo amplio respecto a la bollita')
+    assert.ok(r.segments[1].radius / BALL_R >= 3.8, 'tubo amplio respecto a la ballita')
   }
 
   // Medir duración real de viaje por circuito y supervivencia energética
@@ -210,7 +210,7 @@ test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiem
   const entered = new Map()
   const durations = []
   for (let i = 0; i < 3000; i++) {
-    for (const b of sim.bollitas) {
+    for (const b of sim.ballitas) {
       if (b.phase === 'travel' && !entered.has(b.id)) entered.set(b.id, sim.t)
       else if (b.phase !== 'travel' && b.phase !== 'dying' && b.phase !== 'gone' && entered.has(b.id)) {
         durations.push(sim.t - entered.get(b.id))
@@ -289,7 +289,7 @@ test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y t
   }
 })
 
-test('bollita en carril: pegada a la pared, sin atravesar el cristal, continua, usa y falla mecanismos', () => {
+test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, usa y falla mecanismos', () => {
   const sim = new Sim({ rng: mulberry32(5) })
   const DT = 0.02
   const prev = new Map()
@@ -297,7 +297,7 @@ test('bollita en carril: pegada a la pared, sin atravesar el cristal, continua, 
   let starts = 0; let fails = 0; let tube = 0; let glued = 0; let ceiling = 0
   for (let i = 0; i < 6000; i++) {
     sim.tick(DT)
-    for (const b of sim.bollitas) {
+    for (const b of sim.ballitas) {
       const p = prev.get(b.id)
       if (b.phase !== 'travel') { prev.delete(b.id); continue }
       const s = b.seg

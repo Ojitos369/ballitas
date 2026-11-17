@@ -1,7 +1,7 @@
 .PHONY: help back-run front-install front-dev front-build migrate-build install
 
 help:
-	@echo "bollitas: back-run | front-install | front-dev | front-build | migrate-build | install"
+	@echo "ballitas: back-run | front-install | front-dev | front-build | migrate-build | install"
 
 back-run:
 	cd back && uvicorn main:app --host 0.0.0.0 --port 8000 --reload

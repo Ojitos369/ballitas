@@ -1,5 +1,5 @@
 /**
- * Valida los 13 archivos GLB del contrato de Bollitas cargándolos con Three.js GLTFLoader.
+ * Valida los 13 archivos GLB del contrato de Ballitas cargándolos con Three.js GLTFLoader.
  *
  * Uso desde front/:
  *   node tools/assets/validate_models.mjs

@@ -1,4 +1,4 @@
-// Mundo de Bollitas, sin React ni render: lo usan la sim y el 3D.
+// Mundo de Ballitas, sin React ni render: lo usan la sim y el 3D.
 //
 // ═══════════════════════════ CONTRATO DE DATOS ═══════════════════════════
 // Unidades de mundo; Y es "arriba" (la gravedad tira hacia -Y). Todo `pos`/`dir` es THREE.Vector3.
@@ -40,7 +40,7 @@
 // }
 //   Topología: salida -> fork -> [ruta r: 3 obstáculos (entrada, evento, salida)] -> cross
 //              -> [ruta r: 3 obstáculos (entrada, evento, salida)] -> merge -> llegada.
-//   En `fork` y en `cross` la bollita elige ruta, así que puede cambiar de ruta a mitad de circuito.
+//   En `fork` y en `cross` la ballita elige ruta, así que puede cambiar de ruta a mitad de circuito.
 //
 // route = { idx (global), r (local), name 'A'|'B'|'C', way, segments[8] (salida, 6 obstáculos, llegada),
 //           kinds[6] (los obstáculos, todos distintos), length,
@@ -77,15 +77,15 @@
 //   Un carril que no existe en el tramo siguiente sigue por el más cercano en ángulo (nearestLane).
 //   Marcos: transporte paralelo del tubo (sin torsión), con la torsión residual repartida para que en
 //   cada unión (fork/cross/merge) el ángulo 0 apunte al suelo del mundo.
-//   wallFrame(seg, angle, u, rho?) y laneFrame(seg, laneId, u) -> { pos (centro de la bollita a `rho`
+//   wallFrame(seg, angle, u, rho?) y laneFrame(seg, laneId, u) -> { pos (centro de la ballita a `rho`
 //     del eje; por defecto radius - BALL_R, 0 en `air`), wall (punto del cristal), axis, dir (eje->pared),
-//     tangent, up (apunta al eje: la gravedad de la bollita es hacia su pared), side (= tangent × up), angle }
+//     tangent, up (apunta al eje: la gravedad de la ballita es hacia su pared), side (= tangent × up), angle }
 //
 // Helpers: frameAt(curve, u), cityPath(node, a, b), slerpDir(a, b, t, out), mulberry32(seed),
 //          wallFrame, laneFrame, laneAngle, nearestLane, lowestLane, angDiff.
 // Catálogos de mecanismos: MECHANISMS (física, riesgo y recompensa), THEME_MECHS (los de cada mini
 // mundo, con nombre temático: tronco-rampa, liana-tirolina, erupción...), LANE_NAMES.
-// La forma de cada bollita y sus fases están documentadas al inicio de sim.js.
+// La forma de cada ballita y sus fases están documentadas al inicio de sim.js.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three'
 

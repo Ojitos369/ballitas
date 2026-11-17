@@ -1,4 +1,4 @@
-# Generador de modelos 3D (GLB) de Bollitas
+# Generador de modelos 3D (GLB) de Ballitas
 
 Este directorio contiene el script procedural en Blender y el validador en Three.js que producen los 13 modelos 3D estilizados usados por las pistas y nodos en `public/models/`, junto con la hoja de contacto `preview/models_sheet.png`.
 

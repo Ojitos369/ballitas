@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   BALL_R, Billboard, CartelesDeRuta, Critter, EventStage, Instanced,
-  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame,
+  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame,
   laneGap, makePlacement, markShared, maxHeight, mulberry32, placeAlong, placeAlongInto,
   routeInfo, scatter, segFrames, segPath, switchesOf, useAutoDispose, useWayBounds,
 } from './base.jsx'
@@ -525,7 +525,7 @@ function FinishFireworks({ seg }) {
   useFrame(({ clock }, dt) => {
     const mesh = sparksRef.current
     if (!mesh) return
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let hit = false
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]
@@ -622,7 +622,7 @@ function LaneSwitchMechanisms({ way }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < mechanisms.length; i++) {
       const m = mechanisms[i]
       let act = 0
@@ -777,7 +777,7 @@ function DesertOasisSphinxStage({ seg, stage, G, M }) {
     waterMat.color.setHSL((hue + 1) % 1, 0.78, 0.56)
     waterMat.opacity = 0.5 + open * 0.28
 
-    // Cactus florecen al paso de la bollita
+    // Cactus florecen al paso de la ballita
     for (let i = 0; i < bloomRefs.current.length; i++) {
       const grp = bloomRefs.current[i]
       if (!grp) continue
@@ -923,7 +923,7 @@ function DesertAirRings({ way }) {
 }
 
 // ═══════════════════════════ CRIATURAS ESPECIALES ANIMADAS ═══════════════════════════
-// Buitres que circulan por la bóveda superior y aletean al paso de las bollitas
+// Buitres que circulan por la bóveda superior y aletean al paso de las ballitas
 function SkyVultures({ way }) {
   const G = getGeos()
   const M = getMats()
@@ -949,7 +949,7 @@ function SkyVultures({ way }) {
     if (!mesh || !path.total) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < count; i++) {
       const v = state[i]
       let boost = 0
@@ -982,7 +982,7 @@ function SkyVultures({ way }) {
   return <instancedMesh ref={meshRef} args={[G.vulture, M.clay, items.length]} />
 }
 
-// Espectadores en las gradas que hacen la "ola" cuando pasa la bollita + cazadores de escarabajos + grupo dormido
+// Espectadores en las gradas que hacen la "ola" cuando pasa la ballita + cazadores de escarabajos + grupo dormido
 function LivingCrowdAndBehavior({ way, standItems }) {
   const G = getGeos()
   const M = getMats()
@@ -1025,7 +1025,7 @@ function LivingCrowdAndBehavior({ way, standItems }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
 
     // Ola en las gradas
     if (crowdRef.current && crowd.length) {
@@ -1048,7 +1048,7 @@ function LivingCrowdAndBehavior({ way, standItems }) {
       crowdRef.current.instanceMatrix.needsUpdate = true
     }
 
-    // Durmientes que respiran suave o se desperezan si pasa bollita cerca
+    // Durmientes que respiran suave o se desperezan si pasa ballita cerca
     if (sleepRef.current && sleepers.length) {
       for (let i = 0; i < sleepers.length; i++) {
         const sl = sleepers[i]
@@ -1159,7 +1159,7 @@ function DesertSkyPhenomena({ way, detail }) {
     if (!path.total) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let maxSpd = 10
     for (let k = 0; k < bolls.length; k++) {
       if (bolls[k].way === way && (bolls[k].speed ?? 0) > maxSpd) maxSpd = bolls[k].speed
@@ -1206,7 +1206,7 @@ function DesertSkyPhenomena({ way, detail }) {
   )
 }
 
-// ═══════════════════════════ BALIZAS REACTIVAS A BOLLITA ═══════════════════════════
+// ═══════════════════════════ BALIZAS REACTIVAS A BALLITA ═══════════════════════════
 function ReactiveTotemLights({ way }) {
   const G = getGeos()
   const beacons = useMemo(() => scatter(way, 28, mulberry32(way.idx * 887 + 31), {
@@ -1221,7 +1221,7 @@ function ReactiveTotemLights({ way }) {
     const m = meshRef.current
     if (!m || !beacons.length) return
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < beacons.length; i++) {
       const bcn = beacons[i]
       let nearB = null; let nearK = 0

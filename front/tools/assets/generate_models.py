@@ -1,5 +1,5 @@
 """
-Generador procedural de los 13 modelos GLB del contrato de Bollitas usando Blender 5.3.
+Generador procedural de los 13 modelos GLB del contrato de Ballitas usando Blender 5.3.
 
 Uso desde front/:
     "C:/Program Files/Blender Foundation/Blender 5.3/blender.exe" -b -P tools/assets/generate_models.py

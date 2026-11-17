@@ -5,4 +5,4 @@ router = APIRouter()
 
 @router.get("/hh")
 async def hh():
-    return {"ok": True, "app": "bollitas"}
+    return {"ok": True, "app": "ballitas"}

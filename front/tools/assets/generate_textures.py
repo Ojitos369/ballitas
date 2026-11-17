@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generador procedural de texturas tileables y sprites para Bollitas.
+"""Generador procedural de texturas tileables y sprites para Ballitas.
 
 Genera todas las texturas en ``front/public/tex/`` y mosaicos 2x2 de
 verificación de continuidad en ``front/tools/assets/preview/``.

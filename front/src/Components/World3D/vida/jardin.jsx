@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced, Soundless, TAU,
-  buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame, laneGap, lanesOf,
+  buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame, laneGap, lanesOf,
   makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo, scatter,
   segPath, switchesOf,
 } from './base.jsx'
@@ -470,7 +470,7 @@ function BloomingFlowers({ way, items }) {
     if (!state.length || !headMesh.visible) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < state.length; i++) {
       const f = state[i]
       let near = 0
@@ -522,7 +522,7 @@ function FrogsOnLilyPads({ way, items }) {
     if (!state.length || !frogMesh.visible) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < state.length; i++) {
       const f = state[i]
       let near = 0
@@ -593,7 +593,7 @@ function Butterflies({ way, count = 48 }) {
     if (!path.total || !bodyMesh.visible) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let focusBoll = null
     for (let k = 0; k < bolls.length; k++) {
       const b = bolls[k]
@@ -678,7 +678,7 @@ function PetalSwarm({ way, count = 260 }) {
     if (!path.total) return
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let focusBoll = null
     for (let k = 0; k < bolls.length; k++) {
       const b = bolls[k]
@@ -733,7 +733,7 @@ function GardenSpectators({ way, items, screens }) {
   useFrame(({ clock }) => {
     if (!mesh.visible) return
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let activeBoll = null
     for (let k = 0; k < bolls.length; k++) {
       const b = bolls[k]
@@ -1009,7 +1009,7 @@ function LaneSwitchMechanisms({ way }) {
   const pinRefs = useRef([])
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < switches.length; i++) {
       const m = pinRefs.current[i]
       if (!m) continue
@@ -1068,7 +1068,7 @@ function TerrainCritter({ way, segments = null, count = 12, geo, mat, scale = 0.
     if (!path.total || !mesh.visible) return
     const h = Math.min(dt, 0.1)
     const t = st.clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     for (let i = 0; i < state.length; i++) {
       const c = state[i]
       c.s += c.dir * c.v * h * (1 + c.excite * 1.4)

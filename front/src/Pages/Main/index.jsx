@@ -11,7 +11,7 @@ function initialStatsOn() {
   return new URLSearchParams(window.location.search).get('stats') === '1'
 }
 
-// `vista` ('mapa' | 'camino' | 'bollita') es la fuente de verdad; follow/pov se derivan de ella y de `punto`.
+// `vista` ('mapa' | 'camino' | 'ballita') es la fuente de verdad; follow/pov se derivan de ella y de `punto`.
 export default function Main() {
   const simRef = useRef(null)
   if (!simRef.current) simRef.current = new Sim()
@@ -20,7 +20,7 @@ export default function Main() {
   const [speed, setSpeed] = useState(1)
   const [selected, setSelected] = useState(null)
   const [vista, setVista] = useState('mapa')
-  const [punto, setPunto] = useState('externa') // punto de vista en la vista bollita: externa | interna
+  const [punto, setPunto] = useState('externa') // punto de vista en la vista ballita: externa | interna
   const [focusWay, setFocusWay] = useState(null)
   const [routeIndex, setRouteIndex] = useState(0)
   const [seek, setSeek] = useState(null)
@@ -31,9 +31,9 @@ export default function Main() {
   const [stats, setStats] = useState(null)
   const [, setTick] = useState(0)
 
-  const enBollita = vista === 'bollita'
-  const follow = enBollita && punto === 'externa'
-  const pov = enBollita && punto === 'interna'
+  const enBallita = vista === 'ballita'
+  const follow = enBallita && punto === 'externa'
+  const pov = enBallita && punto === 'interna'
   const activeWay = focusWay == null ? null : sim.world.ways[focusWay]
 
   // La sim vive fuera de React: se refresca la UI 5 veces por segundo.
@@ -48,15 +48,15 @@ export default function Main() {
   const goVista = (id, p) => {
     if (id === 'camino') {
       let w = activeWay
-      if (!w && selected?.way) { // camino de la bollita seleccionada, en su ruta
+      if (!w && selected?.way) { // camino de la ballita seleccionada, en su ruta
         w = selected.way
         enterWay(w, Math.max(0, w.routes.indexOf(selected.route)))
       }
       if (!w) { setVista('camino'); return }
     }
-    if (id === 'bollita') {
+    if (id === 'ballita') {
       let b = selected
-      if (!b || b.phase === 'gone') b = sim.bollitas.find((o) => o.phase !== 'dying' && o.phase !== 'gone')
+      if (!b || b.phase === 'gone') b = sim.ballitas.find((o) => o.phase !== 'dying' && o.phase !== 'gone')
       if (!b) return
       setSelected(b)
       if (p) setPunto(p)
@@ -76,10 +76,10 @@ export default function Main() {
       if (k === 'c') setCine((v) => !v)
       else if (k === '1') goVista('mapa')
       else if (k === '2') goVista('camino')
-      else if (k === '3') goVista('bollita')
+      else if (k === '3') goVista('ballita')
       else if (k === 'v') {
-        if (enBollita) setPunto((p) => (p === 'interna' ? 'externa' : 'interna'))
-        else goVista('bollita', 'interna')
+        if (enBallita) setPunto((p) => (p === 'interna' ? 'externa' : 'interna'))
+        else goVista('ballita', 'interna')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -89,35 +89,35 @@ export default function Main() {
   const select = (b) => {
     setSelected(b)
     if (!b) {
-      if (enBollita) setVista('mapa')
+      if (enBallita) setVista('mapa')
       else if (vista === 'mapa') setFocusWay(null)
     }
   }
-  const followBollita = (b) => {
+  const followBallita = (b) => {
     if (!b) return
     setSelected(b)
     setPunto('externa')
-    setVista('bollita')
+    setVista('ballita')
   }
-  // Si la bollita seguida muere, se vuelve sola al mapa.
+  // Si la ballita seguida muere, se vuelve sola al mapa.
   useEffect(() => {
-    if (selected?.phase === 'gone' && enBollita) setVista('mapa')
+    if (selected?.phase === 'gone' && enBallita) setVista('mapa')
   })
 
   return (
     <div className="app">
-      <Scene sim={sim} bollitas={sim.bollitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} showStats={showStats} onStatsSample={setStats}
+      <Scene sim={sim} ballitas={sim.ballitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} showStats={showStats} onStatsSample={setStats}
         vista={vista} activeWay={activeWay} routeIndex={routeIndex} seek={seek} caminoSpeed={caminoSpeed} caminoPaused={caminoPaused} progressRef={progressRef}
         onSelect={select} onSelectWay={pickWay} onExitPov={() => setVista('mapa')} />
       {showStats && <StatsHud stats={stats} />}
-      <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBollita={followBollita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
+      <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBallita={followBallita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       <ViewTabs vista={vista} goVista={goVista} sim={sim} way={activeWay} routeIndex={routeIndex} setRouteIndex={(i) => { setRouteIndex(i); setSeek(null) }}
         selected={selected} punto={punto} paused={caminoPaused} setPaused={setCaminoPaused} caminoSpeed={caminoSpeed} setCaminoSpeed={setCaminoSpeed}
-        seekTo={(i) => setSeek({ i, k: performance.now() })} onFollow={followBollita} progressRef={progressRef} />
+        seekTo={(i) => setSeek({ i, k: performance.now() })} onFollow={followBallita} progressRef={progressRef} />
       {selected && vista !== 'camino' && (
         <Detail b={selected} sim={sim} follow={follow} pov={pov}
-          onFollow={() => (follow ? setVista('mapa') : followBollita(selected))}
-          onPov={() => (pov ? setPunto('externa') : goVista('bollita', 'interna'))}
+          onFollow={() => (follow ? setVista('mapa') : followBallita(selected))}
+          onPov={() => (pov ? setPunto('externa') : goVista('ballita', 'interna'))}
           onClose={() => select(null)} />
       )}
     </div>

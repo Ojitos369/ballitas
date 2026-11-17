@@ -15,7 +15,7 @@ import * as THREE from 'three'
 import { NODE_R, mulberry32 } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
-import Bollita from './Bollita.jsx'
+import Ballita from './Ballita.jsx'
 import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
@@ -37,7 +37,7 @@ const POV_JOY_PITCH_SPEED = 1.6
 const NOOP = () => {}
 const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
-const SEGUIR_DIST = 3.6 // distancia cómoda detrás/encima de la bollita (0.55x en tubos)
+const SEGUIR_DIST = 3.6 // distancia cómoda detrás/encima de la ballita (0.55x en tubos)
 const MIN_DIST = 1.4
 const VISTA_DIR = new THREE.Vector3(0.55, 0.45, 0.7).normalize()
 const SOL_DIR = new THREE.Vector3(0.4, 0.8, 0.3).normalize()
@@ -161,7 +161,7 @@ const NEBULA_FRAG = /* glsl */ `
   }
 `
 
-// Paso variable (troceado a STEP como máximo): con paso fijo la bollita avanzaba a saltos, muy visible de cerca.
+// Paso variable (troceado a STEP como máximo): con paso fijo la ballita avanzaba a saltos, muy visible de cerca.
 function SimDriver({ sim, speed }) {
   useFrame((_, dt) => {
     for (let t = Math.min(dt, 0.1) * speed; t > 0; t -= STEP) sim.tick(Math.min(t, STEP))
@@ -283,7 +283,7 @@ function ConstellationDome({ r }) {
   )
 }
 
-// Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
+// Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
   const controls = useRef()
@@ -480,8 +480,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 
     let targetFov = FOV
     let targetNear = NEAR_DEFAULT
-    if (!povActive && typeof window !== 'undefined' && window.__bollitasPov?.active) {
-      window.__bollitasPov.active = false
+    if (!povActive && typeof window !== 'undefined' && window.__ballitasPov?.active) {
+      window.__ballitasPov.active = false
     }
     if (povActive) {
       const st = povControlRef.current
@@ -593,7 +593,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       hasPrevPos.current = false
 
       if (typeof window !== 'undefined') {
-        const t = window.__bollitasPov || (window.__bollitasPov = {})
+        const t = window.__ballitasPov || (window.__ballitasPov = {})
         camera.getWorldDirection(povLookDirTmp)
         t.active = true
         t.yaw = totalYaw
@@ -604,8 +604,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         t.gyroActive = Boolean(gyroActiveRef.current)
         t.camDir = [povLookDirTmp.x, povLookDirTmp.y, povLookDirTmp.z]
         t.camQuat = [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w]
-        t.bollitaDir = [povFwd.x, povFwd.y, povFwd.z]
-        t.bollitaPos = [selected.pos.x, selected.pos.y, selected.pos.z]
+        t.ballitaDir = [povFwd.x, povFwd.y, povFwd.z]
+        t.ballitaPos = [selected.pos.x, selected.pos.y, selected.pos.z]
         t.horizon = Boolean(horizonRef.current)
         t.camUp = [povUp.current.x, povUp.current.y, povUp.current.z]
       }
@@ -620,7 +620,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       const vel = selected.speed ?? 0
       const targetDist = selected.phase === 'travel' ? SEGUIR_DIST : SEGUIR_DIST * 1.15
 
-      // Feed-forward del desplazamiento de la bollita para que no quede rezagada ni a 8x.
+      // Feed-forward del desplazamiento de la ballita para que no quede rezagada ni a 8x.
       if (hasPrevPos.current) {
         mov.copy(selected.pos).sub(prevPos.current)
         c.target.add(mov)
@@ -790,7 +790,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
   )
 }
 
-// Luz principal con sombras. Solo proyecta sombras al seguir una bollita / POV para ahorrar GPU en vista general.
+// Luz principal con sombras. Solo proyecta sombras al seguir una ballita / POV para ahorrar GPU en vista general.
 function Sol({ r, shadowsOn, selected }) {
   const luz = useRef()
   const controls = useThree((s) => s.controls)
@@ -850,7 +850,7 @@ function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
   )
 }
 
-export default function Scene({ sim, bollitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
+export default function Scene({ sim, ballitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
@@ -1160,8 +1160,8 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
       <Paths world={sim.world} sim={sim} focusWay={focusedWay} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
-      {bollitas.map((b) => (
-        <Bollita
+      {ballitas.map((b) => (
+        <Ballita
           key={b.id}
           b={b}
           sim={sim}

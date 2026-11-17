@@ -1,5 +1,5 @@
-// Repertorio ampliado de diálogos contextuales y con memoria para Bollitas.
-// No modifica personality.js ni rompe voice(); complementa la UI (Bollita.jsx y Detail.jsx).
+// Repertorio ampliado de diálogos contextuales y con memoria para Ballitas.
+// No modifica personality.js ni rompe voice(); complementa la UI (Ballita.jsx y Detail.jsx).
 
 import { skinFamily } from './personality.js'
 
@@ -35,7 +35,7 @@ export const EMOJI_EVENTO = {
   // Contexto dinámico
   velocidad_rapida: '⚡',
   velocidad_lenta: '🐢',
-  cerca_bollita: '💬',
+  cerca_ballita: '💬',
   plan: '💡',
 }
 
@@ -237,7 +237,7 @@ const EVENT_LINES = {
     'Aquí se va despacito pero seguro.',
     'Respirando hondo en este tramo lento.',
   ],
-  cerca_bollita: [
+  cerca_ballita: [
     '¡Hola, {other}! ¡Qué gusto verte!',
     '¡Eh, {other}, echamos una carrera?',
     '¡Cuidado {other}, que paso rodando!',
@@ -262,7 +262,7 @@ const SKIN_LINES = {
     hielo_resbaloso: ['¡Iceberg a estribor!', '¡Resbalo más que en cubierta mojada!'],
     pantano: ['¡Encallada en el lodo!', '¡Remen fuerte, marineros!'],
     portal: ['¡Un atajo secreto de corsarios!'],
-    cerca_bollita: ['¡Ahoy, {other}!', '¡Comparte el botín, {other}!'],
+    cerca_ballita: ['¡Ahoy, {other}!', '¡Comparte el botín, {other}!'],
   },
   miedosa: {
     _idle: ['Ay, ay, ay… espero no caerme.', '¿Segura que este tubo aguanta?'],
@@ -273,7 +273,7 @@ const SKIN_LINES = {
     hielo_resbaloso: ['¡No puedo frenar, qué susto!'],
     pantano: ['Al menos aquí no voy tan rápido… uf.'],
     portal: ['¿¡Dónde estoy ahora!? ¡Qué miedo!'],
-    cerca_bollita: ['¡{other}, no me dejes sola!'],
+    cerca_ballita: ['¡{other}, no me dejes sola!'],
   },
   maga: {
     _idle: ['Siento vibraciones arcanas…', '¡Magia en cada curva!'],
@@ -282,7 +282,7 @@ const SKIN_LINES = {
     geiser: ['¡Alquimia de agua y vapor!'],
     turbina: ['¡Vientos etéreos a mi favor!'],
     cascada: ['¡Poción de cascada brillante!'],
-    cerca_bollita: ['¡Saludos mágicos, {other}!'],
+    cerca_ballita: ['¡Saludos mágicos, {other}!'],
   },
   rutinaria: {
     _idle: ['Todo según el horario previsto.', 'Paso a paso, sin sorpresas.'],
@@ -290,7 +290,7 @@ const SKIN_LINES = {
     hielo_resbaloso: ['¡Demasiada velocidad para mi agenda!'],
     portal: ['¡Esto no estaba en el mapa oficial!'],
     cascada: ['Hum, humedad dentro de los parámetros.'],
-    cerca_bollita: ['Buenos días, {other}. Circulando.'],
+    cerca_ballita: ['Buenos días, {other}. Circulando.'],
   },
   zombi: {
     _idle: ['Mmm… ¿hay snacks en el planeta?', 'Ruedo por comida… ñam…'],
@@ -298,7 +298,7 @@ const SKIN_LINES = {
     erupcion: ['¡Asadito al carbón!'],
     geiser: ['¡Baño termal gratis!'],
     hielo_resbaloso: ['¡Frío para conservarme fresca!'],
-    cerca_bollita: ['Hola {other}… ¿tienes galletas?'],
+    cerca_ballita: ['Hola {other}… ¿tienes galletas?'],
   },
   ascetica: {
     _idle: ['Paz interior en movimiento.', 'Fluir como el cosmos.'],
@@ -306,7 +306,7 @@ const SKIN_LINES = {
     erupcion: ['Incluso el fuego es armonía.'],
     portal: ['Todo está conectado en un punto.'],
     cascada: ['El agua fluye sin esfuerzo.'],
-    cerca_bollita: ['Que la paz te acompañe, {other}.'],
+    cerca_ballita: ['Que la paz te acompañe, {other}.'],
   },
   gatita: {
     _idle: ['¡Miau! ¡A rodar se ha dicho!', '¡Purrr, qué bonito día!'],
@@ -315,14 +315,14 @@ const SKIN_LINES = {
     hielo_resbaloso: ['¡Patitas patinando, miau!'],
     trampolin: ['¡Salto felino perfecto!'],
     turbina: ['¡Mis bigotes vuelan al viento!'],
-    cerca_bollita: ['¡Miauu, {other}! ¡Juguemos!'],
+    cerca_ballita: ['¡Miauu, {other}! ¡Juguemos!'],
   },
   solitaria: {
     _idle: ['Mejor sola que mal acompañada.', 'Silencio y velocidad…'],
     portal: ['Desaparecer en un segundo. Ideal.'],
     turbina: ['El viento borra mis huellas.'],
     hielo_resbaloso: ['Nadie me alcanza aquí.'],
-    cerca_bollita: ['Oh, {other}… hola, supongo.', 'Espacio personal, {other}.'],
+    cerca_ballita: ['Oh, {other}… hola, supongo.', 'Espacio personal, {other}.'],
   },
   alegre: {
     _idle: ['¡Yupi! ¡Todo es una fiesta!', '¡Brillos y sonrisas!'],
@@ -331,7 +331,7 @@ const SKIN_LINES = {
     geiser: ['¡Fuente de fiesta! ¡Wheee!'],
     portal: ['¡Magia de colores! ¡Otra vez!'],
     cascada: ['¡Arcoíris en el agua!'],
-    cerca_bollita: ['¡Holaaa {other}! ¡Qué alegría verte!'],
+    cerca_ballita: ['¡Holaaa {other}! ¡Qué alegría verte!'],
   },
   elfa: {
     _idle: ['Tsk, qué caminos tan ruidosos…', 'Más rápido, que pierdo el tiempo.'],
@@ -339,11 +339,11 @@ const SKIN_LINES = {
     hielo_resbaloso: ['Al menos esto avanza rápido.'],
     turbina: ['¡Me despeina el gorro!'],
     erupcion: ['¡Demasiado drama volcánico!'],
-    cerca_bollita: ['Apártate un poco, {other}.'],
+    cerca_ballita: ['Apártate un poco, {other}.'],
   },
 }
 
-// Memoria de líneas recientes por bollita (id -> array de textos usados)
+// Memoria de líneas recientes por ballita (id -> array de textos usados)
 const MEMORY_MAX = 10
 const memoria = new Map()
 const globosVivos = new Map()
@@ -372,7 +372,7 @@ function fmt(tpl, ctx) {
 }
 
 /**
- * Elige un diálogo variado y con memoria para la bollita `b` según el `event` y `ctx`.
+ * Elige un diálogo variado y con memoria para la ballita `b` según el `event` y `ctx`.
  */
 export function elegirDialogo(b, event, ctx = {}, rng = Math.random) {
   const fam = skinFamily(b.arch ?? b.genome)
@@ -401,8 +401,8 @@ export function elegirDialogo(b, event, ctx = {}, rng = Math.random) {
 }
 
 /**
- * Sincroniza y genera reacciones de diálogo en vivo para una bollita.
- * Diseñado para llamarse de forma ligera desde Bollita.jsx (con throttling).
+ * Sincroniza y genera reacciones de diálogo en vivo para una ballita.
+ * Diseñado para llamarse de forma ligera desde Ballita.jsx (con throttling).
  */
 export function actualizarDialogoVivo(b, sim, state) {
   const t = sim?.t ?? 0
@@ -460,14 +460,14 @@ export function actualizarDialogoVivo(b, sim, state) {
   const cur = globosVivos.get(b.id)
   if (cur && cur.until > t) return cur
 
-  // 4. Reacción a otras bollitas cercanas
-  if (t >= state.nextSocialAt && sim?.bollitas?.length > 1) {
+  // 4. Reacción a otras ballitas cercanas
+  if (t >= state.nextSocialAt && sim?.ballitas?.length > 1) {
     state.nextSocialAt = t + 7 + (b.id % 4)
-    for (let i = 0; i < sim.bollitas.length; i++) {
-      const other = sim.bollitas[i]
+    for (let i = 0; i < sim.ballitas.length; i++) {
+      const other = sim.ballitas[i]
       if (other.id === b.id || other.phase === 'dying' || other.phase === 'gone') continue
       if (b.pos.distanceToSquared(other.pos) < 12.25) {
-        const d = elegirDialogo(b, 'cerca_bollita', { other: other.name }, sim.rng)
+        const d = elegirDialogo(b, 'cerca_ballita', { other: other.name }, sim.rng)
         const bubble = { ...d, until: t + 3.0 }
         globosVivos.set(b.id, bubble)
         return bubble
@@ -498,7 +498,7 @@ export function actualizarDialogoVivo(b, sim, state) {
 }
 
 /**
- * Obtiene el globo activo actual de una bollita (para Bollita.jsx y Detail.jsx).
+ * Obtiene el globo activo actual de una ballita (para Ballita.jsx y Detail.jsx).
  */
 export function obtenerGlobo(b, sim) {
   const t = sim?.t ?? 0

@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced,
-  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBollitas, laneFrame, laneGap,
+  Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame, laneGap,
   makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo,
   scatter, segFrames, segPath, sampleFrameInto, makeFrame, switchesOf, useInstanced,
 } from './base.jsx'
@@ -515,7 +515,7 @@ function NeonTerrainAndSky({ way, detail }) {
   useFrame(({ clock }) => {
     const det = detail?.value ?? 0
     skyMat.opacity = 0.14 + det * 0.36
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let fastBoost = 1
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]
@@ -574,7 +574,7 @@ function NeonTrackDetails({ way, world }) {
     const chks = []; const curbs = []; const ports = []; const ads = []
     const adTexts = [
       ['TURBO NEÓN', 'VELOCIDAD PURA'],
-      ['BOLLITA GP', 'SIN LÍMITES'],
+      ['BALLITA GP', 'SIN LÍMITES'],
       ['CYBER ARENA', 'EN VIVO'],
       ['HYPER GRID', 'BOOST ×2'],
     ]
@@ -773,9 +773,9 @@ function NeonDioramaProps({ way }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
 
-    // Público holo-chibi salta cuando pasa una bollita por su tramo
+    // Público holo-chibi salta cuando pasa una ballita por su tramo
     for (let i = 0; i < built.specBodies.length; i++) {
       const sp = built.specBodies[i]
       let active = false
@@ -807,7 +807,7 @@ function NeonDioramaProps({ way }) {
     }
     if (built.meteors.length) meteorMesh.instanceMatrix.needsUpdate = true
 
-    // Anillos aceleradores pulsan con la velocidad de la bollita en el tramo
+    // Anillos aceleradores pulsan con la velocidad de la ballita en el tramo
     for (let i = 0; i < built.speedRings.length; i++) {
       const r = built.speedRings[i]
       const pulse = 0.96 + 0.05 * Math.sin(t * 5.5 + r.ph)
@@ -916,7 +916,7 @@ function NeonCast({ way }) {
   useFrame(({ clock }, dt) => {
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
-    const bolls = getBollitas()
+    const bolls = getBallitas()
 
     // Robots chibi
     for (let i = 0; i < robots.length; i++) {
@@ -1025,7 +1025,7 @@ function NeonCast({ way }) {
 // ═══════════════════════════ EVENTOS PERSONALIZADOS POR RUTA ═══════════════════════════
 // Ruta A (r=0): Compuertas láser secuenciales que se abren al paso + anillos warp pulsantes
 // Ruta B (r=1): Puente holográfico que se materializa + ballet giratorio de anillos holo
-// Ruta C (r=2): Cabina de DJ Chibi con ecualizador vivo y focos reactivos al color de la bollita
+// Ruta C (r=2): Cabina de DJ Chibi con ecualizador vivo y focos reactivos al color de la ballita
 // Llegada: Fuegos artificiales digitales
 function EventLaserGates({ stage, info }) {
   const seg = info.segment
@@ -1142,9 +1142,9 @@ function EventDjArena({ stage, info }) {
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    const speedK = stage.bollita ? THREE.MathUtils.clamp((stage.bollita.speed ?? 12) / 14, 0.7, 2.4) : 1
-    if (stage.bollita?.genome) {
-      reactMat.color.setHSL(stage.bollita.genome.hue, 0.9, 0.6)
+    const speedK = stage.ballita ? THREE.MathUtils.clamp((stage.ballita.speed ?? 12) / 14, 0.7, 2.4) : 1
+    if (stage.ballita?.genome) {
+      reactMat.color.setHSL(stage.ballita.genome.hue, 0.9, 0.6)
     } else {
       reactMat.color.set('#ff3df2')
     }
@@ -1305,7 +1305,7 @@ function SwitchMechanism({ seg, sw }) {
 
   useFrame(({ clock }) => {
     if (!rotRef.current) return
-    const bolls = getBollitas()
+    const bolls = getBallitas()
     let near = false
     for (let i = 0; i < bolls.length; i++) {
       const b = bolls[i]

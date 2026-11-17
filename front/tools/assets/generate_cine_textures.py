@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generador de texturas sci-fi cinematográficas y paneles por tema para Bollitas.
+"""Generador de texturas sci-fi cinematográficas y paneles por tema para Ballitas.
 
 Genera en ``front/public/tex/``:
   - panel_albedo.png, panel_normal.png, panel_emissive.png (512x512 tileables)
