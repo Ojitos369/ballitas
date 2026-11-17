@@ -78,13 +78,13 @@ let GEOS = null
 function getGeos() {
   if (GEOS) return GEOS
 
-  const sph10 = new THREE.SphereGeometry(1, 10, 8)
-  const sph8 = new THREE.SphereGeometry(1, 8, 6)
-  const cap8 = new THREE.CapsuleGeometry(1, 1, 3, 6)
-  const cyl8 = new THREE.CylinderGeometry(1, 1, 1, 8)
-  const cone8 = new THREE.ConeGeometry(1, 1, 8)
-  const tor14 = new THREE.TorusGeometry(1, 0.07, 6, 14)
-  const arcTor = new THREE.TorusGeometry(1, 0.08, 6, 16, Math.PI)
+  const sph10 = new THREE.SphereGeometry(1, 8, 6)
+  const sph8 = new THREE.SphereGeometry(1, 6, 4)
+  const cap8 = new THREE.CapsuleGeometry(1, 1, 2, 5)
+  const cyl8 = new THREE.CylinderGeometry(1, 1, 1, 6)
+  const cone8 = new THREE.ConeGeometry(1, 1, 6)
+  const tor14 = new THREE.TorusGeometry(1, 0.075, 5, 10)
+  const arcTor = new THREE.TorusGeometry(1, 0.08, 4, 10, Math.PI)
   const box1 = new THREE.BoxGeometry(1, 1, 1)
 
   // 1. Ángel chibi (túnica nube, alitas blancas, aureola dorada, ojos kawaii)
@@ -298,6 +298,9 @@ function getMats() {
     pennant: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.55, side: THREE.DoubleSide }),
     windBeam: new THREE.MeshBasicMaterial({
       color: '#b8f5ff', transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+    }),
+    skyDome: new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthWrite: false,
     }),
   })
   return MATS
@@ -828,7 +831,6 @@ function CloudCrowdAndBehavior({ way, standItems }) {
       const rows = [
         { d: 0.14, y: 0.19 },
         { d: -0.02, y: 0.33 },
-        { d: -0.18, y: 0.47 },
       ]
       for (let r = 0; r < rows.length; r++) {
         for (let k = -1; k <= 1; k++) {
@@ -973,9 +975,7 @@ function CloudSkyPhenomena({ way, detail }) {
   return (
     <group name="nubes:sky">
       {skyGeo && (
-        <mesh name="nubes:sky-dome" geometry={skyGeo}>
-          <meshBasicMaterial vertexColors transparent opacity={0.30} side={THREE.DoubleSide} depthWrite={false} />
-        </mesh>
+        <mesh name="nubes:sky-dome" geometry={skyGeo} material={M.skyDome} />
       )}
       {bolts.length > 0 && (
         <instancedMesh name="nubes:sky-lightning" ref={boltRef} args={[G.lightning, M.glowBolt, bolts.length]} />
@@ -1051,8 +1051,8 @@ export default function Vida({ way, detail }) {
         buildTerrainGeo(seg, {
           arc: Math.PI * 0.50,
           maxH,
-          radial: 20,
-          along: Math.ceil(seg.length * 1.25),
+          radial: 14,
+          along: Math.ceil(seg.length * 0.9),
           colors,
           height: (u, a) => cloudBankHeight(seg, u, a),
         }),
@@ -1082,22 +1082,22 @@ export default function Vida({ way, detail }) {
     const rng = mulberry32(way.idx * 2203 + 73)
     const solid = info.segments.filter((s) => !s.air).map((s) => s.seg)
 
-    const islands = seatOnTerrain(scatter(way, 30, rng, {
+    const islands = seatOnTerrain(scatter(way, 20, rng, {
       angle: [-1.32, 1.32], clear: BALL_R * 0.88, offset: [0.06, 0.16], scale: [0.46, 0.78],
     }))
-    const clouds = seatOnTerrain(scatter(way, 56, rng, {
+    const clouds = seatOnTerrain(scatter(way, 34, rng, {
       angle: [-1.30, 1.30], clear: BALL_R * 0.68, offset: [0.01, 0.05], scale: [0.42, 0.78],
     }))
-    const windmills = seatOnTerrain(scatter(way, 20, rng, {
+    const windmills = seatOnTerrain(scatter(way, 14, rng, {
       angle: [-1.18, 1.18], clear: BALL_R * 0.82, offset: [0.02, 0.05], scale: [0.44, 0.66],
     }))
-    const balloons = scatter(way, 22, rng, {
+    const balloons = scatter(way, 16, rng, {
       segments: solid,
       angle: [-1.65, 1.65], clear: BALL_R * 0.9, offset: [0.22, 0.42], scale: [0.36, 0.56],
     })
     const rainbows = []
     for (const seg of solid) {
-      const nR = Math.max(1, Math.floor(seg.length / 24))
+      const nR = Math.max(1, Math.floor(seg.length / 26))
       for (let i = 0; i < nR; i++) {
         const u = (i + 0.5) / nR
         const p = placeAlong(seg, u, 0.02, 0)
@@ -1107,7 +1107,7 @@ export default function Vida({ way, detail }) {
 
     const stands = []
     for (const seg of solid) {
-      const nSt = Math.max(1, Math.floor(seg.length / 20))
+      const nSt = Math.max(1, Math.floor(seg.length / 26))
       for (let i = 0; i < nSt; i++) {
         const u = (i + 0.5) / nSt
         const side = (i + seg.i) % 2 === 0 ? 1 : -1
@@ -1126,7 +1126,7 @@ export default function Vida({ way, detail }) {
     for (const seg of solid) {
       const rt = info.routes[seg.route]
       const sp = rt?.profile?.speed
-      const lampStep = sp === 'rapida' ? 8 : 6.5
+      const lampStep = sp === 'rapida' ? 10 : 8.5
       const nL = Math.max(2, Math.floor(seg.length / lampStep))
       for (let i = 0; i < nL; i++) {
         const u = (i + 0.35) / nL
@@ -1137,7 +1137,7 @@ export default function Vida({ way, detail }) {
         const fp = placeAlong(seg, u, cloudSurfaceOffset(seg, u, -side * 0.52), -side * 0.52)
         fences.push({ pos: fp.pos, quat: fp.quat, scale: 0.72 })
       }
-      const nP = Math.max(3, Math.floor(seg.length / 5.2))
+      const nP = Math.max(2, Math.floor(seg.length / 7.5))
       for (let i = 0; i < nP; i++) {
         const u = (i + 0.5) / nP
         const ang = (i % 2 === 0 ? 1 : -1) * (1.28 + (i % 3) * 0.14)
@@ -1154,9 +1154,9 @@ export default function Vida({ way, detail }) {
       }
     }
 
-    const horizon = scatter(way, 28, rng, {
+    const horizon = scatter(way, 16, rng, {
       angle: [1.38, 1.72], clear: 0, offset: [0.02, 0.05], scale: [0.34, 0.58],
-    }).concat(scatter(way, 28, rng, {
+    }).concat(scatter(way, 16, rng, {
       angle: [-1.72, -1.38], clear: 0, offset: [0.02, 0.05], scale: [0.34, 0.58],
     }))
 
