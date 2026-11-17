@@ -7,6 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from urls import urls_router, add_404_handler
 from core.conf.settings import MEDIA_DIR, allow_origin_regex, allow_credentials, allow_methods, allow_headers
 
+import db
+
+db.init()  # crea tablas y siembra el catálogo si la BD está vacía
 app = FastAPI()
 
 app.add_middleware(

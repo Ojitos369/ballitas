@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
@@ -109,7 +109,9 @@ function getSharedMats() {
   if (sharedMats) return sharedMats
   const chibi = getChibiTextures()
   sharedMats = {
-    click: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+    // Solo para el raycast (Mesh.raycast ignora visible): con opacidad 0 se dibujaba igual, una esfera 8×6 que
+    // envuelve a la ballita a r·2,2 y que de cerca entraba en postFX/DoF como un octágono.
+    click: new THREE.MeshBasicMaterial({ visible: false }),
     eye: new THREE.MeshBasicMaterial({ color: '#ffffff', map: chibi.eye }),
     catchlight: new THREE.MeshBasicMaterial({ color: '#ffffff' }),
     sparkle: new THREE.MeshBasicMaterial({
@@ -268,6 +270,13 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
   const [nearCam, setNearCam] = useState(false)
   const nearCamRef = useRef(false)
 
+  // Al seleccionarla (no al llegar la cámara) sube ya sus texturas: el primer cuadro de cerca no las espera.
+  const gl = useThree((s) => s.gl)
+  useEffect(() => {
+    if (!selected) return
+    for (const m of [bodyMat, irisMat, blushMat, mats.eye, mats.sparkle, emoMat]) if (m.map) gl.initTexture(m.map)
+  }, [selected, gl, bodyMat, irisMat, blushMat, mats, emoMat])
+
   useEffect(() => () => {
     bodyMat.dispose()
     blushMat.dispose()
@@ -295,7 +304,8 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
     const rIntro = r * 14 + worldRadius * 0.12
     const rExter = r * 24 + worldRadius * 0.36
     const camDist = camera.position.distanceTo(b.pos)
-    const extFactor = (pov || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
+    // Seguida o en POV: siempre el LOD detallado; el orbe lejano no debe acercarse a la cámara.
+    const extFactor = (pov || follow || b.phase === 'gone') ? 0 : THREE.MathUtils.smoothstep(camDist, rIntro, rExter)
     const nextNear = nearCamRef.current ? camDist < 42 : camDist < 36
     if (nextNear !== nearCamRef.current) {
       nearCamRef.current = nextNear
@@ -443,7 +453,7 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
     root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
 
     // Si la ballita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
-    const bodyVisible = !pov && extFactor < 0.96
+    const bodyVisible = !pov && (extFactor < 0.96 || selected)
     if (bodyGroup.current) bodyGroup.current.visible = bodyVisible
     if (orbGroupRef.current) {
       const showOrb = extFactor > 0.015 && s > 0.02
