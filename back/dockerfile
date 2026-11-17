@@ -1,0 +1,21 @@
+FROM python:3.13-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Mexico_City
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor tzdata \
+    && ln -snf /usr/share/zoneinfo/America/Mexico_City /etc/localtime \
+    && echo "America/Mexico_City" > /etc/timezone \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/src/logs
+
+WORKDIR /usr/src/app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# El código se monta como volumen (docker-compose) y uvicorn corre con --reload:
+# los cambios de Python se cargan solos tras git pull, sin reiniciar el contenedor.

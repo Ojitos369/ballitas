@@ -1,9 +1,10 @@
 ﻿*__pycache__*
 *node_modules*
-*dist*
-*.env*
+/front/dist/
+.env
+*.env
+!env.example
 logs/*
 *.pnpm-store*
-!/back/media/dist/.gitkeep
 
 .build-tmp/

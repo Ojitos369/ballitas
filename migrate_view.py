@@ -1,14 +1,15 @@
 import os
 import re
+import shutil
 from ojitos369.utils import printwln as pln
 
 class Migrate:
     def replace_media(self, file):
         file_str = ""
-        with open(file, 'r') as f:
+        with open(file, 'r', encoding='utf-8') as f:
             file_str = f.read()
         file_str = file_str.replace('/assets/', '/media/dist/assets/')
-        with open(file, 'w') as f:
+        with open(file, 'w', encoding='utf-8') as f:
             f.write(file_str)
         return file_str
 
@@ -20,19 +21,19 @@ class Migrate:
 
         # Borra build anterior si hay
         try:
-            os.system(f'rm -rf {media_dir}/')
+            shutil.rmtree(media_dir, ignore_errors=True)
         except Exception as e:
             pass
 
         # Crea el directorio si no existe
         try:
-            os.system(f'mkdir -p {media_dir}/')
+            os.makedirs(media_dir, exist_ok=True)
         except Exception as e:
             pass
 
         # Copia los archivos del build
         try:
-            os.system(f'cp -rf {react_build}/* {media_dir}')
+            shutil.copytree(react_build, media_dir, dirs_exist_ok=True)
         except Exception as e:
             pass
 
@@ -58,7 +59,7 @@ class Migrate:
             for match in matches:
                 pln(match.group(0))
                 js = js.replace(match.group(0), '')
-            with open(f'{media_dir}/assets/{file_name}', 'w') as f:
+            with open(f'{media_dir}/assets/{file_name}', 'w', encoding='utf-8') as f:
                 f.write(js)
 
         # --------------------------------   css   -----------------
