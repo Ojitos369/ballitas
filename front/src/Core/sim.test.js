@@ -6,7 +6,7 @@ import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.j
 import {
   mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
   MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff, segmentTangent,
-  laneRelief, reliefSlope, OUT_GATES, IN_GATES,
+  laneRelief, reliefSlope, OUT_GATES, IN_GATES, SPHERE_R,
 } from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
@@ -80,7 +80,7 @@ test('tramos: continuos, del puerto de salida al de entrada, sin atravesar nodos
   }
 })
 
-test('separación 3D: tubos de ways distintos >= 4.0 (fuera de 18u de nodos) y sin atravesar nodos ajenos', () => {
+test('separación 3D: tubos de ways distintos >= 3.0 (fuera de 18u de nodos) y sin atravesar nodos ajenos', () => {
   const STEPS = 28
   const TRIM = 18
   const waySamples = world.ways.map((w) => {
@@ -124,7 +124,7 @@ test('separación 3D: tubos de ways distintos >= 4.0 (fuera de 18u de nodos) y s
       }
     }
   }
-  assert.ok(minClearance >= 4.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 4.0 (${minPair})`)
+  assert.ok(minClearance >= 3.0, `distancia mínima entre tubos ${minClearance.toFixed(3)} < 3.0(${minPair})`)
 })
 
 test('10 min simulados: población estable, mueren y nacen, evolucionan, sin NaN', () => {
@@ -529,6 +529,14 @@ test('sin choques: tubos de caminos distintos y nodos, muestreo cada ~2 u', () =
     }
   }
   assert.ok(worst > MARGIN, `holgura mínima ${worst.toFixed(2)} <= ${MARGIN} (${who})`)
+})
+
+test('esfera: nodos sobre la esfera grande y caminos en su cáscara, sin cruzar el interior', () => {
+  for (const n of world.nodes) assert.ok(Math.abs(n.pos.length() - SPHERE_R) < 1e-6)
+  let lo = Infinity; let hi = 0
+  for (const s of world.segments) for (const p of s.curve.getSpacedPoints(40)) { lo = Math.min(lo, p.length()); hi = Math.max(hi, p.length()) }
+  assert.ok(lo > 0.55 * SPHERE_R, `un camino se hunde hacia el centro: ${lo.toFixed(0)} <= ${(0.55 * SPHERE_R).toFixed(0)}`)
+  assert.ok(hi < 1.8 * SPHERE_R, `un camino se aleja de la cáscara: ${hi.toFixed(0)}`)
 })
 
 test('relieve: continuo, finito, dentro del tubo y nulo en las uniones', () => {

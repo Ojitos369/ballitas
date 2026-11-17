@@ -239,14 +239,29 @@ const DEST_NAMES = {
   energia: ['Fuente', 'Siesta', 'Banquete', 'Spa', 'Hamaca', 'Hoguera', 'Manantial', 'Picnic'],
 }
 
-// Boceto del usuario: uno al centro y cuatro alrededor (arriba, abajo, izquierda, derecha), no coplanares.
+// Los nodos viven sobre una esfera grande centrada en el origen; su radio crece con el número de nodos.
 const NODE_DEFS = [
-  { name: 'Eco', color: '#c77dff', pos: [0, 0, 0], n: 8, bias: 0.5 },
-  { name: 'Cima', color: '#6bcb77', pos: [10, 76, -32], n: 3, bias: 0.35 },
-  { name: 'Delta', color: '#4d96ff', pos: [-8, -74, 34], n: 5, bias: 0.5 },
-  { name: 'Alba', color: '#ffb347', pos: [-82, 10, 26], n: 4, bias: 0.5 },
-  { name: 'Brasa', color: '#ff6b6b', pos: [84, -10, -22], n: 6, bias: 0.65 },
-].map((d) => ({ ...d, pos: d.pos.map((v) => v * WORLD_SCALE) }))
+  { name: 'Eco', color: '#c77dff', n: 8, bias: 0.5 },
+  { name: 'Cima', color: '#6bcb77', n: 3, bias: 0.35 },
+  { name: 'Delta', color: '#4d96ff', n: 5, bias: 0.5 },
+  { name: 'Alba', color: '#ffb347', n: 4, bias: 0.5 },
+  { name: 'Brasa', color: '#ff6b6b', n: 6, bias: 0.65 },
+]
+export const SPHERE_R = 52 * WORLD_SCALE * Math.sqrt(NODE_DEFS.length)
+
+// Direcciones unitarias repartidas por Fibonacci y relajadas por repulsión (sin pares antípodas exactos).
+function sphereDirs(n) {
+  const d = Array.from({ length: n }, (_, i) => {
+    const y = 1 - (2 * (i + 0.5)) / n; const r = Math.sqrt(1 - y * y); const a = i * Math.PI * (3 - Math.sqrt(5)) + 0.7
+    return new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r)
+  })
+  for (let it = 0; it < 60; it++) {
+    const f = d.map((p, i) => d.reduce((s, q, j) => (i === j ? s : s.addScaledVector(p.clone().sub(q), 1 / Math.pow(p.distanceTo(q), 3))), new THREE.Vector3()))
+    d.forEach((p, i) => p.addScaledVector(f[i], 0.02).normalize())
+  }
+  // un giro fijo evita pares polares alineados con la gravedad
+  return d.map((p) => p.applyAxisAngle(X, 0.5).applyAxisAngle(Y, 0.3))
+}
 
 const ri = (rng, a, b) => Math.round(a + rng() * (b - a))
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x))
@@ -614,7 +629,8 @@ const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un 
 export function buildWorld(seed = 369) {
   const rng = mulberry32(seed)
   const world = { nodes: [], destinos: [], circuits: [], ways: [], waysFrom: [], routes: [], segments: [] }
-  NODE_DEFS.forEach((d, idx) => world.nodes.push({ idx, name: d.name, color: d.color, pos: new THREE.Vector3(...d.pos), radius: NODE_R }))
+  const dirs = sphereDirs(NODE_DEFS.length)
+  NODE_DEFS.forEach((d, idx) => world.nodes.push({ idx, name: d.name, color: d.color, pos: dirs[idx].clone().multiplyScalar(SPHERE_R), radius: NODE_R }))
   world.nodes.forEach((node) => buildCity(world, node, NODE_DEFS[node.idx], rng))
   world.waysFrom = world.nodes.map(() => [])
   const placed = []
@@ -661,9 +677,14 @@ function buildCity(world, node, def, rng) {
   const pendingTerms = []
   for (const o of world.nodes) {
     if (o === node) continue
-    const dir = o.pos.clone().sub(node.pos).normalize()
-    const out = pickTerminal(dir)
-    const inn = pickTerminal(dir)
+    // hacia el otro nodo siguiendo la superficie de la esfera grande (tangente) y un poco hacia fuera
+    const up = node.pos.clone().normalize()
+    const tan = o.pos.clone().normalize().addScaledVector(up, -o.pos.clone().normalize().dot(up)).normalize()
+    const side = new THREE.Vector3().crossVectors(up, tan) // salida y llegada del mismo par abren a lados opuestos
+    const base = tan.multiplyScalar(0.85).addScaledVector(up, 0.5)
+    const dir = base.clone().normalize()
+    const out = pickTerminal(base.clone().addScaledVector(side, 0.45).normalize())
+    const inn = pickTerminal(base.clone().addScaledVector(side, -0.45).normalize())
     node.portTo[o.idx] = { to: o.idx, dir, in: inn, out, wayIn: null, wayOut: null }
     node.ports.push(node.portTo[o.idx])
     pendingTerms.push({ vert: out, kind: 'out', to: o.idx }, { vert: inn, kind: 'in', to: o.idx })
@@ -922,13 +943,12 @@ function wrapMid(node, dir, target) {
 function sampleWayPoints(way, steps = 14) {
   const pts = []
   for (const s of way.segments) {
-    for (let k = 0; k <= steps; k++) {
-      const u = k / steps
+    // fino (28): un punto cada ~1.5 u para no saltarse cruces entre tubos; grueso (14): descarte rápido
+    const n = steps === 28 ? Math.max(12, Math.ceil(s.length / 1.5)) : steps
+    for (let k = 0; k <= n; k++) {
+      const u = k / n
       const trim = (s.kind === 'salida' && u * s.length < TRIM_LEN) || (s.kind === 'llegada' && (1 - u) * s.length < TRIM_LEN)
-      const cached = steps === 28 && k % 2 === 0 ? s._placementCoarse?.[k / 2] : null
-      const p = cached || s.curve.getPointAt(u)
-      if (steps === 14) (s._placementCoarse || (s._placementCoarse = []))[k] = p
-      pts.push({ p, r: s.radius, kind: s.kind, trim })
+      pts.push({ p: s.curve.getPointAt(u), r: s.radius, kind: s.kind, trim })
     }
   }
   return pts
@@ -997,11 +1017,11 @@ function placeWay(world, circuit, from, to, placed) {
       const cand = buildWay(world, circuit, from, to, theta, bowExtra, false, salt)
       const coarse = evalCand(cand, 14)
       if (!coarse) continue
-      const res = coarse.minTube >= 2.5 && coarse.minNode >= 0 ? evalCand(cand, 28) : coarse
+      const res = coarse.minTube >= 0 && coarse.minNode >= 0 ? evalCand(cand, 28) : coarse // el grueso sólo descarta: su mínimo nunca es menor que el real
       if (!res) continue
       const score = res.minTube < 4.0 ? res.minTube - 10 : Math.min(res.minTube, res.minNode + 1, res.minHub * 0.2)
       if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt } }
-      if (res.minTube >= 4.8 && res.minNode >= 1.5 && res.minHub >= 24) {
+      if (res.minTube >= 4.0 && res.minNode >= 1.5 && res.minHub >= 24) {
         const w = buildWay(world, circuit, from, to, theta, bowExtra, true, salt)
         indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
         return w
@@ -1027,17 +1047,23 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   const pOut = a.portTo[to]; const pIn = b.portTo[from]
   const S = a.verts[pOut.out].pos; const nS = a.verts[pOut.out].dir
   const E = b.verts[pIn.in].pos; const nE = b.verts[pIn.in].dir
-  const { C, u, v } = basis(S, E)
-  const ct = Math.cos(theta); const st = Math.sin(theta)
-  const n1 = u.clone().multiplyScalar(ct).addScaledVector(v, st)
-  const n2 = v.clone().multiplyScalar(ct).addScaledVector(u, -st)
-  // si la recta pasa junto a otro nodo (pares opuestos y el del centro), la panza crece para rodearlo
-  const near = Math.min(...nodes.filter((o) => o !== a && o !== b).map((o) => new THREE.Line3(S, E).closestPointToPoint(o.pos, true, new THREE.Vector3()).distanceTo(o.pos)))
-  const bow = P.bow + (near < 38 * WORLD_SCALE ? 28 * WORLD_SCALE : 0) + bowExtra
+  const { C } = basis(S, E)
+  // geodésica: círculo máximo de S a E sobre la esfera; n1 = lateral sobre la superficie, n2 = radial hacia fuera
+  const dS = S.clone().normalize(); const dE = E.clone().normalize()
+  let axis = new THREE.Vector3().crossVectors(dS, dE)
+  if (axis.lengthSq() < 1e-6) axis = new THREE.Vector3().crossVectors(dS, Math.abs(dS.y) > 0.9 ? X : Y)
+  axis.normalize()
+  const arcA = dS.angleTo(dE); const rS = S.length(); const rE = E.length()
+  const radial = (s) => dS.clone().applyAxisAngle(axis, arcA * s)
+  const ct = Math.cos(theta); const st = Math.sin(theta) // capa de altitud del camino: ±35% del radio (el grosor de la cáscara)
+  const bow = P.bow + bowExtra
   const J = (s) => {
     const f = Math.pow(Math.sin(Math.PI * s), 0.72)
-    return at(S, C, s, n1, bow * f, n2, P.arch * f)
+    const r = radial(s)
+    const lat = new THREE.Vector3().crossVectors(axis, r)
+    return r.clone().multiplyScalar(rS + (rE - rS) * s + SPHERE_R * 0.35 * f * st + P.arch * f * 0.5).addScaledVector(lat, (from < to ? 1 : -1) * bow * f * ct * 0.7) // el sentido contrario ya trae el eje invertido: se compensa para que ida y vuelta queden en lados opuestos
   }
+  const n1 = axis.clone(); const n2 = dS.clone().add(dE).normalize() // marco local para la apertura de rutas
   const stops = [0.16, 0.5, 0.84]
   const hubs = stops.map(J)
   const hubT = stops.map((s) => J(s + 0.02).sub(J(s - 0.02)).normalize())
@@ -1060,7 +1086,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   }
   // rectas de parrilla/meta: salen del planeta inclinadas hacia su unión (las bocas vecinas divergen)
   const gridDir = (n, target, from, k) => { const t = target.clone().sub(from); t.addScaledVector(n, -t.dot(n)); return n.clone().addScaledVector(t.normalize(), k).normalize() }
-  const tilt = [0.5, 0.2, 0.8][salt]; const gOut = gridDir(nS, hubs[0], S, tilt); const gIn = gridDir(nE, hubs[2], E, tilt)
+  const tilt = [0.5, 0.2, 0.8][salt % 3]; const gOut = gridDir(nS, hubs[0], S, tilt); const gIn = gridDir(nE, hubs[2], E, tilt)
   const launch = seg('salida', shape('salida', S, hubs[0], P, gOut, hubT[0], wrapMid(a, nS, hubs[0])), -1, [])
 
   // Reparto por identidad de ruta (A rápida/arriesgada, B lenta/segura, C espectacular) y tema.
@@ -1143,6 +1169,8 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
         Q1.y = Math.max(Q1.y, B.y + drop)
       }
 
+      // las paradas intermedias tampoco se hunden por dentro de la esfera
+      for (const Q of [Q0, Q1]) if (Q.length() < SPHERE_R * 0.7) Q.setLength(SPHERE_R * 0.7)
       const Tbase = [Q1.clone().sub(A).normalize(), B.clone().sub(Q0).normalize()]
       const pts = [A, Q0, Q1, B]
       const cs = [null, null, null]
