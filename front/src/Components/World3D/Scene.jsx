@@ -12,6 +12,7 @@ import {
   DepthOfField,
 } from '@react-three/postprocessing'
 import * as THREE from 'three'
+import { NODE_R } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Bollita from './Bollita.jsx'
@@ -19,10 +20,10 @@ import Bollita from './Bollita.jsx'
 const STEP = 0.05
 const FOV = 50
 const POV_FOV = 75
-const NEAR_DEFAULT = 0.1
+const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
-const SEGUIR_DIST = 5 // distancia inicial al seguir a una bollita
-const MIN_DIST = 1.2
+const SEGUIR_DIST = 3.6 // distancia cómoda detrás/encima de la bollita (0.55x en tubos)
+const MIN_DIST = 1.4
 const VISTA_DIR = new THREE.Vector3(0.55, 0.45, 0.7).normalize()
 const SOL_DIR = new THREE.Vector3(0.4, 0.8, 0.3).normalize()
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
@@ -39,6 +40,7 @@ const povOrthoUp = new THREE.Vector3()
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
+const upRefVec = new THREE.Vector3()
 
 const NEBULA_VERT = /* glsl */ `
   varying vec3 vDir;
@@ -140,14 +142,17 @@ function NebulaDome({ r }) {
 }
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
-function CameraRig({ mundo, selected, follow, pov, cine }) {
+function CameraRig({ mundo, nodes, selected, follow, pov, cine }) {
   const controls = useRef()
   const camera = useThree((s) => s.camera)
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
   const ultima = useRef(null)
   const userActive = useRef(false)
+  const manualOrbit = useRef(false)
   const lastTouch = useRef(0)
   const cineClock = useRef(0)
+  const prevPos = useRef(new THREE.Vector3())
+  const hasPrevPos = useRef(false)
   const povQuat = useRef(new THREE.Quaternion())
   const povUp = useRef(new THREE.Vector3(0, 1, 0))
   const povInit = useRef(false)
@@ -222,61 +227,111 @@ function CameraRig({ mundo, selected, follow, pov, cine }) {
       if (selected.up) povEye.addScaledVector(selected.up, upShift)
       camera.position.lerp(povEye, 1 - Math.exp(-18 * h))
       c.target.copy(povEye).addScaledVector(povFwd, 2)
+      hasPrevPos.current = false
     } else if (follow && selected && selected.phase !== 'gone') {
-      if (modo.current !== 'siguiendo' || ultima.current !== selected) modo.current = 'entrando'
+      if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current !== selected) {
+        modo.current = 'entrando'
+        manualOrbit.current = false
+        hasPrevPos.current = false
+      }
       ultima.current = selected
       const entrando = modo.current === 'entrando'
       const vel = selected.speed ?? 0
+      const targetDist = selected.phase === 'travel' ? SEGUIR_DIST : SEGUIR_DIST * 1.15
+
+      // Feed-forward del desplazamiento de la bollita para que no quede rezagada ni a 8x.
+      if (hasPrevPos.current) {
+        mov.copy(selected.pos).sub(prevPos.current)
+        c.target.add(mov)
+        camera.position.add(mov)
+      }
+      prevPos.current.copy(selected.pos)
+      hasPrevPos.current = true
 
       if (cine) {
         targetFov = FOV + THREE.MathUtils.clamp(vel * 0.75, 0, 18)
-        // Leve anticipación en la dirección de avance y seguimiento más suave (lag cinematográfico)
         if (selected.dir) {
-          lookAhead.copy(selected.pos).addScaledVector(selected.dir, THREE.MathUtils.clamp(vel * 0.06, 0, 1.4))
+          lookAhead.copy(selected.pos).addScaledVector(selected.dir, THREE.MathUtils.clamp(vel * 0.045, 0, 1.0))
         } else {
           lookAhead.copy(selected.pos)
         }
-        mov.copy(lookAhead).sub(c.target).multiplyScalar(1 - Math.exp(-(entrando ? 4 : 8.5) * h))
       } else {
-        // Mismo desplazamiento a objetivo y cámara: el giro y el zoom del usuario se conservan
-        mov.copy(selected.pos).sub(c.target).multiplyScalar(1 - Math.exp(-(entrando ? 4 : 14) * h))
+        lookAhead.copy(selected.pos)
       }
 
+      mov.copy(lookAhead).sub(c.target).multiplyScalar(1 - Math.exp(-(entrando ? 8 : 16) * h))
       c.target.add(mov)
       camera.position.add(mov)
+
+      const hasDir = Boolean(selected.dir && selected.dir.lengthSq() > 1e-4)
+      if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
+        upRefVec.copy(selected.up).normalize()
+      } else {
+        upRefVec.copy(Y_AXIS)
+      }
+      if (hasDir) {
+        sideVec.crossVectors(selected.dir, upRefVec)
+        if (sideVec.lengthSq() < 1e-4) {
+          sideVec.crossVectors(selected.dir, Math.abs(selected.dir.y) > 0.9 ? povFwd.set(1, 0, 0) : Y_AXIS)
+        }
+        sideVec.normalize()
+        const sway = cine ? Math.sin(cineClock.current * 0.85) * 0.35 : 0
+        const baseUp = selected.phase !== 'travel' ? 0.56 : 0.44
+        const upBias = cine ? baseUp + Math.sin(cineClock.current * 0.5) * 0.08 : baseUp
+        desiredOff
+          .copy(selected.dir)
+          .normalize()
+          .multiplyScalar(-1)
+          .addScaledVector(upRefVec, upBias)
+          .addScaledVector(sideVec, sway)
+          .normalize()
+      }
 
       if (entrando) {
         off.copy(camera.position).sub(c.target)
         const d = off.length()
+        const nd = d > 1e-4 ? THREE.MathUtils.damp(d, targetDist, 5, h) : targetDist
         if (d > 1e-4) {
-          const nd = THREE.MathUtils.damp(d, SEGUIR_DIST, 4, h)
-          camera.position.copy(c.target).addScaledVector(off, nd / d)
-          if (nd - SEGUIR_DIST < 0.2) modo.current = 'siguiendo'
+          off.divideScalar(d)
+          if (!userActive.current && !manualOrbit.current && hasDir) {
+            off.lerp(desiredOff, 1 - Math.exp(-4.5 * h)).normalize()
+          }
+          camera.position.copy(c.target).addScaledVector(off, nd)
         } else {
-          camera.position.copy(c.target).addScaledVector(VISTA_DIR, SEGUIR_DIST)
+          camera.position.copy(c.target).addScaledVector(hasDir ? desiredOff : VISTA_DIR, targetDist)
+        }
+        if (Math.abs(nd - targetDist) < 0.2 && c.target.distanceTo(lookAhead) < 0.35) {
           modo.current = 'siguiendo'
         }
-      } else if (cine && !userActive.current && selected.dir && performance.now() - lastTouch.current > 1200) {
-        // Deriva suave detrás de la bollita con leve balanceo lateral sin pelear con OrbitControls
-        off.copy(camera.position).sub(c.target)
-        const dist = Math.max(off.length(), SEGUIR_DIST)
-        sideVec.crossVectors(selected.dir, Y_AXIS)
-        if (sideVec.lengthSq() < 1e-4) sideVec.set(1, 0, 0)
-        else sideVec.normalize()
-        const sway = Math.sin(cineClock.current * 0.85) * 0.35
-        desiredOff
-          .copy(selected.dir)
-          .multiplyScalar(-1)
-          .addScaledVector(Y_AXIS, 0.36 + Math.sin(cineClock.current * 0.5) * 0.08)
-          .addScaledVector(sideVec, sway)
-          .normalize()
-          .multiplyScalar(dist)
-        off.lerp(desiredOff, 1 - Math.exp(-1.2 * h))
-        if (off.lengthSq() > 1e-6) off.setLength(dist)
-        else off.copy(desiredOff)
-        camera.position.copy(c.target).add(off)
+      } else if (!userActive.current && hasDir) {
+        const cineFollow = cine && performance.now() - lastTouch.current > 1200
+        const autoBehind = !cine && !manualOrbit.current
+        if (cineFollow || autoBehind) {
+          off.copy(camera.position).sub(c.target)
+          const dist = cineFollow ? Math.max(off.length(), targetDist) : Math.max(off.length(), MIN_DIST)
+          const rate = cineFollow ? 1.4 : 2.5
+          off.lerp(desiredOff.multiplyScalar(dist), 1 - Math.exp(-rate * h))
+          if (off.lengthSq() > 1e-6) off.setLength(dist)
+          else off.copy(desiredOff)
+          camera.position.copy(c.target).add(off)
+        }
+      }
+
+      // Evita que la cámara se meta dentro de la esfera de un planeta al seguir.
+      const minPlanetR = NODE_R + 1.25
+      for (let i = 0; i < nodes.length; i++) {
+        const np = nodes[i].pos
+        sideVec.copy(camera.position).sub(np)
+        const d2 = sideVec.lengthSq()
+        if (d2 < minPlanetR * minPlanetR) {
+          if (d2 > 1e-6) sideVec.normalize()
+          else sideVec.copy(upRefVec)
+          camera.position.copy(np).addScaledVector(sideVec, minPlanetR)
+        }
       }
     } else if (modo.current !== 'libre') {
+      hasPrevPos.current = false
+      manualOrbit.current = false
       modo.current = 'volviendo'
       const k = 1 - Math.exp(-3 * h)
       const destino = casa()
@@ -311,6 +366,7 @@ function CameraRig({ mundo, selected, follow, pov, cine }) {
   // Si el usuario toma el control en plena transición, la transición se corta (no se le pelea la cámara).
   const alTocar = () => {
     userActive.current = true
+    if (modo.current === 'entrando' || modo.current === 'siguiendo') manualOrbit.current = true
     if (modo.current === 'entrando') modo.current = 'siguiendo'
     if (modo.current === 'volviendo') modo.current = 'libre'
   }
@@ -361,14 +417,15 @@ function Sol({ r }) {
   )
 }
 
-function PostFX({ dofOn }) {
+function PostFX({ dofOn, selected }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
+  const dofTarget = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(() => {
-    if (dofOn && dofRef.current?.target && controls) {
-      dofRef.current.target.copy(controls.target)
-    }
+    if (!dofOn || !dofRef.current?.target) return
+    if (selected && selected.phase !== 'gone') dofRef.current.target.copy(selected.pos)
+    else if (controls) dofRef.current.target.copy(controls.target)
   })
 
   return (
@@ -377,10 +434,9 @@ function PostFX({ dofOn }) {
       {dofOn && (
         <DepthOfField
           ref={dofRef}
-          target={[0, 0, 0]}
-          focalLength={0.025}
-          worldFocusRange={18}
-          bokehScale={1.8}
+          target={dofTarget}
+          worldFocusRange={36}
+          bokehScale={0.75}
           resolutionScale={0.5}
         />
       )}
@@ -404,7 +460,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       shadows="soft"
       dpr={[1, 1.5]}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
-      camera={{ fov: FOV, near: 0.1, far: r * 20 }}
+      camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
       onPointerMissed={() => onSelect(null)}
     >
       <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
@@ -450,8 +506,8 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       {bollitas.map((b) => (
         <Bollita key={b.id} b={b} sim={sim} selected={selected === b} pov={pov && selected === b} onSelect={onSelect} />
       ))}
-      <CameraRig mundo={mundo} selected={selected} follow={follow} pov={pov} cine={cine} />
-      <PostFX dofOn={dofOn} />
+      <CameraRig mundo={mundo} nodes={sim.world.nodes} selected={selected} follow={follow} pov={pov} cine={cine} />
+      <PostFX dofOn={dofOn} selected={selected} />
     </Canvas>
   )
 }

@@ -514,6 +514,54 @@ function withFocusFade(mat, focusU, minAlpha = 0.16, minBright = 0.25, minSat = 
   return mat
 }
 
+/** Desvanece por dither los props cercanos a la cámara para evitar que tapen la vista. */
+export function withCameraFade(mat, minDist = 1.6, maxDist = 3.0) {
+  const prevCompile = mat.onBeforeCompile
+  const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
+  const fadeParams = { value: new THREE.Vector2(minDist, maxDist) }
+  mat.onBeforeCompile = (shader, renderer) => {
+    if (prevCompile) prevCompile(shader, renderer)
+    shader.uniforms.uCamFade = fadeParams
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vCamFragDist;\nvarying float vCamInstDist;')
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        vCamFragDist = length(mvPosition.xyz);
+        vec4 _cfCenter = vec4(0.0, 0.0, 0.0, 1.0);
+        #ifdef USE_INSTANCING
+          _cfCenter = instanceMatrix * _cfCenter;
+        #endif
+        _cfCenter = modelViewMatrix * _cfCenter;
+        vCamInstDist = length(_cfCenter.xyz);`
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform vec2 uCamFade;
+        varying float vCamFragDist;
+        varying float vCamInstDist;
+        float _cfIgn(vec2 p) {
+          return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+        }`
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        if (uCamFade.y > 0.0) {
+          float _cfDist = min(vCamFragDist, vCamInstDist);
+          if (_cfDist < uCamFade.y) {
+            float _cf = smoothstep(uCamFade.x, uCamFade.y, _cfDist);
+            if (_cf <= 0.001 || _cf < _cfIgn(gl_FragCoord.xy)) discard;
+          }
+        }`
+      )
+  }
+  mat.customProgramCacheKey = () => `${prevKey ? `${prevKey}|` : ''}cam-fade-v1`
+  return mat
+}
+
 function createSignMat(focusU) {
   const m = new THREE.MeshBasicMaterial({ map: getSignAtlasTex(), side: THREE.DoubleSide, transparent: true, alphaTest: 0.1 })
   m.onBeforeCompile = (shader) => {
@@ -678,7 +726,7 @@ function createWayMaterials(id, focusU) {
   return {
     tube: createTubeMat(id, focusU),
     rail: createRailMat(focusU),
-    glass: withFocusFade(new THREE.MeshPhysicalMaterial({
+    glass: withCameraFade(withFocusFade(new THREE.MeshPhysicalMaterial({
       color: V.glass,
       normalMap: texNormal(id),
       normalScale: new THREE.Vector2(0.25, 0.25),
@@ -689,11 +737,12 @@ function createWayMaterials(id, focusU) {
       envMapIntensity: 1.5,
       depthWrite: false,
       side: THREE.DoubleSide,
-    }), focusU, 0.18, 0.25, 0.25),
-    deco: withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.12, flatShading: true }), focusU, 0.16, 0.28, 0.25),
-    decoA: withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }), focusU, 0.16, 0.28, 0.25),
-    glow: withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.18, 0.25),
-    sign: createSignMat(focusU),
+    }), focusU, 0.18, 0.25, 0.25), 1.4, 2.2),
+    deco: withCameraFade(withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.12, flatShading: true }), focusU, 0.16, 0.28, 0.25), 1.9, 2.7),
+    decoA: withCameraFade(withFocusFade(new THREE.MeshStandardMaterial({ roughness: 0.6, flatShading: true, transparent: true, opacity: 0.85, depthWrite: false }), focusU, 0.16, 0.28, 0.25), 1.9, 2.7),
+    glow: withCameraFade(withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.18, 0.25), 1.2, 1.9),
+    decorGlow: withCameraFade(withFocusFade(new THREE.MeshBasicMaterial({ toneMapped: false }), focusU, 0.15, 0.18, 0.25), 1.9, 2.7),
+    sign: withCameraFade(createSignMat(focusU), 1.7, 2.5),
     dots: withFocusFade(new THREE.PointsMaterial({
       color: hot(V.rail, 1.25),
       map: getSparkleTex(),
@@ -1415,6 +1464,7 @@ function Way({ way, focused }) {
     const writeDepth = f >= 0.98
     mats.deco.depthWrite = writeDepth
     mats.glow.depthWrite = writeDepth
+    mats.decorGlow.depthWrite = writeDepth
     mats.rail.depthWrite = writeDepth
     mats.sign.depthWrite = writeDepth
   })
@@ -1443,7 +1493,7 @@ function Way({ way, focused }) {
       <SignInst items={d.signs} mat={mats.sign} />
       {d.decor.map(({ p, items }, i) => {
         const solidMat = !p.e && (p.a ?? 1) >= 1
-        return <Inst key={i} geo={GEO_BY[p.k]} mat={p.e ? mats.glow : solidMat ? mats.deco : mats.decoA} items={items} cast={solidMat} />
+        return <Inst key={i} geo={GEO_BY[p.k]} mat={p.e ? mats.decorGlow : solidMat ? mats.deco : mats.decoA} items={items} cast={solidMat} />
       })}
       {d.dots && <points geometry={d.dots} material={mats.dots} frustumCulled={false} />}
       <points geometry={d.parts} material={mats.parts} frustumCulled={false} />

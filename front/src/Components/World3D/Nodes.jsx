@@ -4,6 +4,22 @@ import { useFrame } from '@react-three/fiber'
 import { NODE_R, BALL_R, mulberry32 } from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
+import { withCameraFade } from './Paths.jsx'
+
+function applyCityFade(mat) {
+  if (!mat || mat.userData._camFade) return
+  mat.userData._camFade = true
+  withCameraFade(mat, 1.7, 2.5)
+  mat.needsUpdate = true
+}
+
+function useCityFade(ref) {
+  useLayoutEffect(() => {
+    ref.current?.traverse((o) => {
+      if (o.isMesh && o.material) applyCityFade(o.material)
+    })
+  }, [ref])
+}
 
 const U = BALL_R * 2 // unidad de la ciudad: una bollita de ancho
 const ROAD_W = U * 1.15
@@ -341,7 +357,9 @@ function destinoStyle(name, kind) {
 }
 
 function Destino({ d, base, tex }) {
+  const grp = useRef()
   const icon = useRef()
+  useCityFade(grp)
   const [hover, setHover] = useState(false)
   const gain = d.kind === 'puntos'
   const color = gain ? GOLD : GREEN
@@ -358,6 +376,7 @@ function Destino({ d, base, tex }) {
 
   return (
     <group
+      ref={grp}
       position={d.pos.clone().sub(base)}
       quaternion={q}
       onPointerOver={(e) => (e.stopPropagation(), setHover(true))}
@@ -501,11 +520,13 @@ function Terminal({ node, term, color, tex }) {
   const key = `${node.idx}:${term.vert}:${term.kind}`
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, dir), [dir])
 
+  const grp = useRef()
   const doorL = useRef()
   const doorR = useRef()
   const portalMat = useRef()
   const beacons = useRef([])
   const openAmt = useRef(0)
+  useCityFade(grp)
 
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime
@@ -533,7 +554,7 @@ function Terminal({ node, term, color, tex }) {
   })
 
   return (
-    <group position={pos.clone().sub(node.pos)} quaternion={q}>
+    <group ref={grp} position={pos.clone().sub(node.pos)} quaternion={q}>
       {isOut ? (
         /* ── SALIDA: Lanzadera / Hangar / Torre-Cañón ── */
         <group>
@@ -694,6 +715,7 @@ function Planet({ node, world, tex }) {
       </Instanced>
       <Instanced geo={boxBase} items={city.houses} castShadow receiveShadow>
         <meshStandardMaterial
+          ref={applyCityFade}
           map={tex.buildingAlbedo}
           normalMap={tex.buildingNormal}
           roughness={0.65}
