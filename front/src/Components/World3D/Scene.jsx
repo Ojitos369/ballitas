@@ -45,6 +45,7 @@ const SOL_DIR = new THREE.Vector3(0.4, 0.8, 0.3).normalize()
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const TONE_MAPPING_AGX = 8 // ToneMappingMode.AGX en postprocessing 6.39
 const BlendFunction = { DST: 9, NORMAL: 23 } // postprocessing 6.39 (no es dependencia directa)
+const NOOP_UPDATE = () => {}
 const mov = new THREE.Vector3()
 const off = new THREE.Vector3()
 const lookAhead = new THREE.Vector3()
@@ -837,24 +838,35 @@ function Sol({ r, shadowsOn, selected }) {
 
 const CA_ON = [0.00045, 0.00045]
 const CA_OFF = [0, 0]
-// ultraQuality = capacidad (monta el DoF); dofOn = DoF activo en esta vista.
-function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
+// DoF siempre montado (PerformanceMonitor cambia dpr/lowPerf a menudo); dofOn = activo en esta vista.
+function PostFX({ dofOn, selected, highQuality }) {
   const dofRef = useRef()
   const controls = useThree((s) => s.controls)
   const dofTarget = useMemo(() => new THREE.Vector3(), [])
 
   // DoF siempre montado: apagarlo con DST lo saca del shader sin recrear el EffectMaterial
   // (three guarda ambas variantes del programa en el mismo material) y se omiten sus pasadas.
-  useLayoutEffect(() => {
+  // Se aplica en useFrame: el ref del efecto llega después de los efectos de PostFX y puede recrearse.
+  // Calentamiento: con el mapa ya pintado y el hilo libre, un cuadro con DoF activo compila sus
+  // programas (CoC, Bokeh, Kawase, variante del EffectMaterial) para que la primera Ballita no los compile.
+  const warm = useRef(0) // 0 pendiente, 1 este cuadro, 2 hecho
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 1))
+    const t = setTimeout(() => idle(() => { if (warm.current === 0) warm.current = 1 }), 2500)
+    return () => clearTimeout(t)
+  }, [])
+
+  useFrame(() => {
     const e = dofRef.current
     if (!e) return
     if (!e.__update) e.__update = e.update
-    e.update = dofOn ? e.__update : () => {}
-    e.blendMode.blendFunction = dofOn ? BlendFunction.NORMAL : BlendFunction.DST
-  }, [dofOn, ultraQuality])
-
-  useFrame(() => {
-    if (!dofOn || !ultraQuality || !dofRef.current?.target) return
+    const on = dofOn || warm.current === 1
+    if (warm.current === 1 && e.update === e.__update && e.blendMode.blendFunction === BlendFunction.NORMAL) warm.current = 2
+    const upd = on ? e.__update : NOOP_UPDATE
+    if (e.update !== upd) e.update = upd
+    const bf = on ? BlendFunction.NORMAL : BlendFunction.DST
+    if (e.blendMode.blendFunction !== bf) e.blendMode.blendFunction = bf
+    if (!dofOn || !e.target) return
     if (selected && selected.phase !== 'gone') dofRef.current.target.copy(selected.pos)
     else if (controls) dofRef.current.target.copy(controls.target)
   })
@@ -863,15 +875,13 @@ function PostFX({ dofOn, selected, highQuality, ultraQuality }) {
     <EffectComposer multisampling={0}>
       {/* Composición fija: montar/desmontar efectos recrea el EffectPass y recompila; la calidad alta solo cambia props */}
       <SMAA />
-      {ultraQuality && (
-        <DepthOfField
-          ref={dofRef}
-          target={dofTarget}
-          worldFocusRange={36}
-          bokehScale={0.75}
-          resolutionScale={0.5}
-        />
-      )}
+      <DepthOfField
+        ref={dofRef}
+        target={dofTarget}
+        worldFocusRange={36}
+        bokehScale={0.75}
+        resolutionScale={0.5}
+      />
       <Bloom mipmapBlur luminanceThreshold={1.15} luminanceSmoothing={0.25} intensity={highQuality ? 0.32 : 0.28} />
       <ChromaticAberration offset={highQuality ? CA_ON : CA_OFF} radialModulation modulationOffset={0.35} />
       <Vignette eskil={false} offset={0.22} darkness={highQuality ? 0.48 : 0.45} />
@@ -1217,7 +1227,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         horizonRef={horizonRef}
         onCanvasReady={handleCanvasReady}
       />
-      <PostFX dofOn={dofOn && ultraQualityFx} selected={selected} highQuality={highQualityFx} ultraQuality={!lowPerf && dpr >= 1.25} />
+      <PostFX dofOn={dofOn && ultraQualityFx} selected={selected} highQuality={highQualityFx} />
       <InstanceCuller active={vista !== 'mapa'} />
       <StatsProbe active={showStats} onSample={onStatsSample} />
       <VistaCamino way={cameraWay} routeIndex={routeIndex} seek={seek} speed={caminoSpeed} paused={caminoPaused} active={caminoOn} progressRef={progressRef} />
