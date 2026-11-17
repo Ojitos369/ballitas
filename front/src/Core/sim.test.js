@@ -5,7 +5,7 @@ import { voice } from './personality.js'
 import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
   mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
-  MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff,
+  MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff, segmentTangent,
 } from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
@@ -251,12 +251,13 @@ test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y t
         for (let k = 0; k <= 120; k++) {
           const u = k / 120
           const F = laneFrame(s, l.id, u)
+          F.axisT = segmentTangent(s, u)
           assert.ok(Math.abs(F.up.length() - 1) < 1e-6 && Math.abs(F.up.dot(F.tangent)) < 1e-6)
           assert.ok(Math.abs(F.wall.distanceTo(F.axis) - s.radius) < 1e-6)
-          assert.ok(Math.abs(F.pos.distanceTo(F.axis) - (s.air ? 0 : s.radius - BALL_R)) < 1e-6)
+          assert.ok(Math.abs(F.pos.distanceTo(F.axis) - (s.air ? 0 : s.radius - BALL_R - F.relief)) < 1e-6)
           if (!s.air) assert.ok(F.up.dot(F.axis.clone().sub(F.pos)) > 0, 'up apunta al eje')
           if (prev) {
-            const turn = prev.tangent.angleTo(F.tangent)
+            const turn = prev.axisT.angleTo(F.axisT) // giro del eje (la tangente de la superficie incluye el relieve)
             const frameTurn = prev.dir.angleTo(F.dir)
             assert.ok(frameTurn <= turn * 1.3 + 0.1,`${w.id} ${s.kind} carril ${l.id}: salto del marco en u=${u.toFixed(3)} (marco=${frameTurn.toFixed(3)}, tangente=${turn.toFixed(3)})`)
           }
