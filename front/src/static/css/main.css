@@ -104,24 +104,29 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .ruta-tabs button[aria-pressed="true"] { background: var(--on); border-color: rgba(138,167,255,.65); }
 .vista-toast { z-index: 105; position: absolute; top: 52px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px); padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(8,11,26,.78); backdrop-filter: blur(10px); white-space: nowrap; }
 .vista-toast span { color: var(--dim); }
-.camino-panel { z-index: 105; position: absolute; top: 52px; right: 12px; bottom: 44px; width: min(330px, calc(100% - 24px)); overflow: auto; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(8,11,26,.82); backdrop-filter: blur(12px); scrollbar-width: thin; }
-.camino-panel header, .camino-panel li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.camino-panel header small, .camino-panel p, .camino-panel li small { color: var(--dim); }
-.camino-panel h2 { margin: 12px 0 8px; font-size: 17px; }
+/* Ficha compacta arriba a la derecha: no baja más de la mitad de la pantalla para no tapar la pista. */
+.camino-panel { z-index: 105; position: absolute; top: 52px; right: 12px; max-height: 50vh; width: min(260px, calc(100% - 24px)); overflow: auto; padding: 8px 10px; font-size: 11px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8,11,26,.72); backdrop-filter: blur(10px); scrollbar-width: thin; }
+.camino-panel button { padding: 3px 7px; }
+.camino-panel header, .camino-panel li { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.camino-panel header strong { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.camino-panel > small, .camino-panel p, .camino-panel li small { color: var(--dim); }
+.camino-panel p { margin: 4px 0; }
+.camino-panel.plegado { width: auto; max-width: min(260px, calc(100% - 24px)); }
 .ruta-tabs, .camino-controls, .ballitas-camino { display: flex; flex-wrap: wrap; gap: 5px; }
-.camino-controls { align-items: center; justify-content: space-between; margin: 10px 0; }
+.camino-controls { align-items: center; justify-content: space-between; margin: 6px 0; }
 .camino-controls label { display: flex; align-items: center; gap: 5px; color: var(--dim); }
 .camino-controls input { width: 90px; }
 .evento-nav { display: flex; align-items: center; justify-content: space-between; gap: 5px; margin: 8px 0; }
 .evento-nav span { flex: 1; text-align: center; color: var(--dim); }
 .evento-nav button:disabled { opacity: .4; cursor: default; }
-.camino-panel h3 { margin: 14px 0 5px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); }
+.camino-panel h3 { margin: 8px 0 3px; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); }
 .tramos { list-style: none; margin: 0; padding: 0; }
-.tramos li { padding: 5px 0; border-bottom: 1px solid var(--line); }
+.tramos li { padding: 3px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.tramos li.actual { color: var(--fg); background: var(--on); }
 .ballitas-camino button { font-size: 10px; }
 @media (max-width: 620px) {
   .vista-toast { top: 48px; font-size: 10px; gap: 6px; white-space: normal; }
-  .camino-panel { top: auto; left: 8px; right: 8px; bottom: 44px; width: auto; max-height: 42%; }
+  .camino-panel { top: 48px; left: auto; right: 8px; max-height: 34vh; }
 }
 
 /* panel compacto y joystick virtual en modo POV */

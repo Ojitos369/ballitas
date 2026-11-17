@@ -774,8 +774,8 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
       {(selected || (talking && nearCam)) && !pov && (
-        <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={6} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 155 }}>
-          <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 155, fontSize: 11 }}>
+        <WorldHtml position={[0, r + 0.35, 0]} center distanceFactor={4} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 120 }}>
+          <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 120, fontSize: 9, borderWidth: 2, padding: '1px 6px', borderRadius: 10 }}>
             {selected && <b>{b.name}</b>}
             {talking && <span>{liveThought.emoji} {liveThought.text}</span>}
             {selected && !talking && <span>{FACES[b.mood]?.emoji} {b.mood}</span>}
