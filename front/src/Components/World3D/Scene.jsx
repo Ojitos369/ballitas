@@ -19,6 +19,7 @@ import Ballita from './Ballita.jsx'
 import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
+import InstanceCuller from './InstanceCuller.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -1217,6 +1218,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         onCanvasReady={handleCanvasReady}
       />
       <PostFX dofOn={dofOn && ultraQualityFx} selected={selected} highQuality={highQualityFx} ultraQuality={!lowPerf && dpr >= 1.25} />
+      <InstanceCuller active={vista !== 'mapa'} />
       <StatsProbe active={showStats} onSample={onStatsSample} />
       <VistaCamino way={cameraWay} routeIndex={routeIndex} seek={seek} speed={caminoSpeed} paused={caminoPaused} active={caminoOn} progressRef={progressRef} />
     </Canvas>
