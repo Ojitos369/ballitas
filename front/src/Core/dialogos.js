@@ -16,7 +16,7 @@ export const EMOJI_EVENTO = {
   salida: '🚀',
   llegada: '🏁',
   rampa: '🛝',
-  zigzag: '〰️',
+  horquilla: '↩️',
   rizo: '➰',
   sacacorchos: '🧬',
   trampolin: '🤸',
@@ -162,11 +162,11 @@ const EVENT_LINES = {
     '¡Tornillo cósmico a toda velocidad!',
     '¡Izquierda, derecha, vuelta!',
   ],
-  zigzag: [
-    '¡Zas, zas, de lado a lado!',
-    '¡Curva cerrada! ¡Y otra!',
-    '¡Esquivando como profesional!',
-    '¡Bamboleo de esquina a esquina!',
+  horquilla: [
+    '¡Horquilla! ¡Media vuelta!',
+    '¡Curva cerrada, a frenar!',
+    '¡Me pego a la pared en la vuelta!',
+    '¡Qué curvón!',
   ],
   rampa: [
     '¡Deslizamiento suave!',

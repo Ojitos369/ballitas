@@ -418,7 +418,7 @@ test('ballita en carril: pegada a la pared, sin atravesar el cristal, continua, 
         assert.ok(Math.abs(angDiff(p.ang, b.ang)) < 1.5, `salto de ángulo ${angDiff(p.ang, b.ang).toFixed(3)} en ${s.kind}`)
         assert.ok(Math.abs(p.off - b.off) < 1, `salto radial ${p.off} -> ${b.off} (${p.seg.kind} -> ${s.kind})`)
         // (en esquinas cerradas el punto de la pared barre más rápido que el eje: se excluyen)
-        if (p.seg === s && p.snap <= 0 && b.snap <= 0 && !['embudo', 'cascada', 'zigzag'].includes(s.kind)) {
+        if (p.seg === s && p.snap <= 0 && b.snap <= 0 && !['embudo', 'cascada', 'horquilla'].includes(s.kind)) {
           assert.ok(p.pos.distanceTo(b.pos) < 4.5,`salto de posición ${p.pos.distanceTo(b.pos).toFixed(3)} en ${s.kind}`)
         }
       }

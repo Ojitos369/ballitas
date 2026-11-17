@@ -761,7 +761,7 @@ const SIGN_CELLS = {
   salida: [0, 0, '🚀', 'SALIDA', '#4fc3f7'],
   llegada: [1, 0, '🏁', 'META', '#81c784'],
   rampa: [2, 0, '🛝', 'RAMPA', '#90caf9'],
-  zigzag: [3, 0, '〰', 'ZIGZAG', '#ce93d8'],
+  horquilla: [3, 0, '↩', 'HORQUILLA', '#ce93d8'],
   rizo: [0, 1, '➰', 'RIZO', '#ffab91'],
   sacacorchos: [1, 1, '🧬', 'HELICE', '#80cbc4'],
   trampolin: [2, 1, '🤸', 'SALTO', '#fff59d'],
