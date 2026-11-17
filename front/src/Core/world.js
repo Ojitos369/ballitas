@@ -636,7 +636,7 @@ function buildSurface(s, rng) {
   for (const lane of s.lanes) {
     const feats = []
     for (let j = ri(rng, R.n[0], R.n[1]); j > 0; j--) {
-      feats.push({ c: (0.12 + rng() * 0.76) * L, w: 3 + rng() * 5, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * (rng() < 0.35 ? -1 : 1) })
+      feats.push({ c: (0.12 + rng() * 0.76) * L, w: 4 + rng() * 5, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * (rng() < 0.35 ? -1 : 1) })
     }
     // [cresta, altura, subida]: una rampa por estación (varios mecanismos en la misma u comparten rampa)
     const kicks = [...new Set((s.switchesByLane?.get(lane.id) || []).map((sw) => sw.u))].map((u) => [u * L, 0.3, 5])
@@ -1104,7 +1104,7 @@ function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
   const baseTheta = ((circuit.idx * 0.6180339887 + (from < to ? 0 : 0.5)) % 1) * TAU
-  const N_ANG = 18
+  const N_ANG = 16
   let best = null; let bestScore = -Infinity
 
   const evalCand = (cand, steps) => {
@@ -1163,7 +1163,7 @@ function placeWay(world, circuit, from, to, placed) {
     }
   }
   // Si la búsqueda normal sólo encontró un respaldo, probar fases intermedias y más apertura de panza.
-  extraSearch: if (bestScore < 2.5) for (const salt of [3, 4]) for (const bow of [0, 60, 120]) for (let k = 0; k < N_ANG; k += 3) {
+  extraSearch: if (bestScore < 2.5) for (const salt of [3, 4]) for (const bow of [0, 120]) for (let k = 0; k < N_ANG; k += 3) {
     const theta = (baseTheta + ((k + 0.375) / N_ANG) * TAU) % TAU
     const bowExtra = bow * WORLD_SCALE
     const cand = buildWay(world, circuit, from, to, theta, bowExtra, false, salt)

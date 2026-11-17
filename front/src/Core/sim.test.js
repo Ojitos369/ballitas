@@ -414,7 +414,7 @@ test('relieve: continuo, finito, dentro del tubo y nulo en las uniones', () => {
         assert.ok(Number.isFinite(h) && h >= 0 && h <= hMax + 1e-5, `${s.way.id} ${s.kind}: relieve fuera de rango ${h}`)
         assert.ok(Number.isFinite(reliefSlope(s, l.id, u)))
         // continuo: entre muestras a 0.25 u no salta más que la caída más brusca de una rampa
-        if (k) assert.ok(Math.abs(h - prev) <= (s.length / N) * 0.9 + 1e-6, `${s.way.id} ${s.kind}: relieve discontinuo en u=${u.toFixed(3)}`)
+        if (k) assert.ok(Math.abs(h - prev) <= (s.length / N) * 0.9 + 1e-6, `${s.way.id} ${s.kind} carril ${l.id}: relieve discontinuo en u=${u.toFixed(3)} (${Math.abs(h-prev).toFixed(3)})`)
         prev = h
       }
     }
