@@ -135,6 +135,8 @@ export class Sim {
   constructor({ rng = Math.random, pop = POP, seed } = {}) {
     this.rng = rng
     this.world = buildWorld(seed)
+    this.seed = seed ?? 369 // misma semilla por defecto que buildWorld; se registra en el back
+    this.hooks = {} // { nace(b), muere(b) }: observadores opcionales (Core/api.js); no afectan a la sim
     this.pop = pop
     this.t = 0
     this.nextId = 1
@@ -148,7 +150,7 @@ export class Sim {
 
   genomeForNewborn() {
     const { pool, rng } = this
-    if (pool.length < 3 || rng() < 0.1) return { genome: randomGenome(this.world, rng), gen: 1 } // inmigrante
+    if (pool.length < 3 || rng() < 0.1) return { genome: randomGenome(this.world, rng), gen: 1, padres: [] } // inmigrante
     const tour = () => {
       let best = null
       for (let i = 0; i < 3; i++) {
@@ -158,16 +160,16 @@ export class Sim {
       return best
     }
     const a = tour(); const b = tour()
-    return { genome: breed(a.genome, b.genome, rng), gen: Math.max(a.gen, b.gen) + 1 }
+    return { genome: breed(a.genome, b.genome, rng), gen: Math.max(a.gen, b.gen) + 1, padres: [a.id, b.id] }
   }
 
   spawn() {
-    const { genome, gen } = this.genomeForNewborn()
+    const { genome, gen, padres } = this.genomeForNewborn()
     const node = this.world.nodes[Math.floor(this.rng() * this.world.nodes.length)]
     const vert = Math.floor(this.rng() * node.verts.length)
     const up = node.verts[vert].dir.clone()
     const b = {
-      id: this.nextId++, gen, genome, node: node.idx, vert, p: 60, e: 60, age: 0, visits: 0, score: 0,
+      id: this.nextId++, gen, genome, padres, node: node.idx, vert, p: 60, e: 60, age: 0, visits: 0, score: 0,
       name: `${NAMES[Math.floor(this.rng() * NAMES.length)]} ${gen > 1 ? 'G' + gen : ''}`.trim(),
       phase: 'born', timer: 0.8, dur: 0.8, bornAt: this.t,
       dest: null, way: null, route: null, seg: null, segT: 0, walk: null,
@@ -186,6 +188,7 @@ export class Sim {
     this.stats.nacidas++
     this.stats.genMax = Math.max(this.stats.genMax, gen)
     this.say(b, 'nace')
+    this.hooks.nace?.(b)
     return b
   }
 
@@ -253,10 +256,11 @@ export class Sim {
       this.say(b, 'muere')
       b.phase = 'dying'; b.timer = 1.4; b.speed = 0
       b.mood = 'asustada'
-      this.pool.push({ genome: b.genome, gen: b.gen, fitness: b.age + b.score * 0.2 })
+      this.pool.push({ id: b.id, genome: b.genome, gen: b.gen, fitness: b.age + b.score * 0.2 })
       this.pool.sort((x, y) => y.fitness - x.fitness)
       this.pool.length = Math.min(this.pool.length, 24)
       this.stats.muertas++
+      this.hooks.muere?.(b)
       this.stats.mejorEdad = Math.max(this.stats.mejorEdad, b.age)
       this.feed.unshift({ t: this.t, text: `${b.name} murió por falta de ${b.cause} (${Math.round(b.age)}s)` })
       this.feed.length = Math.min(this.feed.length, 8)
