@@ -46,6 +46,7 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const TONE_MAPPING_AGX = 8 // ToneMappingMode.AGX en postprocessing 6.39
 const BlendFunction = { DST: 9, NORMAL: 23 } // postprocessing 6.39 (no es dependencia directa)
 const NOOP_UPDATE = () => {}
+const DPR_CERCA = 1.0 // tope de DPR en Camino/Ballita
 const mov = new THREE.Vector3()
 const off = new THREE.Vector3()
 const lookAhead = new THREE.Vector3()
@@ -1145,7 +1146,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
     <>
       <Canvas
       shadows="soft"
-      dpr={dpr}
+      // De cerca el coste es de relleno (postFX y tubo a pantalla completa): DPR 1,5 -> 1,0 pasa de ~20-30 a ~48-57 FPS.
+      dpr={vista === 'mapa' ? dpr : Math.min(dpr, DPR_CERCA)}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
       onPointerMissed={() => { if (!povActive && !camino) onSelect(null) }}
