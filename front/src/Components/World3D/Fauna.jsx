@@ -54,9 +54,9 @@ const PI2 = Math.PI / 2
 const SPECIES = {
   bat: { anim: 1, bob: 0.4, build: () => [part(sph(0.1), '#999', [0, 0, 0], [1, 0.9, 2]), part(sph(0.07), '#999', [0, 0.02, 0.2]), ...wings(0.55, 0.35, 0.25, '#fff')] },
   bird: { anim: 1, bob: 0.4, build: () => [part(sph(0.1), '#ddd', [0, 0, 0], [1, 1, 2.2]), part(sph(0.07), '#fff', [0, 0.03, 0.26]), part(cone(0.03, 0.1), '#ffb347', [0, 0.03, 0.36], [1, 1, 1], [PI2, 0, 0]), ...wings(0.5, 0.22, 0.08, '#fff')] },
-  butterfly: { anim: 1, bob: 0.5, build: () => [part(sph(0.04), '#555', [0, 0, 0], [1, 1, 4]), ...wings(0.34, 0.3, 0, '#fff', 2)] },
-  fish: { anim: 2, bob: 0.2, build: () => [part(sph(0.3, 7, 5), '#fff', [0, 0, 0.1], [0.5, 0.75, 1.5]), part(cone(0.2, 0.4), '#ddd', [0, 0, -0.62], [0.2, 1, 1], [PI2, 0, 0]), part(cone(0.1, 0.25, 4), '#ddd', [0, 0.25, 0], [0.2, 1, 1])] },
-  jelly: { anim: 4, bob: 0.5, build: () => [part(new THREE.SphereGeometry(0.35, 8, 5, 0, Math.PI * 2, 0, PI2), '#fff', [0, 0.1, 0]), ...[[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([a, b]) => part(cone(0.03, 0.6, 4), '#ccc', [a * 0.14, -0.2, b * 0.14], [1, 1, 1], [Math.PI, 0, 0]))] },
+  butterfly: { anim: 1, bob: 0.5, glow: 2.6, build: () => [part(sph(0.04), '#555', [0, 0, 0], [1, 1, 4]), ...wings(0.34, 0.3, 0, '#fff', 2)] },
+  fish: { anim: 2, bob: 0.2, glow: 2, build: () => [part(sph(0.3, 7, 5), '#fff', [0, 0, 0.1], [0.5, 0.75, 1.5]), part(cone(0.2, 0.4), '#ddd', [0, 0, -0.62], [0.2, 1, 1], [PI2, 0, 0]), part(cone(0.1, 0.25, 4), '#ddd', [0, 0.25, 0], [0.2, 1, 1])] },
+  jelly: { anim: 4, bob: 0.5, glow: 3.4, build: () => [part(new THREE.SphereGeometry(0.35, 8, 5, 0, Math.PI * 2, 0, PI2), '#fff', [0, 0.1, 0]), ...[[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([a, b]) => part(cone(0.03, 0.6, 4), '#ccc', [a * 0.14, -0.2, b * 0.14], [1, 1, 1], [Math.PI, 0, 0]))] },
   lizard: { anim: 2, bob: 0, build: () => [part(sph(0.3, 6, 4), '#fff', [0, 0.1, 0.05], [0.4, 0.28, 1.1]), part(sph(0.1), '#eee', [0, 0.12, 0.5]), part(cone(0.1, 0.8), '#ddd', [0, 0.07, -0.7], [1, 0.5, 1], [-PI2, 0, 0]), ...[[1, 0.2], [-1, 0.2], [1, -0.2], [-1, -0.2]].map(([a, b]) => part(box(0.05, 0.1, 0.05), '#bbb', [a * 0.14, 0.04, b]))] },
   penguin: { anim: 3, bob: 0, build: () => [part(sph(0.3, 6, 5), '#26324a', [0, 0.42, 0], [1, 1.4, 0.9]), part(sph(0.25, 6, 5), '#ffffff', [0, 0.4, 0.09], [1, 1.35, 0.85]), part(sph(0.17, 6, 4), '#26324a', [0, 0.88, 0]), part(cone(0.04, 0.12, 4), '#ff9a2b', [0, 0.86, 0.19], [1, 1, 1], [PI2, 0, 0]), part(box(0.1, 0.03, 0.16), '#ff9a2b', [0.1, 0.01, 0.05]), part(box(0.1, 0.03, 0.16), '#ff9a2b', [-0.1, 0.01, 0.05])] },
 }
@@ -83,6 +83,11 @@ function makeMaterial(k, time) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = time
     sh.uniforms.uBob = { value: sp.bob }
+    sh.uniforms.uGlow = { value: sp.glow ?? 1 }
+    sh.fragmentShader = 'uniform float uGlow;\n' + sh.fragmentShader.replace(
+      '#include <color_fragment>',
+      '#include <color_fragment>\n      diffuseColor.rgb *= uGlow;', // >1 = HDR: las especies luminosas superan el umbral del Bloom
+    )
     sh.vertexShader = 'uniform float uTime;\nuniform float uBob;\nattribute vec4 aMove;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
@@ -103,6 +108,7 @@ function makeMaterial(k, time) {
       transformed += vec3(cos(ang) * aMove.z, 0.0, sin(ang) * aMove.w);`,
     )
   }
+  m.toneMapped = false
   m.customProgramCacheKey = () => 'fauna' + sp.anim
   return m
 }

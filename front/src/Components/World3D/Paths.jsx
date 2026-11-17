@@ -12,6 +12,7 @@ import Precompilado from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 import Neon from './Neon.jsx'
 import Fauna from './Fauna.jsx'
+import Ecosistema, { ecoMaterial } from './Ecosistema.jsx'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -1340,6 +1341,8 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
       {nearActive && (
         <Precompilado>
           <WayExteriorNear way={way} mats={mats} extFineRef={extFineRef} />
+          {/* ecosistema y transiciones naturales: una sola vez por camino cercano (no se oculta con el LOD interior) */}
+          <Ecosistema way={way} time={SHARED_TIME} getFrames={getSegFrames} sample={sampleCurveFrame} />
         </Precompilado>
       )}
 
@@ -1364,7 +1367,7 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
 function Precalentar() {
   const { group, mats } = useMemo(() => {
     const mats = createWayMaterials('neon', { value: 1 }, { value: 1 })
-    return { mats, group: pistaWarmup([mats.extMetal, mats.extFlora, mats.extFloraGlow, mats.extRuins]) }
+    return { mats, group: pistaWarmup([mats.extMetal, mats.extFlora, mats.extFloraGlow, mats.extRuins, ecoMaterial(SHARED_TIME)]) }
   }, [])
   useEffect(() => () => disposeMats(mats), [mats])
   return <primitive object={group} visible={false} />
