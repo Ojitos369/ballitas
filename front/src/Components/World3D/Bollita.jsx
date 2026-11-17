@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
-import { BALL_R } from '../../Core/world.js'
+import { BALL_R, wallFrame } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
 import WorldHtml from './WorldHtml.jsx'
 import {
@@ -25,7 +25,9 @@ const vx = new THREE.Vector3()
 const vy = new THREE.Vector3()
 const vz = new THREE.Vector3()
 const vTmp = new THREE.Vector3()
+const frameFwd = new THREE.Vector3()
 const prevDirMap = new WeakMap()
+const smooth01 = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c) }
 
 // Expresiones chibi extendidas (heredan FACES y añaden emociones por evento/situación)
 const CHIBI_FACES = {
@@ -172,6 +174,8 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
   const dialogState = useRef({ init: false, nextCheck: 0 })
   const emoState = useRef({ kind: null, until: 0, start: 0, lastSeg: null, lastPhase: null })
   const microState = useRef({ nextWink: 5 + (b.id % 6), winkUntil: 0, nextBlep: 7 + (b.id % 5), blepUntil: 0 })
+  // carril: aterrizaje (squash), inclinación en curvas y voltereta al cambiar de pared
+  const laneFx = useRef({ squash: 0, lean: 0, up: new THREE.Vector3(0, 1, 0), prevT: new THREE.Vector3(), hasPrev: false, hadSw: false, wasAir: false })
 
   const g = b.genome.traits
   const color = useMemo(() => bodyColor(b.genome), [b])
@@ -296,20 +300,66 @@ export default function Bollita({ b, sim, selected, pov = false, povMode = false
       }
     }
 
-    // 3. Squash & stretch elástico chibi
+    // 3a. Marco del carril (world.wallFrame): up hacia el eje del tubo, avance por la tangente
+    const fx = laneFx.current
+    let upV = b.up
+    let fwdV = b.dir
+    let flip = 0
+    const sw = b.phase === 'travel' ? b.sw : null
+    if (b.phase === 'travel' && b.seg?.lanes) {
+      const F = wallFrame(b.seg, b.ang ?? 0, b.segT, b.off ?? 0)
+      // suavizado del up: girar con la pared sin marear
+      if (fx.hasPrev) fx.up.lerp(F.up, k)
+      else fx.up.copy(F.up)
+      if (fx.up.lengthSq() < 1e-6) fx.up.copy(F.up)
+      fx.up.normalize()
+      frameFwd.copy(F.tangent)
+      if (fx.hasPrev) {
+        // inclinación hacia dentro de la curva (aceleración lateral ≈ giro de la tangente · velocidad)
+        const turn = vTmp.copy(F.tangent).sub(fx.prevT).dot(F.side) / Math.max(cdt, 1e-3)
+        const leanT = THREE.MathUtils.clamp(turn * (b.speed ?? 0) * 0.006, -0.55, 0.55)
+        fx.lean += (leanT - fx.lean) * k
+      }
+      fx.prevT.copy(F.tangent)
+      fx.hasPrev = true
+      // squash al despegar de un mecanismo y al aterrizar en la pared
+      if (sw && !fx.hadSw) fx.squash = 0.7
+      if ((fx.hadSw && !sw) || (fx.wasAir && !b.seg.air)) fx.squash = 1
+      fx.hadSw = Boolean(sw)
+      fx.wasAir = Boolean(b.seg.air)
+      upV = fx.up
+      fwdV = frameFwd
+      if (sw) {
+        const x = smooth01(sw.t)
+        if (sw.style === 'salto') flip = x * Math.PI * 2 // voltereta al cruzar el interior del tubo
+        else if (sw.style === 'caida') flip = -x * Math.PI
+        else if (sw.style === 'portal') s *= 1 - 0.85 * Math.sin(Math.PI * smooth01((sw.t - 0.3) / 0.4))
+      }
+    } else {
+      fx.hasPrev = false
+      fx.hadSw = false
+      fx.wasAir = false
+      fx.lean *= 1 - k
+    }
+    fx.squash = Math.max(0, fx.squash - cdt * 3.2)
+    if (bodyGroup.current) bodyGroup.current.rotation.set(flip, 0, fx.lean)
+
+    // 3b. Squash & stretch elástico chibi
     const bob = Math.sin(t * 4.5 * c.bounce + phase0)
     const vs = s * tubeScale
     const speedStretch = b.speed > 0.5 ? 1 + Math.min(b.speed / 36, 0.32) : 1 + bob * 0.075 * c.bounce
     const side = 1 / Math.sqrt(speedStretch)
-    root.current.scale.set(vs * side, vs * side, vs * speedStretch)
+    const sqY = 1 - 0.3 * fx.squash
+    const sqXZ = 1 + 0.15 * fx.squash
+    root.current.scale.set(vs * side * sqXZ, vs * side * sqY, vs * speedStretch * sqXZ)
 
     const hop = b.phase === 'at' ? Math.abs(bob) * 0.14 * c.bounce : 0
     const wallOffset = (b.phase === 'travel' && !b.seg?.air) ? -(r * (1 - tubeScale)) : 0
-    root.current.position.copy(b.pos).addScaledVector(b.up, hop + wallOffset)
+    root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
 
     // 4. Orientación suave
-    vy.copy(b.up)
-    vz.copy(b.dir).addScaledVector(vy, -b.dir.dot(vy))
+    vy.copy(upV)
+    vz.copy(fwdV).addScaledVector(vy, -fwdV.dot(vy))
     if (vz.lengthSq() > 1e-6 && vy.lengthSq() > 1e-6) {
       vz.normalize(); vx.crossVectors(vy, vz).normalize(); vy.crossVectors(vz, vx)
       m4.makeBasis(vx, vy, vz)

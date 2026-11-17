@@ -57,6 +57,9 @@ const povLookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
 const povLookQuat = new THREE.Quaternion()
 const povLookDirTmp = new THREE.Vector3()
 const upRefVec = new THREE.Vector3()
+const rollMat = new THREE.Matrix4()
+const viewDir = new THREE.Vector3()
+const WALL_UP_RATE = 2.6 // suavizado del giro de cámara con la pared (más bajo = menos mareo)
 
 const KEY_TO_ACTION = {
   arrowleft: 'left',
@@ -271,7 +274,8 @@ function ConstellationDome({ r }) {
 }
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la bollita y la cámara se desplaza con ella.
-function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, pointerLockedRef, gyroActiveRef, onCanvasReady }) {
+function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
+  const followUp = useRef(new THREE.Vector3(0, 1, 0))
   const controls = useRef()
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
@@ -511,9 +515,11 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
         povFwd.copy(povLastFwd.current)
       }
 
-      // Up interpolado con peso dominante de Y mundial para evitar roll y giros bruscos
+      // En el tubo el up es el de la pared (la cámara gira con la pista); con horizonte estable (H)
+      // o fuera del tubo, peso dominante de Y mundial para evitar roll y giros bruscos.
+      const onWall = selected.phase === 'travel' && !horizonRef.current
       if (selected.up && selected.up.lengthSq() > 1e-6) {
-        const upWeight = selected.phase === 'travel' ? 0.28 : 0.45
+        const upWeight = onWall ? 1 : selected.phase === 'travel' ? 0.28 : 0.45
         povTargetUp.copy(Y_AXIS).multiplyScalar(1 - upWeight).addScaledVector(selected.up, upWeight)
         if (povTargetUp.lengthSq() < 1e-4) povTargetUp.copy(Y_AXIS)
         else povTargetUp.normalize()
@@ -526,7 +532,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
         povQuat.current.copy(camera.quaternion)
         povInit.current = true
       } else {
-        povUp.current.lerp(povTargetUp, 1 - Math.exp(-3.5 * h)).normalize()
+        povUp.current.lerp(povTargetUp, 1 - Math.exp(-(onWall ? WALL_UP_RATE : 3.5) * h))
+        if (povUp.current.lengthSq() < 1e-6) povUp.current.copy(povTargetUp)
+        povUp.current.normalize()
       }
 
       povRight.crossVectors(povFwd, povUp.current)
@@ -561,7 +569,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
       povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 24 : 12) * h))
       camera.quaternion.copy(povQuat.current)
 
-      const upShift = selected.phase === 'travel' ? -0.06 : 0.08
+      const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
       povEye.copy(selected.pos).addScaledVector(povFwd, 0.14)
       if (selected.up) povEye.addScaledVector(selected.up, upShift)
       camera.position.lerp(povEye, 1 - Math.exp(-18 * h))
@@ -582,6 +590,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
         t.camQuat = [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w]
         t.bollitaDir = [povFwd.x, povFwd.y, povFwd.z]
         t.bollitaPos = [selected.pos.x, selected.pos.y, selected.pos.z]
+        t.horizon = Boolean(horizonRef.current)
+        t.camUp = [povUp.current.x, povUp.current.y, povUp.current.z]
       }
     } else if (follow && selected && selected.phase !== 'gone') {
       if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current !== selected) {
@@ -619,10 +629,19 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
       camera.position.add(mov)
 
       const hasDir = Boolean(selected.dir && selected.dir.lengthSq() > 1e-4)
-      if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
+      // en el tubo, "arriba" es hacia el eje (la pared por la que rueda), suavizado; H lo fija al mundo
+      const wallFollow = selected.phase === 'travel' && !horizonRef.current && Boolean(selected.up)
+      if (wallFollow) {
+        followUp.current.lerp(selected.up, 1 - Math.exp(-WALL_UP_RATE * h))
+        if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(selected.up)
+        followUp.current.normalize()
+        upRefVec.copy(followUp.current)
+      } else if (selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
         upRefVec.copy(selected.up).normalize()
+        followUp.current.copy(upRefVec)
       } else {
         upRefVec.copy(Y_AXIS)
+        followUp.current.copy(Y_AXIS)
       }
       if (hasDir) {
         sideVec.crossVectors(selected.dir, upRefVec)
@@ -682,6 +701,16 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, povControlRef, p
           if (d2 > 1e-6) sideVec.normalize()
           else sideVec.copy(upRefVec)
           camera.position.copy(np).addScaledVector(sideVec, minPlanetR)
+        }
+      }
+
+      // Pista espacial: la cámara rueda con la pared (OrbitControls la vuelve a poner con Y cada frame,
+      // así que el giro se aplica aquí tras su update y sólo mientras el usuario no la maneja).
+      if (wallFollow && !userActive.current) {
+        viewDir.copy(c.target).sub(camera.position)
+        if (viewDir.lengthSq() > 1e-6 && viewDir.normalize().cross(followUp.current).lengthSq() > 0.01) {
+          rollMat.lookAt(camera.position, c.target, followUp.current)
+          camera.quaternion.setFromRotationMatrix(rollMat)
         }
       }
     } else if (modo.current !== 'libre') {
@@ -821,6 +850,22 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
   const [gyroActive, setGyroActive] = useState(false)
   const gyroActiveRef = useRef(false)
   const [gyroNote, setGyroNote] = useState(null)
+  // Horizonte estable (tecla H): la cámara mantiene el up del mundo en vez de girar con la pared.
+  const [horizon, setHorizon] = useState(false)
+  const horizonRef = useRef(false)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key.toLowerCase() !== 'h') return
+      horizonRef.current = !horizonRef.current
+      setHorizon(horizonRef.current)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const cameraOnBall = Boolean((povActive || follow) && selected && selected.phase !== 'gone')
 
   const handleCanvasReady = useCallback((dom) => {
     canvasDomRef.current = dom
@@ -1088,6 +1133,7 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
         povControlRef={povControlRef}
         pointerLockedRef={pointerLockedRef}
         gyroActiveRef={gyroActiveRef}
+        horizonRef={horizonRef}
         onCanvasReady={handleCanvasReady}
       />
       <PostFX dofOn={dofOn} selected={selected} />
@@ -1103,6 +1149,18 @@ export default function Scene({ sim, bollitas, speed, selected, follow, pov = fa
       onToggleGyro={handleToggleGyro}
       onExitPov={() => onExitPov?.()}
     />
+    {cameraOnBall && (
+      <div
+        className="hint-horizonte"
+        style={{
+          position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', zIndex: 90,
+          padding: '3px 10px', borderRadius: 10, fontSize: 11, pointerEvents: 'none',
+          background: 'rgba(8, 12, 28, 0.62)', color: '#cfe0ff', border: '1px solid rgba(150, 180, 255, 0.25)',
+        }}
+      >
+        H · {horizon ? 'Horizonte estable' : 'Cámara pegada a la pared'}
+      </div>
+    )}
     </>
   )
 }
