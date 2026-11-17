@@ -11,7 +11,7 @@ test('angleDiff cruza ±180° sin salto', () => {
 test('clampYaw limita al cono frontal', () => {
   assert.equal(clampYaw(3), POV_YAW_MAX) // hacia atrás: se queda en el borde
   assert.equal(clampYaw(-3), -POV_YAW_MAX)
-  assert.equal(clampYaw(0.3), 0.3)
+  assert.ok(Math.abs(clampYaw(0.3) - 0.3) < 1e-9)
   assert.ok(Math.abs(clampYaw(Math.PI * 2 + 0.3) - 0.3) < 1e-9)
 })
 
