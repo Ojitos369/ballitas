@@ -7,6 +7,7 @@ import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
+import { TunelBanda, createTunelMats } from './tunel.jsx'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -3997,6 +3998,9 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
   const detailU = useMemo(() => ({ value: 0 }), [])
   const mats = useMemo(() => createWayMaterials(id, focusU, detailU), [id, focusU, detailU])
   const d = useMemo(() => buildExterior(way), [way])
+  const tunelMats = useMemo(() => createTunelMats(way, focusU, detailU, withWayFade), [way, focusU, detailU])
+  const tunelNearRef = useRef()
+  useEffect(() => () => disposeMats(tunelMats), [tunelMats])
   const extGroupRef = useRef()
   const extFineRef = useRef()
   const lmFineRef = useRef()
@@ -4038,6 +4042,7 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
     if (extGroupRef.current) extGroupRef.current.visible = det < 0.99
     if (extFineRef.current) extFineRef.current.visible = showNearExt
     if (lmFineRef.current) lmFineRef.current.visible = showNearExt
+    if (tunelNearRef.current) tunelNearRef.current.visible = showNearExt
 
     const intDepth = f >= 0.98 && det >= 0.98
     mats.deco.depthWrite = intDepth
@@ -4059,6 +4064,8 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
     mats.extRuins.depthWrite = extDepth
 
     const lmDepth = f >= 0.98
+    tunelMats.walk.depthWrite = lmDepth
+    tunelMats.rib.depthWrite = lmDepth
     mats.lmDeco.depthWrite = lmDepth
     mats.lmGlow.depthWrite = lmDepth
   })
@@ -4067,6 +4074,9 @@ function Way({ way, world = null, focused, detailActive = false, worldRadius = 1
     <group>
       {/* Tubo de cristal principal (siempre visible, adapta brillo y ruido por uDetail) */}
       {d.tube && <mesh geometry={d.tube} material={mats.tube} />}
+
+      {/* Túnel-banda del hábitat: celosía blanca, cristal en rejilla, pasarelas y luces de ciudad */}
+      <TunelBanda way={way} mats={tunelMats} nearRef={tunelNearRef} />
 
       {/* Landmarks, nudos y siluetas de eventos (esenciales siempre; detalle fino solo de cerca) */}
       <group>

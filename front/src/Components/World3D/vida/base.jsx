@@ -858,6 +858,73 @@ export function CartelesDeRuta({ way, style = {}, angle = 1.0, u = 0.14, height 
   )
 }
 
+// ═══════════════════════════ CIUDAD-HÁBITAT (túnel-banda + mini ciudad) ═══════════════════════════
+// Marco sobre la pared con la MISMA convención que world.js (wallFrame/laneFrame), para que la ciudad,
+// la banda exterior y los mecanismos queden alineados con los carriles reales de la simulación.
+const _wf = {}
+/** wallBaseInto(seg, u, out) -> out = { axis, d0 (eje->pared en ángulo 0), T, b (= T × d0) }. */
+export function wallBaseInto(seg, u, out) {
+  W.wallFrame(seg, 0, u, 0, _wf)
+  out.axis.copy(_wf.axis)
+  out.d0.copy(_wf.dir)
+  out.T.copy(_wf.tangent)
+  out.b.crossVectors(out.T, out.d0).normalize()
+  return out
+}
+export function makeWallBase() {
+  return { axis: new THREE.Vector3(), d0: new THREE.Vector3(), T: new THREE.Vector3(), b: new THREE.Vector3() }
+}
+/** Dirección eje->pared al ángulo `a` (igual que applyAxisAngle(T, a) de world.js). */
+export function wallDirInto(base, a, out) {
+  return out.copy(base.d0).multiplyScalar(Math.cos(a)).addScaledVector(base.b, Math.sin(a))
+}
+const _wd = new THREE.Vector3()
+const _wx = new THREE.Vector3()
+const _wu = new THREE.Vector3()
+const _wm = new THREE.Matrix4()
+/** Coloca sobre la pared: Y local hacia el eje, Z local = tangente. Escribe pos y quat. */
+export function wallPlaceInto(base, a, rho, pos, quat) {
+  wallDirInto(base, a, _wd)
+  pos.copy(base.axis).addScaledVector(_wd, rho)
+  _wu.copy(_wd).negate()
+  _wx.crossVectors(_wu, base.T).normalize()
+  _wm.makeBasis(_wx, _wu, base.T)
+  quat.setFromRotationMatrix(_wm)
+  return pos
+}
+const wrapPi = (x) => ((x + Math.PI) % TAU + TAU) % TAU - Math.PI
+/** Distancia angular (rad) de `angle` al borde del carril más cercano en `u` (con el vaivén real). */
+export function laneGapAt(seg, u, angle) {
+  let best = Infinity
+  for (const l of seg?.lanes ?? []) {
+    const d = Math.abs(wrapPi(angle - W.laneAngle(seg, l.id, u))) - (l.width || BALL_R * 2.6) * 0.5 / Math.max(seg.radius, 1e-3)
+    if (d < best) best = d
+  }
+  return best === Infinity ? Math.PI : best
+}
+
+/**
+ * Estilo de la mini ciudad por tema (lo leen ciudad.jsx y tunel.jsx; un tema puede leerlo para no
+ * duplicar edificios). facade: tonos de fachada; win: ventanas cálidas; neon: acentos; park: fracción de
+ * parques; tree: copas; ground: [calle, parque, canal]; tall: escala de altura; kit: pieza especial;
+ * brands: rótulos de neón propios del tema.
+ */
+export const CIUDAD = {
+  sombrio: { facade: ['#3b3352', '#4a4166', '#2c2640'], win: '#c9a2ff', neon: '#a24bff', park: 0.12, tree: '#5b3f8a', ground: ['#1d1a28', '#33284a', '#2a1f44'], tall: 1.05, kit: 'aguja', brands: ['NOCTURNA', 'UMBRA', 'VELO'] },
+  bosque: { facade: ['#e9e4d6', '#c9d8b8', '#f4efe2'], win: '#ffd59a', neon: '#9cff6b', park: 0.38, tree: '#3f9a4c', ground: ['#3a3f38', '#3f7a3c', '#2f6a48'], tall: 0.85, kit: 'arbol', brands: ['RAÍZ', 'SAVIA', 'CLARO'] },
+  mar: { facade: ['#f2f6fa', '#d8e8f4', '#bcd6ea'], win: '#ffe1a8', neon: '#7fe0ff', park: 0.14, tree: '#3fae8c', ground: ['#3a4250', '#4a8a6a', '#2f86c8'], tall: 0.95, kit: 'canal', brands: ['PUERTO AZUL', 'MAREA', 'COSTA'] },
+  desierto: { facade: ['#e8c99a', '#f2dcb4', '#d8b080'], win: '#ffd27a', neon: '#ffb347', park: 0.1, tree: '#7a9a4a', ground: ['#6a5a44', '#8a9a5a', '#c9a066'], tall: 0.8, kit: 'cupula', brands: ['OASIS', 'DUNA', 'SOLAR'] },
+  hielo: { facade: ['#eaf6ff', '#cfe8fa', '#b8dcf4'], win: '#bff3ff', neon: '#bff3ff', park: 0.1, tree: '#a8d8e8', ground: ['#5a6a7a', '#c8e4f0', '#8ac8e8'], tall: 1.0, kit: 'cristal', brands: ['GLACIAR', 'BOREAL', 'ESCARCHA'] },
+  volcan: { facade: ['#3a3434', '#4a3e3a', '#2e2a2a'], win: '#ffb070', neon: '#ff7a2f', park: 0.06, tree: '#6a4a3a', ground: ['#241e1e', '#4a3a30', '#ff5a1f'], tall: 0.9, kit: 'forja', brands: ['FORJA', 'MAGMA', 'BASALTO'] },
+  cristal: { facade: ['#efeaff', '#d8ccff', '#c4b4ff'], win: '#e8dcff', neon: '#b8a1ff', park: 0.12, tree: '#9a8aff', ground: ['#3a3650', '#6a5aa8', '#8a7aff'], tall: 1.15, kit: 'prisma', brands: ['PRISMA', 'GEODA', 'CUARZO'] },
+  nubes: { facade: ['#ffffff', '#f4f6fb', '#e8eef8'], win: '#fff2a8', neon: '#fff2a8', park: 0.22, tree: '#9ad8a0', ground: ['#c8d0dc', '#bfe8c4', '#dff0ff'], tall: 1.0, kit: 'nube', brands: ['CIRRO', 'ALTURA', 'BRISA'] },
+  neon: { facade: ['#1c2038', '#262a48', '#141830'], win: '#2bffe8', neon: '#ff2bd6', park: 0.06, tree: '#2bffe8', ground: ['#0e1020', '#1a2a3a', '#ff2bd6'], tall: 1.25, kit: 'cyber', brands: ['KYBER', 'NÓVA', 'PULSO'] },
+  jardin: { facade: ['#fff4f8', '#ffe4ee', '#f4ead8'], win: '#ffd8a8', neon: '#ff8fb8', park: 0.34, tree: '#e87aa8', ground: ['#4a4448', '#6aa86a', '#7ac8e8'], tall: 0.85, kit: 'jardin', brands: ['FLORA', 'PÉTALO', 'VERGEL'] },
+}
+export function cityStyle(themeId) {
+  return CIUDAD[themeId] ?? CIUDAD.nubes
+}
+
 const waySphereCache = new WeakMap()
 
 /** Esfera envolvente en mundo que cubre todos los tramos del way para frustum culling sin popping. */

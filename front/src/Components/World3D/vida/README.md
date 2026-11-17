@@ -6,6 +6,7 @@ Esta carpeta da a cada camino su contenido único. La regla de fondo es que cada
 
 - `index.js` es el registro. `getVida(themeId)` devuelve el componente del tema, o uno vacío si no existe. `VidaDeCamino` lo monta dentro de un `VidaGuard`, así que si un módulo falla se apaga solo ese módulo y el resto de la escena sigue.
 - `base.jsx` reúne las utilidades compartidas. Los módulos las importan, pero nunca las modifican para un tema concreto. Si algo hace falta para varios temas, se agrega aquí.
+- `ciudad.jsx` es la capa común de mini ciudad-hábitat: `index.js` la monta junto al módulo de cada tema (en su propio `VidaGuard`). Llena la pared entre carriles con manzanas, parques, grúas, rótulos de neón y vapor, y dibuja cada `switch` como pieza urbana (autopista por la pared, rampa con estela y pista de aterrizaje, o par de portales) con torre-elevador y rótulos del carril destino. Su estilo por tema vive en `CIUDAD` de `base.jsx`; un tema que quiera evitar duplicar edificios puede leer `cityStyle(id)`. La banda exterior blanca del túnel está en `../tunel.jsx`.
 - `<id>.jsx` es un archivo por tema (sombrio, bosque, mar, desierto, hielo, volcan, cristal, nubes, neon, jardin). Cada uno se edita por separado y no importa a ningún otro módulo de tema, para que varios agentes puedan trabajar en paralelo sin choques.
 
 ## Contrato del componente

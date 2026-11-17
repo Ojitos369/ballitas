@@ -12,6 +12,7 @@ import cristal from './cristal.jsx'
 import nubes from './nubes.jsx'
 import neon from './neon.jsx'
 import jardin from './jardin.jsx'
+import Ciudad from './ciudad.jsx'
 
 export const VIDA = { sombrio, bosque, mar, desierto, hielo, volcan, cristal, nubes, neon, jardin }
 
@@ -51,6 +52,7 @@ export function VidaDeCamino(props) {
     'group',
     { ref: wrapRef },
     createElement(VidaGuard, { themeId: id }, createElement(getVida(id), props)),
+    createElement(VidaGuard, { themeId: `${id}:ciudad` }, createElement(Ciudad, props)),
   )
 }
 
