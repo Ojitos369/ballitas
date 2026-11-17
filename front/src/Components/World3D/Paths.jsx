@@ -4206,10 +4206,11 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
       {/* Capa INTERIOR + Mini mundo del tema (montados bajo demanda solo en máx 2 ways cercanos/enfocados) */}
       {detailActive && (
         <Precompilado>
+          {/* la vida va dentro del interior: montada de antemano (precarga) no se ve hasta que hay detalle */}
           <group ref={intGroupRef}>
             <WayInterior way={way} mats={mats} />
+            <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
           </group>
-          <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
         </Precompilado>
       )}
     </group>
@@ -4249,7 +4250,7 @@ function selectTopIds(list, maxCount) {
   return out
 }
 
-export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
+export default function Paths({ world, sim = null, focusWay = null, prefetchWays = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
   const wayMetas = useMemo(() => world.ways.map((w) => {
     const pts = []
     for (const s of w.segments) {
@@ -4277,6 +4278,7 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
   const lastEvalRef = useRef(-10)
   const prevFocusRef = useRef(focusWay)
   const prevForceRef = useRef(forceFocusDetail)
+  const prevPrefetchRef = useRef(prefetchWays)
 
   useFrame(({ camera, clock }, dt) => {
     const t = clock.elapsedTime
@@ -4284,11 +4286,12 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
     SHARED_TIME.value = t
     VIDA_BUS.sim = sim
 
-    const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail
+    const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail || prevPrefetchRef.current !== prefetchWays
     if (focusChanged || t - lastEvalRef.current >= 0.12) {
       lastEvalRef.current = t
       prevFocusRef.current = focusWay
       prevForceRef.current = forceFocusDetail
+      prevPrefetchRef.current = prefetchWays
 
       const cx = camera.position.x
       const cy = camera.position.y
@@ -4304,6 +4307,8 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
       for (let i = 0; i < wayMetas.length; i++) {
         const m = wayMetas[i]
         const isFocus = focusWay === m.idx
+        // Precarga: los caminos que siguen a la ballita seguida se montan (ocultos y compilados) antes de entrar.
+        const pre = !isFocus && prefetchWays != null && prefetchWays.includes(m.idx)
         const enterDist = (focusWay != null && !isFocus) ? (m.radius * 2.5 + 2.5) : (m.radius * 7.5 + worldRadius * 0.09)
         const exitDist = enterDist * 1.35
         const nearEnter = (focusWay != null && !isFocus) ? (m.radius * 5.0 + 6.0) : (m.radius * 13.0 + worldRadius * 0.3)
@@ -4323,7 +4328,7 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
         const centerDist = Math.sqrt(dxC * dxC + dyC * dyC + dzC * dzC)
 
         let dist = Infinity
-        if (centerDist - sp.radius <= maxLim || (isFocus && forceFocusDetail)) {
+        if (centerDist - sp.radius <= maxLim || (isFocus && forceFocusDetail) || pre) {
           const arr = m.flat
           let minD2 = Infinity
           for (let k = 0; k < arr.length; k += 3) {
@@ -4336,9 +4341,9 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
           dist = Math.max(0, Math.sqrt(minD2) - m.radius)
         }
         dists[m.idx] = dist
-        if ((isFocus && forceFocusDetail) || dist < vidaLim) vidaCands.push({ idx: m.idx, dist, isFocus })
-        if ((isFocus && forceFocusDetail) || dist < nearLim) nearCands.push({ idx: m.idx, dist, isFocus })
-        if ((isFocus && (forceFocusDetail || focusWay != null)) || dist < tunelLim) tunelCands.push({ idx: m.idx, dist, isFocus })
+        if ((isFocus && forceFocusDetail) || pre || dist < vidaLim) vidaCands.push({ idx: m.idx, dist, isFocus })
+        if ((isFocus && forceFocusDetail) || pre || dist < nearLim) nearCands.push({ idx: m.idx, dist, isFocus })
+        if ((isFocus && (forceFocusDetail || focusWay != null)) || pre || dist < tunelLim) tunelCands.push({ idx: m.idx, dist, isFocus })
       }
 
       const nextMounted = reconcileLodSet(curMounted, selectTopIds(vidaCands, MAX_ACTIVE_VIDA), 1)

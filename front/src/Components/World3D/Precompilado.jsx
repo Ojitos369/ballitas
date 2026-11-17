@@ -5,6 +5,7 @@ import * as THREE from 'three'
 // Destino de la compilación: como el composer pinta en un RT lineal sin tone mapping, compilar con un RT
 // activo da la misma clave de programa que el render real (con null saldría otra variante).
 let PRE_RT = null
+const TEX_KEYS = ['map', 'emissiveMap', 'alphaMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'bumpMap']
 
 /**
  * Compila (en paralelo si hay KHR_parallel_shader_compile) los programas de `obj`, incluidos los ocultos,
@@ -17,6 +18,12 @@ export function precompilar(gl, obj, camera, scene) {
   try {
     gl.setRenderTarget(PRE_RT)
     gl.compile(obj, camera, scene)
+    // Sube también sus texturas: al revelarse no se dibuja nada con el mapa a medio subir.
+    obj.traverse((o) => {
+      for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+        for (const k of TEX_KEYS) if (m[k]?.isTexture && m[k].image) gl.initTexture(m[k])
+      }
+    })
   } catch {
     return Promise.resolve()
   } finally {

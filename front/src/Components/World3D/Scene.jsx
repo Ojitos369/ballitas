@@ -1142,7 +1142,7 @@ function PostFX({ dofOn, selected, highQuality }) {
     const t = setTimeout(() => idle(() => {
       if (warm.current === 0) warm.current = 1
       precompilar(gl, scene, camera, scene)
-    }), 2500)
+    }, { timeout: 1500 }), 2500) // con render continuo casi nunca hay tiempo ocioso: sin timeout no corría
     return () => clearTimeout(t)
   }, [gl, camera, scene])
 
@@ -1192,6 +1192,12 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   const caminoOn = Boolean(camino && cameraWay)
   const forceFocusDetail = Boolean(camino || ((follow || pov) && selected && selected.phase !== 'gone'))
   const focusedWay = camino ? cameraWay?.idx ?? focusWay : (vista === 'mapa' ? focusWay : (selected && selected.phase !== 'gone' ? (selected.seg?.way?.idx ?? selected.way?.idx ?? null) : null))
+  // Carga predictiva: con la cámara en una ballita, los caminos que salen del nodo al que va (o en el que
+  // está, si aún no eligió) se montan ocultos y compilados antes de que entre en ellos.
+  const nodoSig = !forceFocusDetail || camino || !selected ? null
+    : selected.phase === 'travel' ? selected.way?.to : (selected.way ? null : selected.node)
+  const prefetchKey = nodoSig == null ? '' : (sim.world.waysFrom[nodoSig] ?? []).map((w) => w.idx).filter((i) => i !== focusedWay).join(',')
+  const prefetchWays = useMemo(() => (prefetchKey ? prefetchKey.split(',').map(Number) : null), [prefetchKey])
 
   const povControlRef = useRef(createPovState())
   const canvasDomRef = useRef(null)
@@ -1494,7 +1500,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
 
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
-      <Paths world={sim.world} sim={sim} focusWay={focusedWay} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
+      <Paths world={sim.world} sim={sim} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
       {/* Precompilado: las ballitas nacen con pieles nuevas tras el precompilado inicial; sin esto la primera
           vez que entran en cuadro (al acercarse en Camino/Ballita) se esperaba su enlace dentro del cuadro. */}
       {ballitas.map((b) => (
