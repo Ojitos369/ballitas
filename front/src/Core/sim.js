@@ -45,6 +45,7 @@ import * as THREE from 'three'
 import {
   buildWorld, cityPath, slerpDir, NODE_R, BALL_R, OBSTACLES, KINDS,
   wallFrame, laneAngle, nearestLane, lowestLane, angDiff,
+  segmentTangent,
 } from './world.js'
 import { voice, moodOf, archetype } from './personality.js'
 
@@ -83,6 +84,7 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x))
 const mean = (arr, f) => arr.reduce((s, x) => s + f(x), 0) / arr.length
 const tmp = new THREE.Vector3()
 const tmp2 = new THREE.Vector3()
+const tmp3 = new THREE.Vector3()
 // acerca v a un objetivo unitario sin pasar por el vector nulo
 const ease = (v, target, k) => { v.lerp(target, k); if (v.lengthSq() < 1e-6) v.copy(target); return v.normalize() }
 
@@ -414,7 +416,7 @@ export class Sim {
     if (!prev) {
       b.phase = 'travel'; b.dur = b.timer = this.eta(b, b.way); b.snap = 0.3
       b.lane = 0; b.ang = laneAngle(seg, 0, 0); b.sw = null; b.off = b.rail = 0
-    } else if (prev.curve.getTangentAt(1).angleTo(seg.curve.getTangentAt(0)) > 0.35 && b.rail > 0.3) {
+    } else if (segmentTangent(prev, 1, tmp).angleTo(segmentTangent(seg, 0, tmp2)) > 0.35 && b.rail > 0.3) {
       // quiebro de tangente (entrada a un embudo, etc.): se funde la posición en vez de saltar
       b.snap = Math.max(b.snap, 0.2)
     }
@@ -475,7 +477,7 @@ export class Sim {
       s = b.seg; b.segT = over / s.length; t0 = 0
     }
     if (!b.sw) this.checkSwitches(b, s, t0, b.segT)
-    const T = s.curve.getTangentAt(b.segT)
+    const T = segmentTangent(s, b.segT, tmp2)
 
     // velocidad: la gravedad acelera al bajar y frena al subir; el tubo roza, el aire no
     b.speed += (-GRAV * T.y - FRIC * s.drag * b.speed) * dt
@@ -486,10 +488,10 @@ export class Sim {
 
     // carril: la bollita va pegada a su pared (o vuela entre paredes si hay un mecanismo en curso)
     this.laneStep(b, s, dt)
-    const F = wallFrame(s, b.ang, b.segT, b.off)
+    const F = wallFrame(s, b.ang, b.segT, b.off, b._frame || (b._frame = {}))
     b.wall.copy(F.dir)
     const down = tmp.copy(Y).addScaledVector(T, -T.y).negate()
-    b.roll = down.lengthSq() > 1e-4 ? Math.atan2(T.dot(tmp2.crossVectors(down, F.dir)), down.dot(F.dir)) : 0
+    b.roll = down.lengthSq() > 1e-4 ? Math.atan2(T.dot(tmp3.crossVectors(down, F.dir)), down.dot(F.dir)) : 0
     this.place(b, F.pos, F.tangent, F.up, dt)
   }
 
@@ -554,15 +556,20 @@ export class Sim {
   // ¿Cruzó una estación de mecanismos en (t0, t1] estando en el carril de origen? Decide si la usa.
   checkSwitches(b, s, t0, t1) {
     if (!s.switches?.length) return
-    const cands = s.switches.filter((sw) => sw.from === b.lane && sw.u > t0 && sw.u <= t1)
-    if (!cands.length) return
-    const u = Math.min(...cands.map((sw) => sw.u))
+    const cands = s.switchesByLane?.get(b.lane) || s.switches
+    let first = null
+    for (const sw of cands) {
+      if (sw.from !== b.lane || sw.u <= t0 || sw.u > t1) continue
+      if (!first || sw.u < first.u) first = sw
+    }
+    if (!first) return
+    const u = first.u
     const t = b.genome.traits
     const peers = this.bollitas.filter((o) => o !== b && o.phase === 'travel' && o.seg === s)
     let best = null
     let bs = 0.3 + (0.45 - t.valentia) * 0.5 + this.rng() * 0.3 // seguir por el mismo carril
     for (const sw of cands) {
-      if (Math.abs(sw.u - u) > 1e-6) continue
+      if (sw.from !== b.lane || Math.abs(sw.u - u) > 1e-6) continue
       const sc = this.laneUtility(b, s, sw, peers)
       if (sc > bs) { bs = sc; best = sw }
     }

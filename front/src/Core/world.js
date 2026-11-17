@@ -280,27 +280,27 @@ function canonDown(T, out = new THREE.Vector3()) {
 const FRAME_TMP = new THREE.Vector3()
 function sampleChain(segs, pinEnd) {
   const q = new THREE.Quaternion()
-  const D = canonDown(segs[0].curve.getTangentAt(0))
-  let Tprev = null; let total = 0
+  const T = new THREE.Vector3(); const Tprev = new THREE.Vector3()
+  const D = new THREE.Vector3(); let hasPrev = false; let total = 0
   const data = []
   for (const s of segs) {
     // El transporte discreto pierde la torsión de curvas muy cerradas si se muestrea
-    // cada 1.5 unidades (en espirales el tangente gira varias veces en ese intervalo).
-    // Muestrear a 0.5 mantiene el giro por paso pequeño; el marco se cachea en el tramo.
-    const n = clamp(Math.ceil(s.length / 0.5), 24, 1200)
-    const Ts = new Float32Array((n + 1) * 3); const Ds = new Float32Array((n + 1) * 3); const Ps = new Float32Array((n + 1) * 3)
+    // cada 0.25 unidades; el marco se cachea en el tramo.
+    const n = clamp(Math.ceil(s.length / 0.25), 24, 2000)
+    const Ts = new Float32Array((n + 1) * 3); const Ds = new Float32Array((n + 1) * 3)
     for (let i = 0; i <= n; i++) {
-      const T = s.curve.getTangentAt(i / n)
-      if (Tprev) { q.setFromUnitVectors(Tprev, T); D.applyQuaternion(q) }
+      const t = s.curve.getUtoTmapping(i / n)
+      s.curve.getTangent(t, T)
+      if (!hasPrev) { canonDown(T, D); hasPrev = true }
+      else { q.setFromUnitVectors(Tprev, T); D.applyQuaternion(q) }
       D.addScaledVector(T, -D.dot(T))
       if (D.lengthSq() < 1e-8) canonDown(T, D)
       D.normalize()
       Ts[i * 3] = T.x; Ts[i * 3 + 1] = T.y; Ts[i * 3 + 2] = T.z
       Ds[i * 3] = D.x; Ds[i * 3 + 1] = D.y; Ds[i * 3 + 2] = D.z
-      s.curve.getPointAt(i / n).toArray(Ps, i * 3)
-      Tprev = T
+      Tprev.copy(T)
     }
-    data.push({ s, n, Ts, Ds, Ps, start: total }); total += s.length
+    data.push({ s, n, Ts, Ds, start: total }); total += s.length
   }
   if (pinEnd && total > 0) {
     const C = canonDown(Tprev)
@@ -314,9 +314,24 @@ function sampleChain(segs, pinEnd) {
       }
     }
   }
-  for (const { s, n, Ts, Ds, Ps } of data) s._fr = { n, T: Ts, D: Ds, P: Ps }
+  for (const { s, n, Ts, Ds } of data) s._fr = { n, T: Ts, D: Ds, arcLengths: s.curve.getLengths() }
 }
 const ensureFrames = (seg) => { if (!seg._fr) sampleChain([seg], false) }
+
+// Equivalente a Curve.getUtoTmapping sobre la caché ya calculada, sin asignaciones.
+function arcParamAt(fr, u) {
+  const lengths = fr.arcLengths; const last = lengths.length - 1
+  const target = clamp(u, 0, 1) * lengths[last]
+  let low = 0; let high = last
+  while (low <= high) {
+    const i = Math.floor(low + (high - low) / 2)
+    if (lengths[i] < target) low = i + 1
+    else if (lengths[i] > target) high = i - 1
+    else return i / last
+  }
+  const before = lengths[high]; const after = lengths[low]
+  return (high + (target - before) / (after - before)) / last
+}
 
 // Marco sobre la pared a ángulo `angle` y avance `u`. Ver el contrato al inicio del archivo.
 export function wallFrame(seg, angle, u, rho = seg.air ? 0 : seg.radius - BALL_R, out = {}) {
@@ -335,13 +350,28 @@ export function wallFrame(seg, angle, u, rho = seg.air ? 0 : seg.radius - BALL_R
   if (w.lengthSq() < 1e-8) canonDown(T, w)
   w.normalize().applyAxisAngle(T, angle)
   const axis = out.axis || (out.axis = new THREE.Vector3())
-  axis.fromArray(fr.P, i * 3); FRAME_TMP.fromArray(fr.P, (i + 1) * 3); axis.lerp(FRAME_TMP, k)
+  const curveU = arcParamAt(fr, u)
+  seg.curve.getPoint(curveU, axis)
   out.axis = axis; out.dir = w; out.angle = angle; out.tangent = T
   out.pos = (out.pos || new THREE.Vector3()).copy(axis).addScaledVector(w, rho)
   out.wall = (out.wall || new THREE.Vector3()).copy(axis).addScaledVector(w, seg.radius)
   out.up = (out.up || new THREE.Vector3()).copy(w).negate()
   out.side = (out.side || new THREE.Vector3()).crossVectors(T, out.up).normalize()
   return out
+}
+
+// Tangente de la tabla cacheada del tramo. Evita getTangentAt (que vuelve a mapear
+// la longitud de arco en cada llamada) durante la simulación.
+export function segmentTangent(seg, u, out = new THREE.Vector3()) {
+  ensureFrames(seg)
+  const fr = seg._fr
+  const f = clamp(u, 0, 1) * fr.n
+  const i = Math.min(fr.n - 1, Math.floor(f)); const k = f - i; const j = i * 3
+  return out.set(
+    fr.T[j] + (fr.T[j + 3] - fr.T[j]) * k,
+    fr.T[j + 1] + (fr.T[j + 4] - fr.T[j + 1]) * k,
+    fr.T[j + 2] + (fr.T[j + 5] - fr.T[j + 2]) * k,
+  ).normalize()
 }
 
 const laneOf = (seg, id) => seg.lanes?.find((l) => l.id === id) || seg.lanes?.[0] || null
@@ -406,6 +436,7 @@ function buildLanes(way) {
         const to = id === 0 ? [2, rng() < 0.5 ? 1 : 3] : [0, (id + 2) % 4]
         for (const t of new Set(to)) if (t !== id) s.switches.push(mk(s, 0.12, id, t, s.kind, dur))
       }
+      s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id)]))
       return
     }
     const primary = s.event && MECHANISMS[s.event] ? s.event : mechs[i % mechs.length]
@@ -417,6 +448,9 @@ function buildLanes(way) {
     others.forEach((id, j) => s.switches.push(mk(s, u1, 0, id, j === 0 ? primary : secondary)))
     others.forEach((id, j) => s.switches.push(mk(s, u2, id, 0, j === 0 ? secondary : primary)))
     if (others.length >= 2) s.switches.push(mk(s, u2, others[0], others[1], primary))
+    // Índice de estaciones por carril origen para que cada tick consulte sólo las
+    // opciones de ese carril, ya ordenadas por posición.
+    s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id).sort((a, b) => a.u - b.u)]))
   })
 }
 
@@ -644,37 +678,65 @@ function sampleWayPoints(way, steps = 14) {
     for (let k = 0; k <= steps; k++) {
       const u = k / steps
       const trim = (s.kind === 'salida' && u * s.length < TRIM_LEN) || (s.kind === 'llegada' && (1 - u) * s.length < TRIM_LEN)
-      pts.push({ p: s.curve.getPointAt(u), r: s.radius, kind: s.kind, trim })
+      const cached = steps === 28 && k % 2 === 0 ? s._placementCoarse?.[k / 2] : null
+      const p = cached || s.curve.getPointAt(u)
+      if (steps === 14) (s._placementCoarse || (s._placementCoarse = []))[k] = p
+      pts.push({ p, r: s.radius, kind: s.kind, trim })
     }
   }
   return pts
+}
+
+const SPATIAL_CELL = 12
+const pointCell = (p) => `${Math.floor(p.x / SPATIAL_CELL)},${Math.floor(p.y / SPATIAL_CELL)},${Math.floor(p.z / SPATIAL_CELL)}`
+function indexPlacedWay(placed, entry) {
+  placed.push(entry)
+  const grid = placed.grid || (placed.grid = new Map())
+  for (const q of entry.pts) {
+    if (q.trim) continue
+    const key = pointCell(q.p); let bucket = grid.get(key)
+    if (!bucket) grid.set(key, bucket = [])
+    bucket.push(q)
+  }
 }
 
 function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
   const baseTheta = ((circuit.idx * 0.6180339887 + (from < to ? 0 : 0.5)) % 1) * TAU
-  const N_ANG = 24
+  const N_ANG = 18
   let best = null; let bestScore = -Infinity
 
   const evalCand = (cand, steps) => {
     const pts = sampleWayPoints(cand, steps)
     let minNode = Infinity
+    const nodeMargin = NODE_R + 3 * WORLD_SCALE
+    const nodeAcceptSq = (nodeMargin + 1.5) ** 2
     for (const pt of pts) {
-      for (const o of others) minNode = Math.min(minNode, pt.p.distanceTo(o.pos) - (NODE_R + 3 * WORLD_SCALE))
-      if (pt.kind !== 'salida' && pt.p.distanceTo(a.pos) <= NODE_R + pt.r) return null
-      if (pt.kind !== 'llegada' && pt.p.distanceTo(b.pos) <= NODE_R + pt.r) return null
-      if (pt.kind === 'salida' && pt.p.distanceTo(a.pos) <= NODE_R - 0.005) return null
-      if (pt.kind === 'llegada' && pt.p.distanceTo(b.pos) <= NODE_R - 0.005) return null
+      for (const o of others) {
+        const d2 = pt.p.distanceToSquared(o.pos)
+        if (d2 < nodeAcceptSq) minNode = Math.min(minNode, Math.sqrt(d2) - nodeMargin)
+      }
+      if (pt.kind !== 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R + pt.r) ** 2) return null
+      if (pt.kind !== 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R + pt.r) ** 2) return null
+      if (pt.kind === 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R - 0.005) ** 2) return null
+      if (pt.kind === 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R - 0.005) ** 2) return null
     }
+    if (minNode === Infinity) minNode = 1.5
     let minTube = Infinity; let minHub = Infinity
     for (const prev of placed) {
       for (const h1 of cand.junctions) for (const h2 of prev.hubs) minHub = Math.min(minHub, h1.pos.distanceTo(h2.pos))
-      for (const pt of pts) {
-        if (pt.trim) continue
-        for (const q of prev.pts) {
-          if (q.trim) continue
-          minTube = Math.min(minTube, pt.p.distanceTo(q.p) - (pt.r + q.r))
+    }
+    const grid = placed.grid
+    if (grid) for (const pt of pts) {
+      if (pt.trim) continue
+      const x = Math.floor(pt.p.x / SPATIAL_CELL); const y = Math.floor(pt.p.y / SPATIAL_CELL); const z = Math.floor(pt.p.z / SPATIAL_CELL)
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const bucket = grid.get(`${x + dx},${y + dy},${z + dz}`)
+        if (!bucket) continue
+        for (const q of bucket) {
+          const r = pt.r + q.r; const d2 = pt.p.distanceToSquared(q.p)
+          if (d2 < (r + 4.8) ** 2) minTube = Math.min(minTube, Math.sqrt(d2) - r)
         }
       }
     }
@@ -682,8 +744,8 @@ function placeWay(world, circuit, from, to, placed) {
   }
 
   for (const bowExtra of [-12, 0, 10, 20, 32, 46, 62, 80, 100].map((x) => x * WORLD_SCALE)) {
-    for (let k = 0; k < 36; k++) {
-      const theta = (baseTheta + (k / 36) * TAU) % TAU
+    for (let k = 0; k < N_ANG; k++) {
+      const theta = (baseTheta + (k / N_ANG) * TAU) % TAU
       const cand = buildWay(world, circuit, from, to, theta, bowExtra, false)
       const coarse = evalCand(cand, 14)
       if (!coarse) continue
@@ -693,14 +755,14 @@ function placeWay(world, circuit, from, to, placed) {
       if (score > bestScore) { bestScore = score; best = { theta, bowExtra } }
       if (res.minTube >= 4.8 && res.minNode >= 1.5 && res.minHub >= 24) {
         const w = buildWay(world, circuit, from, to, theta, bowExtra, true)
-        placed.push({ pts: sampleWayPoints(w, 28), hubs: w.junctions })
+        indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
         return w
       }
     }
   }
   const chosen = best || { theta: baseTheta, bowExtra: 0 }
   const w = buildWay(world, circuit, from, to, chosen.theta, chosen.bowExtra, true)
-  placed.push({ pts: sampleWayPoints(w, 28), hubs: w.junctions })
+  indexPlacedWay(placed, { pts: sampleWayPoints(w, 28), hubs: w.junctions })
   return w
 }
 

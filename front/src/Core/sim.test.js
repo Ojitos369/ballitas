@@ -254,7 +254,8 @@ test('carriles: contrato de lanes/switches, marcos sobre la pared sin saltos y t
           if (!s.air) assert.ok(F.up.dot(F.axis.clone().sub(F.pos)) > 0, 'up apunta al eje')
           if (prev) {
             const turn = prev.tangent.angleTo(F.tangent)
-            assert.ok(prev.dir.angleTo(F.dir) <= turn * 1.3 + 0.1,`${w.id} ${s.kind} carril ${l.id}: salto del marco en u=${u.toFixed(3)}`)
+            const frameTurn = prev.dir.angleTo(F.dir)
+            assert.ok(frameTurn <= turn * 1.3 + 0.1,`${w.id} ${s.kind} carril ${l.id}: salto del marco en u=${u.toFixed(3)} (marco=${frameTurn.toFixed(3)}, tangente=${turn.toFixed(3)})`)
           }
           prev = F
         }
@@ -306,7 +307,7 @@ test('bollita en carril: pegada a la pared, sin atravesar el cristal, continua, 
       if (b.snap <= 0) {
         const axis = s.curve.getPointAt(b.segT)
         const d = b.pos.distanceTo(axis)
-        assert.ok(Math.abs(d - b.off) < 1e-3, `posición fuera de su marco de pared (${d.toFixed(3)} vs ${b.off.toFixed(3)})`)
+        assert.ok(Math.abs(d - b.off) < 1e-3, `posición fuera de su marco de pared en ${s.kind} u=${b.segT.toFixed(4)} (${d.toFixed(3)} vs ${b.off.toFixed(3)})`)
         if (!s.air) {
           assert.ok(d + BALL_R <= s.radius + 1e-3, `atraviesa el cristal en ${s.kind}: ${(d + BALL_R).toFixed(3)} > ${s.radius}`)
           if (!b.sw) {
