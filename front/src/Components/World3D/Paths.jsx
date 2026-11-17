@@ -7,6 +7,7 @@ import { mulberry32 } from '../../Core/world.js'
 import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
+import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -4063,7 +4064,7 @@ function PulseInst({ geo, mat, items }) {
   return <instancedMesh ref={ref} args={[geo, mat, items.length]} frustumCulled={false} />
 }
 
-function Way({ way, focused, worldRadius = 110, forceFocusDetail = false }) {
+function Way({ way, world = null, focused, worldRadius = 110, forceFocusDetail = false }) {
   const id = way.theme.id
   const focusU = useMemo(() => ({ value: 1 }), [])
   const detailU = useMemo(() => ({ value: 0 }), [])
@@ -4071,6 +4072,7 @@ function Way({ way, focused, worldRadius = 110, forceFocusDetail = false }) {
   const d = useMemo(() => build(way), [way])
   const extGroupRef = useRef()
   const intGroupRef = useRef()
+  const vidaGroupRef = useRef()
   const glbRegistry = useMemo(() => ({ interior: new Set(), exterior: new Set(), none: new Set() }), [])
   const glbPresets = useMemo(() => ({
     extMetal: { focusU, detailU, lod: 'exterior', scaleLod: false, registry: glbRegistry },
@@ -4119,6 +4121,8 @@ function Way({ way, focused, worldRadius = 110, forceFocusDetail = false }) {
 
     if (intGroupRef.current) intGroupRef.current.visible = det > 0.01
     if (extGroupRef.current) extGroupRef.current.visible = det < 0.99
+    // Mini mundo interior: visible de cerca o mientras el camino esté en foco (diorama visto por el cristal)
+    if (vidaGroupRef.current) vidaGroupRef.current.visible = det > 0.05 || focused
 
     const intDepth = f >= 0.98 && det >= 0.98
     mats.deco.depthWrite = intDepth
@@ -4236,13 +4240,19 @@ function Way({ way, focused, worldRadius = 110, forceFocusDetail = false }) {
           geo ? <points key={k} geometry={geo} material={mats.fx[k]} frustumCulled={false} /> : null
         )}
       </group>
+
+      {/* Mini mundo del tema (vida/<tema>.jsx): todo dentro del volumen del tubo */}
+      <group ref={vidaGroupRef}>
+        <VidaDeCamino way={way} world={world} detail={detailU} focused={focused} time={SHARED_TIME} />
+      </group>
     </group>
   )
 }
 
-export default function Paths({ world, focusWay = null, worldRadius = 110, forceFocusDetail = false }) {
+export default function Paths({ world, sim = null, focusWay = null, worldRadius = 110, forceFocusDetail = false }) {
   useFrame(({ clock }) => {
     SHARED_TIME.value = clock.elapsedTime
+    VIDA_BUS.sim = sim
   })
   return (
     <>
@@ -4250,6 +4260,7 @@ export default function Paths({ world, focusWay = null, worldRadius = 110, force
         <Way
           key={w.idx}
           way={w}
+          world={world}
           focused={focusWay == null || focusWay === w.idx}
           worldRadius={worldRadius}
           forceFocusDetail={forceFocusDetail}
