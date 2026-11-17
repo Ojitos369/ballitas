@@ -84,13 +84,17 @@ function makeMaterial(k, time) {
     sh.uniforms.uTime = time
     sh.uniforms.uBob = { value: sp.bob }
     sh.uniforms.uGlow = { value: sp.glow ?? 1 }
-    sh.fragmentShader = 'uniform float uGlow;\n' + sh.fragmentShader.replace(
+    // Glow propio: base algo más viva + extremidades (alas, cola, cabeza) en HDR leve (~1.6x) y tirando a blanco-cálido:
+    // solo los bordes superan el umbral 1.0 del Bloom y se distinguen del neón de los caminos.
+    sh.fragmentShader = 'uniform float uGlow;\nvarying float vExt;\n' + sh.fragmentShader.replace(
       '#include <color_fragment>',
-      '#include <color_fragment>\n      diffuseColor.rgb *= uGlow;', // >1 = HDR: las especies luminosas superan el umbral del Bloom
+      `#include <color_fragment>
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.4 + vec3(0.6, 0.55, 0.45), vExt * 0.35) * uGlow * (1.1 + 0.5 * vExt);`, // >1 = HDR
     )
-    sh.vertexShader = 'uniform float uTime;\nuniform float uBob;\nattribute vec4 aMove;\n' + sh.vertexShader.replace(
+    sh.vertexShader = 'uniform float uTime;\nuniform float uBob;\nattribute vec4 aMove;\nvarying float vExt;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
+      vExt = smoothstep(0.22, 0.75, length(transformed));
       float ph = aMove.y;
       float ang = uTime * aMove.x + ph;
       vec2 fw = normalize(vec2(-sin(ang) * aMove.z, cos(ang) * aMove.w) * sign(aMove.x) + vec2(0.0, 1e-4));
@@ -109,7 +113,7 @@ function makeMaterial(k, time) {
     )
   }
   m.toneMapped = false
-  m.customProgramCacheKey = () => 'fauna' + sp.anim
+  m.customProgramCacheKey = () => 'fauna-glow' + sp.anim
   return m
 }
 
