@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const JOY_MAX_R = 32
-const JOY_DEADZONE = 0.08
+const JOY_DEADZONE = 0.18 // zona muerta amplia: sin deriva al soltar a medias
 
 function computeJoy(el, clientX, clientY) {
   const rect = el.getBoundingClientRect()
@@ -17,7 +17,8 @@ function computeJoy(el, clientX, clientY) {
   }
   const norm = Math.min(1, dist / JOY_MAX_R)
   if (norm < JOY_DEADZONE) return [dx, dy, 0, 0]
-  const scaled = (norm - JOY_DEADZONE) / (1 - JOY_DEADZONE)
+  const lin = (norm - JOY_DEADZONE) / (1 - JOY_DEADZONE)
+  const scaled = lin * lin // respuesta cuadrática: precisión cerca del centro
   const angle = Math.atan2(dy, dx)
   return [dx, dy, Math.cos(angle) * scaled, Math.sin(angle) * scaled]
 }

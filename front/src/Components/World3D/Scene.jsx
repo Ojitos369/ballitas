@@ -26,15 +26,13 @@ const FOV = 50
 const POV_FOV = 75
 const POV_FOV_MIN = 45
 const POV_FOV_MAX = 100
-const POV_PITCH_MAX = THREE.MathUtils.degToRad(80)
-const POV_ROLL_MAX = THREE.MathUtils.degToRad(45)
-const POV_SENS = 0.0048
-const POV_LOCK_SENS = 0.0026
-const POV_KEY_YAW_SPEED = 1.9
-const POV_KEY_PITCH_SPEED = 1.5
-const POV_KEY_ROLL_SPEED = 1.3
-const POV_JOY_YAW_SPEED = 2.0
-const POV_JOY_PITCH_SPEED = 1.6
+const POV_PITCH_MAX = THREE.MathUtils.degToRad(65)
+const POV_SENS = 0.0026
+const POV_LOCK_SENS = 0.0014
+const POV_KEY_YAW_SPEED = 1.2
+const POV_KEY_PITCH_SPEED = 0.9
+const POV_JOY_YAW_SPEED = 1.3
+const POV_JOY_PITCH_SPEED = 0.9
 const NOOP = () => {}
 const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
@@ -65,6 +63,7 @@ const povLookDirTmp = new THREE.Vector3()
 const upRefVec = new THREE.Vector3()
 const rollMat = new THREE.Matrix4()
 const viewDir = new THREE.Vector3()
+const POV_FWD_RATE = 5 // filtro del rumbo en POV
 const WALL_UP_RATE = 2.6 // suavizado del giro de cámara con la pared (más bajo = menos mareo)
 const FOLLOW_FWD_RATE = 1.8 // filtro del rumbo de la ballita para la cámara de seguir
 const FOLLOW_TARGET_W = 6 // resorte crítico del objetivo (lateral: carriles, saltos)
@@ -94,8 +93,6 @@ const KEY_TO_ACTION = {
   arrowdown: 'down',
   s: 'down',
   k: 'down',
-  q: 'rollL',
-  e: 'rollR',
 }
 
 function wrapAngle(a) {
@@ -326,6 +323,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
   const povQuat = useRef(new THREE.Quaternion())
   const povUp = useRef(new THREE.Vector3(0, 1, 0))
   const povLastFwd = useRef(new THREE.Vector3(0, 0, 1))
+  const povLastRight = useRef(new THREE.Vector3(1, 0, 0))
   const povInit = useRef(false)
   const povDragging = useRef(false)
   const keysRef = useRef(new Set())
@@ -547,13 +545,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       const keys = keysRef.current
       const yawInput = (keys.has('right') ? -1 : 0) + (keys.has('left') ? 1 : 0)
       const pitchInput = (keys.has('up') ? 1 : 0) + (keys.has('down') ? -1 : 0)
-      const rollInput = (keys.has('rollL') ? 1 : 0) + (keys.has('rollR') ? -1 : 0)
       if (yawInput !== 0) st.yaw = wrapAngle(st.yaw + yawInput * POV_KEY_YAW_SPEED * h)
       if (pitchInput !== 0) {
         st.pitch = THREE.MathUtils.clamp(st.pitch + pitchInput * POV_KEY_PITCH_SPEED * h, -POV_PITCH_MAX, POV_PITCH_MAX)
-      }
-      if (rollInput !== 0) {
-        st.roll = THREE.MathUtils.clamp(st.roll + rollInput * POV_KEY_ROLL_SPEED * h, -POV_ROLL_MAX, POV_ROLL_MAX)
       }
 
       if (st.joyX !== 0 || st.joyY !== 0) {
@@ -564,18 +558,20 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       targetFov = st.fov
       targetNear = NEAR_POV
 
+      // rumbo filtrado: la mirada no tiembla con el vaivén del carril ni con los mecanismos
       if (selected.dir && selected.dir.lengthSq() > 1e-6) {
-        povFwd.copy(selected.dir).normalize()
-        povLastFwd.current.copy(povFwd)
-      } else {
-        povFwd.copy(povLastFwd.current)
+        if (povInit.current) povLastFwd.current.lerp(selected.dir, 1 - Math.exp(-POV_FWD_RATE * h))
+        else povLastFwd.current.copy(selected.dir)
+        if (povLastFwd.current.lengthSq() < 1e-6) povLastFwd.current.copy(selected.dir)
+        povLastFwd.current.normalize()
       }
+      povFwd.copy(povLastFwd.current)
 
       // En el tubo el up es el de la pared (la cámara gira con la pista); con horizonte estable (H)
       // o fuera del tubo, peso dominante de Y mundial para evitar roll y giros bruscos.
       const onWall = selected.phase === 'travel' && !horizonRef.current
       if (selected.up && selected.up.lengthSq() > 1e-6) {
-        const upWeight = onWall ? 1 : selected.phase === 'travel' ? 0.28 : 0.45
+        const upWeight = onWall ? 1 : selected.phase === 'travel' ? 0 : 0.45
         povTargetUp.copy(Y_AXIS).multiplyScalar(1 - upWeight).addScaledVector(selected.up, upWeight)
         if (povTargetUp.lengthSq() < 1e-4) povTargetUp.copy(Y_AXIS)
         else povTargetUp.normalize()
@@ -594,10 +590,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       }
 
       povRight.crossVectors(povFwd, povUp.current)
-      if (povRight.lengthSq() < 1e-4) {
-        povRight.crossVectors(povFwd, Math.abs(povFwd.y) > 0.9 ? sideVec.set(1, 0, 0) : Y_AXIS)
-      }
+      if (povRight.lengthSq() < 1e-3) povRight.copy(povLastRight.current) // tramo vertical: conserva el lateral
       povRight.normalize()
+      povLastRight.current.copy(povRight)
       povOrthoUp.crossVectors(povRight, povFwd).normalize()
       povMat.makeBasis(povRight, povOrthoUp, sideVec.copy(povFwd).negate())
       povTargetQuat.setFromRotationMatrix(povMat)
@@ -617,12 +612,11 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       const interacting = povDragging.current
         || yawInput !== 0
         || pitchInput !== 0
-        || rollInput !== 0
         || st.joyX !== 0
         || st.joyY !== 0
         || pointerLockedRef.current
         || gyroActiveRef.current
-      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 24 : 12) * h))
+      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : 8) * h))
       camera.quaternion.copy(povQuat.current)
 
       const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
@@ -917,8 +911,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   const gyroActiveRef = useRef(false)
   const [gyroNote, setGyroNote] = useState(null)
   // Horizonte estable (tecla H): la cámara mantiene el up del mundo en vez de girar con la pared.
-  const [horizon, setHorizon] = useState(false)
-  const horizonRef = useRef(false)
+  const horizonRef = useRef(true) // por defecto estable: sin roll
   useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
@@ -926,7 +919,6 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key.toLowerCase() !== 'h') return
       horizonRef.current = !horizonRef.current
-      setHorizon(horizonRef.current)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -1248,18 +1240,6 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       onToggleGyro={handleToggleGyro}
       onExitPov={() => onExitPov?.()}
     />
-    {cameraOnBall && (
-      <div
-        className="hint-horizonte"
-        style={{
-          position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', zIndex: 90,
-          padding: '3px 10px', borderRadius: 10, fontSize: 11, pointerEvents: 'none',
-          background: 'rgba(8, 12, 28, 0.62)', color: '#cfe0ff', border: '1px solid rgba(150, 180, 255, 0.25)',
-        }}
-      >
-        H · {horizon ? 'Horizonte estable' : 'Cámara pegada a la pared'}
-      </div>
-    )}
     </>
   )
 }
