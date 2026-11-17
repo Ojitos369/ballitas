@@ -29,10 +29,10 @@ const Barra = ({ label, v, color }) => (
   </div>
 )
 
-function SkinThumb({ skin, bodyCss }) {
+export function SkinThumb({ skin, bodyCss, size = 32 }) {
   const { id, hatColor, ribbonColor, pupilColor } = skin
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
       {id === 'gatita' && <>
         <polygon points="6,13 9,3 14,10" fill={bodyCss} />
         <polygon points="26,13 23,3 18,10" fill={bodyCss} />
