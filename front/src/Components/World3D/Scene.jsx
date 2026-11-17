@@ -12,7 +12,7 @@ import {
   DepthOfField,
 } from '@react-three/postprocessing'
 import * as THREE from 'three'
-import { NODE_R, mulberry32 } from '../../Core/world.js'
+import { NODE_R } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Ballita from './Ballita.jsx'
@@ -223,88 +223,6 @@ function NebulaDome({ r }) {
   )
 }
 
-function makeConstellationDotTex() {
-  if (typeof document === 'undefined') return null
-  const c = document.createElement('canvas')
-  c.width = 32
-  c.height = 32
-  const ctx = c.getContext('2d')
-  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 15)
-  g.addColorStop(0, 'rgba(255,255,255,1)')
-  g.addColorStop(0.3, 'rgba(170,230,255,0.75)')
-  g.addColorStop(1, 'rgba(80,180,255,0)')
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, 32, 32)
-  const tex = new THREE.CanvasTexture(c)
-  tex.needsUpdate = true
-  return tex
-}
-
-function ConstellationDome({ r }) {
-  const groupRef = useRef()
-  const { lineGeo, pointGeo, dotTex } = useMemo(() => {
-    const rng = mulberry32(9369)
-    const rad = r * 7.2
-    const count = 190
-    const pts = []
-    for (let i = 0; i < count; i++) {
-      const y = 1 - 2 * rng()
-      const rr = Math.sqrt(Math.max(0, 1 - y * y))
-      const a = rng() * Math.PI * 2
-      pts.push(new THREE.Vector3(Math.cos(a) * rr * rad, y * rad, Math.sin(a) * rr * rad))
-    }
-    const maxDist = rad * 0.24
-    const maxDist2 = maxDist * maxDist
-    const deg = new Uint8Array(count)
-    const linePos = []
-    for (let i = 0; i < count; i++) {
-      for (let j = i + 1; j < count; j++) {
-        if (deg[i] >= 3 || deg[j] >= 3) continue
-        if (pts[i].distanceToSquared(pts[j]) <= maxDist2) {
-          linePos.push(pts[i].x, pts[i].y, pts[i].z, pts[j].x, pts[j].y, pts[j].z)
-          deg[i]++
-          deg[j]++
-        }
-      }
-    }
-    const lg = new THREE.BufferGeometry()
-    lg.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3))
-    const pg = new THREE.BufferGeometry()
-    pg.setAttribute('position', new THREE.Float32BufferAttribute(pts.flatMap((p) => [p.x, p.y, p.z]), 3))
-    return { lineGeo: lg, pointGeo: pg, dotTex: makeConstellationDotTex() }
-  }, [r])
-
-  useEffect(() => () => {
-    lineGeo.dispose()
-    pointGeo.dispose()
-    dotTex?.dispose()
-  }, [lineGeo, pointGeo, dotTex])
-
-  useFrame((_, dt) => {
-    if (groupRef.current) groupRef.current.rotation.y += dt * 0.004
-  })
-
-  return (
-    <group ref={groupRef}>
-      <lineSegments geometry={lineGeo}>
-        <lineBasicMaterial color="#4da8ff" transparent opacity={0.13} depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
-      </lineSegments>
-      <points geometry={pointGeo}>
-        <pointsMaterial
-          color="#9ce4ff"
-          map={dotTex}
-          size={Math.max(1.2, r * 0.045)}
-          sizeAttenuation
-          transparent
-          opacity={0.55}
-          depthWrite={false}
-          fog={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </points>
-    </group>
-  )
-}
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
@@ -1181,16 +1099,9 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
           </meshBasicMaterial>
         </mesh>
         <NebulaDome r={r} />
-        <ConstellationDome r={r} />
-        <Stars
-          radius={r * 8}
-          depth={r * 2}
-          count={1200}
-          factor={Math.max(1.5, r * 0.035)}
-          saturation={0.25}
-          fade
-          speed={0.3}
-        />
+        {/* espacio profundo: dos capas de estrellas (lejanas finas + cercanas brillantes), sin líneas de constelación */}
+        <Stars radius={r * 8} depth={r * 2} count={2600} factor={Math.max(1.2, r * 0.028)} saturation={0.35} fade speed={0.2} />
+        <Stars radius={r * 6} depth={r * 1.2} count={500} factor={Math.max(2, r * 0.05)} saturation={0.6} fade speed={0.5} />
       </group>
 
       {/* Iluminación con contraste: clave cálida + relleno frío tenue */}
