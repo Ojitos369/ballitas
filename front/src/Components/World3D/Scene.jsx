@@ -95,10 +95,21 @@ const ejeR = new THREE.Vector3()
 // Vector radial (en ejeR) de P al eje del tubo de la ballita, buscando el punto del eje junto a P
 // (tramo actual o el anterior si P quedó detrás del inicio). Devuelve su longitud.
 function radioTubo(P, b, prevSeg) {
-  let s = b.seg
-  let u = b.segT + ejeR.copy(P).sub(b.pos).dot(b.dir) / s.length
-  for (let it = 0; it < 2; it++) {
-    if (u < 0 && s === b.seg && prevSeg && !prevSeg.air) { u = 1 + (u * s.length) / prevSeg.length; s = prevSeg }
+  // búsqueda por muestras en el tramo de eje que cubre la cámara (detrás de la ballita): en rizos y espirales
+  // una proyección local convergía al otro lado del lazo
+  const L = b.seg.length
+  const span = (P.distanceTo(b.pos) + 1.5) / L
+  const tienePrev = prevSeg && !prevSeg.air
+  let s = b.seg; let u = b.segT; let best = Infinity
+  for (let k = 0; k <= 12; k++) {
+    let uk = b.segT - span + (span * 1.15 * k) / 12
+    let sk = b.seg
+    if (uk < 0 && tienePrev) { uk = Math.max(0, 1 + (uk * L) / prevSeg.length); sk = prevSeg }
+    uk = THREE.MathUtils.clamp(uk, 0, 1)
+    const d2 = sk.curve.getPointAt(uk, ejeP).distanceToSquared(P)
+    if (d2 < best) { best = d2; s = sk; u = uk }
+  }
+  for (let it = 0; it < 2; it++) { // afinado local
     u = THREE.MathUtils.clamp(u, 0, 1)
     s.curve.getPointAt(u, ejeP)
     s.curve.getTangentAt(u, ejeT)
@@ -878,8 +889,12 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 
       // marco de colocación: en el tubo "arriba" es el de la ballita (hacia el eje), así la cámara
       // queda dentro del tubo aunque ruede por la pared o el techo; fuera, el de la vista
-      const enTubo = selected.phase === 'travel' && selected.seg && !selected.seg.air
-      if (selected.seg !== fs.seg) { fs.prevSeg = fs.seg; fs.seg = selected.seg }
+      // (tras un portal o un salto la posición se funde unos cuadros hacia el tubo: hasta llegar no hay riel)
+      const ejeB = selected._frame?.axis
+      const enTubo = selected.phase === 'travel' && selected.seg && !selected.seg.air &&
+        (!ejeB || selected.pos.distanceToSquared(ejeB) < (selected.seg.radius * 1.3) ** 2)
+      const segCam = enTubo ? selected.seg : null // en la ciudad b.seg conserva el último tramo: no cuenta
+      if (segCam !== fs.seg) { fs.prevSeg = fs.seg; fs.seg = segCam }
       const upGoalPos = enTubo && selected.up ? selected.up : upRefVec
       if (corte || !fs.hasPosUp) fs.posUp.copy(upGoalPos)
       else fs.posUp.lerp(upGoalPos, 1 - Math.exp(-WALL_UP_RATE * h))
