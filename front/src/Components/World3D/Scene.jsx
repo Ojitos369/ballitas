@@ -12,7 +12,7 @@ import {
   DepthOfField,
 } from '@react-three/postprocessing'
 import * as THREE from 'three'
-import { NODE_R } from '../../Core/world.js'
+import { NODE_R, mulberry32 } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Ballita from './Ballita.jsx'
@@ -149,9 +149,9 @@ const NEBULA_FRAG = /* glsl */ `
   float fbm(vec3 p) {
     float v = 0.0;
     float a = 0.5;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
       v += a * noise(p);
-      p = p * 2.04 + vec3(1.7, 9.2, 4.3);
+      p = p * 2.03 + vec3(1.7, 9.2, 4.3);
       a *= 0.5;
     }
     return v;
@@ -160,20 +160,32 @@ const NEBULA_FRAG = /* glsl */ `
   void main() {
     vec3 d = normalize(vDir);
     vec3 drift = vec3(uTime * 0.006, -uTime * 0.004, uTime * 0.003);
-    float n1 = fbm(d * 2.5 + drift);
-    float n2 = fbm(d * 4.8 - drift * 1.4 + n1 * 0.65);
+    // domain warping: filamentos y volutas en vez de manchas redondas
+    vec3 q = vec3(fbm(d * 2.2 + drift), fbm(d * 2.2 + vec3(5.2, 1.3, 2.8) - drift), fbm(d * 2.2 + vec3(8.1, 3.7, 6.4)));
+    float n1 = fbm(d * 2.6 + q * 1.6 + drift);
+    float n2 = fbm(d * 5.5 + q * 2.2 - drift * 1.4);
 
-    // Banda galáctica inclinada muy sutil
-    float band = exp(-abs(dot(d, normalize(vec3(0.28, 0.86, -0.42)))) * 2.4);
-    float wisp = smoothstep(0.36, 0.85, n1 * 0.6 + n2 * 0.4) * (0.35 + 0.65 * band);
+    // banda galáctica inclinada con núcleo brillante y franjas de polvo oscuro
+    vec3 bandN = normalize(vec3(0.28, 0.86, -0.42));
+    float band = exp(-pow(abs(dot(d, bandN)) * 3.2, 1.6));
+    float core = exp(-pow(length(d - normalize(vec3(0.75, -0.18, 0.62))) * 2.4, 2.0));
+    float dust = smoothstep(0.48, 0.7, fbm(d * 9.0 + q * 3.0)) * band;
 
-    vec3 colA = vec3(0.07, 0.11, 0.24);
-    vec3 colB = vec3(0.06, 0.16, 0.21);
-    vec3 colC = vec3(0.18, 0.09, 0.16);
-    vec3 col = mix(colA, colB, smoothstep(0.3, 0.75, n2));
-    col = mix(col, colC, band * smoothstep(0.5, 0.9, n1) * 0.55);
+    float cloud = smoothstep(0.32, 0.82, n1 * 0.65 + n2 * 0.35);
+    float wisp = cloud * (0.45 + 0.55 * band) + core * 0.8 * cloud;
+    wisp *= 1.0 - dust * 0.75;
 
-    gl_FragColor = vec4(col * wisp * 0.26, wisp * 0.26);
+    vec3 deep = vec3(0.10, 0.12, 0.42);   // azul profundo
+    vec3 teal = vec3(0.05, 0.42, 0.52);   // cian
+    vec3 mag = vec3(0.55, 0.12, 0.48);    // magenta
+    vec3 warm = vec3(0.95, 0.52, 0.28);   // núcleo cálido
+    vec3 col = mix(deep, teal, smoothstep(0.35, 0.8, n2));
+    col = mix(col, mag, smoothstep(0.45, 0.85, q.x) * 0.8);
+    col = mix(col, warm, core * smoothstep(0.4, 0.8, n1));
+    col += vec3(0.9, 0.85, 1.0) * pow(band, 6.0) * cloud * 0.25; // brillo lechoso del plano galáctico
+
+    float a = clamp(wisp * 0.55, 0.0, 0.7);
+    gl_FragColor = vec4(col * a, a);
   }
 `
 
@@ -209,6 +221,60 @@ function Parallax({ center, follow, children }) {
     ref.current.position.copy(center).add(parallaxOff)
   })
   return <group ref={ref} position={center}>{children}</group>
+}
+
+// Nubes de nebulosa a media distancia (sprites aditivos): al ir en una capa de parallax distinta de la
+// cúpula, se deslizan delante de ella y dan volumen al fondo.
+function makeCloudTex() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 256
+  const ctx = c.getContext('2d')
+  const rnd = mulberry32(4242)
+  for (let i = 0; i < 70; i++) { // muchas manchas suaves superpuestas = borde irregular y textura interior
+    const a = rnd() * Math.PI * 2
+    const d = Math.pow(rnd(), 1.4) * 80
+    const x = 128 + Math.cos(a) * d
+    const y = 128 + Math.sin(a) * d * 0.7
+    const rad = 18 + rnd() * 46
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad)
+    g.addColorStop(0, `rgba(255,255,255,${0.05 + rnd() * 0.08})`)
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 256, 256)
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+const CLOUD_COLORS = ['#5b3cff', '#17b4c9', '#c02d9a', '#3a6bff', '#ff7a45', '#8a2be2']
+function NebulaClouds({ r }) {
+  const { tex, items } = useMemo(() => {
+    const rnd = mulberry32(777)
+    const items = []
+    for (let i = 0; i < 16; i++) {
+      const y = 1 - 2 * rnd()
+      const rr = Math.sqrt(1 - y * y)
+      const a = rnd() * Math.PI * 2
+      const dist = r * (4.2 + rnd() * 1.2)
+      items.push({
+        pos: [Math.cos(a) * rr * dist, y * dist, Math.sin(a) * rr * dist],
+        scale: r * (1.6 + rnd() * 2.2),
+        rot: rnd() * Math.PI * 2,
+        color: CLOUD_COLORS[i % CLOUD_COLORS.length],
+        opacity: 0.16 + rnd() * 0.14,
+      })
+    }
+    return { tex: typeof document === 'undefined' ? null : makeCloudTex(), items }
+  }, [r])
+  useEffect(() => () => tex?.dispose(), [tex])
+  if (!tex) return null
+  return items.map((it, i) => (
+    <sprite key={i} position={it.pos} scale={[it.scale, it.scale * 0.7, 1]}>
+      <spriteMaterial map={tex} color={it.color} rotation={it.rot} transparent opacity={it.opacity}
+        depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
+    </sprite>
+  ))
 }
 
 function NebulaDome({ r }) {
@@ -1118,6 +1184,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         <Stars radius={r * 8} depth={r * 2} count={2400} factor={Math.max(1.2, r * 0.026)} saturation={0.35} fade speed={0.2} />
       </Parallax>
       <Parallax center={center} follow={0.6}>
+        <NebulaClouds r={r} />
         <Stars radius={r * 5.5} depth={r * 1.2} count={600} factor={Math.max(2, r * 0.045)} saturation={0.6} fade speed={0.4} />
       </Parallax>
       <Parallax center={center} follow={0.25}>
