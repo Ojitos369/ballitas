@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -4341,23 +4341,23 @@ export default function Paths({ world, sim = null, focusWay = null, worldRadius 
       }
 
       const nextMounted = reconcileLodSet(curMounted, selectTopIds(vidaCands, MAX_ACTIVE_VIDA), 1)
-      if (nextMounted) {
-        mountedRef.current = nextMounted
-        setMountedIds(nextMounted)
-      }
       const nearDesired = selectTopIds(nearCands, MAX_ACTIVE_NEAR)
       for (const id of (nextMounted ?? mountedRef.current)) nearDesired.add(id)
       const nextNear = reconcileLodSet(curNear, nearDesired, 1)
-      if (nextNear) {
-        nearRef.current = nextNear
-        setNearIds(nextNear)
-      }
       const tunelDesired = selectTopIds(tunelCands, MAX_ACTIVE_TUNEL)
       for (const id of (nextNear ?? nearRef.current)) tunelDesired.add(id)
       const nextTunel = reconcileLodSet(curTunel, tunelDesired)
-      if (nextTunel) {
-        tunelRef.current = nextTunel
-        setTunelIds(nextTunel)
+      if (nextMounted) mountedRef.current = nextMounted
+      if (nextNear) nearRef.current = nextNear
+      if (nextTunel) tunelRef.current = nextTunel
+      // Transición: React reparte el render del montaje (vida, interior, capas cercanas) en porciones
+      // de ~5 ms entre cuadros en vez de un único cuadro de cientos de ms en la primera entrada.
+      if (nextMounted || nextNear || nextTunel) {
+        startTransition(() => {
+          if (nextMounted) setMountedIds(nextMounted)
+          if (nextNear) setNearIds(nextNear)
+          if (nextTunel) setTunelIds(nextTunel)
+        })
       }
     }
 

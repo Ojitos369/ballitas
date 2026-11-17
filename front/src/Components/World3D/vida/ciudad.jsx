@@ -129,6 +129,12 @@ function buildAtlas(id, name) {
       ctx.stroke()
       let size = 46
       ctx.font = `bold ${size}px system-ui, sans-serif`
+      // El ancho escala casi lineal con el tamaño: se salta al tamaño estimado (par) y el bucle solo afina.
+      const w46 = ctx.measureText(t).width
+      if (w46 > 216) {
+        size = Math.max(16, Math.min(44, 2 * Math.floor((46 * 216) / w46 / 2) + 2))
+        ctx.font = `bold ${size}px system-ui, sans-serif`
+      }
       while (size > 16 && ctx.measureText(t).width > 216) {
         size -= 2
         ctx.font = `bold ${size}px system-ui, sans-serif`

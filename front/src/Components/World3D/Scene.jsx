@@ -20,7 +20,7 @@ import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
-import { precompilar } from './Precompilado.jsx'
+import Precompilado, { precompilar } from './Precompilado.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -1212,17 +1212,20 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <SimDriver sim={sim} speed={speed} />
       <Nodes world={sim.world} />
       <Paths world={sim.world} sim={sim} focusWay={focusedWay} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
+      {/* Precompilado: las ballitas nacen con pieles nuevas tras el precompilado inicial; sin esto la primera
+          vez que entran en cuadro (al acercarse en Camino/Ballita) se esperaba su enlace dentro del cuadro. */}
       {ballitas.map((b) => (
-        <Ballita
-          key={b.id}
-          b={b}
-          sim={sim}
-          selected={selected === b}
-          pov={pov && selected === b}
-          povMode={povActive}
-          worldRadius={r}
-          onSelect={povActive ? NOOP : onSelect}
-        />
+        <Precompilado key={b.id}>
+          <Ballita
+            b={b}
+            sim={sim}
+            selected={selected === b}
+            pov={pov && selected === b}
+            povMode={povActive}
+            worldRadius={r}
+            onSelect={povActive ? NOOP : onSelect}
+          />
+        </Precompilado>
       ))}
       <CameraRig
         mundo={mundo}
