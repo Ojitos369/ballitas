@@ -3,6 +3,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { getBallitas, markShared, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
@@ -14,6 +15,29 @@ const G = {
   eye: markShared(new THREE.SphereGeometry(0.045, 6, 5)),
   foot: markShared(new THREE.SphereGeometry(0.12, 7, 5)),
 }
+function merged(parts) {
+  const geos = parts.map(([geo, pos, scale, rot]) => {
+    const g = geo.clone()
+    g.scale(...scale)
+    if (rot) g.rotateZ(rot)
+    g.translate(...pos)
+    return g
+  })
+  const out = markShared(mergeGeometries(geos, false))
+  geos.forEach((g) => g.dispose())
+  return out
+}
+const COAT = merged([
+  [G.body, [0, 0.36, 0], [0.78, 0.8, 1.05]],
+  [G.head, [0, 0.78, 0.19], [1, 1, 1]],
+  [G.ear, [-0.16, 1, 0.12], [1, 1, 1], 0.17],
+  [G.ear, [0.16, 1, 0.12], [1, 1, 1], -0.17],
+])
+const BELLY = merged([[G.body, [0, 0.31, 0.27], [0.5, 0.58, 0.42]]])
+const INK = merged([
+  [G.eye, [-0.1, 0.82, 0.405], [1, 1, 1]], [G.eye, [0.1, 0.82, 0.405], [1, 1, 1]],
+  [G.foot, [-0.16, 0.1, 0.15], [1, 0.55, 1.2]], [G.foot, [0.16, 0.1, 0.15], [1, 0.55, 1.2]],
+])
 const M = new Map()
 function material(color) {
   if (!M.has(color)) M.set(color, markShared(new THREE.MeshLambertMaterial({ color })))
@@ -60,15 +84,9 @@ function Critter({ item, colors }) {
   })
   const [coat, belly, ink] = colors
   return <group ref={root} position={item.pos} quaternion={item.quat} scale={item.scale}>
-    <mesh geometry={G.body} material={material(coat)} position={[0, 0.36, 0]} scale={[0.78, 0.8, 1.05]} />
-    <mesh geometry={G.head} material={material(coat)} position={[0, 0.78, 0.19]} />
-    <mesh geometry={G.body} material={material(belly)} position={[0, 0.31, 0.27]} scale={[0.5, 0.58, 0.42]} />
-    <mesh geometry={G.ear} material={material(coat)} position={[-0.16, 1.0, 0.12]} rotation={[0, 0, 0.17]} />
-    <mesh geometry={G.ear} material={material(coat)} position={[0.16, 1.0, 0.12]} rotation={[0, 0, -0.17]} />
-    <mesh geometry={G.eye} material={material(ink)} position={[-0.1, 0.82, 0.405]} />
-    <mesh geometry={G.eye} material={material(ink)} position={[0.1, 0.82, 0.405]} />
-    <mesh geometry={G.foot} material={material(ink)} position={[-0.16, 0.1, 0.15]} scale={[1, 0.55, 1.2]} />
-    <mesh geometry={G.foot} material={material(ink)} position={[0.16, 0.1, 0.15]} scale={[1, 0.55, 1.2]} />
+    <mesh geometry={COAT} material={material(coat)} />
+    <mesh geometry={BELLY} material={material(belly)} />
+    <mesh geometry={INK} material={material(ink)} />
   </group>
 }
 

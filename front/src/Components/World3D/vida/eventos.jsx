@@ -1,6 +1,6 @@
 // Mecanismos de cambio: piezas low-poly compartidas y animación local sin estado React por cuadro.
 import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { getBallitas, markShared, mulberry32 } from './base.jsx'
@@ -93,11 +93,13 @@ function Piece({ kind, accent, refs }) {
 
 function Mechanism({ item, events }) {
   const root = useRef(); const moving = useRef(); const seen = useRef(new WeakSet())
+  const camera = useThree((s) => s.camera)
   const phase = useMemo(() => (item.seed % 1000) / 1000 * Math.PI * 2, [item.seed])
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime + phase
     const rootObj = root.current
     if (!rootObj) return
+    rootObj.visible = camera.position.distanceToSquared(item.pos) < 190 * 190
     rootObj.rotation.y = Math.sin(t * 0.25) * 0.035
     const part = moving.current
     if (item.kind === 'arbol') {
