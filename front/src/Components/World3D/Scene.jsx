@@ -978,7 +978,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       // Orientación: mira exacto a la ballita (siempre centrada). El "arriba" de la cámara se transporta del cuadro
       // anterior (sin giro propio) y se endereza poco a poco hacia followUp (Y del mundo, normal del planeta o pared
       // con H), con más fuerza cuanto mejor definido esté: lookAt con Y fija daba medio giro al pasar por la vertical.
-      viewDir.copy(c.target).sub(camera.position)
+      // se mira a la ballita (no al objetivo, que en la entrada aún viaja desde la vista anterior y la dejaba fuera de cuadro)
+      viewDir.copy(lookAhead).sub(camera.position)
       if (viewDir.lengthSq() > 1e-8) {
         viewDir.normalize()
         upRefVec.set(0, 1, 0).applyQuaternion(fs.quat)
@@ -993,13 +994,14 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         upRefVec.crossVectors(sideVec, viewDir)
         rollMat.makeBasis(sideVec, upRefVec, midVec.copy(viewDir).negate())
         rotGoal.setFromRotationMatrix(rollMat)
-        if (corte || entrando) fs.quat.copy(rotGoal)
+        if (corte) fs.quat.copy(rotGoal)
         else {
           // zona muerta: la mirada se suaviza y la ballita puede moverse dentro del tercio central, nunca fuera
-          fs.quat.slerp(rotGoal, 1 - Math.exp(-FOLLOW_ROT_W * h))
+          // (en la entrada gira más rápido y con zona amplia: nada de saltos, pero la ballita entra a cuadro desde el inicio)
+          fs.quat.slerp(rotGoal, 1 - Math.exp(-(entrando ? 4 * FOLLOW_ROT_W : FOLLOW_ROT_W) * h))
           // la zona es una elipse dentro del tercio central de la pantalla (más ancha en horizontal)
           midVec.copy(viewDir).applyQuaternion(occQuat.copy(fs.quat).invert())
-          const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * FOLLOW_ZONA
+          const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * (entrando ? 0.8 : FOLLOW_ZONA)
           const z = Math.max(1e-4, -midVec.z)
           const fuera = midVec.z >= 0 ? 4 : Math.hypot(midVec.x / (z * t * (camera.aspect || 1)), midVec.y / (z * t))
           if (fuera > 1) fs.quat.slerp(rotGoal, 1 - 1 / fuera)
