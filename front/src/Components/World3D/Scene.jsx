@@ -21,6 +21,7 @@ import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
 import Precompilado, { precompilar } from './Precompilado.jsx'
+import { clampYaw, decayOffset } from './povLook.js'
 
 const STEP = 0.05
 const FOV = 50
@@ -53,6 +54,11 @@ const desiredOff = new THREE.Vector3()
 const sideVec = new THREE.Vector3()
 const povEye = new THREE.Vector3()
 const povFwd = new THREE.Vector3()
+const povPrevDir = new THREE.Vector3()
+const povDirVel = new THREE.Vector3()
+const povLeadTarget = new THREE.Vector3()
+const povLeadTmp = new THREE.Vector3()
+const POV_LEAD_S = 0.4 // anticipación de la curva
 const povRight = new THREE.Vector3()
 const povOrthoUp = new THREE.Vector3()
 const collisionOrigin = new THREE.Vector3()
@@ -199,6 +205,8 @@ function createPovState() {
     gyroPitch: 0,
     gyroReset: true,
     centerRequested: false,
+    centering: false, // volviendo suavemente al seguimiento del camino
+    idle: 0, // s sin input de mirada
   }
 }
 
@@ -566,9 +574,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 
     const centerLook = () => {
       const st = povControlRef.current
-      st.yaw = 0
-      st.pitch = 0
-      st.roll = 0
+      st.centering = true // el offset vuelve a 0 con suavizado (ver useFrame) y sigue el camino
       st.gyroYaw = 0
       st.gyroPitch = 0
       st.gyroReset = true
@@ -599,7 +605,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       }
       if (dx !== 0 || dy !== 0) {
         const st = povControlRef.current
-        st.yaw = wrapAngle(st.yaw + dx * POV_SENS)
+        st.centering = false
+        st.idle = 0
+        st.yaw = clampYaw(st.yaw + dx * POV_SENS)
         st.pitch = THREE.MathUtils.clamp(st.pitch + dy * POV_SENS, -POV_PITCH_MAX, POV_PITCH_MAX)
       }
     }
@@ -620,7 +628,9 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       const my = e.movementY || 0
       if (mx === 0 && my === 0) return
       const st = povControlRef.current
-      st.yaw = wrapAngle(st.yaw - mx * POV_LOCK_SENS)
+      st.centering = false
+      st.idle = 0
+      st.yaw = clampYaw(st.yaw - mx * POV_LOCK_SENS)
       st.pitch = THREE.MathUtils.clamp(st.pitch - my * POV_LOCK_SENS, -POV_PITCH_MAX, POV_PITCH_MAX)
     }
 
@@ -730,9 +740,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       }
 
       if (st.centerRequested) {
-        st.yaw = 0
-        st.pitch = 0
-        st.roll = 0
+        st.centering = true
         st.gyroYaw = 0
         st.gyroPitch = 0
         st.gyroReset = true
@@ -742,22 +750,43 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       const keys = keysRef.current
       const yawInput = (keys.has('right') ? -1 : 0) + (keys.has('left') ? 1 : 0)
       const pitchInput = (keys.has('up') ? 1 : 0) + (keys.has('down') ? -1 : 0)
-      if (yawInput !== 0) st.yaw = wrapAngle(st.yaw + yawInput * POV_KEY_YAW_SPEED * h)
+      const joyActive = st.joyX !== 0 || st.joyY !== 0
+      if (yawInput !== 0 || pitchInput !== 0 || joyActive) { st.centering = false; st.idle = 0 }
+      if (yawInput !== 0) st.yaw = clampYaw(st.yaw + yawInput * POV_KEY_YAW_SPEED * h)
       if (pitchInput !== 0) {
         st.pitch = THREE.MathUtils.clamp(st.pitch + pitchInput * POV_KEY_PITCH_SPEED * h, -POV_PITCH_MAX, POV_PITCH_MAX)
       }
 
-      if (st.joyX !== 0 || st.joyY !== 0) {
-        st.yaw = wrapAngle(st.yaw - st.joyX * POV_JOY_YAW_SPEED * h)
+      if (joyActive) {
+        st.yaw = clampYaw(st.yaw - st.joyX * POV_JOY_YAW_SPEED * h)
         st.pitch = THREE.MathUtils.clamp(st.pitch - st.joyY * POV_JOY_PITCH_SPEED * h, -POV_PITCH_MAX, POV_PITCH_MAX)
       }
+
+      // sin input la mirada vuelve al camino (tras ~1.5 s) o, si se pidió centrar, enseguida
+      if (povDragging.current || pointerLockedRef.current || gyroActiveRef.current) st.idle = 0
+      else st.idle += h
+      st.yaw = decayOffset(st.yaw, h, st.idle, st.centering)
+      st.pitch = decayOffset(st.pitch, h, st.idle, st.centering)
+      st.roll = decayOffset(st.roll, h, st.idle, st.centering)
+      if (st.centering && st.yaw === 0 && st.pitch === 0 && st.roll === 0) st.centering = false
 
       targetFov = st.fov
       targetNear = NEAR_POV
 
-      // rumbo filtrado: la mirada no tiembla con el vaivén del carril ni con los mecanismos
+      // rumbo filtrado: la mirada no tiembla con el vaivén del carril ni con los mecanismos.
+      // Anticipa la curva: extrapola la tangente con su velocidad angular suavizada (~POV_LEAD_S hacia adelante).
       if (selected.dir && selected.dir.lengthSq() > 1e-6) {
-        if (povInit.current) povLastFwd.current.lerp(selected.dir, 1 - Math.exp(-POV_FWD_RATE * h))
+        povLeadTarget.copy(selected.dir)
+        if (povInit.current && h > 0) {
+          if (povPrevDir.dot(selected.dir) < 0.7) povDirVel.set(0, 0, 0) // salto de tramo: no extrapolar
+          else {
+            povLeadTmp.copy(selected.dir).sub(povPrevDir).divideScalar(h)
+            povDirVel.lerp(povLeadTmp, 1 - Math.exp(-6 * h))
+          }
+          povLeadTarget.addScaledVector(povDirVel, POV_LEAD_S).normalize()
+        } else povDirVel.set(0, 0, 0)
+        povPrevDir.copy(selected.dir)
+        if (povInit.current) povLastFwd.current.lerp(povLeadTarget, 1 - Math.exp(-POV_FWD_RATE * h))
         else povLastFwd.current.copy(selected.dir)
         if (povLastFwd.current.lengthSq() < 1e-6) povLastFwd.current.copy(selected.dir)
         povLastFwd.current.normalize()
@@ -791,7 +820,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       povMat.makeBasis(povRight, povOrthoUp, sideVec.copy(povFwd).negate())
       povTargetQuat.setFromRotationMatrix(povMat)
 
-      const totalYaw = wrapAngle(st.yaw + (gyroActiveRef.current ? st.gyroYaw : 0))
+      const totalYaw = clampYaw(st.yaw + (gyroActiveRef.current ? st.gyroYaw : 0))
       const totalPitch = THREE.MathUtils.clamp(
         st.pitch + (gyroActiveRef.current ? st.gyroPitch : 0),
         -POV_PITCH_MAX,
