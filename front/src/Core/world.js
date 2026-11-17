@@ -539,7 +539,8 @@ function buildSurface(s, rng) {
     for (let j = ri(rng, R.n[0], R.n[1]); j > 0; j--) {
       feats.push({ c: (0.12 + rng() * 0.76) * L, w: 3 + rng() * 5, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * (rng() < 0.35 ? -1 : 1) })
     }
-    const kicks = (s.switchesByLane?.get(lane.id) || []).map((sw) => [sw.u * L, 0.3, 5]) // [cresta, altura, subida]
+    // [cresta, altura, subida]: una rampa por estación (varios mecanismos en la misma u comparten rampa)
+    const kicks = [...new Set((s.switchesByLane?.get(lane.id) || []).map((sw) => sw.u))].map((u) => [u * L, 0.3, 5])
     for (let j = 0; j < R.jumps; j++) kicks.push([(0.2 + rng() * 0.6) * L, 0.5, 7])
     const arr = new Float32Array(nr + 1)
     for (let i = 0; i <= nr; i++) {
