@@ -65,7 +65,7 @@ const rollMat = new THREE.Matrix4()
 const viewDir = new THREE.Vector3()
 const POV_FWD_RATE = 5 // filtro del rumbo en POV
 const WALL_UP_RATE = 2.6 // suavizado del giro de cámara con la pared (más bajo = menos mareo)
-const FOLLOW_FWD_RATE = 1.8 // filtro del rumbo de la ballita para la cámara de seguir
+const FOLLOW_FWD_RATE = 3 // filtro del rumbo de la ballita para la cámara de seguir
 const FOLLOW_TARGET_W = 6 // resorte crítico del objetivo (lateral: carriles, saltos)
 const FOLLOW_OFF_W = 3 // resorte crítico de la posición relativa de la cámara
 const REL_DEFAULT = { yaw: 0, pitch: 0.42, dist: SEGUIR_DIST }
@@ -662,7 +662,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       const vel = selected.speed ?? 0
       const distK = selected.phase === 'travel' ? 1 : 1.15
 
-      // marco suavizado: adelante filtrado y "arriba" estable (Y del mundo) salvo modo pared (H)
+      // marco suavizado: adelante filtrado; "arriba" = Y del mundo en el tubo (horizonte estable), normal del planeta en la ciudad, pared con H
       if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.lerp(selected.dir, 1 - Math.exp(-FOLLOW_FWD_RATE * h))
       if (fs.fwd.lengthSq() < 1e-6) fs.fwd.copy(selected.dir ?? Y_AXIS)
       fs.fwd.normalize()
@@ -672,7 +672,10 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(selected.up)
         followUp.current.normalize()
       } else {
-        followUp.current.lerp(Y_AXIS, 1 - Math.exp(-WALL_UP_RATE * h)).normalize()
+        const upGoal = selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4 ? selected.up : Y_AXIS
+        followUp.current.lerp(upGoal, 1 - Math.exp(-WALL_UP_RATE * h))
+        if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(upGoal)
+        followUp.current.normalize()
       }
       sideVec.crossVectors(fs.fwd, followUp.current)
       if (sideVec.lengthSq() > 1e-3) fs.side.copy(sideVec.normalize()) // en tramos verticales se conserva el lateral previo
@@ -715,7 +718,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         .multiplyScalar(dist)
       springCD(fs.off, fs.offV, desiredOff, entrando ? 2.2 : FOLLOW_OFF_W, h)
       camera.position.copy(c.target).add(fs.off)
-      if (entrando && c.target.distanceTo(lookAhead) < 0.5 && Math.abs(fs.off.length() - dist) < 0.4) modo.current = 'siguiendo'
+      if (entrando && c.target.distanceTo(lookAhead) < 1 && Math.abs(fs.off.length() - dist) < 0.8) modo.current = 'siguiendo'
 
       // Evita que la cámara se meta dentro de la esfera de un planeta al seguir.
       const minPlanetR = NODE_R + 1.25
