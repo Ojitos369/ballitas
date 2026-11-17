@@ -91,7 +91,9 @@ function getSharedMats() {
   if (sharedMats) return sharedMats
   const chibi = getChibiTextures()
   sharedMats = {
-    click: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+    // Solo para el raycast (Mesh.raycast ignora visible): con opacidad 0 se dibujaba igual, una esfera 8×6 que
+    // envuelve a la ballita a r·2,2 y que de cerca entraba en postFX/DoF como un octágono.
+    click: new THREE.MeshBasicMaterial({ visible: false }),
     eye: new THREE.MeshBasicMaterial({ color: '#ffffff', map: chibi.eye }),
     catchlight: new THREE.MeshBasicMaterial({ color: '#ffffff' }),
     sparkle: new THREE.MeshBasicMaterial({
