@@ -1547,6 +1547,7 @@ const GEO = {
   arrow: buildArrowGeo(),
   sign: new THREE.PlaneGeometry(1.45, 0.72),
 }
+for (const k in GEO) GEO[k].name = 'paths:' + k // rastreo en ?stats=1 (__ballitasDebug)
 
 const GEO_BY = {
   cone: GEO.cone,

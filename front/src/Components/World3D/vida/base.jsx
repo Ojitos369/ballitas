@@ -16,6 +16,28 @@ export const BALL_R = WORLD.BALL_R ?? 0.5
 export const FILL = 0.6 // fracción máxima de la sección que puede ocupar el mini mundo
 export const mulberry32 = WORLD.mulberry32
 
+/**
+ * lodPiece(geo, s) -> geo o una esfera/cápsula sin transformar con menos segmentos si la pieza mide poco
+ * (radio × escala `s`). Ojos, mejillas y patitas se instancian cientos de veces por vía.
+ */
+export function lodPiece(geo, s = 1) {
+  const p = geo.parameters
+  if (!p || !(p.radius > 0)) return geo
+  const k = p.radius * s
+  geo.computeBoundingBox()
+  const bb = geo.boundingBox
+  // solo piezas recién creadas (sin translate/rotate previos), si no se perdería la transformación
+  if (geo.type === 'SphereGeometry' && p.widthSegments > 6 && k < 0.13 && Math.abs(bb.max.y + bb.min.y) < 1e-4 && Math.abs(bb.max.x + bb.min.x) < 1e-4) {
+    const tiny = k < 0.06
+    return new THREE.SphereGeometry(p.radius, tiny ? 5 : 6, tiny ? 4 : 5, p.phiStart, p.phiLength, p.thetaStart, p.thetaLength)
+  }
+  const h = p.height ?? p.length
+  if (geo.type === 'CapsuleGeometry' && p.capSegments > 2 && k < 0.1 && Math.abs(bb.max.y - (p.radius + h / 2)) < 1e-4) {
+    return new THREE.CapsuleGeometry(p.radius, h, 2, Math.min(p.radialSegments, 5))
+  }
+  return geo
+}
+
 /** Marca un recurso (geometría, material o textura) como compartido para que no se libere al desmontar un way. */
 export function markShared(obj) {
   if (!obj) return obj
@@ -34,6 +56,7 @@ export function markShared(obj) {
       if (v && (v.isBufferGeometry || v.isMaterial || v.isTexture)) {
         v.userData = v.userData || {}
         v.userData.shared = true
+        if (v.isBufferGeometry && !v.name) v.name = k // rastreo en ?stats=1 (__ballitasDebug)
       }
     }
   }

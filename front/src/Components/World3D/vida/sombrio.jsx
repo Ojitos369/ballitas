@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import {
+import { lodPiece,
   BALL_R, Billboard, CartelesDeRuta, EventStage, Instanced,
   Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame, laneGap,
   makePlacement, markShared, mulberry32, placeAlong, placeAlongInto, routeInfo,
@@ -20,6 +20,7 @@ const ESTILO_WARN = { color: '#ffe599', bg: 'rgba(34,14,48,0.92)', border: '#ff7
 
 // ═══════════════════════════ HELPERS DE GEOMETRÍA SUAVE ═══════════════════════════
 function prepGeo(geo, hex, shadeTop = null) {
+  geo = lodPiece(geo)
   const g = geo.index ? geo.toNonIndexed() : geo.clone()
   if (g.attributes.uv) g.deleteAttribute('uv')
   if (!g.attributes.normal) g.computeVertexNormals()

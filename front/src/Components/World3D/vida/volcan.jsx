@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import {
+import { lodPiece,
   BALL_R, Billboard, CartelesDeRuta, Critter, EventStage, Instanced,
   Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas, laneFrame,
   laneGap, makePlacement, markShared, maxHeight, mulberry32, placeAlong, placeAlongInto,
@@ -29,6 +29,7 @@ const _tmpPl = makePlacement()
 
 // ═══════════════════════════ UTILIDADES DE GEOMETRÍA SUAVE ═══════════════════════════
 function bakePart(geo, hex, tx = 0, ty = 0, tz = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
+  geo = lodPiece(geo, Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)))
   const g = geo.index ? geo.toNonIndexed() : geo.clone()
   if (sx !== 1 || sy !== 1 || sz !== 1) g.scale(sx, sy, sz)
   if (rx) g.rotateX(rx)

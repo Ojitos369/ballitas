@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import {
+import { lodPiece,
   BALL_R, Billboard, CartelesDeRuta, EventStage,
   Instanced, Soundless, TAU, buildSkyGeo, buildTerrainGeo, getBallitas,
   laneFrame, laneGap, lanesOf, makePlacement, markShared, mulberry32, placeAlong,
@@ -50,6 +50,7 @@ function scatterOnTerrain(way, n, rng, opts) {
 
 // ═══════════════════════════ HELPERS DE GEOMETRÍA SUAVE MULTICOLOR ═══════════════════════════
 function paintPart(rawGeo, hex, { t = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1], shade = 0 } = {}) {
+  rawGeo = lodPiece(rawGeo, Math.max(Math.abs(s[0]), Math.abs(s[1]), Math.abs(s[2])))
   if (!rawGeo.attributes.normal) rawGeo.computeVertexNormals()
   const g = rawGeo.index ? rawGeo.toNonIndexed() : rawGeo.clone()
   if (g.attributes.uv) g.deleteAttribute('uv')

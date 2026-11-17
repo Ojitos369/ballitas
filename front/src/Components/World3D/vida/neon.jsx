@@ -57,14 +57,14 @@ function mergeParts(parts) {
 // ───────────────────────── Elenco Chibi y Vehículos Neón ─────────────────────────
 function buildChibiRobotGeos() {
   // Cuerpo tintable por instanceColor (cápsula suave + cabeza redonda + antenita + bracitos + patitas)
-  const torso = new THREE.CapsuleGeometry(0.28, 0.22, 4, 8).translate(0, 0.34, 0)
-  const head = new THREE.SphereGeometry(0.32, 10, 8).scale(1.08, 0.94, 0.96).translate(0, 0.72, 0)
-  const ant = new THREE.CylinderGeometry(0.025, 0.03, 0.18, 6).translate(0, 1.06, 0)
-  const bulb = new THREE.SphereGeometry(0.065, 8, 6).translate(0, 1.17, 0)
-  const armL = new THREE.CapsuleGeometry(0.08, 0.14, 4, 6).rotateZ(0.45).translate(-0.34, 0.36, 0.04)
-  const armR = new THREE.CapsuleGeometry(0.08, 0.14, 4, 6).rotateZ(-0.45).translate(0.34, 0.36, 0.04)
-  const footL = new THREE.SphereGeometry(0.11, 8, 6).scale(1, 0.65, 1.25).translate(-0.15, 0.06, 0.05)
-  const footR = new THREE.SphereGeometry(0.11, 8, 6).scale(1, 0.65, 1.25).translate(0.15, 0.06, 0.05)
+  const torso = new THREE.CapsuleGeometry(0.28, 0.22, 2, 8).translate(0, 0.34, 0)
+  const head = new THREE.SphereGeometry(0.32, 9, 7).scale(1.08, 0.94, 0.96).translate(0, 0.72, 0)
+  const ant = new THREE.CylinderGeometry(0.025, 0.03, 0.18, 4, 1, true).translate(0, 1.06, 0)
+  const bulb = new THREE.SphereGeometry(0.065, 6, 4).translate(0, 1.17, 0)
+  const armL = new THREE.CapsuleGeometry(0.08, 0.14, 2, 5).rotateZ(0.45).translate(-0.34, 0.36, 0.04)
+  const armR = new THREE.CapsuleGeometry(0.08, 0.14, 2, 5).rotateZ(-0.45).translate(0.34, 0.36, 0.04)
+  const footL = new THREE.SphereGeometry(0.11, 6, 4).scale(1, 0.65, 1.25).translate(-0.15, 0.06, 0.05)
+  const footR = new THREE.SphereGeometry(0.11, 6, 4).scale(1, 0.65, 1.25).translate(0.15, 0.06, 0.05)
   const body = mergeParts([
     prepGeo(torso, '#d8e4ff', '#ffffff'),
     prepGeo(head, '#eef4ff', '#ffffff'),
@@ -75,10 +75,10 @@ function buildChibiRobotGeos() {
   ])
 
   // Visor LED oscuro + ojos felices cian/brillantes + mejillas neón
-  const visor = new THREE.SphereGeometry(0.26, 16, 12).scale(1.12, 0.68, 0.52).translate(0, 0.73, 0.19)
-  const eyeL = new THREE.SphereGeometry(0.055, 10, 8).translate(-0.11, 0.75, 0.32)
-  const eyeR = new THREE.SphereGeometry(0.055, 10, 8).translate(0.11, 0.75, 0.32)
-  const core = new THREE.SphereGeometry(0.09, 10, 8).scale(1, 1, 0.45).translate(0, 0.38, 0.25)
+  const visor = new THREE.SphereGeometry(0.26, 10, 7).scale(1.12, 0.68, 0.52).translate(0, 0.73, 0.19)
+  const eyeL = new THREE.SphereGeometry(0.055, 6, 5).translate(-0.11, 0.75, 0.32)
+  const eyeR = new THREE.SphereGeometry(0.055, 6, 5).translate(0.11, 0.75, 0.32)
+  const core = new THREE.SphereGeometry(0.09, 8, 5).scale(1, 1, 0.45).translate(0, 0.38, 0.25)
   const face = mergeParts([
     prepGeo(visor, '#0e1326'),
     prepGeo(eyeL, '#2bffe8'), prepGeo(eyeR, '#2bffe8'),
@@ -128,10 +128,10 @@ function buildHoloTaxiGeo() {
 
 // ───────────────────────── Props del diorama Cyber-Estadio ─────────────────────────
 function buildCyberTowerGeo() {
-  const base = new THREE.CylinderGeometry(0.24, 0.28, 0.52, 12).translate(0, 0.26, 0)
-  const band1 = new THREE.TorusGeometry(0.245, 0.024, 8, 16).rotateX(Math.PI * 0.5).translate(0, 0.22, 0)
-  const band2 = new THREE.TorusGeometry(0.235, 0.024, 8, 16).rotateX(Math.PI * 0.5).translate(0, 0.42, 0)
-  const spire = new THREE.ConeGeometry(0.16, 0.24, 12).translate(0, 0.62, 0)
+  const base = new THREE.CylinderGeometry(0.24, 0.28, 0.52, 8).translate(0, 0.26, 0)
+  const band1 = new THREE.TorusGeometry(0.245, 0.024, 4, 10).rotateX(Math.PI * 0.5).translate(0, 0.22, 0)
+  const band2 = new THREE.TorusGeometry(0.235, 0.024, 4, 10).rotateX(Math.PI * 0.5).translate(0, 0.42, 0)
+  const spire = new THREE.ConeGeometry(0.16, 0.24, 8).translate(0, 0.62, 0)
   return mergeParts([
     prepGeo(base, '#151c36', '#24315c'),
     prepGeo(band1, '#ffffff'),
@@ -141,9 +141,9 @@ function buildCyberTowerGeo() {
 }
 
 function buildNeonLampGeo() {
-  const pole = new THREE.CylinderGeometry(0.024, 0.036, 0.58, 10).translate(0, 0.29, 0)
-  const arch = new THREE.TorusGeometry(0.12, 0.02, 8, 14, Math.PI).translate(0.12, 0.56, 0)
-  const bulb = new THREE.SphereGeometry(0.065, 10, 8).translate(0.23, 0.54, 0)
+  const pole = new THREE.CylinderGeometry(0.024, 0.036, 0.58, 6, 1, true).translate(0, 0.29, 0)
+  const arch = new THREE.TorusGeometry(0.12, 0.02, 4, 8, Math.PI).translate(0.12, 0.56, 0)
+  const bulb = new THREE.SphereGeometry(0.065, 6, 5).translate(0.23, 0.54, 0)
   return mergeParts([
     prepGeo(pole, '#1d243b', '#2b3860'),
     prepGeo(arch, '#2bffe8'),
@@ -152,9 +152,9 @@ function buildNeonLampGeo() {
 }
 
 function buildHoloTreeGeo() {
-  const stem = new THREE.CylinderGeometry(0.04, 0.08, 0.44, 12).translate(0, 0.22, 0)
-  const c1 = new THREE.SphereGeometry(0.22, 14, 12).scale(1.15, 0.72, 1.15).translate(0, 0.54, 0)
-  const c2 = new THREE.SphereGeometry(0.15, 12, 10).scale(1.1, 0.75, 1.1).translate(-0.15, 0.45, 0.04)
+  const stem = new THREE.CylinderGeometry(0.04, 0.08, 0.44, 6).translate(0, 0.22, 0)
+  const c1 = new THREE.SphereGeometry(0.22, 10, 7).scale(1.15, 0.72, 1.15).translate(0, 0.54, 0)
+  const c2 = new THREE.SphereGeometry(0.15, 8, 6).scale(1.1, 0.75, 1.1).translate(-0.15, 0.45, 0.04)
   return mergeParts([
     prepGeo(stem, '#2b3860'),
     prepGeo(c1, '#2bffe8', '#a8fff6'),
@@ -176,9 +176,9 @@ function buildBleacherGeo() {
 }
 
 function buildBarrierGeo() {
-  const pL = new THREE.CapsuleGeometry(0.024, 0.18, 6, 8).translate(0, 0.09, -0.45)
-  const pR = new THREE.CapsuleGeometry(0.024, 0.18, 6, 8).translate(0, 0.09, 0.45)
-  const bar = new THREE.CapsuleGeometry(0.02, 0.92, 6, 8).rotateX(Math.PI * 0.5).translate(0, 0.14, 0)
+  const pL = new THREE.CylinderGeometry(0.024, 0.024, 0.22, 5, 1).translate(0, 0.11, -0.45)
+  const pR = new THREE.CylinderGeometry(0.024, 0.024, 0.22, 5, 1).translate(0, 0.11, 0.45)
+  const bar = new THREE.CylinderGeometry(0.02, 0.02, 0.96, 5, 1).rotateX(Math.PI * 0.5).translate(0, 0.14, 0)
   return mergeParts([prepGeo(pL, '#222b4a'), prepGeo(pR, '#222b4a'), prepGeo(bar, '#ffffff')])
 }
 

@@ -21,17 +21,17 @@ function smooth01(e0, e1, x) {
 function strut(a, b, r) {
   const dir = new THREE.Vector3().subVectors(b, a)
   const len = dir.length()
-  const g = new THREE.CylinderGeometry(r, r, len, 5, 1)
+  const g = new THREE.CylinderGeometry(r, r, len, 3, 1, true)
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()))
   g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
   return g
 }
 
 // Arco de la banda (eje local Z = tangente, Y = lejos del suelo): aro principal, arco superior con
-// tirantes en celosía y dos flancos orgánicos que bajan a las pasarelas. ~700 triángulos.
+// tirantes en celosía y dos flancos orgánicos que bajan a las pasarelas. ~510 triángulos (era 980: cientos por vía).
 function buildRibGeo() {
-  const parts = [new THREE.TorusGeometry(1, 0.045, 6, 40)]
-  const arch = new THREE.TorusGeometry(1.2, 0.03, 5, 20, Math.PI * 0.7)
+  const parts = [new THREE.TorusGeometry(1, 0.045, 4, 32)]
+  const arch = new THREE.TorusGeometry(1.2, 0.03, 4, 14, Math.PI * 0.7)
   arch.rotateZ(Math.PI * 0.15)
   parts.push(arch)
   for (const k of [-0.3, -0.15, 0, 0.15, 0.3]) {
@@ -43,7 +43,7 @@ function buildRibGeo() {
     ))
   }
   for (const rz of [-Math.PI * 0.14, Math.PI * 0.86]) {
-    const f = new THREE.TorusGeometry(1.12, 0.026, 5, 10, Math.PI * 0.28)
+    const f = new THREE.TorusGeometry(1.12, 0.026, 4, 7, Math.PI * 0.28)
     f.rotateZ(rz)
     parts.push(f)
   }
@@ -52,6 +52,7 @@ function buildRibGeo() {
   parts.forEach((p) => p.dispose())
   flat.forEach((p) => p.dispose())
   g.userData.shared = true
+  g.name = 'tunel:rib'
   return g
 }
 let RIB_GEO = null
