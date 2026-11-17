@@ -28,8 +28,10 @@ const _tmpC = new THREE.Color()
 const _tmpPl = makePlacement()
 
 // ═══════════════════════════ UTILIDADES DE GEOMETRÍA SUAVE ═══════════════════════════
+let LOD_MUL = 1 // escala extra que ve lodPiece al construir variantes lejanas
+
 function bakePart(geo, hex, tx = 0, ty = 0, tz = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
-  geo = lodPiece(geo, Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)))
+  geo = lodPiece(geo, LOD_MUL * Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)))
   const g = geo.index ? geo.toNonIndexed() : geo.clone()
   if (sx !== 1 || sy !== 1 || sz !== 1) g.scale(sx, sy, sz)
   if (rx) g.rotateX(rx)
@@ -92,7 +94,7 @@ function getGeos() {
   ])
 
   // 2. Gólem de lava chibi (basalto redondeado con grietas de magma)
-  const golem = mergePainted([
+  const build_golem = () => mergePainted([
     bakePart(sph16, '#3a2b2e', 0, 0.32, 0, 0, 0, 0, 0.28, 0.26, 0.24), // torso roca
     bakePart(sph12, '#ff5a1f', 0, 0.30, 0.18, 0, 0, 0, 0.13, 0.11, 0.10), // núcleo magma
     bakePart(sph16, '#4a363a', 0, 0.62, 0.02, 0, 0, 0, 0.22, 0.18, 0.20), // cabeza chibi
@@ -104,6 +106,11 @@ function getGeos() {
     bakePart(sph12, '#2b1e20', -0.14, 0.08, 0.04, 0, 0, 0, 0.09, 0.08, 0.11), // pie L
     bakePart(sph12, '#2b1e20', 0.14, 0.08, 0.04, 0, 0, 0, 0.09, 0.08, 0.11), // pie R
   ])
+  const golem = build_golem()
+  // Variante de gradas: el público se instancia a escala ~0.15, así que basta con menos segmentos.
+  LOD_MUL = 0.3
+  const golemCrowd = build_golem()
+  LOD_MUL = 1
 
   // 3. Salamandra de fuego chibi (alargada, brillante, manchas ígneas)
   const salamander = mergePainted([
@@ -198,7 +205,7 @@ function getGeos() {
   cyl6.dispose()
 
   GEOS = markShared({
-    dragon, golem, salamander, forger, volcano, forge, crystal, basalt,
+    dragon, golem, golemCrowd, salamander, forger, volcano, forge, crystal, basalt,
     stand, lamp, fence, pennant, orb, meteor, hexPillar,
     sph16, sph12, cap12, cyl16, cone16, tor16,
   })
@@ -991,7 +998,7 @@ function VolcanoCrowdAndBehavior({ way, standItems }) {
 
   return (
     <group>
-      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.golem, M.clay, crowd.length]} />}
+      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.golemCrowd, M.clay, crowd.length]} />}
       {sleepers.length > 0 && <instancedMesh ref={sleepRef} args={[G.golem, M.clay, sleepers.length]} />}
       {emberWisps.length > 0 && <instancedMesh ref={wispRef} args={[G.orb, M.glowGold, emberWisps.length]} />}
     </group>

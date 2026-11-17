@@ -27,13 +27,21 @@ export function lodPiece(geo, s = 1) {
   geo.computeBoundingBox()
   const bb = geo.boundingBox
   // solo piezas recién creadas (sin translate/rotate previos), si no se perdería la transformación
-  if (geo.type === 'SphereGeometry' && p.widthSegments > 6 && k < 0.13 && Math.abs(bb.max.y + bb.min.y) < 1e-4 && Math.abs(bb.max.x + bb.min.x) < 1e-4) {
-    const tiny = k < 0.06
-    return new THREE.SphereGeometry(p.radius, tiny ? 5 : 6, tiny ? 4 : 5, p.phiStart, p.phiLength, p.thetaStart, p.thetaLength)
+  const centered = Math.abs(bb.max.x + bb.min.x) < 1e-4
+  if (geo.type === 'SphereGeometry' && k < 0.35 && centered && Math.abs(bb.max.y + bb.min.y) < 1e-4 && p.thetaLength >= Math.PI - 1e-6) {
+    const [w, h] = k < 0.06 ? [5, 4] : k < 0.13 ? [6, 5] : [10, 8]
+    if (p.widthSegments > w) return new THREE.SphereGeometry(p.radius, w, Math.min(p.heightSegments, h), p.phiStart, p.phiLength)
   }
   const h = p.height ?? p.length
-  if (geo.type === 'CapsuleGeometry' && p.capSegments > 2 && k < 0.1 && Math.abs(bb.max.y - (p.radius + h / 2)) < 1e-4) {
-    return new THREE.CapsuleGeometry(p.radius, h, 2, Math.min(p.radialSegments, 5))
+  if (geo.type === 'CapsuleGeometry' && centered && Math.abs(bb.max.y - (p.radius + h / 2)) < 1e-4) {
+    const [cs, rs] = k < 0.1 ? [2, 5] : [4, 10]
+    if (p.capSegments > cs || p.radialSegments > rs) return new THREE.CapsuleGeometry(p.radius, h, Math.min(p.capSegments, cs), Math.min(p.radialSegments, rs))
+  }
+  if (geo.type === 'TorusGeometry' && k < 0.5 && centered && Math.abs(bb.max.z + bb.min.z) < 1e-4 && (p.radialSegments > 5 || p.tubularSegments > 16)) {
+    return new THREE.TorusGeometry(p.radius, p.tube, Math.min(p.radialSegments, 5), Math.min(p.tubularSegments, 16), p.arc)
+  }
+  if (geo.type === 'ConeGeometry' && k < 0.3 && centered && Math.abs(bb.max.y + bb.min.y) < 1e-4 && p.radialSegments > 8) {
+    return new THREE.ConeGeometry(p.radius, p.height, 8, p.heightSegments, p.openEnded, p.thetaStart, p.thetaLength)
   }
   return geo
 }

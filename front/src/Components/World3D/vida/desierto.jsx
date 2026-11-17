@@ -30,8 +30,10 @@ const _tmpC = new THREE.Color()
 const _tmpPl = makePlacement()
 
 // ═══════════════════════════ UTILIDADES DE GEOMETRÍA SUAVE ═══════════════════════════
+let LOD_MUL = 1 // escala extra que ve lodPiece al construir variantes lejanas
+
 function bakePart(geo, hex, tx = 0, ty = 0, tz = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
-  geo = lodPiece(geo, Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)))
+  geo = lodPiece(geo, LOD_MUL * Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)))
   const g = geo.index ? geo.toNonIndexed() : geo.clone()
   if (sx !== 1 || sy !== 1 || sz !== 1) g.scale(sx, sy, sz)
   if (rx) g.rotateX(rx)
@@ -143,7 +145,7 @@ function getGeos() {
   ])
 
   // 5. Fenec / Espíritu chibi espectador (para gradas y cazadores de escarabajos)
-  const spectator = mergePainted([
+  const build_spectator = () => mergePainted([
     bakePart(sph16, '#f4c078', 0, 0.24, 0, 0, 0, 0, 0.19, 0.20, 0.19), // cuerpo túnica
     bakePart(sph16, '#fde2b8', 0, 0.48, 0, 0, 0, 0, 0.18, 0.16, 0.18), // cabeza
     bakePart(tor16, '#e76f51', 0, 0.59, 0, Math.PI / 2, 0, 0, 0.15, 0.15, 0.28), // turbante
@@ -155,6 +157,11 @@ function getGeos() {
     bakePart(sph12, '#fde2b8', -0.20, 0.34, 0.06, 0, 0, 0.4, 0.055, 0.09, 0.055), // brazo L arriba
     bakePart(sph12, '#fde2b8', 0.20, 0.34, 0.06, 0, 0, -0.4, 0.055, 0.09, 0.055), // brazo R arriba
   ])
+  const spectator = build_spectator()
+  // Variante de gradas: el público se instancia a escala ~0.15, así que basta con menos segmentos.
+  LOD_MUL = 0.3
+  const spectatorCrowd = build_spectator()
+  LOD_MUL = 1
 
   // 6. Cactus saguaro suave con botón floral
   const cactus = mergePainted([
@@ -237,7 +244,7 @@ function getGeos() {
   petal.translate(0, 0, 0.16)
 
   GEOS = markShared({
-    camel, snake, scorpion, vulture, spectator, cactus, palm, pyramid, adobe, rock,
+    camel, snake, scorpion, vulture, spectator, spectatorCrowd, cactus, palm, pyramid, adobe, rock,
     stand, lamp, fence, pennant, orb, star, petal,
     sph16, sph12, cap12, cyl16, cone16, cone4, tor16,
   })
@@ -1085,7 +1092,7 @@ function LivingCrowdAndBehavior({ way, standItems }) {
 
   return (
     <group>
-      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.spectator, M.clay, crowd.length]} />}
+      {crowd.length > 0 && <instancedMesh ref={crowdRef} args={[G.spectatorCrowd, M.clay, crowd.length]} />}
       {sleepers.length > 0 && <instancedMesh ref={sleepRef} args={[G.camel, M.clay, sleepers.length]} />}
       {scarabs.length > 0 && <instancedMesh ref={scarabRef} args={[G.orb, M.glowAmber, scarabs.length]} />}
     </group>
