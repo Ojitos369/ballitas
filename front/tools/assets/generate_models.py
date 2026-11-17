@@ -336,7 +336,7 @@ def build_tree(mat):
         set_bm_vertex_color(bm, col)
         objs.append(create_mesh_obj(f"tree_blob_{i}", bm, mat))
 
-    obj = join_and_bake(objs, "tree", mat, subsurf_levels=2)
+    obj = join_and_bake(objs, "tree", mat, subsurf_levels=1)
     normalize_vertical(obj)
     return obj
 
@@ -371,7 +371,7 @@ def build_pine(mat):
                 v.co.z += 0.015 * math.sin(ang * 5.0)
         objs.append(create_mesh_obj(f"pine_tier_{i}", bm, mat))
 
-    obj = join_and_bake(objs, "pine", mat, subsurf_levels=2)
+    obj = join_and_bake(objs, "pine", mat, subsurf_levels=1)
     normalize_vertical(obj)
     return obj
 
@@ -407,8 +407,8 @@ def build_mushroom(mat):
     bm_cap = make_lathe(cap_prof, segs=16, col_bot=(0.90, 0.90, 0.90, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
     objs.append(create_mesh_obj("mush_cap", bm_cap, mat))
 
-    # Laminillas radiales bajo el sombrero
-    num_gills = 12
+    # Laminillas radiales bajo el sombrero (pocas para mantener bajo polígono)
+    num_gills = 8
     for i in range(num_gills):
         ang = (2.0 * math.pi * i) / num_gills
         bm_g = bmesh.new()
@@ -428,7 +428,6 @@ def build_mushroom(mat):
         (-0.20, 0.08, 0.82, 0.070),
         (0.05, -0.22, 0.80, 0.068),
         (-0.08, 0.24, 0.77, 0.060),
-        (0.24, -0.14, 0.74, 0.058),
     ]
     for i, (sx, sy, sz, sr) in enumerate(spots):
         bm_s = bmesh.new()
@@ -439,7 +438,7 @@ def build_mushroom(mat):
         set_bm_vertex_color(bm_s, (1.0, 1.0, 1.0, 1.0))
         objs.append(create_mesh_obj(f"mush_spot_{i}", bm_s, mat))
 
-    obj = join_and_bake(objs, "mushroom", mat, subsurf_levels=1)
+    obj = join_and_bake(objs, "mushroom", mat, subsurf_levels=0)
     normalize_vertical(obj)
     return obj
 
@@ -494,7 +493,7 @@ def build_crystal(mat):
     bm_base = make_lathe([(0.0, 0.0), (0.24, 0.0), (0.22, 0.06), (0.14, 0.13), (0.0, 0.14)], segs=8, col_bot=(0.80, 0.82, 0.85, 1.0), col_top=(0.88, 0.90, 0.93, 1.0))
     objs.append(create_mesh_obj("crystal_base", bm_base, mat))
 
-    obj = join_and_bake(objs, "crystal", mat, subsurf_levels=0, bevel_width=0.012, bevel_segments=2)
+    obj = join_and_bake(objs, "crystal", mat, subsurf_levels=0, bevel_width=0.012, bevel_segments=1)
     normalize_vertical(obj)
     return obj
 
@@ -534,7 +533,7 @@ def build_rock(mat):
         set_bm_height_gradient(bm, 0.0, 0.64, (0.83, 0.83, 0.83, 1.0), col)
         objs.append(create_mesh_obj(f"rock_{i}", bm, mat))
 
-    obj = join_and_bake(objs, "rock", mat, subsurf_levels=1)
+    obj = join_and_bake(objs, "rock", mat, subsurf_levels=0)
     normalize_vertical(obj)
     return obj
 
@@ -591,7 +590,7 @@ def build_flower(mat):
         set_bm_vertex_color(bm_p, (0.99, 0.99, 1.0, 1.0))
         objs.append(create_mesh_obj(f"flower_petal_{i}", bm_p, mat))
 
-    obj = join_and_bake(objs, "flower", mat, subsurf_levels=2)
+    obj = join_and_bake(objs, "flower", mat, subsurf_levels=1)
     normalize_vertical(obj)
     return obj
 
@@ -612,7 +611,7 @@ def build_coral(mat):
         bm = make_tube_chain(pts, rads, segs=7, col_bot=(0.84, 0.84, 0.84, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
         objs.append(create_mesh_obj(f"coral_b_{i}", bm, mat))
 
-    obj = join_and_bake(objs, "coral", mat, subsurf_levels=2)
+    obj = join_and_bake(objs, "coral", mat, subsurf_levels=1)
     normalize_vertical(obj)
     return obj
 
@@ -658,7 +657,7 @@ def build_ice_spire(mat):
             v.co = (rot @ v.co) + Vector((off[0], off[1], 0.0))
         objs.append(create_mesh_obj(f"ice_{i}", bm, mat))
 
-    obj = join_and_bake(objs, "ice_spire", mat, subsurf_levels=0, bevel_width=0.010, bevel_segments=2)
+    obj = join_and_bake(objs, "ice_spire", mat, subsurf_levels=0, bevel_width=0.010, bevel_segments=1)
     normalize_vertical(obj)
     return obj
 
@@ -699,7 +698,7 @@ def build_cactus(mat):
     set_bm_vertex_color(bm_top, (1.0, 0.97, 0.98, 1.0))
     objs.append(create_mesh_obj("cactus_top", bm_top, mat))
 
-    obj = join_and_bake(objs, "cactus", mat, subsurf_levels=1)
+    obj = join_and_bake(objs, "cactus", mat, subsurf_levels=0)
     normalize_vertical(obj)
     return obj
 
@@ -752,7 +751,7 @@ def build_lamp(mat):
         v.co.x += 0.26
     objs.append(create_mesh_obj("lamp_head", bm_head, mat))
 
-    obj = join_and_bake(objs, "lamp", mat, subsurf_levels=1)
+    obj = join_and_bake(objs, "lamp", mat, subsurf_levels=0)
     normalize_vertical(obj)
     return obj
 
@@ -779,14 +778,11 @@ def build_pylon(mat):
     for i in range(4):
         j = (i + 1) % 4
         # Patas principales
-        objs.append(create_mesh_obj(f"pyl_leg_{i}", make_strut(bot_p[i], top_p[i], 0.026, 6, (0.92, 0.93, 0.95, 1.0)), mat))
+        objs.append(create_mesh_obj(f"pyl_leg_{i}", make_strut(bot_p[i], top_p[i], 0.026, 4, (0.92, 0.93, 0.95, 1.0)), mat))
         # Anillos horizontales
-        objs.append(create_mesh_obj(f"pyl_bot_{i}", make_strut(bot_p[i], bot_p[j], 0.020, 6, (0.88, 0.89, 0.91, 1.0)), mat))
-        objs.append(create_mesh_obj(f"pyl_mid_{i}", make_strut(mid_p[i], mid_p[j], 0.018, 6, (0.90, 0.91, 0.93, 1.0)), mat))
-        objs.append(create_mesh_obj(f"pyl_top_{i}", make_strut(top_p[i], top_p[j], 0.022, 6, (0.94, 0.95, 0.97, 1.0)), mat))
-        # Diagonales en celosía
-        objs.append(create_mesh_obj(f"pyl_d1_{i}", make_strut(bot_p[i], mid_p[j], 0.013, 4, (0.88, 0.89, 0.91, 1.0)), mat))
-        objs.append(create_mesh_obj(f"pyl_d2_{i}", make_strut(mid_p[i], top_p[j], 0.013, 4, (0.90, 0.91, 0.93, 1.0)), mat))
+        objs.append(create_mesh_obj(f"pyl_bot_{i}", make_strut(bot_p[i], bot_p[j], 0.020, 4, (0.88, 0.89, 0.91, 1.0)), mat))
+        objs.append(create_mesh_obj(f"pyl_mid_{i}", make_strut(mid_p[i], mid_p[j], 0.018, 4, (0.90, 0.91, 0.93, 1.0)), mat))
+        objs.append(create_mesh_obj(f"pyl_top_{i}", make_strut(top_p[i], top_p[j], 0.022, 4, (0.94, 0.95, 0.97, 1.0)), mat))
 
     # Cuna superior que abraza el tubo
     cradle_pts = [
@@ -795,9 +791,9 @@ def build_pylon(mat):
         Vector((0.14, 0.0, 0.94)),
         Vector((0.24, 0.0, 1.00)),
     ]
-    objs.append(create_mesh_obj("pyl_cradle", make_tube_chain(cradle_pts, [0.024, 0.028, 0.028, 0.024], segs=6, col_bot=(0.94, 0.95, 0.97, 1.0), col_top=(1.0, 1.0, 1.0, 1.0)), mat))
+    objs.append(create_mesh_obj("pyl_cradle", make_tube_chain(cradle_pts, [0.024, 0.028, 0.028, 0.024], segs=5, col_bot=(0.94, 0.95, 0.97, 1.0), col_top=(1.0, 1.0, 1.0, 1.0)), mat))
 
-    obj = join_and_bake(objs, "pylon", mat, subsurf_levels=0, bevel_width=0.005, bevel_segments=1)
+    obj = join_and_bake(objs, "pylon", mat, subsurf_levels=0)
     normalize_vertical(obj)
     return obj
 
@@ -817,17 +813,17 @@ def build_clamp(mat):
         (0.43, 0.068),
         (0.43, -0.068),
     ]
-    bm_ring = make_lathe(prof, segs=32, col_bot=(0.90, 0.91, 0.94, 1.0), col_top=(0.96, 0.97, 0.99, 1.0))
+    bm_ring = make_lathe(prof, segs=20, col_bot=(0.90, 0.91, 0.94, 1.0), col_top=(0.96, 0.97, 0.99, 1.0))
     # Rotar para que el eje del anillo sea Y_blender (que en glTF +Y up será Z_gltf)
     rot_x = Matrix.Rotation(math.pi / 2.0, 4, "X")
     for v in bm_ring.verts:
         v.co = rot_x @ v.co
     objs.append(create_mesh_obj("clamp_ring", bm_ring, mat))
 
-    # 8 tornillos / pernos radiales biselados alrededor del anillo (simetría exacta X/Y)
+    # 8 tornillos / pernos radiales alrededor del anillo (simetría exacta X/Y)
     for i in range(8):
         ang = (2.0 * math.pi * i) / 8.0
-        bm_bolt = make_lathe([(0.0, -0.025), (0.032, -0.025), (0.032, 0.015), (0.022, 0.028), (0.0, 0.028)], segs=6, col_bot=(0.82, 0.84, 0.88, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
+        bm_bolt = make_lathe([(0.0, -0.025), (0.032, -0.025), (0.032, 0.015), (0.022, 0.028), (0.0, 0.028)], segs=5, col_bot=(0.82, 0.84, 0.88, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
         # Orientar radialmente en el plano X-Z de Blender (que será X-Y en glTF)
         r_mat = Matrix.Rotation(ang, 4, "Y") @ Matrix.Rotation(math.pi / 2.0, 4, "X")
         pos = Vector((0.49 * math.sin(ang), 0.0, 0.49 * math.cos(ang)))
@@ -835,7 +831,7 @@ def build_clamp(mat):
             v.co = (r_mat @ v.co) + pos
         objs.append(create_mesh_obj(f"clamp_bolt_{i}", bm_bolt, mat))
 
-    obj = join_and_bake(objs, "clamp", mat, subsurf_levels=0, bevel_width=0.006, bevel_segments=1)
+    obj = join_and_bake(objs, "clamp", mat, subsurf_levels=0)
     normalize_clamp(obj)
     return obj
 
@@ -891,7 +887,219 @@ def build_pod(mat):
     ant_prof = [(0.0, 0.88), (0.025, 0.88), (0.015, 0.97), (0.032, 0.985), (0.0, 1.00)]
     objs.append(create_mesh_obj("pod_ant", make_lathe(ant_prof, segs=8, col_bot=(0.86, 0.88, 0.90, 1.0), col_top=(1.0, 1.0, 1.0, 1.0)), mat))
 
-    obj = join_and_bake(objs, "pod", mat, subsurf_levels=1)
+    obj = join_and_bake(objs, "pod", mat, subsurf_levels=0)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 14. PALM: Palmera curva con hojas arqueadas suaves
+# ---------------------------------------------------------------------------
+def build_palm(mat):
+    objs = []
+    trunk_pts = [
+        Vector((0.0, 0.0, 0.0)),
+        Vector((0.03, 0.01, 0.24)),
+        Vector((0.08, 0.02, 0.50)),
+        Vector((0.12, 0.02, 0.74)),
+        Vector((0.10, 0.0, 0.90)),
+    ]
+    trunk_r = [0.095, 0.072, 0.056, 0.044, 0.036]
+    objs.append(create_mesh_obj("palm_trunk", make_tube_chain(trunk_pts, trunk_r, segs=7, col_bot=(0.80, 0.77, 0.72, 1.0), col_top=(0.90, 0.87, 0.82, 1.0)), mat))
+
+    crown = Vector((0.10, 0.0, 0.89))
+    for i in range(5):
+        ang = (2.0 * math.pi * i) / 5.0 + 0.3
+        ca, sa = math.cos(ang), math.sin(ang)
+        pts = [
+            crown,
+            crown + Vector((ca * 0.16, sa * 0.16, 0.10)),
+            crown + Vector((ca * 0.34, sa * 0.34, 0.04)),
+            crown + Vector((ca * 0.46, sa * 0.46, -0.09)),
+        ]
+        rads = [0.045, 0.065, 0.048, 0.016]
+        bm_f = make_tube_chain(pts, rads, segs=5, col_bot=(0.88, 0.94, 0.88, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
+        for v in bm_f.verts:
+            v.co.z = crown.z + (v.co.z - crown.z) * 0.65
+        objs.append(create_mesh_obj(f"palm_frond_{i}", bm_f, mat))
+
+    obj = join_and_bake(objs, "palm", mat, subsurf_levels=0)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 15. PYRAMID: Pirámide escalonada con base y capitel
+# ---------------------------------------------------------------------------
+def build_pyramid(mat):
+    objs = []
+    tiers = [
+        (0.0, 0.30, 0.56, 0.44, (0.86, 0.85, 0.82, 1.0)),
+        (0.28, 0.58, 0.40, 0.30, (0.91, 0.90, 0.87, 1.0)),
+        (0.56, 0.82, 0.26, 0.17, (0.95, 0.94, 0.91, 1.0)),
+        (0.80, 1.00, 0.14, 0.01, (1.0, 1.0, 1.0, 1.0)),
+    ]
+    for i, (z0, z1, r0, r1, col) in enumerate(tiers):
+        bm = make_lathe([(0.0, z0), (r0, z0), (r1, z1), (0.0, z1)], segs=4, col_bot=col, col_top=col)
+        for v in bm.verts:
+            x, y = v.co.x, v.co.y
+            v.co.x = x * 0.7071 - y * 0.7071
+            v.co.y = x * 0.7071 + y * 0.7071
+        objs.append(create_mesh_obj(f"pyr_tier_{i}", bm, mat))
+
+    obj = join_and_bake(objs, "pyramid", mat, subsurf_levels=0, bevel_width=0.012, bevel_segments=1)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 16. TOMB: Lápida estilizada redondeada con base sólida
+# ---------------------------------------------------------------------------
+def build_tomb(mat):
+    objs = []
+    bm_base = bmesh.new()
+    bmesh.ops.create_cube(bm_base, size=1.0)
+    for v in bm_base.verts:
+        v.co = Vector((v.co.x * 0.56, v.co.y * 0.32, (v.co.z + 0.5) * 0.16))
+    set_bm_vertex_color(bm_base, (0.82, 0.82, 0.85, 1.0))
+    objs.append(create_mesh_obj("tomb_base", bm_base, mat))
+
+    bm_slab = bmesh.new()
+    bmesh.ops.create_cube(bm_slab, size=1.0)
+    for v in bm_slab.verts:
+        t = v.co.z + 0.5
+        taper = 1.0 - 0.16 * t
+        v.co = Vector((v.co.x * 0.42 * taper, v.co.y * 0.18, 0.14 + t * 0.72))
+    set_bm_height_gradient(bm_slab, 0.14, 0.86, (0.86, 0.86, 0.90, 1.0), (1.0, 1.0, 1.0, 1.0))
+    objs.append(create_mesh_obj("tomb_slab", bm_slab, mat))
+
+    bm_crest = make_lathe([(0.0, 0.82), (0.18, 0.82), (0.14, 0.96), (0.0, 1.00)], segs=8, col_bot=(0.94, 0.94, 0.97, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
+    for v in bm_crest.verts:
+        v.co.y *= 0.45
+    objs.append(create_mesh_obj("tomb_crest", bm_crest, mat))
+
+    obj = join_and_bake(objs, "tomb", mat, subsurf_levels=1)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 17. HOUSE: Cabaña/casita chibi redondeada con tejado curvo y chimenea
+# ---------------------------------------------------------------------------
+def build_house(mat):
+    objs = []
+    # Base + muros redondeados
+    wall = make_lathe([(0.0, 0.0), (0.36, 0.0), (0.37, 0.12), (0.35, 0.46), (0.0, 0.48)], segs=8, col_bot=(0.86, 0.86, 0.88, 1.0), col_top=(0.96, 0.96, 0.98, 1.0))
+    objs.append(create_mesh_obj("house_wall", wall, mat))
+
+    # Tejado cónico suave
+    roof = make_lathe([(0.0, 0.42), (0.46, 0.40), (0.43, 0.48), (0.26, 0.76), (0.06, 0.96), (0.0, 1.00)], segs=8, col_bot=(0.92, 0.90, 0.92, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
+    objs.append(create_mesh_obj("house_roof", roof, mat))
+
+    # Chimenea lateral
+    bm_chim = make_lathe([(0.0, 0.56), (0.075, 0.56), (0.085, 0.92), (0.0, 0.92)], segs=6, col_bot=(0.84, 0.84, 0.86, 1.0), col_top=(0.94, 0.94, 0.96, 1.0))
+    for v in bm_chim.verts:
+        v.co.x += 0.18
+        v.co.y += 0.10
+    objs.append(create_mesh_obj("house_chim", bm_chim, mat))
+
+    obj = join_and_bake(objs, "house", mat, subsurf_levels=1)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 18. TORII: Pórtico/arco sólido apoyado en 2 columnas con bases
+# ---------------------------------------------------------------------------
+def build_torii(mat):
+    objs = []
+    for sgn in (-1.0, 1.0):
+        col_pts = [Vector((sgn * 0.34, 0.0, 0.0)), Vector((sgn * 0.34, 0.0, 0.10)), Vector((sgn * 0.31, 0.0, 0.86))]
+        col_r = [0.10, 0.075, 0.062]
+        objs.append(create_mesh_obj(f"torii_col_{sgn}", make_tube_chain(col_pts, col_r, segs=8, col_bot=(0.82, 0.82, 0.84, 1.0), col_top=(0.94, 0.94, 0.96, 1.0)), mat))
+
+    # Dintel superior curvado
+    lintel_pts = [
+        Vector((-0.52, 0.0, 0.96)),
+        Vector((-0.26, 0.0, 0.90)),
+        Vector((0.0, 0.0, 0.88)),
+        Vector((0.26, 0.0, 0.90)),
+        Vector((0.52, 0.0, 0.96)),
+    ]
+    objs.append(create_mesh_obj("torii_top", make_tube_chain(lintel_pts, [0.055, 0.075, 0.08, 0.075, 0.055], segs=6, col_bot=(0.92, 0.92, 0.95, 1.0), col_top=(1.0, 1.0, 1.0, 1.0)), mat))
+
+    # Travesaño medio
+    mid_pts = [Vector((-0.38, 0.0, 0.72)), Vector((0.0, 0.0, 0.72)), Vector((0.38, 0.0, 0.72))]
+    objs.append(create_mesh_obj("torii_mid", make_tube_chain(mid_pts, [0.042, 0.046, 0.042], segs=6, col_bot=(0.88, 0.88, 0.90, 1.0), col_top=(0.96, 0.96, 0.98, 1.0)), mat))
+
+    obj = join_and_bake(objs, "torii", mat, subsurf_levels=0)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 19. MONOLITH: Torre/monolito futurista biselado con corona
+# ---------------------------------------------------------------------------
+def build_monolith(mat):
+    objs = []
+    base = make_lathe([(0.0, 0.0), (0.34, 0.0), (0.30, 0.12), (0.22, 0.16), (0.0, 0.16)], segs=6, col_bot=(0.80, 0.82, 0.86, 1.0), col_top=(0.90, 0.92, 0.95, 1.0))
+    objs.append(create_mesh_obj("mono_base", base, mat))
+
+    shaft = make_lathe([(0.0, 0.14), (0.20, 0.14), (0.17, 0.62), (0.11, 0.90), (0.0, 1.00)], segs=6, col_bot=(0.88, 0.90, 0.94, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
+    objs.append(create_mesh_obj("mono_shaft", shaft, mat))
+
+    collar = make_lathe([(0.16, 0.60), (0.25, 0.62), (0.25, 0.68), (0.15, 0.70)], segs=6, col_bot=(0.95, 0.97, 1.0, 1.0), col_top=(1.0, 1.0, 1.0, 1.0))
+    objs.append(create_mesh_obj("mono_collar", collar, mat))
+
+    obj = join_and_bake(objs, "monolith", mat, subsurf_levels=0, bevel_width=0.010, bevel_segments=1)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 20. CLOUD: Nube esponjosa suave de una sola pieza
+# ---------------------------------------------------------------------------
+def build_cloud(mat):
+    objs = []
+    blobs = [
+        (Vector((0.0, 0.0, 0.34)), (0.34, 0.24, 0.24), (1.0, 1.0, 1.0, 1.0)),
+        (Vector((-0.26, 0.02, 0.24)), (0.24, 0.20, 0.18), (0.95, 0.96, 0.99, 1.0)),
+        (Vector((0.26, -0.02, 0.24)), (0.24, 0.20, 0.18), (0.95, 0.96, 0.99, 1.0)),
+        (Vector((0.0, 0.10, 0.22)), (0.28, 0.22, 0.16), (0.92, 0.94, 0.98, 1.0)),
+    ]
+    for i, (pos, sc, col) in enumerate(blobs):
+        bm = bmesh.new()
+        bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0)
+        for v in bm.verts:
+            p = Vector((v.co.x * sc[0], v.co.y * sc[1], v.co.z * sc[2])) + pos
+            p.z = max(0.0, p.z)
+            v.co = p
+        set_bm_vertex_color(bm, col)
+        objs.append(create_mesh_obj(f"cloud_b_{i}", bm, mat))
+
+    obj = join_and_bake(objs, "cloud", mat, subsurf_levels=1)
+    normalize_vertical(obj)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# 21. ARCH_MECH: Arco/puerta sólido de mecanismo pegado a la pared
+# ---------------------------------------------------------------------------
+def build_arch_mech(mat):
+    objs = []
+    arch_pts = [
+        Vector((-0.42, 0.0, 0.0)),
+        Vector((-0.40, 0.0, 0.48)),
+        Vector((-0.24, 0.0, 0.84)),
+        Vector((0.0, 0.0, 0.96)),
+        Vector((0.24, 0.0, 0.84)),
+        Vector((0.40, 0.0, 0.48)),
+        Vector((0.42, 0.0, 0.0)),
+    ]
+    rads = [0.11, 0.085, 0.08, 0.095, 0.08, 0.085, 0.11]
+    objs.append(create_mesh_obj("arch_loop", make_tube_chain(arch_pts, rads, segs=8, col_bot=(0.86, 0.88, 0.92, 1.0), col_top=(1.0, 1.0, 1.0, 1.0)), mat))
+
+    obj = join_and_bake(objs, "arch_mech", mat, subsurf_levels=0)
     normalize_vertical(obj)
     return obj
 
@@ -910,6 +1118,14 @@ BUILDERS = [
     ("pylon", build_pylon, 0.35, 0.65),
     ("clamp", build_clamp, 0.30, 0.80),
     ("pod", build_pod, 0.32, 0.45),
+    ("palm", build_palm, 0.62, 0.0),
+    ("pyramid", build_pyramid, 0.72, 0.0),
+    ("tomb", build_tomb, 0.76, 0.0),
+    ("house", build_house, 0.62, 0.0),
+    ("torii", build_torii, 0.58, 0.05),
+    ("monolith", build_monolith, 0.32, 0.45),
+    ("cloud", build_cloud, 0.85, 0.0),
+    ("arch_mech", build_arch_mech, 0.35, 0.45),
 ]
 
 
@@ -950,9 +1166,9 @@ def validate_and_render_sheet(exported_paths):
         bg.inputs[0].default_value = (0.04, 0.05, 0.08, 1.0)
         bg.inputs[1].default_value = 0.7
 
-    cols = 5
+    cols = 6
     spacing_x = 1.75
-    spacing_y = 2.25
+    spacing_y = 2.05
 
     imported_objs = []
     for idx, (name, glb_path) in enumerate(exported_paths):
@@ -982,8 +1198,8 @@ def validate_and_render_sheet(exported_paths):
         # Ubicar en la cuadrícula (en Blender, X e Y son el plano horizontal, Z es arriba)
         col_i = idx % cols
         row_i = idx // cols
-        gx = (col_i - 2.0) * spacing_x
-        gy = -(row_i - 1.0) * spacing_y
+        gx = (col_i - 2.5) * spacing_x
+        gy = -(row_i - 1.5) * spacing_y
         if name == "clamp":
             obj.location = (gx, gy, 0.50)
         else:
@@ -1024,7 +1240,7 @@ def validate_and_render_sheet(exported_paths):
     # Cámara ortográfica / telefoto inclinada para ver toda la cuadrícula claramente
     cam_data = bpy.data.cameras.new("SheetCam")
     cam_data.type = "ORTHO"
-    cam_data.ortho_scale = 9.8
+    cam_data.ortho_scale = 11.8
     cam_obj = bpy.data.objects.new("SheetCam", cam_data)
     cam_obj.location = (0.0, -8.5, 6.2)
     direction = Vector((0.0, 0.0, 0.35)) - cam_obj.location
