@@ -207,3 +207,36 @@ export const VISUALS = {
     },
   },
 }
+
+// Neón exterior por tema (Neon.jsx). c: colores de franjas/arcos/mástiles (se multiplican por el brillo para el bloom),
+// head: forma del remate del mástil (octa, cone, sphere, tetra, box, ico), arc: separación (unidades) entre arcos neón.
+export const NEON_DECOR = {
+  sombrio: { c: ['#a24bff', '#ff4bd8'], head: 'octa', arc: 22 },
+  bosque: { c: ['#4dff7a', '#d4ff5a'], head: 'cone', arc: 24 },
+  mar: { c: ['#38d6ff', '#ff6fa5'], head: 'sphere', arc: 20 },
+  desierto: { c: ['#ffb347', '#ff5a8a'], head: 'tetra', arc: 24 },
+  hielo: { c: ['#7ce8ff', '#e8f9ff'], head: 'octa', arc: 22 },
+  volcan: { c: ['#ff6028', '#ffc233'], head: 'cone', arc: 22 },
+  cristal: { c: ['#c07eff', '#7df9ff'], head: 'octa', arc: 18 },
+  nubes: { c: ['#ffe169', '#8fd4ff'], head: 'sphere', arc: 22 },
+  neon: { c: ['#ff2bd6', '#2bffe8'], head: 'box', arc: 14 },
+  jardin: { c: ['#ff6fa5', '#ffd24a'], head: 'ico', arc: 22 },
+}
+
+// Fauna por tema (Fauna.jsx). k especie, d animales por unidad de camino, s tamaño, c colores (tinte),
+// gap distancia a la pared del tubo (vuelo/nado) o 'top' (camina sobre el lomo), spd velocidad angular, r radio de patrulla.
+export const FAUNA = {
+  sombrio: [{ k: 'bat', d: 0.22, s: [0.5, 0.9], c: ['#6b3fa0', '#8a5cf0', '#3d2466'], gap: [0.8, 3.2], spd: [0.5, 1.1], r: [1, 3.5] }],
+  bosque: [{ k: 'butterfly', d: 0.3, s: [0.35, 0.6], c: ['#ffd54f', '#ff8a65', '#9cff6b', '#7fe0ff'], gap: [0.6, 2.6], spd: [0.5, 1.0], r: [1, 2.5] }],
+  mar: [
+    { k: 'fish', d: 0.3, s: [0.45, 0.9], c: ['#ff9671', '#ffc75f', '#38d6ff', '#ff6f91'], gap: [0.8, 3.0], spd: [0.6, 1.2], r: [1.5, 4] },
+    { k: 'jelly', d: 0.08, s: [0.8, 1.3], c: ['#ff6fa5', '#bff3ff'], gap: [1.2, 3.2], spd: [0.2, 0.4], r: [0.5, 1.5] },
+  ],
+  desierto: [{ k: 'lizard', d: 0.12, s: [0.55, 0.9], c: ['#6aa84f', '#c9a227', '#b5651d'], gap: 'top', spd: [0.3, 0.6], r: [0.8, 1.5] }],
+  hielo: [{ k: 'penguin', d: 0.1, s: [0.7, 1.0], c: ['#ffffff', '#d8f0ff'], gap: 'top', spd: [0.15, 0.3], r: [0.5, 1.0] }],
+  volcan: [{ k: 'bat', d: 0.2, s: [0.55, 1.0], c: ['#ff5a1f', '#ffb300', '#ff3b14'], gap: [0.8, 3.4], spd: [0.6, 1.3], r: [1, 3.5] }],
+  cristal: [{ k: 'butterfly', d: 0.26, s: [0.35, 0.6], c: ['#7df9ff', '#ff7de9', '#a78bff'], gap: [0.8, 3.0], spd: [0.5, 1.0], r: [1, 2.5] }],
+  nubes: [{ k: 'bird', d: 0.2, s: [0.5, 0.9], c: ['#ffffff', '#ffe169', '#90caf9'], gap: [1.0, 4.0], spd: [0.5, 1.0], r: [2, 5] }],
+  neon: [{ k: 'jelly', d: 0.2, s: [0.7, 1.2], c: ['#ff2bd6', '#2bffe8', '#fff22b'], gap: [0.8, 3.0], spd: [0.25, 0.5], r: [0.6, 1.8] }],
+  jardin: [{ k: 'butterfly', d: 0.4, s: [0.3, 0.55], c: ['#ff6fa5', '#ffd24a', '#b06bff', '#ff8a5c'], gap: [0.6, 2.4], spd: [0.5, 1.0], r: [0.8, 2.2] }],
+}

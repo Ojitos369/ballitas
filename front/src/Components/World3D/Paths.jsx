@@ -10,6 +10,8 @@ import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
 import { pistaWarmup } from './vida/pista.jsx'
 import Precompilado from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
+import Neon from './Neon.jsx'
+import Fauna from './Fauna.jsx'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -1237,6 +1239,9 @@ function WayExteriorNear({ way, mats, extFineRef }) {
       <Inst geo={GEO.tree} mat={mats.extFlora} items={d.extFlora} />
       <Inst geo={GEO.mushroom} mat={mats.extFloraGlow} items={d.extFloraGlow} />
       <Inst geo={GEO.ruinPillar} mat={mats.extRuins} items={d.extRuins} />
+      {/* neón y fauna del tema a lo largo del camino: mismo LOD que el resto del exterior cercano */}
+      <Neon way={way} time={SHARED_TIME} getFrames={getSegFrames} sample={sampleCurveFrame} />
+      <Fauna way={way} time={SHARED_TIME} getFrames={getSegFrames} sample={sampleCurveFrame} />
     </group>
   )
 }
