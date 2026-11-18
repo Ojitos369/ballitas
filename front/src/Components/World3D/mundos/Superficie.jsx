@@ -1,7 +1,7 @@
 // Vista de superficie de un nodo: diorama procedural (parcelas de colores, barrios del kit GLB del bioma,
 // flora, calles hacia cada puerto, cielo nocturno). Todo instanciado; un solo useFrame; 2 luces reales.
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -10,6 +10,7 @@ import { loadBiomeCityKit, BUILDING_TYPES } from './arquitectura.js'
 import { Monument } from './monumentos.jsx'
 import { generarSuperficie, CELDA, R_SUELO } from './superficieGen.js'
 import { bodyColor } from '../Ballita.jsx'
+import { StatsProbe } from '../StatsOverlay.jsx'
 
 const MODELS_URL = (import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
 const gltfLoader = new GLTFLoader()
@@ -162,20 +163,13 @@ function Cielo({ biome }) {
   )
 }
 
-export default function Superficie({ world, nodeIdx, ballitas, onSalir }) {
-  const node = world.nodes[nodeIdx]
-  const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
-  const gen = useMemo(() => generarSuperficie(node, biome, world), [node, biome, world])
-  const scene = useThree((s) => s.scene)
-  const camera = useThree((s) => s.camera)
+function SuperficieEscena({ world, node, biome, gen, nodeIdx, ballitas, onHoverPort }) {
   const [kit, setKit] = useState(null)
   const [modelos, setModelos] = useState({})
-  const hoverEl = useRef(null)
   const arrows = useRef([])
   const hoverId = useRef(-1)
   const bRef = useRef(ballitas)
   bRef.current = ballitas
-  const init = useRef(false)
 
   useEffect(() => {
     let vivo = true
@@ -282,43 +276,14 @@ export default function Superficie({ world, nodeIdx, ballitas, onSalir }) {
   const walkColor = useMemo(() => (w, i) => _c.set([biome.creatureColor, biome.cityLight, '#ffffff'][i % 3]), [biome])
   const MAXB = 48
 
-  useEffect(() => {
-    scene.fog = new THREE.FogExp2(new THREE.Color(biome.atmoBase).multiplyScalar(0.07), 0.0028)
-    return () => { scene.fog = null }
-  }, [scene, biome])
-
-  // ── interfaz DOM: título, Salir, rótulo de puerto ──
-  useEffect(() => {
-    const bar = document.createElement('div')
-    bar.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:30;display:flex;gap:12px;align-items:center;padding:8px 14px;border-radius:14px;color:#fff;font:600 14px system-ui,sans-serif;pointer-events:auto;'
-      + `background:${biome.groundLow}e6;border:1px solid ${biome.atmoRim};box-shadow:0 0 18px ${biome.atmoBase}99;`
-    bar.innerHTML = `<span>${biome.emoji} ${node.name} · ${biome.title}</span>`
-    const btn = document.createElement('button')
-    btn.textContent = 'Salir (Esc)'
-    btn.style.cssText = `cursor:pointer;border:1px solid ${biome.atmoRim};background:${biome.atmoBase}55;color:#fff;border-radius:8px;padding:4px 10px;font:inherit;`
-    btn.onclick = () => onSalir()
-    bar.appendChild(btn)
-    const tip = document.createElement('div')
-    tip.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:30;padding:6px 14px;border-radius:10px;color:#fff;background:#0a0c1ce6;border:1px solid ${biome.atmoRim};font:600 13px system-ui,sans-serif;pointer-events:none;opacity:0;transition:opacity .15s;`
-    document.body.append(bar, tip)
-    hoverEl.current = tip
-    return () => { bar.remove(); tip.remove(); hoverEl.current = null }
-  }, [biome, node, onSalir])
+  const fogColor = useMemo(() => '#' + new THREE.Color(biome.atmoBase).multiplyScalar(0.07).getHexString(), [biome])
 
   const onHover = (p) => {
     hoverId.current = p ? p.id : -1
-    const el = hoverEl.current
-    if (!el) return
-    el.style.opacity = p ? '1' : '0'
-    if (p) el.textContent = `${p.kind === 'out' ? 'Salida' : 'Llegada'} ${p.n} · ${p.themeEmoji} ${p.themeName} · ${p.kind === 'out' ? 'lleva a' : 'viene de'} ${p.toName}`
+    onHoverPort(p)
   }
 
   useFrame(({ clock }, dt) => {
-    if (!init.current) { // primer cuadro: pose diagonal (después de que Vistas guardó la cámara general)
-      init.current = true
-      camera.fov = 42; camera.near = 0.5; camera.far = 1500
-      camera.position.set(0, 46, 64); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix()
-    }
     const t = clock.elapsedTime
     M.lampA.color.setScalar(1.5 + Math.sin(t * 6.3) * 0.25 + Math.sin(t * 17) * 0.1).multiply(M.calido)
     M.lampB.color.setScalar(1.5 + Math.sin(t * 5.1 + 2) * 0.3 + Math.sin(t * 13 + 1) * 0.1).multiply(M.calido)
@@ -364,6 +329,8 @@ export default function Superficie({ world, nodeIdx, ballitas, onSalir }) {
 
   return (
     <group>
+      <color attach="background" args={['#03040c']} />
+      <fogExp2 attach="fog" args={[fogColor, 0.0028]} />
       <Cielo biome={biome} />
       <hemisphereLight args={[biome.atmoRim, biome.groundMid, 0.95]} />
       <directionalLight position={[-30, 50, 25]} intensity={1.5} color={new THREE.Color('#ffe2c0').lerp(new THREE.Color(biome.atmoRim), 0.25)} />
@@ -401,7 +368,75 @@ export default function Superficie({ world, nodeIdx, ballitas, onSalir }) {
         <Puerto key={p.id} p={p} y={gen.topAt(p.x, p.z) - 0.1} color={BIOMES[p.themeId]?.cityLight || biome.cityLight} onHover={onHover} arrows={arrows} />
       ))}
 
-      <OrbitControls target={[0, 3, 0]} enablePan={false} enableDamping dampingFactor={0.08} minDistance={26} maxDistance={125} minPolarAngle={0.3} maxPolarAngle={1.32} autoRotate autoRotateSpeed={0.25} />
+      <OrbitControls makeDefault target={[0, 3, 0]} enablePan={false} enableDamping dampingFactor={0.08} minDistance={26} maxDistance={125} minPolarAngle={0.3} maxPolarAngle={1.32} autoRotate autoRotateSpeed={0.25} />
     </group>
+  )
+}
+
+// Vista de superficie montada en su propio <Canvas> aislado de la escena general (su propia cámara, escena, cielo, niebla y luces).
+export default function Superficie({ world, nodeIdx, ballitas, onSalir, showStats = false, onStatsSample }) {
+  const node = world.nodes[nodeIdx]
+  const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
+  const gen = useMemo(() => generarSuperficie(node, biome, world), [node, biome, world])
+  const [hoverPort, setHoverPort] = useState(null)
+
+  useLayoutEffect(() => {
+    const prevDbg = typeof window !== 'undefined' ? window.__ballitasDebug : undefined
+    return () => {
+      if (typeof window !== 'undefined' && prevDbg) window.__ballitasDebug = prevDbg
+    }
+  }, [])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 20, background: '#03040c' }}>
+      <Canvas
+        dpr={1}
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        camera={{ fov: 42, near: 0.5, far: 1500, position: [0, 46, 64] }}
+        onCreated={({ gl }) => { gl.debug.checkShaderErrors = import.meta.env.DEV }}
+      >
+        <SuperficieEscena
+          world={world}
+          node={node}
+          biome={biome}
+          gen={gen}
+          nodeIdx={nodeIdx}
+          ballitas={ballitas}
+          onHoverPort={setHoverPort}
+        />
+        <StatsProbe active={showStats} onSample={onStatsSample} />
+      </Canvas>
+      <div
+        style={{
+          position: 'fixed', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 22,
+          display: 'flex', gap: 12, alignItems: 'center', padding: '8px 14px', borderRadius: 14,
+          color: '#fff', font: '600 14px system-ui,sans-serif', pointerEvents: 'auto',
+          background: `${biome.groundLow}e6`, border: `1px solid ${biome.atmoRim}`,
+          boxShadow: `0 0 18px ${biome.atmoBase}99`,
+        }}
+      >
+        <span>{biome.emoji} {node.name} · {biome.title}</span>
+        <button
+          type="button"
+          onClick={() => onSalir()}
+          style={{
+            cursor: 'pointer', border: `1px solid ${biome.atmoRim}`, background: `${biome.atmoBase}55`,
+            color: '#fff', borderRadius: 8, padding: '4px 10px', font: 'inherit',
+          }}
+        >
+          Salir (Esc)
+        </button>
+      </div>
+      <div
+        style={{
+          position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 22,
+          padding: '6px 14px', borderRadius: 10, color: '#fff', background: '#0a0c1ce6',
+          border: `1px solid ${biome.atmoRim}`, font: '600 13px system-ui,sans-serif',
+          pointerEvents: 'none', opacity: hoverPort ? 1 : 0, transition: 'opacity .15s',
+        }}
+      >
+        {hoverPort ? `${hoverPort.kind === 'out' ? 'Salida' : 'Llegada'} ${hoverPort.n} · ${hoverPort.themeEmoji} ${hoverPort.themeName} · ${hoverPort.kind === 'out' ? 'lleva a' : 'viene de'} ${hoverPort.toName}` : ''}
+      </div>
+    </div>
   )
 }

@@ -1518,6 +1518,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   return (
     <>
       <Canvas
+      frameloop={supOn ? 'never' : 'always'}
+      style={supOn ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}
       shadows="soft"
       // De cerca el coste es de relleno (postFX y tubo a pantalla completa): DPR 1,5 -> 1,0 pasa de ~20-30 a ~48-57 FPS.
       dpr={Math.min(dpr, DPR_CERCA)}
@@ -1582,7 +1584,6 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       </Environment>
 
       <SimDriver sim={sim} speed={speed} />
-      {supOn && <Superficie world={sim.world} nodeIdx={supIdx} ballitas={ballitas} onSalir={cerrarSuperficie} />}
       <group visible={!supOn}>
       <Nodes world={sim.world} />
       <Paths world={sim.world} sim={sim} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
@@ -1622,6 +1623,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <StatsProbe active={showStats} onSample={onStatsSample} />
       <VistaCamino way={cameraWay} routeIndex={routeIndex} seek={seek} speed={caminoSpeed} paused={caminoPaused} active={caminoOn} progressRef={progressRef} />
     </Canvas>
+    {supOn && <Superficie world={sim.world} nodeIdx={supIdx} ballitas={ballitas} onSalir={cerrarSuperficie} showStats={showStats} onStatsSample={onStatsSample} />}
     <PovPanel
       active={povActive}
       povControlRef={povControlRef}
