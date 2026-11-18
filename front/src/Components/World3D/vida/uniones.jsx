@@ -3,7 +3,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Instanced, bermaAjusta, markShared, mergeColoredParts, vidaSharedMats } from './base.jsx'
+import { Instanced, bermaAjusta, markShared, mergePlainParts, vidaSharedMats } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, halfWidth, lanesOf, pal, surfFrame } from './pista.jsx'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
@@ -17,60 +17,60 @@ function routeGlowColor(themeMec, rIdx) {
 
 // ═══════════════════════════ GEOMETRÍAS COMPARTIDAS ═══════════════════════════
 function buildPillarGeo() {
-  return mergeColoredParts([
-    [new THREE.CylinderGeometry(0.24, 0.32, 0.16, 8).translate(0, 0.08, 0), '#1f242e'],
-    [new THREE.CylinderGeometry(0.1, 0.13, 3.4, 8).translate(0, 1.8, 0), '#3b4354'],
-    [new THREE.BoxGeometry(0.3, 0.16, 0.32).translate(0, 3.5, 0), '#242a36'],
+  return mergePlainParts([
+    new THREE.CylinderGeometry(0.24, 0.32, 0.16, 8).translate(0, 0.08, 0),
+    new THREE.CylinderGeometry(0.1, 0.13, 3.4, 8).translate(0, 1.8, 0),
+    new THREE.BoxGeometry(0.3, 0.16, 0.32).translate(0, 3.5, 0),
   ], 'uniones:pillar')
 }
 
 function buildBeamGeo() {
-  return mergeColoredParts([
-    [new THREE.BoxGeometry(1, 0.16, 0.24), '#232936'],
-    [new THREE.BoxGeometry(1, 0.06, 0.28).translate(0, -0.07, 0), '#3d4659'],
+  return mergePlainParts([
+    new THREE.BoxGeometry(1, 0.16, 0.24),
+    new THREE.BoxGeometry(1, 0.06, 0.28).translate(0, -0.07, 0),
   ], 'uniones:beam')
 }
 
 function buildRouteArrowGeo() {
-  return mergeColoredParts([
-    [new THREE.BoxGeometry(0.14, 0.09, 0.42).translate(0, 0, -0.06), '#ffffff'],
-    [new THREE.ConeGeometry(0.22, 0.32, 4).rotateY(Math.PI / 4).rotateX(Math.PI / 2).scale(1, 0.48, 1).translate(0, 0, 0.26), '#ffffff'],
+  return mergePlainParts([
+    new THREE.BoxGeometry(0.14, 0.09, 0.42).translate(0, 0, -0.06),
+    new THREE.ConeGeometry(0.22, 0.32, 4).rotateY(Math.PI / 4).rotateX(Math.PI / 2).scale(1, 0.48, 1).translate(0, 0, 0.26),
   ], 'uniones:routeArrow')
 }
 
 function buildGroundChevronGeo() {
-  return mergeColoredParts([
-    [new THREE.BoxGeometry(0.13, 0.026, 0.54).rotateY(0.56).translate(-0.14, 0.013, 0), '#ffffff'],
-    [new THREE.BoxGeometry(0.13, 0.026, 0.54).rotateY(-0.56).translate(0.14, 0.013, 0), '#ffffff'],
+  return mergePlainParts([
+    new THREE.BoxGeometry(0.13, 0.026, 0.54).rotateY(0.56).translate(-0.14, 0.013, 0),
+    new THREE.BoxGeometry(0.13, 0.026, 0.54).rotateY(-0.56).translate(0.14, 0.013, 0),
   ], 'uniones:groundChevron')
 }
 
 function buildDividerBodyGeo() {
-  return mergeColoredParts([
-    [new THREE.CylinderGeometry(0.26, 0.34, 0.16, 6).translate(0, 0.08, 0), '#202630'],
-    [new THREE.CylinderGeometry(0.14, 0.22, 0.72, 6).translate(0, 0.5, 0), '#f2b738'],
-    [new THREE.BoxGeometry(0.14, 0.18, 0.54).translate(0, 0.24, 0), '#202630'],
+  return mergePlainParts([
+    new THREE.CylinderGeometry(0.26, 0.34, 0.16, 6).translate(0, 0.08, 0),
+    new THREE.CylinderGeometry(0.14, 0.22, 0.72, 6).translate(0, 0.5, 0),
+    new THREE.BoxGeometry(0.14, 0.18, 0.54).translate(0, 0.24, 0),
   ], 'uniones:dividerBody')
 }
 
 function buildDividerGlowGeo() {
-  return mergeColoredParts([
-    [new THREE.OctahedronGeometry(0.22, 0).scale(0.75, 1.35, 1.15).translate(0, 1.05, 0), '#ffffff'],
-    [new THREE.BoxGeometry(0.18, 0.08, 0.56).translate(0, 0.34, 0), '#ffffff'],
+  return mergePlainParts([
+    new THREE.OctahedronGeometry(0.22, 0).scale(0.75, 1.35, 1.15).translate(0, 1.05, 0),
+    new THREE.BoxGeometry(0.18, 0.08, 0.56).translate(0, 0.34, 0),
   ], 'uniones:dividerGlow')
 }
 
 function buildPortBeaconBodyGeo() {
-  return mergeColoredParts([
-    [new THREE.CylinderGeometry(0.16, 0.22, 0.12, 8).translate(0, 0.06, 0), '#1f242e'],
-    [new THREE.CylinderGeometry(0.06, 0.09, 0.85, 8).translate(0, 0.52, 0), '#3a4354'],
+  return mergePlainParts([
+    new THREE.CylinderGeometry(0.16, 0.22, 0.12, 8).translate(0, 0.06, 0),
+    new THREE.CylinderGeometry(0.06, 0.09, 0.85, 8).translate(0, 0.52, 0),
   ], 'uniones:portBody')
 }
 
 function buildPortBeaconGlowGeo() {
-  return mergeColoredParts([
-    [new THREE.TorusGeometry(0.22, 0.045, 5, 12).translate(0, 1.05, 0), '#ffffff'],
-    [new THREE.OctahedronGeometry(0.12, 0).translate(0, 1.05, 0), '#ffffff'],
+  return mergePlainParts([
+    new THREE.TorusGeometry(0.22, 0.045, 5, 12).translate(0, 1.05, 0),
+    new THREE.OctahedronGeometry(0.12, 0).translate(0, 1.05, 0),
   ], 'uniones:portGlow')
 }
 
@@ -98,6 +98,10 @@ function spanQuat(spanDir, upDir) {
   return new THREE.Quaternion().setFromRotationMatrix(_m.makeBasis(_x, _y, _z))
 }
 
+const PILLAR_COL = new THREE.Color('#343c4d')
+const BEAM_COL = new THREE.Color('#272e3c')
+const DIVIDER_COL = new THREE.Color('#e0a630')
+const PORT_BODY_COL = new THREE.Color('#343c4d')
 const unionesCache = new WeakMap()
 function buildUnionesData(way) {
   if (unionesCache.has(way)) return unionesCache.get(way)
@@ -137,8 +141,8 @@ function buildUnionesData(way) {
       ajusta: bermaAjusta(hubPos, hubSide, hubUp, E, TERR, 0.35),
     }, 0.35, { way: way.idx }, 4, local)
 
-    if (pL) pillars.push({ pos: pL, quat: archQuat, scale: 1 })
-    if (pR) pillars.push({ pos: pR, quat: archQuat, scale: 1 })
+    if (pL) pillars.push({ pos: pL, quat: archQuat, scale: 1, color: PILLAR_COL })
+    if (pR) pillars.push({ pos: pR, quat: archQuat, scale: 1, color: PILLAR_COL })
 
     let beamMid; let beamSpan; let beamQuat; let sideDir
     if (pL && pR) {
@@ -167,7 +171,7 @@ function buildUnionesData(way) {
       : null
 
     if (beamMid) {
-      beams.push({ pos: beamMid, quat: beamQuat, scale: [beamSpan, 1, 1] })
+      beams.push({ pos: beamMid, quat: beamQuat, scale: [beamSpan, 1, 1], color: BEAM_COL })
       beamTrims.push({
         pos: beamMid.clone().addScaledVector(hubUp, 0.14),
         quat: beamQuat, scale: [beamSpan * 0.96, 1, 1],
@@ -225,7 +229,7 @@ function buildUnionesData(way) {
           if (!divPos) continue
           const divQuat = basisQuat(up, tan)
           const sc = placedFirst ? 0.72 : 1.0
-          dividerBodies.push({ pos: divPos, quat: divQuat, scale: sc })
+          dividerBodies.push({ pos: divPos, quat: divQuat, scale: sc, color: DIVIDER_COL })
           dividerGlows.push({ pos: divPos, quat: divQuat, scale: sc, color: mecCol })
           if (placedFirst) break
           placedFirst = true
@@ -298,7 +302,7 @@ function buildUnionesData(way) {
         const pos = colocar(world, { pos: want, seed: way.idx * 313 + (side > 0 ? 7 : 19), ajusta: bermaAjusta(fr.pos, fr.side, fr.up, E, TERR, 0.3) }, 0.3, { way: way.idx, si: launch.i, lane: 0 }, 4, local)
         if (pos) {
           const q = basisQuat(fr.up, fr.tangent)
-          portBodies.push({ pos, quat: q, scale: 1 })
+          portBodies.push({ pos, quat: q, scale: 1, color: PORT_BODY_COL })
           portGlows.push({ pos, quat: q, scale: 1, color: outCol })
         }
       }
@@ -325,7 +329,7 @@ function buildUnionesData(way) {
         const pos = colocar(world, { pos: want, seed: way.idx * 419 + (side > 0 ? 11 : 29), ajusta: bermaAjusta(fr.pos, fr.side, fr.up, E, TERR, 0.3) }, 0.3, { way: way.idx, si: landing.i, lane: 0 }, 4, local)
         if (pos) {
           const q = basisQuat(fr.up, fr.tangent)
-          portBodies.push({ pos, quat: q, scale: 1 })
+          portBodies.push({ pos, quat: q, scale: 1, color: PORT_BODY_COL })
           portGlows.push({ pos, quat: q, scale: 1, color: inCol })
         }
       }

@@ -1056,6 +1056,32 @@ export function bermaAjusta(o, side, up, E, terr, rad) {
 }
 
 /**
+ * mergePlainParts(geos, name?) -> BufferGeometry compartida sin atributo `color` (para instanciado con instanceColor).
+ * Limpia atributos extra y libera las piezas temporales.
+ */
+export function mergePlainParts(geos, name = '') {
+  if (!geos?.length) return null
+  const clean = []
+  for (let i = 0; i < geos.length; i++) {
+    const raw = geos[i]
+    if (!raw) continue
+    const g = raw.index ? raw.toNonIndexed() : raw
+    if (!g.attributes.normal) g.computeVertexNormals()
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== 'position' && k !== 'normal') g.deleteAttribute(k)
+    }
+    clean.push(g)
+    if (g !== raw) raw.dispose()
+  }
+  if (!clean.length) return null
+  const merged = mergeGeometries(clean, false)
+  for (let i = 0; i < clean.length; i++) clean[i].dispose()
+  merged.computeBoundingSphere()
+  if (name) merged.name = name
+  return markShared(merged)
+}
+
+/**
  * mergeColoredParts(parts, name?) -> BufferGeometry compartida con atributo `color`.
  * parts: [[BufferGeometry, hexColor], ...]. Limpia atributos extra y libera las piezas temporales.
  */
@@ -1090,11 +1116,11 @@ export function mergeColoredParts(parts, name = '') {
 }
 
 let _vidaMats = null
-/** Materiales instanciados compartidos (sólido con vertexColors, emisivo 3D y calca sobre asfalto). */
+/** Materiales instanciados compartidos (compatibles 1:1 con pistaWarmup: instanceColor, sin vertexColors). */
 export function vidaSharedMats() {
   if (!_vidaMats) {
     _vidaMats = {
-      body: markShared(new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true })),
+      body: markShared(new THREE.MeshLambertMaterial({ color: '#ffffff' })),
       glow: markShared(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })),
       decal: markShared(new THREE.MeshBasicMaterial({
         color: '#ffffff', toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
