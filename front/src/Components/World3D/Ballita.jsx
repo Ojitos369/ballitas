@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { povView } from './povLook.js'
 import { FACES } from '../../Core/personality.js'
 import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
 import { BALL_R, laneFrame, laneRelief, wallFrame } from '../../Core/world.js'
@@ -454,7 +455,7 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
     root.current.position.copy(b.pos).addScaledVector(upV, hop + wallOffset)
 
     // Si la ballita está en modo orbe lejano (cuerpo oculto y no seleccionada), omitir detalle facial/miembros.
-    const bodyVisible = !pov && (extFactor < 0.96 || selected)
+    const bodyVisible = (!pov || povView.body) && (extFactor < 0.96 || selected)
     if (bodyGroup.current) bodyGroup.current.visible = bodyVisible
     if (orbGroupRef.current) {
       const showOrb = extFactor > 0.015 && s > 0.02

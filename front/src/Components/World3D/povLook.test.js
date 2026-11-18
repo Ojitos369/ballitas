@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { angleDiff, clampYaw, decayOffset, POV_YAW_MAX } from './povLook.js'
+import { angleDiff, clampYaw, decayOffset, POV_YAW_MAX, povZoomView, POV_ZOOM_EYE } from './povLook.js'
 
 test('angleDiff cruza ±180° sin salto', () => {
   const d = angleDiff(-Math.PI + 0.1, Math.PI - 0.1)
@@ -23,4 +23,19 @@ test('decayOffset espera 1.5 s y luego vuelve a 0', () => {
   let c = 1
   for (let i = 0; i < 200; i++) c = decayOffset(c, 0.016, 0, true)
   assert.equal(c, 0)
+})
+
+test('povZoomView: continuo, espalda a ojos a zoom óptico', () => {
+  const a = povZoomView(0)
+  assert.ok(a.back > 2 && a.body)
+  const e = povZoomView(POV_ZOOM_EYE)
+  assert.equal(e.back, 0)
+  assert.ok(!e.body && e.fov > 70)
+  assert.ok(povZoomView(1).fov < 30 && povZoomView(1).back === 0)
+  let prev = povZoomView(0)
+  for (let z = 0.01; z <= 1; z += 0.01) {
+    const v = povZoomView(z)
+    assert.ok(Math.abs(v.back - prev.back) < 0.1 && Math.abs(v.fov - prev.fov) < 2.5)
+    prev = v
+  }
 })
