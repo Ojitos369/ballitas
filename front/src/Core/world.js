@@ -456,18 +456,20 @@ export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon
 export function braidEnv(seg, u, hubs = true) {
   const L = seg.length; const x = clamp(Number.isFinite(u) ? u : 0, 0, 1) * L
   const [a, b] = braidDelay(seg, hubs)
-  const r = Math.max(4 * TK, Math.min(BRAID_RAMP, (L - a - b) * 0.3))
+  const r = Math.max(4 * TK, Math.min(hubs ? OPEN_RAMP : BRAID_RAMP, (L - a - b) * 0.3))
   return smooth01((x - a) / r) * smooth01((L - b - x) / r)
 }
-// Largo (u) en cada punta del tramo donde los carriles van juntos, antes de abrirse la trenza: la trenza no se abre hasta
-// alejarse del nodo (BRAID_OPEN, las bocas vecinas no chocan cerca del puerto) ni de una unión de rutas fork/cross/merge
-// (HUB_OPEN: las rutas salen de la unión con el mismo rumbo; se separan como una sola cinta y luego abren sus carriles).
-const HUB_OPEN = 26 * TK
+// Largo (u) en cada punta del tramo donde los carriles van juntos (una sola calzada) antes de abrirse la trenza. Los
+// carriles reales se abren en abanico poco después de la punta (NODE_OPEN junto al nodo, HUB_OPEN junto a una unión
+// fork/cross/merge, rampa OPEN_RAMP): así las cintas que nacen juntas se separan antes de JOINT_MAX. hubs = false da el
+// envolvente de la búsqueda de huecos (braidRadius, routeExtent), que conserva la apertura tardía de siempre
+// (parrilla/meta + BRAID_OPEN): las elecciones del reparto no cambian y el envolvente queda del lado holgado.
+const NODE_OPEN = 8 * TK
+const HUB_OPEN = 6 * TK
+const OPEN_RAMP = 16 * TK
 export function braidDelay(seg, hubs = true) {
-  return [
-    seg.kind === 'salida' ? GRID_LEN + 2 * TK + BRAID_OPEN : hubs && seg.hubA ? HUB_OPEN : 0,
-    seg.kind === 'llegada' ? FINISH_LEN + 2 * TK + BRAID_OPEN : hubs && seg.hubB ? HUB_OPEN : 0,
-  ]
+  if (!hubs) return [seg.kind === 'salida' ? GRID_LEN + 2 * TK + BRAID_OPEN : 0, seg.kind === 'llegada' ? FINISH_LEN + 2 * TK + BRAID_OPEN : 0]
+  return [seg.kind === 'salida' ? NODE_OPEN : seg.hubA ? HUB_OPEN : 0, seg.kind === 'llegada' ? NODE_OPEN : seg.hubB ? HUB_OPEN : 0]
 }
 // Radio del envolvente de la trenza alrededor del eje (para separar pistas distintas; la búsqueda de huecos no cuenta
 // HUB_OPEN, así sus elecciones no cambian y el envolvente queda del lado holgado).
@@ -823,7 +825,7 @@ function buildBraid(s) {
     }
   }
   const [da, db] = braidDelay(s)
-  s._braid = { N, P, env, rad, full: [Math.min(0.45, (da + BRAID_RAMP) / s.length), Math.max(0.55, 1 - (db + BRAID_RAMP) / s.length)], len: [], curves: [] }
+  s._braid = { N, P, env, rad, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -888,7 +890,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 7
+export const WORLD_GEN = 8
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1738,6 +1740,8 @@ const RIB_SELF = 12 * TK
 // histéresis de la unión: dos cintas que nacen juntas quedan exentas hasta separarse esto (una ballita y un margen);
 // desde ahí ya no pueden volver a bajar de RIBBON_CLEAR
 export const JOINT_SEP = RIBBON_CLEAR + 0.4 * TK
+// tope (u de arco desde la punta) de la zona exenta de una unión: más allá, todo par a menos de RIBBON_CLEAR es choque
+export const JOINT_MAX = 25 * TK
 
 function ribbonEndKey(world, x, y, z) {
   for (const n of world.nodes) if ((x - n.pos.x) ** 2 + (y - n.pos.y) ** 2 + (z - n.pos.z) ** 2 < (NODE_R + TK) ** 2) return 'n' + n.idx
@@ -1748,7 +1752,7 @@ const ribbonsOf = (world) => world.ways.flatMap((way) => way.segments.filter((s)
 // Índices de muestra de la zona cerrada de la trenza y del tope de unión en cada punta.
 function ribMeta(r) {
   const k = r.n / r.seg.length; const [a, b] = braidDelay(r.seg)
-  r.closed = [Math.floor(a * k), Math.floor(b * k)]; r.capI = [(a + BRAID_RAMP) * k, (b + BRAID_RAMP) * k]
+  r.closed = [Math.floor(a * k), Math.floor(b * k)]; r.capI = [JOINT_MAX / r.ds, JOINT_MAX / r.ds]
   return r
 }
 function packRibbons(ribs, xs, rs) {
@@ -1825,6 +1829,8 @@ function gatherPairs(S, lim) {
 // de uniones; Infinity si no hubo pares), joint (arco máximo exento desde una unión, u) }.
 function judgePairs(S, pairs, hitD) {
   const { ribs, R } = S; const hits = []; let slack = Infinity; let joint = 0
+  // desglose de la zona exenta por tipo de punta: nodo (puerto), unión de rutas (fork/cross/merge) y carriles de un mismo tramo
+  const jointBy = { nodo: 0, union: 0, carril: 0 }
   // prefijo contiguo desde la punta e que sigue chocando con la otra cinta (la zona cerrada cuenta si es el mismo tramo)
   const pre = (set, r, e, ss) => { let c = ss ? r.closed[e] : 0; while (c <= r.n && c < r.capI[e] && set.has(e ? r.n - c : c)) c++; return c }
   for (const l of pairs.values()) {
@@ -1840,15 +1846,21 @@ function judgePairs(S, pairs, hitD) {
     }
     for (let k = 0; k < l.length; k += 3) {
       const ia = l[k] - A.start; const ib = l[k + 1] - B.start; const d = l[k + 2]
-      if (zones && zones.some(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)) {
-        if (d < hitD) joint = Math.max(joint, Math.min(ia, A.n - ia) * A.ds, Math.min(ib, B.n - ib) * B.ds)
+      const z = zones && zones.find(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)
+      if (z) {
+        if (d < hitD) {
+          const ja = Math.max((z[0] ? A.n - ia : ia) * A.ds, (z[2] ? B.n - ib : ib) * B.ds)
+          joint = Math.max(joint, ja)
+          const t = A.ends[z[0]][0] === 'n' ? 'nodo' : A.seg === B.seg ? 'carril' : 'union'
+          if (ja > jointBy[t]) jointBy[t] = ja
+        }
         continue
       }
       slack = Math.min(slack, d - RIBBON_CLEAR)
       if (d < hitD) hits.push(l[k], l[k + 1], d)
     }
   }
-  return { hits, slack, joint }
+  return { hits, slack, joint, jointBy }
 }
 
 // Choques reales entre cintas visibles (ver arriba). { hits: [i, j, d, ...] (índices de muestra en S), slack, joint, S }.
@@ -1868,6 +1880,9 @@ const RELAX_PIN = 4 * TK // (u) rampa de anclaje en cada punta
 const RELAX_SPRING = 0.004
 const RELAX_SIG = 6 // (vértices, ~1.5 u cada uno) ancho de la campana con que se reparte cada empuje
 const RELAX_K = 18
+// empuje de cada par en choque, sobre su déficit: más que el déficit porque el suavizado gaussiano lo reparte y lo diluye
+// (con la trenza abierta cerca de las uniones hay más pares; 3.5 converge en la mitad de pasadas que 1.5)
+const RELAX_PUSH = 3.5
 function relaxRibbons(world) {
   const t0 = performance.now()
   const S = braidRibbons(world); const { ribs, X, Y: Yy, Z, R } = S; const N = X.length
@@ -1921,13 +1936,13 @@ function relaxRibbons(world) {
     }
     const { hits } = judgePairs(S, pairs, hitD)
     left = hits.length / 3
-    if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0 })
+    if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0, S })
     let deep = 0; for (let q = 2; q < hits.length; q += 3) if (hits[q] < RIBBON_CLEAR + RELAX_DONE) deep++
     if (!deep) break // lo que queda ya pasa la medida con holgura: no se gastan más pasadas en el margen
     F.fill(0); cnt.fill(0)
     for (const g of live) { g.F.fill(0); g.c.fill(0) }
     for (let q = 0; q < hits.length; q += 3) {
-      const a = hits[q]; const b = hits[q + 1]; const d = hits[q + 2]; const m = (hitD - d) * 1.5 // cada lado casi todo el déficit: el suavizado lo reparte
+      const a = hits[q]; const b = hits[q + 1]; const d = hits[q + 2]; const m = (hitD - d) * RELAX_PUSH
       const A = ribs[R[a]]; const B = ribs[R[b]]
       let nx = X[a] - X[b]; let ny = Yy[a] - Yy[b]; let nz = Z[a] - Z[b]
       if (d > 1e-3) { nx /= d; ny /= d; nz /= d } else { const o = (a - A.start) * 3; nx = A.O[o]; ny = A.O[o + 1]; nz = A.O[o + 2]; const l = Math.hypot(nx, ny, nz); if (l > 1e-6) { nx /= l; ny /= l; nz /= l } else { nx = 0; ny = 1; nz = 0 } }

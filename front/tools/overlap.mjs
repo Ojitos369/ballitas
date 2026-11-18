@@ -42,9 +42,9 @@ function sampleWay(way) {
 // d - RIBBON_CLEAR del peor par fuera de uniones (>= 0 cumple; 1.00 = ningún par a menos de RIBBON_CLEAR + 1).
 // lane = los choques de cintas de un mismo tramo; cintas = todos.
 function measureRibbons(world) {
-  const { hits, slack, joint, S } = ribbonHits(world)
+  const { hits, slack, joint, jointBy = {}, S } = ribbonHits(world)
   const { ribs, R } = S
-  const lane = { gap: Infinity, slack: Infinity, info: '' }; const cint = { gap: Infinity, slack: Math.min(1, slack), info: '', n: hits.length / 3, joint }
+  const lane = { gap: Infinity, slack: Infinity, info: '' }; const cint = { gap: Infinity, slack: Math.min(1, slack), info: '', n: hits.length / 3, joint, jointBy }
   const tag = (r, i) => `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}`
   for (let k = 0; k < hits.length; k += 3) {
     const A = ribs[R[hits[k]]]; const B = ribs[R[hits[k + 1]]]; const d = hits[k + 2]; const info = `${tag(A, hits[k])} vs ${tag(B, hits[k + 1])}`
@@ -105,18 +105,19 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const n = +(process.argv[2] ?? 20); const s0 = +(process.argv[3] ?? 1)
   const KEYS = ['cross', 'same', 'route', 'visual', 'lane', 'cintas']
   const worst = {}; const worstS = {}; for (const k of KEYS) { worst[k] = Infinity; worstS[k] = Infinity }
-  let maxJoint = 0
+  let maxJoint = 0; const maxBy = { nodo: 0, union: 0, carril: 0 }
+  const byFmt = (o) => Object.entries(o).map(([k, v]) => `${k} ${v.toFixed(1)}u/${(v / TK).toFixed(1)}`).join(' ')
   let bad = 0; let tot = 0; let minNode = Infinity; let maxMs = 0
   const fmt = (m) => `${m.gap.toFixed(2)} (holg ${m.slack.toFixed(2)})`
   for (let seed = s0; seed < s0 + n; seed++) {
     const t = performance.now(); const w = buildWorld(seed); const ms = performance.now() - t
     const m = measure(w); tot += ms; maxMs = Math.max(maxMs, ms)
-    const ok = KEYS.every((k) => m[k].slack >= 0); maxJoint = Math.max(maxJoint, m.cintas.joint)
+    const ok = KEYS.every((k) => m[k].slack >= 0); maxJoint = Math.max(maxJoint, m.cintas.joint); for (const k in maxBy) maxBy[k] = Math.max(maxBy[k], m.cintas.jointBy[k] ?? 0)
     if (!ok) bad++
     for (const k of Object.keys(worst)) { worst[k] = Math.min(worst[k], m[k].gap); worstS[k] = Math.min(worstS[k], m[k].slack) }
     minNode = Math.min(minNode, m.node)
     if (process.argv[5] === 'malas' && ok) continue // 5º arg: sólo semillas que incumplen
-    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | visual ${fmt(m.visual)} [${m.visual.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
+    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | visual ${fmt(m.visual)} [${m.visual.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u (${byFmt(m.cintas.jointBy)}) | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
   }
-  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; visual ${worst.visual.toFixed(2)}/${worstS.visual.toFixed(2)} (umbral ${2 * LANE_W}u, pad ${VISUAL_PAD}); carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
+  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; visual ${worst.visual.toFixed(2)}/${worstS.visual.toFixed(2)} (umbral ${2 * LANE_W}u, pad ${VISUAL_PAD}); carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u = ${(maxJoint / TK).toFixed(1)}·TK; por punta: ${byFmt(maxBy)}); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
 }
