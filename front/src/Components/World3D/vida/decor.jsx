@@ -14,10 +14,12 @@ import { TRACK_K } from '../../../Core/world.js'
 const KIT_THEMES = new Set(['sombrio', 'bosque', 'mar', 'desierto', 'hielo', 'volcan', 'cristal', 'nubes', 'neon', 'jardin'])
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const Q_Y180 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI)
-const SPACING = 3.0 * TRACK_K // ~14 u entre piezas de berma
+const SPACING = 2.8 * TRACK_K // ~13 u entre hitos/farolas/banderines de berma
+const FLORA_SPACING = 1.15 * TRACK_K // ~5.4 u entre matas de flora en ambas bermas
 const MAX_REBOTES_JUMP = 16
 const MAX_REBOTES_SIDE = 10
 const MAX_DECO_TOTAL = 180 // InstanceCuller recorta >= 48 a 60 u
+const MAX_FLORA_TOTAL = 460 // flora densa continua en bermas, recortada por InstanceCuller a 60 u
 
 function capStride(arr, max) {
   if (arr.length <= max) return arr
@@ -44,6 +46,7 @@ function buildDecorData(way) {
   const rebotesSide = []
   const seenJump = new Set()
   const decoCands = []
+  const floraCands = []
 
   way.segments?.forEach((seg, si) => {
     if (seg.air) return
@@ -137,6 +140,31 @@ function buildDecorData(way) {
         if (kind === 'rebote') rebotesSide.push({ pos, quat, scale: sc })
         else decoCands.push({ kind, pos, quat, scale: sc })
       }
+
+      // 3) Flora densa en ambas bermas a lo largo de todo el tramo
+      for (let s = 3.2; s < L - 3.2; s += FLORA_SPACING * (0.8 + rng() * 0.4)) {
+        if (busy.some((b) => Math.abs(b - s) < 3.6)) continue
+        const u = s / L
+        const f = surfFrame(seg, lane.id, u, F)
+        const o = f.pos.clone()
+        const side = f.side.clone()
+        const up = f.up.clone()
+        const baseQuat = basisQuat(up, f.tangent)
+        for (const sgn of [-1, 1]) {
+          if (rng() > 0.86) continue
+          const sc = (1.25 + rng() * 0.95) * widthK
+          const rChk = 0.24 * sc
+          const ax = E + 0.24 + rng() * Math.max(0.15, TERR * 0.82 - 0.24)
+          const cand = o.clone().addScaledVector(side, sgn * ax).addScaledVector(up, bermY(ax, E) - 0.03)
+          if (!laneSideClear(seg, lane, u, cand, 0.3)) continue
+          if (col && !col.libre(cand, rChk, { way: way.idx })) continue
+          if (!local.libre(cand, rChk)) continue
+          const pos = colocar(world, { pos: cand, seed: way.idx * 14983 + si * 211 + lane.id * 31 + Math.floor(s * 13) + (sgn > 0 ? 5 : 0) }, rChk, { way: way.idx }, 0, local)
+          if (!pos) continue
+          const quat = baseQuat.clone().multiply(YAW.setFromAxisAngle(Y_AXIS, rng() * Math.PI * 2))
+          floraCands.push({ pos, quat, scale: sc })
+        }
+      }
     }
   })
 
@@ -145,7 +173,7 @@ function buildDecorData(way) {
   const decos = capStride(decoCands, MAX_DECO_TOTAL)
 
   const hito = []
-  const flora = []
+  const flora = capStride(floraCands, MAX_FLORA_TOTAL)
   const farola = []
   const banderin = []
   for (const d of decos) {
