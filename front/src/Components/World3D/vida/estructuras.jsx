@@ -22,112 +22,116 @@ const Q_ROTX = new THREE.Quaternion()
 
 const SEG_ACTIVE_DIST = 165 // distancia real a la curva del tramo para activarlo (solo 1-3 tramos activos)
 const TALL_CULL_DIST = 148
-const MED_CULL_DIST = 98
+const MED_CULL_DIST = 104
 const ARCH_CULL_DIST = 148
-const POOL_CAP = 96
-const ARCH_CAP = 36
+const POOL_CAP = 128
+const ARCH_CAP = 48
 const MOVE_RECOMPACT_SQ = 16 // recompila instancias visibles solo al moverse >= 4 u
 
 // ═══════════════════════════ CATÁLOGO POR TEMA (4 piezas clave + arco + ribera) ═══════════════════════════
 const THEME_STRUCTS = {
   bosque: {
-    ribbon: null,
-    arch: { kind: 'bosque', step: 54, sx: 1.06, sy: 7.5 },
+    ribbon: { mode: 'hedge', c1: '#235926', c2: '#4aa142', h: 1.05, w: 6.0, glow: 0.04 },
+    arch: { kind: 'bosque', step: 38, sx: 1.08, sy: 8.2 },
     props: [
-      { model: 'tree', step: 15, ax: [0.55, 1.45], scale: [6.8, 11.5], foot: 0.52, rad: 1.75, tints: ['#2f7d32', '#3f9642', '#25662a', '#4ea344'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'pine', step: 18, ax: [0.55, 1.5], scale: [7.5, 12.8], foot: 0.36, rad: 1.5, tints: ['#1f5e2c', '#2c7838', '#358742'], cat: 'terreno', tall: true },
-      { model: 'tronco_hueco', step: 38, ax: [0.45, 0.95], scale: [2.4, 3.5], foot: 0.45, rad: 1.0, rotX: Math.PI / 2, yOff: 0.4, cat: 'terreno' },
-      { model: 'bosque_casita', step: 48, ax: [0.65, 1.3], scale: [3.8, 5.2], foot: 0.5, rad: 1.4, cat: 'fachada', faceRoad: true },
+      { model: 'tree', step: 13, ax: [0.55, 1.45], scale: [9.2, 15.2], foot: 0.5, rad: 1.85, tints: ['#2f7d32', '#3f9642', '#25662a', '#4ea344'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'pine', step: 15, ax: [0.55, 1.5], scale: [9.8, 16.2], foot: 0.36, rad: 1.6, tints: ['#1f5e2c', '#2c7838', '#358742'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'tronco_hueco', step: 32, ax: [0.45, 0.95], scale: [2.8, 4.0], foot: 0.45, rad: 1.05, rotX: Math.PI / 2, yOff: 0.45, cat: 'terreno' },
+      { model: 'hongo_gigante', step: 24, ax: [0.4, 0.95], scale: [2.6, 4.2], foot: 0.48, rad: 1.0, cat: 'terreno' },
+      { model: 'bosque_casita', step: 44, ax: [0.7, 1.35], scale: [4.2, 5.8], foot: 0.5, rad: 1.45, cat: 'fachada', faceRoad: true },
     ],
   },
   mar: {
-    ribbon: null,
-    arch: { kind: 'mar', step: 58, sx: 1.06, sy: 7.4 },
+    ribbon: { mode: 'reef', c1: '#1a6e96', c2: '#4de0cf', h: 1.55, w: 7.8, glow: 0.14 },
+    arch: { kind: 'mar', step: 42, sx: 1.08, sy: 8.0 },
     props: [
-      { model: 'ciudad/mar_torre', step: 46, ax: [0.7, 1.45], scale: [7.5, 11.8], foot: 0.44, rad: 1.7, cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'coral', step: 14, ax: [0.4, 1.25], scale: [3.4, 6.2], foot: 0.44, rad: 1.2, tints: ['#ff6f91', '#ff9671', '#ffc75f', '#4dd0e1', '#ff7eb9'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'concha_gigante', step: 28, ax: [0.4, 0.95], scale: [2.2, 3.4], foot: 0.5, rad: 0.95, cat: 'terreno', faceRoad: true },
-      { model: 'mar_boya', step: 30, ax: [0.45, 0.95], scale: [2.6, 3.8], foot: 0.38, rad: 0.85, cat: 'techo' },
+      { model: 'ciudad/mar_torre', step: 40, ax: [0.75, 1.5], scale: [8.8, 13.5], foot: 0.44, rad: 1.75, tints: ['#e8f8ff', '#b8ecff'], cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'coral', step: 12, ax: [0.4, 1.25], scale: [3.8, 6.8], foot: 0.44, rad: 1.2, tints: ['#ff6f91', '#ff9671', '#ffc75f', '#4dd0e1', '#ff7eb9'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'alga_larga', step: 14, ax: [0.4, 1.1], scale: [4.6, 8.2], foot: 0.25, rad: 0.85, tints: ['#28b899', '#45d9aa', '#1f9488'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'concha_gigante', step: 24, ax: [0.4, 0.95], scale: [2.4, 3.8], foot: 0.5, rad: 1.0, cat: 'terreno', faceRoad: true },
+      { model: 'mar_boya', step: 28, ax: [0.45, 0.95], scale: [2.8, 4.2], foot: 0.38, rad: 0.85, cat: 'techo' },
     ],
   },
   desierto: {
-    ribbon: { mode: 'dune', c1: '#c48d48', c2: '#e8bc74', h: 2.2, w: 8.6, glow: 0 },
-    arch: { kind: 'desierto', step: 62, sx: 1.08, sy: 7.6 },
+    ribbon: { mode: 'dune', c1: '#c48d48', c2: '#ecc37a', h: 2.75, w: 10.2, glow: 0.04 },
+    arch: { kind: 'desierto', step: 46, sx: 1.1, sy: 8.2 },
     props: [
-      { model: 'saguaro_grande', step: 15, ax: [0.45, 1.25], scale: [3.4, 5.8], foot: 0.42, rad: 1.05, cat: 'terreno', tall: true, bothSides: true },
-      { model: 'palm', step: 24, ax: [0.55, 1.35], scale: [5.5, 8.8], foot: 0.4, rad: 1.3, tints: ['#4e9445', '#68a347', '#3f7d3a'], cat: 'terreno', tall: true },
-      { model: 'pyramid', step: 52, ax: [0.9, 1.85], scale: [7.5, 12.2], foot: 0.52, rad: 2.0, tints: ['#d4a55c', '#c78c48', '#e0b872'], cat: 'terreno', tall: true },
-      { model: 'ciudad/desierto_torre', step: 44, ax: [0.7, 1.4], scale: [5.8, 9.0], foot: 0.44, rad: 1.5, cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'saguaro_grande', step: 14, ax: [0.45, 1.25], scale: [3.8, 6.4], foot: 0.42, rad: 1.05, cat: 'terreno', tall: true, bothSides: true },
+      { model: 'pyramid', step: 42, ax: [0.95, 1.9], scale: [8.2, 13.4], foot: 0.52, rad: 2.05, tints: ['#d4a55c', '#c78c48', '#e0b872'], cat: 'terreno', tall: true },
+      { model: 'ciudad/desierto_torre', step: 38, ax: [0.75, 1.45], scale: [6.5, 10.2], foot: 0.44, rad: 1.55, cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'desierto_oasis', step: 36, ax: [0.6, 1.25], scale: [4.4, 6.4], foot: 0.48, rad: 1.4, cat: 'terreno' },
     ],
   },
   hielo: {
-    ribbon: { mode: 'ice', c1: '#75b2d9', c2: '#dcf3ff', h: 1.9, w: 7.0, glow: 0.16 },
-    arch: { kind: 'hielo', step: 56, sx: 1.06, sy: 7.5 },
+    ribbon: { mode: 'ice', c1: '#6eb4de', c2: '#e2f6ff', h: 3.3, w: 7.4, glow: 0.18 },
+    arch: { kind: 'hielo', step: 40, sx: 1.08, sy: 8.2 },
     props: [
-      { model: 'ice_spire', step: 15, ax: [0.5, 1.4], scale: [5.8, 11.2], foot: 0.38, rad: 1.4, tints: ['#b8ebff', '#8cd4fa', '#e4f8ff'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'estalagmita_hielo', step: 17, ax: [0.45, 1.1], scale: [3.4, 6.2], foot: 0.34, rad: 1.05, cat: 'terreno', tall: true },
-      { model: 'hielo_iglu', step: 38, ax: [0.55, 1.15], scale: [3.2, 4.6], foot: 0.5, rad: 1.3, cat: 'fachada', faceRoad: true },
-      { model: 'ciudad/hielo_torre', step: 48, ax: [0.75, 1.45], scale: [6.8, 10.6], foot: 0.44, rad: 1.6, cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'ice_spire', step: 13, ax: [0.5, 1.4], scale: [6.4, 12.2], foot: 0.38, rad: 1.4, tints: ['#b8ebff', '#8cd4fa', '#e4f8ff'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'estalagmita_hielo', step: 14, ax: [0.45, 1.15], scale: [4.2, 7.6], foot: 0.34, rad: 1.1, cat: 'terreno', tall: true, bothSides: true },
+      { model: 'hielo_iglu', step: 34, ax: [0.55, 1.15], scale: [3.5, 5.0], foot: 0.5, rad: 1.3, cat: 'fachada', faceRoad: true },
+      { model: 'ciudad/hielo_torre', step: 42, ax: [0.75, 1.45], scale: [7.5, 11.6], foot: 0.44, rad: 1.65, cat: 'fachada', faceRoad: true, tall: true },
     ],
   },
   volcan: {
-    ribbon: { mode: 'lava', c1: '#ff3b08', c2: '#ffaa22', h: 0.55, w: 5.8, glow: 1.15 },
-    arch: { kind: 'volcan', step: 60, sx: 1.06, sy: 7.5 },
+    ribbon: { mode: 'lava', c1: '#ff3b08', c2: '#ffaa22', h: 0.72, w: 6.8, glow: 1.0 },
+    arch: { kind: 'volcan', step: 44, sx: 1.08, sy: 8.0 },
     props: [
-      { model: 'volcan_erupcion', step: 38, ax: [1.15, 2.1], scale: [6.8, 10.8], foot: 0.58, rad: 2.0, cat: 'terreno', tall: true },
-      { model: 'rock', step: 15, ax: [1.05, 1.95], scale: [3.2, 5.8], foot: 0.48, rad: 1.3, tints: ['#332422', '#47302a', '#281d1c'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'volcan_farol', step: 20, ax: [0.35, 0.75], scale: [2.4, 3.3], foot: 0.22, rad: 0.65, cat: 'techo' },
-      { model: 'volcan_altar', step: 38, ax: [0.55, 1.1], scale: [2.8, 4.0], foot: 0.48, rad: 1.1, cat: 'terreno', faceRoad: true },
+      { model: 'volcan_erupcion', step: 30, ax: [1.15, 2.1], scale: [7.4, 12.0], foot: 0.58, rad: 2.0, tints: ['#785046', '#8f5a4a'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'rock', step: 13, ax: [1.05, 1.95], scale: [3.6, 6.4], foot: 0.48, rad: 1.3, tints: ['#6b4b44', '#7d564c', '#573b36'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'geiser', step: 26, ax: [0.65, 1.3], scale: [3.4, 5.2], foot: 0.48, rad: 1.15, tints: ['#855c50', '#9c6855'], cat: 'terreno', tall: true },
+      { model: 'volcan_farol', step: 18, ax: [0.35, 0.75], scale: [2.6, 3.6], foot: 0.22, rad: 0.65, cat: 'techo' },
+      { model: 'volcan_altar', step: 34, ax: [0.55, 1.1], scale: [3.0, 4.4], foot: 0.48, rad: 1.1, cat: 'terreno', faceRoad: true },
     ],
   },
   cristal: {
-    ribbon: null,
-    arch: { kind: 'cristal', step: 54, sx: 1.06, sy: 7.5 },
+    ribbon: { mode: 'canyon', c1: '#48388a', c2: '#9a7dff', h: 3.1, w: 7.8, glow: 0.22 },
+    arch: { kind: 'cristal', step: 42, sx: 1.08, sy: 8.1 },
     props: [
-      { model: 'crystal', step: 14, ax: [0.45, 1.4], scale: [5.4, 10.6], foot: 0.38, rad: 1.35, tints: ['#7df9ff', '#ff7de9', '#b894ff', '#7dffb2'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'cristal_prisma', step: 18, ax: [0.45, 1.2], scale: [4.2, 7.8], foot: 0.4, rad: 1.15, cat: 'terreno', tall: true },
-      { model: 'geoda', step: 24, ax: [0.4, 0.95], scale: [2.4, 3.8], foot: 0.5, rad: 0.95, cat: 'terreno', faceRoad: true },
-      { model: 'ciudad/cristal_torre', step: 46, ax: [0.7, 1.4], scale: [6.8, 11.2], foot: 0.44, rad: 1.6, cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'crystal', step: 12, ax: [0.45, 1.4], scale: [6.2, 12.2], foot: 0.38, rad: 1.35, tints: ['#7df9ff', '#ff7de9', '#b894ff', '#7dffb2'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'cristal_prisma', step: 15, ax: [0.45, 1.25], scale: [4.8, 8.8], foot: 0.4, rad: 1.15, cat: 'terreno', tall: true, bothSides: true },
+      { model: 'geoda', step: 22, ax: [0.4, 0.95], scale: [2.6, 4.2], foot: 0.5, rad: 0.95, cat: 'terreno', faceRoad: true },
+      { model: 'ciudad/cristal_torre', step: 40, ax: [0.7, 1.4], scale: [7.6, 12.4], foot: 0.44, rad: 1.6, cat: 'fachada', faceRoad: true, tall: true },
     ],
   },
   nubes: {
-    ribbon: { mode: 'cloud', c1: '#dce6ff', c2: '#ffffff', h: 1.35, w: 7.4, glow: 0.12 },
-    arch: { kind: 'nubes', step: 60, sx: 1.08, sy: 7.6 },
+    ribbon: { mode: 'cloud', c1: '#dce6ff', c2: '#ffffff', h: 1.65, w: 8.2, glow: 0.14 },
+    arch: { kind: 'nubes', step: 44, sx: 1.1, sy: 8.0 },
     props: [
-      { model: 'cloud', step: 16, ax: [0.85, 1.9], scale: [4.0, 6.8], foot: 0.5, rad: 1.5, yOff: [-2.2, 0.2], tints: ['#ffffff', '#eef4ff', '#fff7e0'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'isla_nube', step: 30, ax: [1.05, 2.05], scale: [5.2, 8.2], foot: 0.5, rad: 1.75, yOff: [-2.5, 0.8], cat: 'terreno', tall: true },
-      { model: 'nubes_globo', step: 26, ax: [0.65, 1.4], scale: [3.4, 5.4], foot: 0.34, rad: 1.0, yOff: [2.8, 5.8], cat: 'techo', tall: true },
-      { model: 'nubes_casita', step: 44, ax: [0.7, 1.3], scale: [3.6, 5.0], foot: 0.5, rad: 1.35, cat: 'fachada', faceRoad: true },
+      { model: 'isla_nube', step: 22, ax: [1.05, 2.1], scale: [6.2, 10.0], foot: 0.5, rad: 1.85, yOff: [-2.4, 0.9], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'cloud', step: 14, ax: [0.85, 1.9], scale: [4.4, 7.6], foot: 0.5, rad: 1.5, yOff: [-2.0, 0.4], tints: ['#ffffff', '#eef4ff', '#fff7e0'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'nubes_globo', step: 22, ax: [0.65, 1.4], scale: [3.8, 6.0], foot: 0.34, rad: 1.0, yOff: [3.0, 6.6], cat: 'techo', tall: true },
+      { model: 'nubes_casita', step: 38, ax: [0.7, 1.3], scale: [3.8, 5.4], foot: 0.5, rad: 1.35, cat: 'fachada', faceRoad: true },
     ],
   },
   neon: {
-    ribbon: null,
-    arch: { kind: 'neon', step: 48, sx: 1.06, sy: 7.5 },
+    ribbon: { mode: 'cyber', c1: '#161b36', c2: '#2d3b70', h: 0.45, w: 7.6, glow: 0.16 },
+    arch: { kind: 'neon', step: 36, sx: 1.08, sy: 8.2 },
     props: [
-      { model: 'ciudad/neon_rascacielos', step: 20, ax: [0.85, 1.75], scale: [8.8, 14.5], foot: 0.49, rad: 2.2, yOff: -0.25, tints: ['#ffffff', '#d8f4ff', '#ffd8fa'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
-      { model: 'ciudad/neon_torre', step: 24, ax: [0.75, 1.55], scale: [7.2, 12.2], foot: 0.44, rad: 1.85, yOff: -0.2, cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'ciudad/neon_comercio', step: 28, ax: [0.65, 1.25], scale: [4.6, 6.8], foot: 0.52, rad: 1.45, cat: 'fachada', faceRoad: true },
-      { model: 'neon_kiosco', step: 24, ax: [0.45, 0.9], scale: [2.4, 3.4], foot: 0.5, rad: 0.95, cat: 'fachada', faceRoad: true },
+      { model: 'ciudad/neon_rascacielos', step: 17, ax: [0.85, 1.75], scale: [9.4, 15.8], foot: 0.49, rad: 2.2, yOff: -0.25, tints: ['#ffffff', '#d8f4ff', '#ffd8fa'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
+      { model: 'ciudad/neon_torre', step: 20, ax: [0.75, 1.55], scale: [7.8, 13.2], foot: 0.44, rad: 1.85, yOff: -0.2, tints: ['#eef7ff', '#ffe6fb'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
+      { model: 'ciudad/neon_comercio', step: 24, ax: [0.65, 1.25], scale: [5.0, 7.4], foot: 0.52, rad: 1.45, cat: 'fachada', faceRoad: true },
+      { model: 'neon_kiosco', step: 20, ax: [0.45, 0.9], scale: [2.6, 3.8], foot: 0.5, rad: 0.95, cat: 'fachada', faceRoad: true },
     ],
   },
   jardin: {
-    ribbon: { mode: 'hedge', c1: '#357a34', c2: '#7cd964', h: 0.85, w: 5.2, glow: 0 },
-    arch: { kind: 'jardin', step: 56, sx: 1.06, sy: 7.3 },
+    ribbon: { mode: 'hedge', c1: '#2f7a32', c2: '#7be063', h: 1.35, w: 5.8, glow: 0.05 },
+    arch: { kind: 'jardin', step: 34, sx: 1.08, sy: 7.6 },
     props: [
-      { model: 'jardin_gazebo', step: 30, ax: [0.6, 1.2], scale: [3.6, 5.2], foot: 0.36, rad: 1.2, cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'fuente_jardin', step: 38, ax: [0.55, 1.05], scale: [2.8, 4.0], foot: 0.5, rad: 1.15, cat: 'terreno' },
-      { model: 'jardin_flor', step: 14, ax: [0.35, 0.85], scale: [2.0, 3.2], foot: 0.34, rad: 0.7, cat: 'terreno', bothSides: true },
-      { model: 'tree', step: 18, ax: [0.65, 1.5], scale: [5.5, 9.2], foot: 0.52, rad: 1.55, tints: ['#4fa84b', '#ff8fb8', '#ffb3d9', '#67bd5b'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'jardin_gazebo', step: 26, ax: [0.6, 1.2], scale: [4.0, 5.8], foot: 0.36, rad: 1.25, cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'fuente_jardin', step: 30, ax: [0.55, 1.1], scale: [3.2, 4.6], foot: 0.5, rad: 1.2, cat: 'terreno' },
+      { model: 'jardin_flor', step: 12, ax: [0.35, 0.85], scale: [2.2, 3.6], foot: 0.34, rad: 0.72, cat: 'terreno', bothSides: true },
+      { model: 'tree', step: 16, ax: [0.65, 1.5], scale: [6.2, 10.4], foot: 0.52, rad: 1.6, tints: ['#4fa84b', '#ff8fb8', '#ffb3d9', '#67bd5b'], cat: 'terreno', tall: true, bothSides: true },
     ],
   },
   sombrio: {
-    ribbon: null,
-    arch: { kind: 'sombrio', step: 56, sx: 1.06, sy: 7.4 },
+    ribbon: { mode: 'crypt', c1: '#281f3d', c2: '#503b75', h: 1.05, w: 6.4, glow: 0.1 },
+    arch: { kind: 'sombrio', step: 44, sx: 1.08, sy: 8.0 },
     props: [
-      { model: 'tomb', step: 28, ax: [0.65, 1.35], scale: [4.8, 7.6], foot: 0.48, rad: 1.5, tints: ['#5a4d75', '#423659', '#70608f'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
-      { model: 'ciudad/sombrio_torre', step: 38, ax: [0.75, 1.55], scale: [7.2, 11.4], foot: 0.44, rad: 1.75, cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'lapida', step: 14, ax: [0.4, 0.9], scale: [2.0, 3.2], foot: 0.34, rad: 0.75, cat: 'terreno', faceRoad: true, bothSides: true },
-      { model: 'sombrio_farol', step: 18, ax: [0.35, 0.75], scale: [2.6, 3.5], foot: 0.2, rad: 0.65, cat: 'techo' },
+      { model: 'proc:dead_tree', step: 14, ax: [0.55, 1.35], scale: [7.2, 11.8], foot: 0.32, rad: 1.35, tints: ['#3e3054', '#4e3c69', '#322645'], cat: 'terreno', tall: true, bothSides: true },
+      { model: 'tomb', step: 22, ax: [0.65, 1.35], scale: [5.4, 8.6], foot: 0.48, rad: 1.55, tints: ['#786899', '#5e4f7d', '#8e7cb0'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
+      { model: 'ciudad/sombrio_torre', step: 34, ax: [0.75, 1.55], scale: [7.8, 12.2], foot: 0.44, rad: 1.75, tints: ['#8574a8', '#68588a'], cat: 'fachada', faceRoad: true, tall: true },
+      { model: 'lapida', step: 13, ax: [0.4, 0.9], scale: [2.2, 3.6], foot: 0.34, rad: 0.75, cat: 'terreno', faceRoad: true, bothSides: true },
+      { model: 'sombrio_farol', step: 16, ax: [0.35, 0.75], scale: [2.8, 3.8], foot: 0.2, rad: 0.65, cat: 'techo' },
     ],
   },
 }
@@ -152,96 +156,120 @@ const cone = (r, h, segs, x = 0, y = 0, z = 0, rx = 0, rz = 0) => {
 const sph = (r, sx = 1, sy = 1, sz = 1, x = 0, y = 0, z = 0) =>
   new THREE.SphereGeometry(r, 7, 5).scale(sx, sy, sz).translate(x, y, z)
 
+let _deadTreeGeo = null
+function getDeadTreeGeo() {
+  if (_deadTreeGeo) return _deadTreeGeo
+  const parts = [
+    [cyl(0.06, 0.14, 0.56, 7, 0, 0.28, 0, 0.05, 0.04), '#3d2f4d'],
+    [cyl(0.038, 0.068, 0.44, 6, 0.05, 0.62, 0.02, 0.12, -0.34), '#352845'],
+    [cyl(0.026, 0.045, 0.36, 6, -0.14, 0.64, -0.02, -0.1, 0.52), '#352845'],
+    [cyl(0.018, 0.034, 0.32, 5, 0.18, 0.78, 0.08, 0.32, -0.68), '#473659'],
+    [cyl(0.016, 0.03, 0.3, 5, -0.22, 0.82, -0.06, -0.28, 0.62), '#473659'],
+    [cyl(0.014, 0.026, 0.26, 5, 0.04, 0.88, -0.1, -0.45, -0.15), '#473659'],
+    [sph(0.04, 1, 1.3, 1, -0.28, 0.78, -0.08), '#b784ff'],
+    [sph(0.04, 1, 1.3, 1, 0.26, 0.72, 0.1), '#9b6bff'],
+  ]
+  _deadTreeGeo = mergeColoredParts(parts, 'struct:dead_tree')
+  return _deadTreeGeo
+}
+
 function getArchGeo(kind) {
   if (archGeoCache.has(kind)) return archGeoCache.get(kind)
   const parts = []
   switch (kind) {
     case 'bosque':
       for (const s of [-1, 1]) {
-        parts.push([cyl(0.055, 0.085, 0.72, 7, s * 0.48, 0.36, 0, 0, s * 0.14), '#5c3c24'])
-        parts.push([cyl(0.04, 0.06, 0.42, 6, s * 0.3, 0.76, 0, 0, s * 0.85), '#5c3c24'])
-        parts.push([sph(0.24, 1.3, 0.72, 1.2, s * 0.34, 0.88, 0), '#2e7d32'])
+        parts.push([cyl(0.065, 0.1, 0.76, 7, s * 0.48, 0.38, 0, 0, s * 0.14), '#5c3c24'])
+        parts.push([cyl(0.042, 0.065, 0.44, 6, s * 0.3, 0.76, 0, 0, s * 0.85), '#5c3c24'])
+        parts.push([sph(0.26, 1.4, 0.78, 1.5, s * 0.35, 0.88, 0), '#2e7d32'])
+        parts.push([cyl(0.016, 0.02, 0.24, 5, s * 0.42, 0.78, 0.12), '#52b84a'])
       }
-      parts.push([sph(0.32, 1.75, 0.56, 1.15, 0, 0.95, 0), '#3b943f'])
-      parts.push([sph(0.22, 1.2, 0.55, 1.0, 0.12, 0.89, 0.08), '#58b34e'])
+      parts.push([sph(0.34, 1.85, 0.58, 1.65, 0, 0.96, 0), '#3b943f'])
+      parts.push([sph(0.24, 1.3, 0.55, 1.3, 0.12, 0.9, 0.1), '#58b34e'])
+      parts.push([sph(0.22, 1.2, 0.52, 1.3, -0.14, 0.91, -0.1), '#4ea644'])
       break
     case 'mar':
       for (const s of [-1, 1]) {
-        parts.push([cyl(0.06, 0.095, 0.76, 7, s * 0.48, 0.38, 0, 0, s * 0.16), '#ff7aa8'])
-        parts.push([cyl(0.04, 0.06, 0.35, 6, s * 0.43, 0.56, 0.06, 0.25, -s * 0.4), '#4dd0e1'])
-        parts.push([sph(0.07, 1.2, 1.1, 1.2, s * 0.4, 0.78, 0), '#ffd166'])
+        parts.push([cyl(0.065, 0.1, 0.76, 7, s * 0.48, 0.38, 0, 0, s * 0.16), '#ff7aa8'])
+        parts.push([cyl(0.04, 0.06, 0.36, 6, s * 0.43, 0.56, 0.06, 0.25, -s * 0.4), '#4dd0e1'])
+        parts.push([sph(0.075, 1.2, 1.1, 1.2, s * 0.4, 0.78, 0), '#ffd166'])
       }
-      parts.push([new THREE.TorusGeometry(0.42, 0.055, 6, 14, Math.PI).scale(1, 0.62, 1).translate(0, 0.74, 0), '#ff9671'])
-      parts.push([cone(0.05, 0.22, 5, -0.15, 0.98, 0, 0, 0.2), '#ffc75f'])
-      parts.push([cone(0.05, 0.22, 5, 0.15, 0.98, 0, 0, -0.2), '#4dd0e1'])
+      parts.push([new THREE.TorusGeometry(0.43, 0.058, 6, 14, Math.PI).scale(1, 0.64, 1).translate(0, 0.74, 0), '#ff9671'])
+      parts.push([cone(0.055, 0.24, 5, -0.16, 0.98, 0, 0, 0.22), '#ffc75f'])
+      parts.push([cone(0.055, 0.24, 5, 0.16, 0.98, 0, 0, -0.22), '#4dd0e1'])
+      parts.push([cone(0.045, 0.2, 5, 0, 1.0, 0.06), '#ff6f91'])
       break
     case 'desierto':
       for (const s of [-1, 1]) {
-        parts.push([box(0.14, 0.72, 0.22, s * 0.48, 0.36, 0, 0, 0, s * 0.12), '#b86f3a'])
-        parts.push([box(0.17, 0.22, 0.25, s * 0.5, 0.11, 0), '#9a582b'])
+        parts.push([cyl(0.09, 0.14, 0.74, 6, s * 0.48, 0.37, 0, 0, s * 0.14), '#b86f3a'])
+        parts.push([box(0.22, 0.24, 0.28, s * 0.51, 0.12, 0, 0, s * 0.2, 0), '#9a582b'])
+        parts.push([box(0.16, 0.2, 0.24, s * 0.41, 0.68, 0, 0, 0, -s * 0.35), '#c98249'])
       }
-      parts.push([box(0.96, 0.18, 0.24, 0, 0.84, 0), '#c98249'])
-      parts.push([box(0.76, 0.11, 0.2, 0, 0.95, 0), '#dfa266'])
+      parts.push([new THREE.TorusGeometry(0.44, 0.085, 5, 12, Math.PI).scale(1, 0.62, 1.15).translate(0, 0.7, 0), '#c98249'])
+      parts.push([box(0.74, 0.12, 0.26, 0, 0.95, 0), '#dfa266'])
       break
     case 'hielo':
       for (const s of [-1, 1]) {
-        parts.push([cone(0.11, 0.85, 6, s * 0.48, 0.42, 0, 0, s * 0.15), '#9edcff'])
-        parts.push([cone(0.07, 0.55, 5, s * 0.53, 0.27, 0.08, 0.1, -s * 0.2), '#cfefff'])
+        parts.push([cone(0.12, 0.86, 6, s * 0.48, 0.43, 0, 0, s * 0.15), '#9edcff'])
+        parts.push([cone(0.075, 0.56, 5, s * 0.54, 0.28, 0.08, 0.1, -s * 0.2), '#cfefff'])
       }
-      parts.push([box(0.95, 0.14, 0.2, 0, 0.88, 0), '#bfe9ff'])
-      for (let i = -2; i <= 2; i++) {
-        parts.push([cone(0.036, 0.16 + (Math.abs(i) % 2) * 0.05, 5, i * 0.15, 0.76, 0, Math.PI, 0), '#e8f9ff'])
+      parts.push([box(0.96, 0.14, 0.22, 0, 0.88, 0), '#bfe9ff'])
+      for (let i = -3; i <= 3; i++) {
+        parts.push([cone(0.036, 0.16 + (Math.abs(i) % 2) * 0.07, 5, i * 0.12, 0.74, 0, Math.PI, 0), '#e8f9ff'])
       }
       break
     case 'volcan':
       for (const s of [-1, 1]) {
-        parts.push([cyl(0.07, 0.12, 0.78, 6, s * 0.48, 0.39, 0, 0, s * 0.12), '#2b1e1c'])
-        parts.push([box(0.03, 0.5, 0.14, s * 0.44, 0.38, 0, 0, 0, s * 0.12), '#ff5a1f'])
+        parts.push([cyl(0.08, 0.13, 0.78, 6, s * 0.48, 0.39, 0, 0, s * 0.12), '#3c2b28'])
+        parts.push([box(0.032, 0.52, 0.15, s * 0.44, 0.38, 0, 0, 0, s * 0.12), '#ff5a1f'])
       }
-      parts.push([box(0.95, 0.16, 0.22, 0, 0.86, 0), '#332422'])
-      parts.push([box(0.84, 0.06, 0.24, 0, 0.86, 0), '#ff6d29'])
+      parts.push([box(0.96, 0.17, 0.24, 0, 0.86, 0), '#45312d'])
+      parts.push([box(0.86, 0.06, 0.26, 0, 0.86, 0), '#ff6d29'])
       break
     case 'cristal':
       for (const s of [-1, 1]) {
-        parts.push([cone(0.08, 0.86, 6, s * 0.48, 0.43, 0, 0, s * 0.18), '#7df9ff'])
-        parts.push([cone(0.06, 0.58, 6, s * 0.53, 0.29, 0.05, 0, -s * 0.18), '#ff7de9'])
+        parts.push([cone(0.085, 0.86, 6, s * 0.48, 0.43, 0, 0, s * 0.18), '#7df9ff'])
+        parts.push([cone(0.065, 0.6, 6, s * 0.53, 0.3, 0.05, 0, -s * 0.18), '#ff7de9'])
       }
-      parts.push([cyl(0.06, 0.06, 0.92, 6, 0, 0.86, 0, 0, Math.PI / 2), '#b894ff'])
-      parts.push([new THREE.OctahedronGeometry(0.11, 0).translate(0, 0.94, 0), '#e6dcff'])
+      parts.push([cyl(0.065, 0.065, 0.94, 6, 0, 0.86, 0, 0, Math.PI / 2), '#b894ff'])
+      parts.push([new THREE.OctahedronGeometry(0.12, 0).translate(0, 0.95, 0), '#e6dcff'])
       break
     case 'nubes':
       for (const s of [-1, 1]) {
-        parts.push([sph(0.13, 1.1, 1.3, 1.1, s * 0.5, 0.22, 0), '#ffffff'])
-        parts.push([sph(0.11, 1.0, 1.4, 1.0, s * 0.45, 0.54, 0), '#eef4ff'])
+        parts.push([sph(0.14, 1.1, 1.3, 1.1, s * 0.5, 0.24, 0), '#ffffff'])
+        parts.push([sph(0.12, 1.0, 1.4, 1.0, s * 0.45, 0.54, 0), '#eef4ff'])
+        parts.push([cyl(0.03, 0.04, 0.5, 6, s * 0.46, 0.52, 0), '#ffd54a'])
       }
-      parts.push([new THREE.TorusGeometry(0.45, 0.04, 5, 16, Math.PI).scale(1, 0.62, 1).translate(0, 0.72, 0), '#ffd54a'])
-      parts.push([sph(0.14, 1.6, 0.7, 1.0, 0, 0.96, 0), '#ffffff'])
+      parts.push([box(0.96, 0.08, 0.28, 0, 0.86, 0), '#fff6d6'])
+      parts.push([new THREE.TorusGeometry(0.45, 0.045, 5, 16, Math.PI).scale(1, 0.62, 1).translate(0, 0.72, 0), '#ffd54a'])
+      parts.push([sph(0.15, 1.7, 0.75, 1.1, 0, 0.96, 0), '#ffffff'])
       break
     case 'neon':
       for (const s of [-1, 1]) {
-        parts.push([box(0.07, 0.84, 0.12, s * 0.48, 0.42, 0), '#1a2038'])
-        parts.push([box(0.03, 0.76, 0.14, s * 0.43, 0.42, 0), s < 0 ? '#ff2bd6' : '#2bffe8'])
+        parts.push([box(0.08, 0.84, 0.14, s * 0.48, 0.42, 0), '#1a2038'])
+        parts.push([box(0.03, 0.76, 0.16, s * 0.43, 0.42, 0), s < 0 ? '#ff2bd6' : '#2bffe8'])
       }
-      parts.push([box(1.02, 0.13, 0.18, 0, 0.88, 0), '#161b30'])
-      parts.push([box(0.88, 0.05, 0.2, 0, 0.88, 0), '#2bffe8'])
-      parts.push([box(0.46, 0.09, 0.22, 0, 0.96, 0), '#ff2bd6'])
+      parts.push([box(1.04, 0.14, 0.2, 0, 0.88, 0), '#161b30'])
+      parts.push([box(0.9, 0.05, 0.22, 0, 0.88, 0), '#2bffe8'])
+      parts.push([box(0.54, 0.14, 0.24, 0, 0.99, 0), '#1b223d'])
+      parts.push([box(0.48, 0.08, 0.26, 0, 0.99, 0), '#ff2bd6'])
       break
     case 'jardin':
       for (const s of [-1, 1]) {
-        parts.push([cyl(0.045, 0.055, 0.82, 7, s * 0.48, 0.41, 0), '#f5eadc'])
-        parts.push([sph(0.1, 1.1, 1.0, 1.1, s * 0.48, 0.18, 0), '#3d9944'])
+        parts.push([cyl(0.045, 0.055, 0.84, 7, s * 0.48, 0.42, 0), '#f5eadc'])
+        parts.push([sph(0.11, 1.1, 1.0, 1.1, s * 0.48, 0.18, 0), '#3d9944'])
       }
-      parts.push([box(1.02, 0.08, 0.18, 0, 0.86, 0), '#f5eadc'])
-      parts.push([box(0.94, 0.06, 0.12, 0, 0.93, 0), '#4eb355'])
-      for (const fx of [-0.26, 0, 0.26]) parts.push([sph(0.065, 1.2, 0.8, 1.2, fx, 0.97, 0), '#ff7ab8'])
+      parts.push([box(1.04, 0.08, 0.28, 0, 0.86, 0), '#f5eadc'])
+      parts.push([box(0.98, 0.07, 0.2, 0, 0.93, 0), '#4eb355'])
+      for (const fx of [-0.3, -0.1, 0.1, 0.3]) parts.push([sph(0.065, 1.2, 0.8, 1.2, fx, 0.98, 0), fx < 0 ? '#ff7ab8' : '#ffd24a'])
       break
     default:
       for (const s of [-1, 1]) {
-        parts.push([cyl(0.045, 0.075, 0.84, 6, s * 0.48, 0.42, 0, 0, s * 0.1), '#282038'])
-        parts.push([sph(0.055, 1, 1.2, 1, s * 0.41, 0.65, 0), '#b784ff'])
+        parts.push([cyl(0.05, 0.08, 0.84, 6, s * 0.48, 0.42, 0, 0, s * 0.1), '#352a4a'])
+        parts.push([sph(0.058, 1, 1.2, 1, s * 0.41, 0.65, 0), '#b784ff'])
       }
-      parts.push([new THREE.TorusGeometry(0.44, 0.04, 5, 14, Math.PI).scale(1, 0.58, 1).translate(0, 0.72, 0), '#3b2e54'])
-      parts.push([cone(0.045, 0.18, 5, 0, 0.98, 0), '#a24bff'])
+      parts.push([new THREE.TorusGeometry(0.44, 0.045, 5, 14, Math.PI).scale(1, 0.58, 1).translate(0, 0.72, 0), '#473863'])
+      parts.push([cone(0.05, 0.2, 5, 0, 0.98, 0), '#a24bff'])
       break
   }
   const g = mergeColoredParts(parts, `struct:arch:${kind}`)
@@ -324,11 +352,13 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
 
   const L = Math.max(seg.length ?? 1, 1)
   const lanes = lanesOf(seg)
-  const stepDist = 5.2 * TRACK_K // ~24 u
-  const n = Math.max(4, Math.ceil(L / stepDist))
+  const stepDist = 2.6 * TRACK_K // ~12 u para seguir curvas suavemente
+  const n = Math.max(6, Math.ceil(L / stepDist))
   const isLava = spec.mode === 'lava'
   const isIce = spec.mode === 'ice'
   const isDune = spec.mode === 'dune'
+  const isCanyon = spec.mode === 'canyon'
+  const isCyber = spec.mode === 'cyber'
   const W = spec.w
   const H = spec.h
 
@@ -336,7 +366,7 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
     const lane = lanes[li]
     const hw = halfWidth(lane)
     const E = hw + CURB
-    const edge0 = E + TERR * 0.9
+    const edge0 = E + TERR * 0.85
     for (const sideSign of [-1, 1]) {
       let stripCount = 0
       for (let i = 0; i <= n; i++) {
@@ -353,12 +383,14 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
         const wave = Math.sin(s * 0.14 + si * 2.1 + lane.id * 1.7 + sideSign)
         const wave2 = Math.cos(s * 0.31 + si * 0.9)
         let hCrest = H * (0.78 + 0.38 * wave + 0.2 * wave2)
-        if (isIce) hCrest = H * (0.65 + 0.65 * Math.abs(wave))
+        if (isIce || isCanyon) hCrest = H * (0.62 + 0.72 * Math.abs(wave))
         else if (isDune) hCrest = H * (0.8 + 0.45 * wave)
 
         const pts = isLava
-          ? [[edge0, -0.06, 0, 0], [edge0 + W * 0.18, -0.32, 0.35, 0.2], [edge0 + W * 0.72, -0.32, 0.65, 0.8], [edge0 + W * 0.95, 0.32 * H, 1, 1]]
-          : [[edge0, -0.1, 0, 0], [edge0 + W * 0.42, hCrest * 0.72, 0.65, 0.35], [edge0 + W * 0.75, hCrest, 1, 0.7], [edge0 + W, -0.55, 0.25, 1]]
+          ? [[edge0, -0.08, 0, 0], [edge0 + W * 0.16, -0.34, 0.35, 0.18], [edge0 + W * 0.72, -0.34, 0.65, 0.82], [edge0 + W, 0.28 * H, 1, 1]]
+          : isCyber
+            ? [[edge0, -0.08, 0, 0], [edge0 + W * 0.14, 0.22, 0.75, 0.2], [edge0 + W * 0.86, 0.26, 1, 0.85], [edge0 + W, -0.45, 0.2, 1]]
+            : [[edge0, -0.08, 0, 0], [edge0 + W * 0.42, hCrest * 0.76, 0.65, 0.35], [edge0 + W * 0.76, hCrest, 1, 0.7], [edge0 + W, -0.7, 0.25, 1]]
 
         const vBase = pos.length / 3
         for (let j = 0; j < 4; j++) {
@@ -551,7 +583,9 @@ function getSegStructData(way, seg, si) {
 
 // ═══════════════════════════ POOL DE INSTANCIAS FIJAS POR MODELO ═══════════════════════════
 function FixedPoolInst({ model, themeId, cat, tall, waySphere, regPool }) {
-  const geo = useModelo(model, null)
+  const isProcDead = model === 'proc:dead_tree'
+  const glbGeo = useModelo(isProcDead ? null : model, null)
+  const geo = isProcDead ? getDeadTreeGeo() : glbGeo
   const mat = useMemo(() => triplanarMaterial(themeId, cat, { standard: false }), [themeId, cat])
 
   const mesh = useMemo(() => {
@@ -583,7 +617,7 @@ function FixedPoolInst({ model, themeId, cat, tall, waySphere, regPool }) {
 export default function Estructuras({ way, detail, time }) {
   const themeId = way.theme?.id
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
-  const models = useMemo(() => spec.props.map((p) => p.model), [spec])
+  const models = useMemo(() => spec.props.filter((p) => !p.model.startsWith('proc:')).map((p) => p.model), [spec])
   useEffect(() => { precargarModelos(models) }, [models])
 
   const nonAirSegs = useMemo(
