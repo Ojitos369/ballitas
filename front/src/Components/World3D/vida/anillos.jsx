@@ -13,7 +13,7 @@ import { TRACK_K } from '../../../Core/world.js'
 const RING_STEP = 55 * TRACK_K
 // El culling conserva la escala del trazado, con un radio acotado para no triplicar
 // los aros visibles desde la cámara pegada a la ballita.
-const RING_RANGE = 140 * TRACK_K
+const RING_RANGE = 250 // culling desde la cámara de la ballita; no escala con el trazado
 const ROUTE_COLS = ['#38e8ff', '#ff5c8a', '#ffd24a']
 const RING_TIME = { value: 0 }
 

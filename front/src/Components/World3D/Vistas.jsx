@@ -23,7 +23,7 @@ export function escalaMapa(R, dist, camera, height) {
 }
 
 // Radio visual real del planeta (1.0-1.6 × NODE_R): el enfoque se mide en radios para que quepa entero con terminales.
-const ENFOQUE_RADIOS = 3.2
+const ENFOQUE_RADIOS = 4.2
 const _rv = new WeakMap()
 function radioVisual(n, world) {
   let r = _rv.get(n)
