@@ -8,6 +8,8 @@
 //   TUBE_SCALE  (1.8): factor del radio de los tubos (`P.radius`); `BALL_R` queda fijo (0.5)
 //                      para dejar espacio interior a pórticos, gradas y decoración.
 //   SIZE_K      (2.5): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
+//   TRACK_K     (4.7): escala uniforme de todo lo espacial del trazado (incluidos NODE_R, LANE_W y el efecto de
+//                      WORLD_SCALE/TUBE_SCALE); BALL_R no escala: calzada LANE_W = 4.89 u (~6 ballitas de ancho).
 //   PORT_ZONE: radio desde el centro de un nodo donde los caminos que llegan a él se unen (inPort); fuera de él y de
 //              las uniones fork/cross/merge (ROUTE_JOIN), todo par de caminos guarda >= 1.5 radios de pista de huelgo:
 //              circuitos distintos, ida contra vuelta, rutas de un mismo sentido y carriles trenzados entre sí

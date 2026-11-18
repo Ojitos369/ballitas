@@ -20,13 +20,14 @@ const inPort = W.inPort ?? ((p, q) => p.zn >= 0 && p.zn === q.zn)
 export const MIN_GAP_K = W.MIN_GAP_K ?? 1.5 // huelgo mínimo, en radios de pista (seg.radius mayor del par)
 const PORT_ZONE = W.PORT_ZONE ?? NODE_R + GRID_LEN + 20
 const ROUTE_JOIN = W.ROUTE_JOIN ?? 56 // radio (u, euclidiano) alrededor de fork/cross/merge donde las rutas se abren en abanico por diseño
-const CELL = 40
+const TK = W.TRACK_K ?? 1 // escala uniforme del trazado: rejilla y muestreo en u del trazado
+const CELL = 40 * TK
 
 function sampleWay(way) {
   const out = []
   const ends = [way.from, way.to]
   for (const s of way.segments) {
-    const n = Math.max(12, Math.ceil(s.length / 1.5))
+    const n = Math.max(12, Math.ceil(s.length / (1.5 * TK)))
     for (let k = 0; k <= n; k++) {
       const u = k / n; const p = s.curve.getPointAt(u)
       const hubD = Math.min(...way.junctions.map((j) => j.pos.distanceTo(p))) // abanico de la unión (fork/cross/merge)
@@ -114,5 +115,5 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     if (process.argv[5] === 'malas' && ok) continue // 5º arg: sólo semillas que incumplen
     console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
   }
-  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)}; rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
+  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
 }
