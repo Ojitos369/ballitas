@@ -886,7 +886,7 @@ function CajasMesh({ nombre, items, way, detail }) {
     const h = Math.min(dt, 0.1)
     const t = clock.elapsedTime
     const bolls = getBallitas()
-    const lowDetail = detail ? detail.value < 0.25 : false
+    const lowDetail = detail ? detail.value < 0.3 : false
     const hitR2 = (WORLD.BALL_R + 0.55) ** 2
     let anyActive = false
 
