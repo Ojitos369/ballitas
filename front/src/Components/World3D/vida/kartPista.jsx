@@ -1,9 +1,9 @@
 // Piezas de pista estilo kart por camino: arcos de salida/meta con líneas a cuadros,
 // túnel de arcos en tramo recto, pianos (bordillos) en curvas cerradas y barreras en el borde exterior.
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Instanced, bermaAjusta, getWayDetail, markShared } from './base.jsx'
+import { Instanced, bermaAjusta, getWayBoundingSphere, getWayDetail, markShared } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { useKit, precargarKit } from '../Modelos.jsx'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
@@ -23,7 +23,7 @@ const MAX_BARRIERS = 32
 const TUNNEL_RIBS = 7
 const TUNNEL_STEP = 1.9
 
-export const KART_KIT_PIECES = ['arco_salida', 'tunel_arco', 'bordillo', 'barrera']
+export const KART_KIT_PIECES = ['arco_salida', 'tunel_arco_lod', 'bordillo_lod', 'barrera_lod']
 
 // Geometría plana 1×1 en XZ (base y=0) con UV recortado al cuadrado interior [0.15..0.85] de las texturas .webp.
 function buildLineDecalGeo() {
@@ -103,6 +103,7 @@ function capStride(arr, max) {
 }
 
 const kartDataCache = new WeakMap()
+const WAY_KART_RANGE = 620
 
 function buildKartPistaData(way) {
   if (kartDataCache.has(way)) return kartDataCache.get(way)
@@ -277,7 +278,8 @@ function buildKartPistaData(way) {
 }
 
 function KitInstanced({ nombre, items, receiveShadow = false }) {
-  const kit = useKit(nombre)
+  const lodName = ['tunel_arco', 'bordillo', 'barrera'].includes(nombre) ? `${nombre}_lod` : nombre
+  const kit = useKit(lodName)
   if (!kit || !items.length) return null
   return <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow={receiveShadow} />
 }
@@ -288,10 +290,17 @@ export default function KartPista({ way }) {
   const startMat = useMemo(() => lineDecalMat('carrera_salida.webp'), [])
   const finishMat = useMemo(() => lineDecalMat('carrera_meta.webp'), [])
   const detail = getWayDetail(way)
+  const camera = useThree((s) => s.camera)
   const solidRef = useRef()
+  const wayBounds = useMemo(() => {
+    const radius = Math.max(5, ...(way.segments ?? []).map((s) => s.radius ?? 0))
+    return getWayBoundingSphere(way, radius)
+  }, [way])
 
   useFrame(() => {
-    if (solidRef.current && detail) solidRef.current.visible = detail.value >= 0.3
+    if (!solidRef.current) return
+    const distant = wayBounds && camera.position.distanceTo(wayBounds.center) - wayBounds.radius > WAY_KART_RANGE
+    solidRef.current.visible = !distant && (!detail || detail.value >= 0.3)
   })
 
   return (

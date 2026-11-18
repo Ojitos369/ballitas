@@ -853,7 +853,7 @@ const _boxP = new THREE.Vector3(); const _boxQ = new THREE.Quaternion(); const _
 const _boxM = new THREE.Matrix4(); const _boxSpin = new THREE.Quaternion()
 
 function CajasMesh({ nombre, items, way, detail }) {
-  const kit = useKit(nombre)
+  const kit = useKit(`${nombre}_lod`)
   const cap = Math.max(1, items.length)
   const inst = useMemo(() => {
     if (!kit || !items.length) return null
@@ -957,7 +957,7 @@ function TurboPlacasMesh({ items }) {
 }
 
 export default function Eventos({ way }) {
-  useEffect(() => { precargarKit(['caja_cambio', 'caja_evento', 'turbo_placa']) }, [])
+  useEffect(() => { precargarKit(['caja_cambio_lod', 'caja_evento_lod', 'turbo_placa']) }, [])
   const data = useMemo(() => buildWayData(way), [way])
   const { items, chevrons, posts, arrows, pads, originRings, landRings, struts, byKind, switchBoxes, eventBoxes, turboPads } = data
   const ev = useMemo(() => items.map(() => ({ active: 0, glow: 0, flightT: -1, wasLit: false })), [items])

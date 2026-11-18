@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import sys
 import bpy
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -11,6 +12,11 @@ THEMES = [
     'sombrio', 'bosque', 'mar', 'desierto', 'hielo',
     'volcan', 'cristal', 'nubes', 'neon', 'jardin',
 ]
+
+LOD_TARGETS = {
+    'anillo_neon': 192, 'tunel_arco': 160, 'bordillo': 120,
+    'barrera': 120, 'caja_evento': 160, 'caja_cambio': 160,
+}
 
 
 def mat(name, tx, em=False, em_str=1.2, rough=0.45, metal=0.0, alpha=1.0):
@@ -645,7 +651,8 @@ def build_common_mats():
         'metal_cian': mat('metal_cian', 'metal_cian', rough=0.35, metal=0.7),
         'metal_azul': mat('metal_azul', 'metal_azul', rough=0.35, metal=0.7),
         'metal_amarillo': mat('metal_amarillo', 'metal_amarillo', em=True, em_str=0.8, rough=0.3, metal=0.5),
-        'vidrio_violeta': mat('vidrio_violeta', 'vidrio_violeta', em=True, em_str=0.5, rough=0.12, alpha=0.68),
+        # La caja conserva el tono violeta brillante, pero evita una cara grande en blending.
+        'vidrio_violeta': mat('vidrio_violeta', 'vidrio_violeta', em=True, em_str=0.5, rough=0.12),
         'vidrio_dorado': mat('vidrio_dorado', 'vidrio_dorado', em=True, em_str=1.4, rough=0.15),
         'rayas_amarillas': mat('rayas_amarillas', 'rayas_amarillas', rough=0.45),
         'rayas_rojas': mat('rayas_rojas', 'rayas_rojas', rough=0.45),
@@ -656,6 +663,9 @@ def build_common_mats():
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    if '--lod-only' in sys.argv:
+        generate_lod_variants()
+        return
     data = []
 
     common_specs = [
@@ -738,6 +748,61 @@ def main():
     print('OK kit assets', len(data), 'max_tris:', max(d['tris'] for d in data))
     if over:
         raise Exception(f'Exceden 900 tris: {over}')
+
+
+def generate_lod_variants():
+    """Crea LODs decimados desde los GLB fuente, conservando materiales y UV."""
+    manifest_path = os.path.join(OUT, 'kit.json')
+    with open(manifest_path, encoding='utf8') as f:
+        manifest = json.load(f)
+    by_name = {x['nombre']: x for x in manifest}
+    for name, target in LOD_TARGETS.items():
+        src = os.path.join(OUT, name + '.glb')
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        bpy.ops.import_scene.gltf(filepath=src)
+        meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+        if not meshes:
+            raise RuntimeError('No hay malla para ' + name)
+        bpy.ops.object.select_all(action='DESELECT')
+        for o in meshes:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = meshes[0]
+        bpy.ops.object.join()
+        ob = bpy.context.object
+        if name == 'caja_evento':
+            for material in ob.data.materials:
+                if material and material.use_nodes:
+                    bsdf = material.node_tree.nodes.get('Principled BSDF')
+                    if bsdf and 'Alpha' in bsdf.inputs:
+                        bsdf.inputs['Alpha'].default_value = 1.0
+                    color = material.diffuse_color
+                    material.diffuse_color = (color[0], color[1], color[2], 1.0)
+        original = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+        mod = ob.modifiers.new('LOD decimado', 'DECIMATE')
+        mod.ratio = min(1.0, target / max(original, 1))
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+        if tris > target + 8:
+            raise RuntimeError(f'{name}_lod excede objetivo: {tris} > {target}')
+        out_name = name + '_lod'
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.ops.export_scene.gltf(
+            filepath=os.path.join(OUT, out_name + '.glb'),
+            export_format='GLB', use_selection=True, export_yup=True,
+            export_apply=True, export_image_format='AUTO', export_materials='EXPORT',
+        )
+        source = by_name[name]
+        by_name[out_name] = {
+            'nombre': out_name, 'pieza': source['pieza'], 'tema': source['tema'],
+            'tris': tris, 'dims': source['dims'], 'mov': source['mov'],
+            'emisivo': source['emisivo'], 'lod_de': name,
+        }
+        print(f'LOD {out_name}: {original} -> {tris} tris')
+    with open(manifest_path, 'w', encoding='utf8') as f:
+        json.dump(list(by_name.values()), f, ensure_ascii=False, indent=2)
+        f.write('\n')
 
 
 if __name__ == '__main__':

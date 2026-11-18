@@ -110,6 +110,11 @@ function markKitShared(obj) {
       if (t && t.isTexture) {
         t.userData = t.userData || {}
         t.userData.shared = true
+        t.generateMipmaps = true
+        t.minFilter = THREE.LinearMipmapLinearFilter
+        t.magFilter = THREE.LinearFilter
+        t.anisotropy = 4
+        t.needsUpdate = true
       }
     }
   }
