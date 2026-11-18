@@ -87,6 +87,14 @@ export function getPlanetUnitSphereLowGeo() {
   return _unitSphereLowGeo
 }
 
+let _ringGeo = null
+export function getPlanetRingGeo() {
+  if (!_ringGeo) {
+    _ringGeo = new THREE.RingGeometry(1.34, 1.96, 80, 1).rotateX(-Math.PI / 2)
+  }
+  return _ringGeo
+}
+
 const outlineMatCache = new Map()
 export function getPlanetOutlineMaterial(colorHex = '#080a14') {
   let mat = outlineMatCache.get(colorHex)
@@ -101,40 +109,7 @@ export function getPlanetOutlineMaterial(colorHex = '#080a14') {
   return mat
 }
 
-const PLANET_VERTEX_SHADER = /* glsl */ `
-  varying vec3 vLocalDir;
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPos;
-
-  void main() {
-    vLocalDir = normalize(position);
-    vWorldNormal = normalize(mat3(modelMatrix) * normal);
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vWorldPos = wp.xyz;
-    gl_Position = projectionMatrix * viewMatrix * wp;
-  }
-`
-
-const PLANET_FRAGMENT_SHADER = /* glsl */ `
-  uniform float uTime;
-  uniform vec3 uLightDir;
-  uniform float uPlanetType;
-  uniform vec3 uCol0;
-  uniform vec3 uCol1;
-  uniform vec3 uCol2;
-  uniform vec3 uCol3;
-  uniform vec3 uCol4;
-  uniform vec3 uAtmoColor;
-  uniform vec3 uOutlineColor;
-  uniform float uNoiseScale;
-  uniform float uBandFreq;
-  uniform vec3 uSeedVec;
-  uniform vec3 uStormPos;
-
-  varying vec3 vLocalDir;
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPos;
-
+const GLSL_NOISE_3D = /* glsl */ `
   // Hash y ruido 3D continuo sin costuras sobre la esfera
   float hash31(vec3 p) {
     p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -182,6 +157,43 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
     }
     return v;
   }
+`
+
+const PLANET_VERTEX_SHADER = /* glsl */ `
+  varying vec3 vLocalDir;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPos;
+
+  void main() {
+    vLocalDir = normalize(position);
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`
+
+const PLANET_FRAGMENT_SHADER = /* glsl */ `
+  uniform float uTime;
+  uniform vec3 uLightDir;
+  uniform float uPlanetType;
+  uniform vec3 uCol0;
+  uniform vec3 uCol1;
+  uniform vec3 uCol2;
+  uniform vec3 uCol3;
+  uniform vec3 uCol4;
+  uniform vec3 uAtmoColor;
+  uniform vec3 uOutlineColor;
+  uniform float uNoiseScale;
+  uniform float uBandFreq;
+  uniform vec3 uSeedVec;
+  uniform vec3 uStormPos;
+
+  varying vec3 vLocalDir;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPos;
+
+  ${GLSL_NOISE_3D}
 
   // Campo celular 3D para cráteres y burbujas (x: dist al centro, y: radio celda, z: 2da dist)
   vec3 voronoi3(vec3 p) {
@@ -463,6 +475,63 @@ export function resolvePlanetConfig(node, biome, world) {
   const rotY0 = rng() * Math.PI * 2
   const spinSpeed = (0.015 + rng() * 0.035) * (rng() < 0.5 ? 1 : -1)
 
+  // Anillos inclinados en ~30% de los planetas
+  const ringChance = (type === 'gaseoso_bandas' || type === 'hielo') ? 0.44
+    : (type === 'desierto_dunas' || type === 'toxico') ? 0.28 : 0.18
+  const hasRings = rng() < ringChance
+  const ring = hasRings ? {
+    tilt: [(rng() - 0.5) * 0.52 + 0.18, rng() * Math.PI * 2, (rng() - 0.5) * 0.52],
+    freq: 18 + rng() * 20,
+    seed: rng() * 10,
+    colors: [
+      palette[2].clone().lerp(palette[3], 0.4),
+      palette[3].clone(),
+      palette[1].clone().lerp(atmoColor, 0.35),
+    ],
+  } : null
+
+  // Lunas pequeñas en órbita en ~45% de los planetas (1 o 2)
+  const moonCount = rng() < 0.48 ? (rng() < 0.35 ? 2 : 1) : 0
+  const moons = []
+  for (let i = 0; i < moonCount; i++) {
+    const baseOrbit = hasRings ? 2.15 : 1.48
+    const orbitRatio = baseOrbit + i * 0.36 + rng() * 0.22
+    const radiusRatio = 0.12 + rng() * 0.08
+    const baseMoonHex = rng() < 0.5 ? '#9ea8c4' : '#c7a487'
+    const mc0 = shiftColor(baseMoonHex, rng, 0.06, 0.1, 0.08).multiplyScalar(0.55)
+    const mc1 = shiftColor(baseMoonHex, rng, 0.05, 0.08, 0.08)
+    const mc2 = mc1.clone().lerp(new THREE.Color('#ffffff'), 0.45)
+    moons.push({
+      radiusRatio,
+      orbitRatio,
+      tilt: [(rng() - 0.5) * 0.7, 0, (rng() - 0.5) * 0.7],
+      phase: rng() * Math.PI * 2,
+      speed: (0.2 + rng() * 0.26) * (rng() < 0.5 ? 1 : -1),
+      colors: [mc0, mc1, mc2],
+      seedVec: new THREE.Vector3((rng() - 0.5) * 40, (rng() - 0.5) * 40, (rng() - 0.5) * 40),
+    })
+  }
+
+  // Nubes toon en capa propia (ausentes o muy tenues en lunas áridas)
+  const cloudChance = type === 'luna_crateres' ? 0.15 : type === 'desierto_dunas' ? 0.45 : 0.92
+  const cloudsEnabled = rng() < cloudChance
+  const clouds = {
+    enabled: cloudsEnabled,
+    coverage: type === 'gaseoso_bandas' || type === 'oceano_espiral' ? 0.06 + rng() * 0.12 : 0.14 + rng() * 0.14,
+    scale: 2.3 + rng() * 1.4,
+    opacity: type === 'lava' ? 0.65 : 0.88,
+    speed: biome?.cloudSpeed ?? (0.02 + rng() * 0.025),
+    colorLit: type === 'lava'
+      ? new THREE.Color('#ffd0b3')
+      : type === 'toxico'
+        ? new THREE.Color('#dcff9e')
+        : new THREE.Color(biome?.cloudColor || '#ffffff').lerp(new THREE.Color('#ffffff'), 0.55),
+    colorShade: type === 'lava'
+      ? new THREE.Color('#4a2d2d')
+      : new THREE.Color(biome?.atmoBase || '#7b99c9').lerp(palette[0], 0.35),
+    seedVec: new THREE.Vector3((rng() - 0.5) * 60, (rng() - 0.5) * 60, (rng() - 0.5) * 60),
+  }
+
   return {
     seed,
     type,
@@ -478,6 +547,9 @@ export function resolvePlanetConfig(node, biome, world) {
     tilt: [tiltX, 0, tiltZ],
     rotY0,
     spinSpeed,
+    ring,
+    moons,
+    clouds,
   }
 }
 
@@ -507,5 +579,226 @@ export function createPlanetCartoonMaterial(config) {
     fragmentShader: PLANET_FRAGMENT_SHADER,
   })
   mat.customProgramCacheKey = () => 'planet-cartoon-v1'
+  return mat
+}
+
+// ───────────────────────── Shader de Nubes Toon ─────────────────────────
+
+const CLOUD_FRAGMENT_SHADER = /* glsl */ `
+  uniform float uTime;
+  uniform vec3 uLightDir;
+  uniform vec3 uColorLit;
+  uniform vec3 uColorShade;
+  uniform vec3 uOutlineColor;
+  uniform float uCoverage;
+  uniform float uScale;
+  uniform float uOpacity;
+  uniform vec3 uSeedVec;
+
+  varying vec3 vLocalDir;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPos;
+
+  ${GLSL_NOISE_3D}
+
+  void main() {
+    vec3 p = normalize(vLocalDir) * uScale + uSeedVec + vec3(uTime * 0.015, 0.0, -uTime * 0.01);
+    float n = fbm(p) + 0.3 * fbm(p * 2.2);
+    float latFade = 1.0 - smoothstep(0.78, 0.96, abs(vLocalDir.y));
+    float puff = n * latFade - uCoverage;
+    if (puff < 0.015) discard;
+
+    vec3 N = normalize(vWorldNormal);
+    vec3 L = normalize(uLightDir);
+    float ndotl = dot(N, L);
+    float bShadow = smoothstep(-0.12, 0.0, ndotl);
+    float bLit = smoothstep(0.38, 0.48, ndotl);
+    vec3 col = mix(uColorShade, uColorLit, mix(0.32, 1.0, bShadow));
+    col = mix(col, vec3(1.0), bLit * 0.16);
+
+    // Contorno toon sutil en el borde de cada nube
+    float edge = 1.0 - smoothstep(0.015, 0.075, puff);
+    col = mix(col, uOutlineColor, edge * 0.65);
+
+    float alpha = smoothstep(0.015, 0.06, puff) * uOpacity;
+    gl_FragColor = vec4(col, alpha);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
+export function createPlanetCloudMaterial(config) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uLightDir: { value: SCENE_SUN_DIR.clone() },
+      uColorLit: { value: config.clouds.colorLit.clone() },
+      uColorShade: { value: config.clouds.colorShade.clone() },
+      uOutlineColor: { value: config.outlineColor.clone() },
+      uCoverage: { value: config.clouds.coverage },
+      uScale: { value: config.clouds.scale },
+      uOpacity: { value: config.clouds.opacity },
+      uSeedVec: { value: config.clouds.seedVec.clone() },
+    },
+    vertexShader: PLANET_VERTEX_SHADER,
+    fragmentShader: CLOUD_FRAGMENT_SHADER,
+    transparent: true,
+    depthWrite: false,
+  })
+  mat.customProgramCacheKey = () => 'planet-clouds-cartoon-v1'
+  return mat
+}
+
+// ───────────────────────── Shader de Anillos Cartoon con Sombra Planetaria ─────────────────────────
+
+const RING_VERTEX_SHADER = /* glsl */ `
+  varying vec3 vLocalPos;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPos;
+
+  void main() {
+    vLocalPos = position;
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`
+
+const RING_FRAGMENT_SHADER = /* glsl */ `
+  uniform vec3 uLightDir;
+  uniform vec3 uPlanetCenter;
+  uniform float uPlanetR;
+  uniform vec3 uCol0;
+  uniform vec3 uCol1;
+  uniform vec3 uCol2;
+  uniform vec3 uOutlineColor;
+  uniform float uFreq;
+  uniform float uSeed;
+
+  varying vec3 vLocalPos;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPos;
+
+  void main() {
+    float r = length(vLocalPos.xz);
+    float t = clamp((r - 1.34) / 0.62, 0.0, 1.0);
+
+    // Bandas concéntricas con divisiones estilo Cassini
+    float w1 = sin(t * uFreq + uSeed + sin(t * 15.0) * 0.45) * 0.5 + 0.5;
+    float w2 = cos(t * uFreq * 1.85 - uSeed * 0.7) * 0.5 + 0.5;
+    float band = mix(w1, w2, 0.38);
+
+    vec3 col = mix(uCol0, uCol1, smoothstep(0.28, 0.45, band));
+    col = mix(col, uCol2, smoothstep(0.66, 0.82, band));
+
+    float gap1 = smoothstep(0.022, 0.05, abs(t - 0.62));
+    float gap2 = smoothstep(0.015, 0.038, abs(t - 0.28));
+    float edgeFade = smoothstep(0.0, 0.055, t) * smoothstep(1.0, 0.93, t);
+
+    // Contorno oscuro sutil en los bordes del anillo
+    float borderInk = (1.0 - smoothstep(0.0, 0.03, t)) + (1.0 - smoothstep(0.97, 1.0, t));
+    col = mix(col, uOutlineColor, clamp(borderInk, 0.0, 0.75));
+
+    // Sombra proyectada por el planeta sobre sus propios anillos
+    vec3 L = normalize(uLightDir);
+    vec3 rel = vWorldPos - uPlanetCenter;
+    float proj = dot(rel, L);
+    float perp = length(rel - L * proj);
+    float shadow = proj < 0.0 ? smoothstep(uPlanetR * 0.94, uPlanetR * 1.05, perp) : 1.0;
+
+    // Iluminación toon suave (anillo traslúcido visto por ambos lados)
+    vec3 N = normalize(gl_FrontFacing ? vWorldNormal : -vWorldNormal);
+    float ndotl = abs(dot(N, L));
+    float toon = mix(0.68, 1.08, smoothstep(0.18, 0.45, ndotl));
+    col *= toon * mix(0.32, 1.0, shadow);
+
+    float alpha = clamp((0.46 + band * 0.42) * gap1 * gap2 * edgeFade, 0.0, 0.88);
+    if (alpha < 0.03) discard;
+
+    gl_FragColor = vec4(col, alpha);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
+export function createPlanetRingMaterial(config, planetCenter, planetR) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uLightDir: { value: SCENE_SUN_DIR.clone() },
+      uPlanetCenter: { value: planetCenter.clone() },
+      uPlanetR: { value: planetR },
+      uCol0: { value: config.ring.colors[0].clone() },
+      uCol1: { value: config.ring.colors[1].clone() },
+      uCol2: { value: config.ring.colors[2].clone() },
+      uOutlineColor: { value: config.outlineColor.clone() },
+      uFreq: { value: config.ring.freq },
+      uSeed: { value: config.ring.seed },
+    },
+    vertexShader: RING_VERTEX_SHADER,
+    fragmentShader: RING_FRAGMENT_SHADER,
+    side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: false,
+  })
+  mat.customProgramCacheKey = () => 'planet-ring-cartoon-v1'
+  return mat
+}
+
+// ───────────────────────── Shader de Lunas Toon ─────────────────────────
+
+const MOON_FRAGMENT_SHADER = /* glsl */ `
+  uniform vec3 uLightDir;
+  uniform vec3 uCol0;
+  uniform vec3 uCol1;
+  uniform vec3 uCol2;
+  uniform vec3 uOutlineColor;
+  uniform vec3 uSeedVec;
+
+  varying vec3 vLocalDir;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPos;
+
+  ${GLSL_NOISE_3D}
+
+  void main() {
+    float n = fbm(normalize(vLocalDir) * 3.4 + uSeedVec);
+    vec3 baseCol = mix(uCol0, uCol1, smoothstep(-0.22, 0.15, n));
+    baseCol = mix(baseCol, uCol2, smoothstep(0.28, 0.55, n));
+
+    vec3 N = normalize(vWorldNormal);
+    vec3 L = normalize(uLightDir);
+    vec3 V = normalize(cameraPosition - vWorldPos);
+    float ndotl = dot(N, L);
+    float bShadow = smoothstep(-0.08, 0.02, ndotl);
+    float bLit = smoothstep(0.42, 0.52, ndotl);
+    float toon = mix(0.42, mix(0.88, 1.14, bLit), bShadow);
+
+    float ndotv = clamp(dot(N, V), 0.0, 1.0);
+    float rim = smoothstep(0.55, 0.88, 1.0 - ndotv) * (0.4 + 0.6 * bShadow);
+    vec3 col = baseCol * toon + uCol2 * rim * 0.35;
+    float edgeInk = smoothstep(0.18, 0.05, ndotv);
+    col = mix(col, uOutlineColor, edgeInk * 0.88);
+
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
+export function createPlanetMoonMaterial(moonCfg, outlineColor) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uLightDir: { value: SCENE_SUN_DIR.clone() },
+      uCol0: { value: moonCfg.colors[0].clone() },
+      uCol1: { value: moonCfg.colors[1].clone() },
+      uCol2: { value: moonCfg.colors[2].clone() },
+      uOutlineColor: { value: outlineColor.clone() },
+      uSeedVec: { value: moonCfg.seedVec.clone() },
+    },
+    vertexShader: PLANET_VERTEX_SHADER,
+    fragmentShader: MOON_FRAGMENT_SHADER,
+  })
+  mat.customProgramCacheKey = () => 'planet-moon-cartoon-v1'
   return mat
 }

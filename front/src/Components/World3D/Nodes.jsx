@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useFrame } from '@react-three/fiber'
-import { NODE_R, BALL_R, mulberry32 } from '../../Core/world.js'
+import { NODE_R, BALL_R, SPHERE_R, mulberry32 } from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { withCameraFade } from './Paths.jsx'
@@ -12,7 +12,12 @@ import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
 import {
   resolvePlanetConfig,
   createPlanetCartoonMaterial,
+  createPlanetCloudMaterial,
+  createPlanetRingMaterial,
+  createPlanetMoonMaterial,
   getPlanetUnitSphereGeo,
+  getPlanetUnitSphereLowGeo,
+  getPlanetRingGeo,
   getPlanetOutlineMaterial,
 } from './mundos/planetaCartoon.js'
 import {
@@ -50,7 +55,8 @@ const ROAD_W = Math.max(U * 2.0, NODE_R * 0.145) // avenidas anchas proporcional
 const ROAD_H = Math.max(0.085, NODE_R * 0.011)
 const LOD_NEAR = Math.max(95, NODE_R * 7.5)
 const LOD_LAMPS = Math.max(68, NODE_R * 5.5)
-const LOD_CLOUDS = Math.max(95, NODE_R * 8.0)
+const LOD_CLOUDS = Math.max(260, SPHERE_R * 2.9)
+const LOD_ORBITALS = Math.max(240, SPHERE_R * 2.8)
 const UP = new THREE.Vector3(0, 1, 0)
 const GOLD = '#ffd54a'
 const GREEN = '#5dffb0'
@@ -1414,11 +1420,26 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }
 }
 
 function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
+  const planetVisualR = NODE_R - 0.02
   const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
   const planetCfg = useMemo(() => resolvePlanetConfig(node, biome, world), [node, biome, world])
   const city = useMemo(() => cityData(node, biome), [node, biome])
   const unitSphereGeo = useMemo(() => getPlanetUnitSphereGeo(), [])
+  const unitSphereLowGeo = useMemo(() => getPlanetUnitSphereLowGeo(), [])
+  const ringGeo = useMemo(() => getPlanetRingGeo(), [])
   const planetMat = useMemo(() => createPlanetCartoonMaterial(planetCfg), [planetCfg])
+  const cloudMat = useMemo(
+    () => (planetCfg.clouds.enabled ? createPlanetCloudMaterial(planetCfg) : null),
+    [planetCfg],
+  )
+  const ringMat = useMemo(
+    () => (planetCfg.ring ? createPlanetRingMaterial(planetCfg, node.pos, planetVisualR) : null),
+    [planetCfg, node.pos, planetVisualR],
+  )
+  const moonMats = useMemo(
+    () => planetCfg.moons.map((m) => createPlanetMoonMaterial(m, planetCfg.outlineColor)),
+    [planetCfg],
+  )
   const outlineMat = useMemo(() => getPlanetOutlineMaterial(planetCfg.outlineHex), [planetCfg.outlineHex])
   const kitGeos = useCityKit(biome)
   const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot, city), [node, biome, city])
@@ -1458,6 +1479,9 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
 
   useEffect(() => () => {
     planetMat.dispose()
+    cloudMat?.dispose()
+    ringMat?.dispose()
+    moonMats.forEach((m) => m.dispose())
     city.roadGeo.dispose()
     city.lineGeo.dispose()
     city.farSkylineGeo?.dispose()
@@ -1465,10 +1489,13 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     buildingMat.dispose()
     parkMat.dispose()
     farSkylineMat.dispose()
-  }, [planetMat, city, atmoOuterMat, buildingMat, parkMat, farSkylineMat])
+  }, [planetMat, cloudMat, ringMat, moonMats, city, atmoOuterMat, buildingMat, parkMat, farSkylineMat])
 
   const planetBodyRef = useRef()
   const cloudsRef = useRef()
+  const ringRef = useRef()
+  const moonsGroupRef = useRef()
+  const moonPivotsRef = useRef([])
   const lampsRef = useRef()
   const farSkylineRef = useRef()
   const detailRef = useRef()
@@ -1502,10 +1529,24 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     }
     const dist = camera.position.distanceTo(node.pos)
     const near = dist < LOD_NEAR
+    const showOrbitals = dist < LOD_ORBITALS
     planetLodRef.current.near = near
     if (cloudsRef.current) {
       cloudsRef.current.visible = dist < LOD_CLOUDS
-      if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * biome.cloudSpeed
+      if (cloudsRef.current.visible) {
+        cloudsRef.current.rotation.y += dt * planetCfg.clouds.speed
+        if (cloudMat) cloudMat.uniforms.uTime.value = t
+      }
+    }
+    if (ringRef.current) ringRef.current.visible = showOrbitals
+    if (moonsGroupRef.current) {
+      moonsGroupRef.current.visible = showOrbitals
+      if (showOrbitals) {
+        for (let i = 0; i < planetCfg.moons.length; i++) {
+          const piv = moonPivotsRef.current[i]
+          if (piv) piv.rotation.y += dt * planetCfg.moons[i].speed
+        }
+      }
     }
     if (lampsRef.current) lampsRef.current.visible = dist < LOD_LAMPS
     if (farSkylineRef.current) farSkylineRef.current.visible = !near
@@ -1524,11 +1565,10 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   })
 
   const lampGeo = lampFallbackGeo
-  const planetVisualR = NODE_R - 0.02
 
   return (
     <group position={node.pos}>
-      {/* Esfera cartoon procedural con inclinación, giro, sombreado toon y contorno oscuro */}
+      {/* Esfera cartoon procedural con inclinación, giro, sombreado toon, nubes y contorno oscuro */}
       <group rotation={planetCfg.tilt}>
         <group ref={planetBodyRef} rotation-y={planetCfg.rotY0}>
           <mesh
@@ -1547,25 +1587,68 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
             raycast={() => null}
           />
         </group>
+
+        {/* Capa propia de nubes con el mismo estilo toon */}
+        {cloudMat && (
+          <mesh
+            ref={cloudsRef}
+            geometry={unitSphereGeo}
+            material={cloudMat}
+            scale={planetVisualR * 1.028}
+            raycast={() => null}
+          />
+        )}
       </group>
+
+      {/* Anillo inclinado con bandas en shader y sombra planetaria */}
+      {ringMat && (
+        <mesh
+          ref={ringRef}
+          geometry={ringGeo}
+          material={ringMat}
+          rotation={planetCfg.ring.tilt}
+          scale={planetVisualR}
+          raycast={() => null}
+        />
+      )}
+
+      {/* Lunas pequeñas en órbita */}
+      {planetCfg.moons.length > 0 && (
+        <group ref={moonsGroupRef}>
+          {planetCfg.moons.map((m, i) => {
+            const moonR = planetVisualR * m.radiusRatio
+            const orbitR = planetVisualR * m.orbitRatio
+            return (
+              <group key={i} rotation={m.tilt}>
+                <group
+                  ref={(el) => { moonPivotsRef.current[i] = el }}
+                  rotation-y={m.phase}
+                >
+                  <group position={[orbitR, 0, 0]}>
+                    <mesh
+                      geometry={unitSphereLowGeo}
+                      material={moonMats[i]}
+                      scale={moonR}
+                      raycast={() => null}
+                    />
+                    <mesh
+                      geometry={unitSphereLowGeo}
+                      material={outlineMat}
+                      scale={moonR * 1.08}
+                      raycast={() => null}
+                    />
+                  </group>
+                </group>
+              </group>
+            )
+          })}
+        </group>
+      )}
 
       {/* Silueta urbana ligera para LOD lejano (1 draw call por planeta) */}
       {city.farSkylineGeo && (
         <mesh ref={farSkylineRef} geometry={city.farSkylineGeo} material={farSkylineMat} raycast={() => null} />
       )}
-
-      {/* Nubes finas suaves sin facetas */}
-      <mesh ref={cloudsRef} geometry={cloudsGeo} raycast={() => null}>
-        <meshStandardMaterial
-          color={biome.cloudColor}
-          map={tex.planetClouds}
-          transparent
-          opacity={biome.cloudOpacity}
-          depthWrite={false}
-          roughness={1}
-          metalness={0}
-        />
-      </mesh>
 
       {/* Atmósfera exterior con Fresnel y gradiente (no intercepta cursor) */}
       <mesh geometry={atmoOuterGeo} material={atmoOuterMat} raycast={() => null} />
