@@ -162,7 +162,7 @@ const GEOS = {
     const parts = []
     const rng = mulberry32(91)
     for (let i = 0; i < 9; i++) {
-      const r = 0.05 + rng() * 0.09
+      const r = 0.025 + rng() * 0.045
       parts.push(piece(sphere(r, 7, 5), { pos: [(rng() - 0.5) * 0.5, 0, (rng() - 0.5) * 0.5], color: '#ffffff', phase: rng() }))
     }
     return merge(parts, 'bubbles')
@@ -192,7 +192,7 @@ const GEOS = {
   reef: () => {
     const parts = [piece(ico(0.42, 1), {
       pos: [0, 0.12, 0], scl: [1.3, 0.55, 1.05], noise: 0.4, jitter: 0.3,
-      color: (c, x, y) => c.set('#6c5f73').lerp(_c2.set('#a68a7a'), THREE.MathUtils.smoothstep(y, 0.0, 0.2)),
+      color: (c, x, y) => c.set('#8a6f9a').lerp(_c2.set('#e0b89a'), THREE.MathUtils.smoothstep(y, 0.0, 0.2)),
     })]
     const rng = mulberry32(13)
     const vivid = ['#ff6f91', '#ff9671', '#ffc75f', '#c56bff', '#4dd0e1']
@@ -253,7 +253,7 @@ function pMat(kind) {
   const m = additive
     ? new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false })
     : new THREE.MeshLambertMaterial({ vertexColors: true })
-  m.defines = { P_KIND: { solid: 0, sway: 1, school: 2, bubbles: 3, motes: 4, ray: 5, neon: 6 }[kind] }
+  m.defines = { P_KIND: { solid: 0, soft: 0, sway: 1, school: 2, bubbles: 3, motes: 4, ray: 5, neon: 6 }[kind] }
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uPTime = P_TIME
     sh.vertexShader = sh.vertexShader
@@ -311,7 +311,7 @@ function pMat(kind) {
     } else if (!additive) {
       // Relleno suave para que no queden negros a contraluz.
       sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += diffuseColor.rgb * ${kind === 'school' ? '0.55' : '0.22'};`)
+        totalEmissiveRadiance += diffuseColor.rgb * ${kind === 'school' ? '0.55' : kind === 'soft' ? '0.5' : '0.22'};`)
     }
   }
   m.customProgramCacheKey = () => `paisaje-v1:${kind}`
@@ -336,18 +336,18 @@ function waterMat() {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uPTime;\nvarying vec2 vWUv;\nvarying vec3 vWPos;')
       .replace('#include <color_fragment>', `#include <color_fragment>
-        vec3 shallow = vec3(0.16, 0.78, 0.82);
-        vec3 deep = vec3(0.03, 0.22, 0.42);
+        vec3 shallow = vec3(0.05, 0.62, 0.7);
+        vec3 deep = vec3(0.01, 0.12, 0.32);
         vec3 wc = mix(shallow, deep, smoothstep(0.05, 0.9, vWUv.x));
         vec2 q = vWPos.xz * 0.55;
         float c1 = sin(q.x + uPTime * 1.1 + sin(q.y * 1.3 + uPTime * 0.7) * 1.6);
         float c2 = sin(q.y * 1.2 - uPTime * 0.9 + sin(q.x * 1.1 - uPTime * 0.5) * 1.4);
         float caus = pow(1.0 - abs(c1 * c2), 6.0);
         float foam = 1.0 - smoothstep(0.0, 0.08 + 0.03 * sin(vWUv.y * 3.0 + uPTime * 2.0), vWUv.x);
-        diffuseColor.rgb = wc + vec3(0.55, 0.95, 1.0) * caus * 0.35 + vec3(0.9) * foam * 0.7;
+        diffuseColor.rgb = wc + vec3(0.55, 0.95, 1.0) * caus * 0.6 + vec3(0.9) * foam * 0.7;
         diffuseColor.a = mix(0.62, 0.9, smoothstep(0.1, 0.8, vWUv.x)) + foam * 0.2;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += diffuseColor.rgb * 0.45;`)
+        totalEmissiveRadiance += diffuseColor.rgb * 0.25;`)
   }
   m.customProgramCacheKey = () => 'paisaje-agua-v1'
   _waterMat = markShared(m)
@@ -355,7 +355,7 @@ function waterMat() {
 }
 
 export function paisajeWarmup() {
-  return [pMat('solid'), pMat('sway'), pMat('school'), pMat('bubbles'), pMat('motes'), pMat('ray'), pMat('neon'), waterMat()]
+  return [pMat('solid'), pMat('soft'), pMat('sway'), pMat('school'), pMat('bubbles'), pMat('motes'), pMat('ray'), pMat('neon'), waterMat()]
 }
 
 // ═══════════════════════════ CATÁLOGO POR TEMA ═══════════════════════════
@@ -376,7 +376,7 @@ const PAISAJE = {
   mar: {
     water: { y: 0.12, w: 13 },
     layers: [
-      { geo: 'reef', mat: 'solid', step: 6.5, ax: [0.25, 2.6], scale: [2.6, 5.2], foot: 0.4, both: 0.85, cap: 140, range: 75, tints: ['#ffffff', '#ffe0ec', '#e0f4ff', '#fff0d0'], berm: true },
+      { geo: 'reef', mat: 'soft', step: 6.5, ax: [0.25, 2.6], scale: [2.2, 4.4], foot: 0.4, both: 0.85, cap: 140, range: 75, tints: ['#ffffff', '#ffe0ec', '#e0f4ff', '#fff0d0'], berm: true },
       { geo: 'kelp', mat: 'sway', step: 4.5, ax: [0.6, 3.0], scale: [3.5, 7.5], foot: 0.15, both: 0.7, cap: 120, range: 70, tints: ['#ffffff', '#c8ffe8', '#e8ffd0'], berm: true },
       { geo: 'school', mat: 'school', step: 18, ax: [-0.5, 1.5], scale: [6, 9], y: [1.6, 4.2], foot: 0, both: 0.5, cap: 30, range: 90, noClear: true, tints: ['#ffffff'] },
       { geo: 'bubbles', mat: 'bubbles', step: 8, ax: [0.2, 2.4], scale: [1.6, 2.6], y: [0.0, 0.3], foot: 0, both: 0.6, cap: 60, range: 60, tints: ['#bff6ff', '#e6fdff'], noClear: true },
@@ -393,7 +393,7 @@ const PAISAJE = {
   },
   nubes: {
     layers: [
-      { geo: 'cumulus', mat: 'solid', step: 9, ax: [0.6, 3.0], scale: [3.5, 7], y: [-1.6, 0.2], foot: 0.4, both: 0.8, cap: 90, range: 90, tints: ['#ffffff', '#fff3e0', '#f0eaff'] },
+      { geo: 'cumulus', mat: 'soft', step: 9, ax: [0.6, 3.0], scale: [3.5, 7], y: [-1.6, 0.2], foot: 0.4, both: 0.8, cap: 90, range: 90, tints: ['#ffffff', '#fff3e0', '#f0eaff'] },
       { geo: 'ray', mat: 'ray', step: 15, ax: [0.6, 2.4], scale: [12, 18], y: [-0.6, 0.2], foot: 0, both: 0.5, cap: 34, range: 90, tints: ['#fff4c8', '#ffe1f0'], tilt: 0.3, noClear: true },
       { geo: 'motes', mat: 'motes', step: 9, ax: [-0.5, 1.8], scale: [3, 5], y: [0.6, 3.4], foot: 0, both: 0.6, cap: 50, range: 70, tints: ['#fff2a8', '#ffffff', '#ffd6eb'], noClear: true },
     ],
