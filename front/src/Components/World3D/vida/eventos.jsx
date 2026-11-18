@@ -76,7 +76,7 @@ function buildWayData(way) {
     // Cada dash queda elevado sobre el firme para evitar z-fighting y se agrupa en una malla instanciada.
     if (!seg.air) {
       const edge = WORLD.CARRIL_EDGE
-      const marks = Math.max(2, Math.ceil(L / (2.6 * TRACK_K)))
+      const marks = Math.max(2, Math.ceil(L / (5.2 * TRACK_K)))
       for (const lane of seg.lanes ?? []) {
         for (let j = 0; j < marks; j++) {
           const u = (j + 0.5) / marks
@@ -209,6 +209,7 @@ export default function Eventos({ way }) {
   const detail = getWayDetail(way)
   const camera = useThree((s) => s.camera)
   const solidRef = useRef()
+  const laneMarksRef = useRef()
   const cajaKit = useKit('caja_evento_lod')
 
   // puntos de trayectoria, estela de vuelo y remolinos de portal: tres InstancedMesh vivos
@@ -236,6 +237,7 @@ export default function Eventos({ way }) {
   useFrame(({ clock }, dt) => {
     const low = detail ? detail.value < 0.3 : false
     if (solidRef.current) solidRef.current.visible = !low
+    if (laneMarksRef.current) laneMarksRef.current.visible = !low
     if (low || !items.length) { live.trail.count = 0; return }
     const h = Math.min(dt, 0.1)
     const { dots, trail, glow, flightT, lit, base } = live
@@ -296,8 +298,10 @@ export default function Eventos({ way }) {
       {/* Capa emisiva: siempre visible (también a detalle bajo) para leer de lejos dónde hay eventos */}
       <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={originRings} />
       <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={landRings} />
-      <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={laneDashes} />
-      <Instanced geo={G.sphere} mat={EMISSIVE_INST_MAT} items={laneStarts} />
+      <group ref={laneMarksRef}>
+        <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={laneDashes} />
+        <Instanced geo={G.sphere} mat={EMISSIVE_INST_MAT} items={laneStarts} />
+      </group>
       {/* Capa de detalle: piezas del kit, marcas del carril y trayectorias */}
       <group ref={solidRef}>
         {kits.map(([nombre, its]) => <KitPieza key={nombre} nombre={nombre} items={its} />)}
