@@ -7,6 +7,7 @@ import { useGLTF } from '@react-three/drei'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { geoDeGltf, modeloListo, registrarModelo } from './ecosistema.js'
+import { categoriaModelo, triplanarMaterial } from './triplanar.js'
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
 const u = (n) => BASE + n + '.glb'
@@ -73,7 +74,21 @@ export function useModeloGeo(nombre) {
     if (!geos.length) return null
     const geometry = geos.length === 1 ? geos[0] : mergeGeometries(geos)
     geometry.computeBoundingSphere()
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: mat?.roughness ?? 0.85, metalness: 0 })
+    const theme = temaModelo(nombre)
+    const material = triplanarMaterial(theme, categoriaModelo(nombre), { standard: true })
     return { geometry, material }
   }, [gltf, url])
+}
+
+function temaModelo(name) {
+  if (/volcan|geiser|lava/i.test(name)) return 'volcan'
+  if (/hielo|ice|nieve/i.test(name)) return 'hielo'
+  if (/cristal|crystal|geoda/i.test(name)) return 'cristal'
+  if (/desierto|arena|saguaro/i.test(name)) return 'desierto'
+  if (/mar|alga|concha|coral/i.test(name)) return 'mar'
+  if (/nube|cloud/i.test(name)) return 'nubes'
+  if (/neon|farol|luciernaga/i.test(name)) return 'neon'
+  if (/jardin|fuente|hongo/i.test(name)) return 'jardin'
+  if (/lapida|sombrio/i.test(name)) return 'sombrio'
+  return 'bosque'
 }

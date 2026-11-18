@@ -2,9 +2,10 @@
 // orientados con la gravedad de ESE carril, con ritmo (zonas calmas y zonas con algo) y la calzada libre.
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { Instanced, markShared, mulberry32 } from './base.jsx'
+import { Instanced, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { useModelo } from './modelos.js'
+import { categoriaModelo, triplanarMaterial } from '../triplanar.js'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
 
@@ -24,22 +25,6 @@ const KITS = {
 const GLOW = { neon: 0.5, cristal: 0.2, sombrio: 0.12 }
 const SPACING = 2.6
 const MAX_ITEMS = 40
-
-const matCache = new Map()
-function decorMat(themeId) {
-  if (matCache.has(themeId)) return matCache.get(themeId)
-  const m = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true })
-  const glow = { value: GLOW[themeId] ?? 0.04 }
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uGlow = glow
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uGlow;')
-  }
-  m.customProgramCacheKey = () => 'decor-v1'
-  matCache.set(themeId, markShared(m))
-  return m
-}
 
 // altura de la berma en |x| (mismo perfil que pista.jsx)
 function bermY(ax, E) {
@@ -96,13 +81,13 @@ function buildItems(way) {
   return { kit, out }
 }
 
-function Pieza({ name, mat, items }) {
+function Pieza({ name, theme, items }) {
   const geo = useModelo(name)
+  const mat = triplanarMaterial(theme, categoriaModelo(name), { glow: GLOW[theme] ?? 0.04 })
   return <Instanced geo={geo} mat={mat} items={items} />
 }
 
 export default function Decor({ way }) {
   const { kit, out } = useMemo(() => buildItems(way), [way])
-  const mat = decorMat(way.theme.id)
-  return kit.flatMap(([name], k) => out[k].length ? [<Pieza key={k} name={name} mat={mat} items={out[k]} />] : [])
+  return kit.flatMap(([name], k) => out[k].length ? [<Pieza key={k} name={name} theme={way.theme.id} items={out[k]} />] : [])
 }
