@@ -17,8 +17,8 @@ import KartPista from './kartPista.jsx'
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
 const TRACK_TILE = 4 // unidades de mundo por repetición de la textura en V
 const TRACK_K = WORLD.TRACK_K
-export const CURB = 0.17
-export const TERR = 0.55 // berma estrecha: menos de media calzada por lado
+export const CURB = 0.17 * TRACK_K
+export const TERR = 0.55 * TRACK_K // conserva la proporción con el ancho del carril
 const STEP = 1.5 * TRACK_K // conserva la densidad de geometría por camino
 const CHEV_K = 0.12 / TRACK_K // umbral de curvatura expresado en las unidades escaladas
 
