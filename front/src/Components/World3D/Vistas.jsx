@@ -1,7 +1,21 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../Core/world.js'
+import WorldHtml from './WorldHtml.jsx'
+import { resolveNodeBiome } from './mundos/biomas.js'
+
+let _worldRef = null
+const _worldListeners = new Set()
+
+export function registerWorldForVistas(world) {
+  _worldRef = world
+  _worldListeners.forEach((fn) => fn(world))
+}
+
+export function focusWorldNode(nodeIdx) {
+  window.dispatchEvent(new CustomEvent('ballitas:focus-node', { detail: { nodeIdx } }))
+}
 
 const Y = new THREE.Vector3(0, 1, 0)
 const sm = THREE.MathUtils.smoothstep
@@ -145,5 +159,151 @@ export function VistaCamino({ way, routeIndex = 0, speed = 0.05, paused = false,
     camera.updateProjectionMatrix()
     if (progressRef) progressRef.current = { d: s.d, total: perfil.total, entrando: s.fly < 1 }
   })
-  return null
+  return <VistaMundos enabled={!active} />
+}
+
+const _vmOff = new THREE.Vector3()
+const _vmGoal = new THREE.Vector3()
+const _vmDir = new THREE.Vector3()
+
+function VistaMundos({ enabled }) {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls)
+  const [world, setWorld] = useState(() => _worldRef)
+  const [focusedIdx, setFocusedIdx] = useState(null)
+  const nav = useRef({ fly: 1, dragging: false, p0: new THREE.Vector3(), goal: new THREE.Vector3() })
+
+  useEffect(() => {
+    const onWorld = (w) => {
+      setWorld(w)
+      setFocusedIdx(null)
+    }
+    _worldListeners.add(onWorld)
+    if (_worldRef && _worldRef !== world) setWorld(_worldRef)
+    return () => { _worldListeners.delete(onWorld) }
+  }, [world])
+
+  useEffect(() => {
+    if (!enabled) {
+      setFocusedIdx(null)
+      return undefined
+    }
+    const nodes = world?.nodes || []
+    const focus = (idx) => {
+      if (!nodes.length) return
+      const safe = ((idx % nodes.length) + nodes.length) % nodes.length
+      const n = nodes[safe]
+      if (!n) return
+      nav.current.fly = 0
+      nav.current.p0.copy(camera.position)
+      _vmDir.copy(camera.position).sub(n.pos)
+      if (_vmDir.lengthSq() < 1e-4) _vmDir.set(0.6, 0.35, 0.72)
+      _vmDir.y = Math.max(_vmDir.y * 0.4, 0.25 * WORLD.NODE_R)
+      _vmDir.normalize().multiplyScalar(WORLD.NODE_R * 3.15)
+      nav.current.goal.copy(n.pos).add(_vmDir)
+      setFocusedIdx(safe)
+    }
+    const onFocusEvent = (e) => {
+      if (typeof e.detail?.nodeIdx === 'number') focus(e.detail.nodeIdx)
+    }
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || !nodes.length) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === '[' || e.key === 'PageUp') {
+        e.preventDefault()
+        setFocusedIdx((cur) => {
+          const next = cur == null ? nodes.length - 1 : (cur - 1 + nodes.length) % nodes.length
+          focus(next)
+          return next
+        })
+      } else if (e.key === ']' || e.key === 'PageDown') {
+        e.preventDefault()
+        setFocusedIdx((cur) => {
+          const next = cur == null ? 0 : (cur + 1) % nodes.length
+          focus(next)
+          return next
+        })
+      } else if (e.key === 'Escape') {
+        setFocusedIdx(null)
+      }
+    }
+    window.addEventListener('ballitas:focus-node', onFocusEvent)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('ballitas:focus-node', onFocusEvent)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [enabled, world, camera])
+
+  useEffect(() => {
+    if (!controls) return undefined
+    const onStart = () => {
+      nav.current.dragging = true
+      nav.current.fly = 1
+    }
+    const onEnd = () => { nav.current.dragging = false }
+    controls.addEventListener('start', onStart)
+    controls.addEventListener('end', onEnd)
+    return () => {
+      controls.removeEventListener('start', onStart)
+      controls.removeEventListener('end', onEnd)
+    }
+  }, [controls])
+
+  useFrame((_, dt) => {
+    if (!enabled || focusedIdx == null) return
+    const node = world?.nodes?.[focusedIdx]
+    if (!node) return
+    const h = Math.min(dt, 0.05)
+    const s = nav.current
+    if (controls?.target) {
+      controls.target.lerp(node.pos, 1 - Math.exp(-7 * h))
+    }
+    if (s.fly < 1) {
+      s.fly = Math.min(1, s.fly + h / 1.1)
+      const e = sm(s.fly, 0, 1)
+      _vmGoal.copy(s.goal)
+      camera.position.copy(s.p0).lerp(_vmGoal, e)
+    } else if (!s.dragging) {
+      _vmOff.copy(camera.position).sub(node.pos)
+      if (_vmOff.lengthSq() > 1e-4) {
+        _vmOff.applyAxisAngle(Y, 0.16 * h)
+        camera.position.copy(node.pos).add(_vmOff)
+      }
+    }
+    controls?.update?.()
+  })
+
+  const focusedNode = enabled && focusedIdx != null ? world?.nodes?.[focusedIdx] : null
+  const biome = useMemo(() => (focusedNode ? resolveNodeBiome(focusedNode, world) : null), [focusedNode, world])
+
+  if (!focusedNode || !biome) return null
+  return (
+    <WorldHtml
+      center
+      position={[focusedNode.pos.x, focusedNode.pos.y + WORLD.NODE_R + 4.9, focusedNode.pos.z]}
+      distanceFactor={20}
+      zIndexRange={[10, 0]}
+    >
+      <div
+        className="tag node"
+        style={{
+          borderColor: biome.atmoRim,
+          background: `linear-gradient(135deg, ${biome.groundLow}f2, ${biome.groundMid}e6)`,
+          boxShadow: `0 0 18px ${biome.atmoBase}99`,
+          padding: '6px 12px',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontWeight: 700, fontSize: '1.05em' }}>
+          {biome.emoji} {focusedNode.name}
+        </div>
+        <div style={{ fontSize: '0.8em', color: biome.atmoRim }}>{biome.title}</div>
+        <div style={{ fontSize: '0.68em', opacity: 0.72, marginTop: 2 }}>
+          [ / ] o PgUp / PgDn · Esc para salir
+        </div>
+      </div>
+    </WorldHtml>
+  )
 }
