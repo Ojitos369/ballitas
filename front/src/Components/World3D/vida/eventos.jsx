@@ -3,9 +3,10 @@ import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
-import { getBallitas, markShared, mulberry32 } from './base.jsx'
+import { getBallitas, markShared, useInstanced } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { halfWidth, lanesOf, pal, surfFrame, TERR, CURB } from './pista.jsx'
+import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 
 const KINDS = ['geiser', 'arbol', 'erupcion', 'rampa', 'cascada', 'viento']
 const G = {
@@ -24,22 +25,49 @@ function mat(hex, emissive = '#000000') {
 const MATS = ['#252a32', '#69727d', '#ff9d35', '#47d9f5', '#dcf7ff', '#ff4c3d'].map((c) => mat(c, c === '#47d9f5' ? c : '#000000'))
 export const eventosWarmup = () => MATS
 
-function switchData(way) {
-  const out = []
-  for (const seg of way.segments ?? []) for (const sw of seg.switches ?? []) {
-    const kind = KINDS.includes(sw.kind) ? sw.kind : 'rampa'
-    const lane = lanesOf(seg).find((l) => l.id === sw.from)
-    if (!lane) continue
-    const f = surfFrame(seg, lane.id, sw.u)
-    const P = pal(way.theme.id)
-    // Al lado exterior de la curva, fuera del borde y del corredor de seguridad.
-    const side = sw.side === -1 ? -1 : 1
-    const pos = f.pos.clone().addScaledVector(f.side, side * (halfWidth(lane) + CURB + TERR * 0.43))
-    const quat = basisQuat(f.up, f.tangent)
-    const start = Math.max(0, sw.u - 0.018)
-    const seed = Math.floor(sw.u * 1e6) + lane.id * 139 + way.idx * 733
-    out.push({ seg, sw, kind, pos, quat, up: f.up.clone(), tangent: f.tangent.clone(), accent: new THREE.Color(P.mec), seed, start })
+// Lado (±1 sobre f.side) hacia el que queda el carril destino al despegar: ahí van flechas, baliza y mecanismo.
+const _dst = {}
+export function destSide(seg, sw, f) {
+  const b = surfFrame(seg, sw.to, sw.u, _dst)
+  const d = b.pos.clone().sub(f.pos).dot(f.side)
+  return d < 0 ? -1 : 1
+}
+
+// Mantiene un objeto de berma en su franja lateral (mismo contrato que decor.jsx).
+function bermaAjusta(o, side, up, E, rad) {
+  return (p) => {
+    const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z
+    const a = Math.max(Math.abs(xx), E + rad * 0.5)
+    return a > E + TERR + rad + 0.6 ? null : o.clone().addScaledVector(side, Math.sign(xx || 1) * a).addScaledVector(up, -0.02)
   }
+}
+
+const switchCache = new WeakMap()
+function switchData(way) {
+  if (switchCache.has(way)) return switchCache.get(way)
+  const out = []
+  const world = mundoDe(way); const local = nuevoLocal()
+  const P = pal(way.theme.id)
+  way.segments?.forEach((seg, si) => {
+    for (const sw of seg.switches ?? []) {
+      const kind = KINDS.includes(sw.kind) ? sw.kind : 'rampa'
+      const lane = lanesOf(seg).find((l) => l.id === sw.from)
+      if (!lane) continue
+      const f = surfFrame(seg, lane.id, sw.u, {})
+      const side = destSide(seg, sw, f)
+      // Del lado hacia el que salta la ballita, fuera del bordillo; colocado sin pisar otras pistas.
+      const E = halfWidth(lane) + CURB
+      const o = f.pos.clone()
+      const want = o.clone().addScaledVector(f.side, side * (E + TERR * 0.43))
+      const seed = Math.floor(sw.u * 1e6) + lane.id * 139 + way.idx * 733
+      const pos = colocar(world, { pos: want, seed, ajusta: bermaAjusta(o, f.side, f.up, E, 0.6) }, 0.6, { way: way.idx, si, lane: lane.id }, 4, local)
+      if (!pos) continue
+      const quat = basisQuat(f.up, f.tangent)
+      const start = Math.max(0, sw.u - 0.018)
+      out.push({ seg, si, sw, kind, pos, quat, up: f.up.clone(), tangent: f.tangent.clone(), side, accent: P.mec, seed, start })
+    }
+  })
+  switchCache.set(way, out)
   return out
 }
 
@@ -70,14 +98,14 @@ function Piece({ kind, accent, refs }) {
   </group>
   if (kind === 'rampa') return <group>
     <mesh geometry={G.box} material={mat('#414956')} position={[0, 0.18, 0.15]} rotation={[-0.3, 0, 0]} scale={[1.5, 0.28, 1.0]} {...shared} />
-    <mesh geometry={G.torus} material={mat('#ffffff')} position={[0, 1.5, 0.35]} rotation={[Math.PI / 2, 0, 0]} scale={0.55} {...shared} />
-    <mesh geometry={G.torus} material={mat('#ffffff')} position={[0, 2.5, 0.6]} rotation={[Math.PI / 2, 0, 0]} scale={0.42} {...shared} />
+    <mesh geometry={G.torus} material={mat(accent, accent)} position={[0, 1.5, 0.35]} rotation={[Math.PI / 2, 0, 0]} scale={0.55} {...shared} />
+    <mesh geometry={G.torus} material={mat(accent, accent)} position={[0, 2.5, 0.6]} rotation={[Math.PI / 2, 0, 0]} scale={0.42} {...shared} />
     <mesh geometry={G.box} material={mat('#ffffff')} position={[0, 0.38, 0.18]} scale={[0.1, 0.035, 0.8]} {...shared} />
   </group>
   if (kind === 'geiser' || kind === 'cascada') return <group>
     <mesh geometry={G.cyl} material={MATS[0]} position={[0, 0.2, 0]} scale={[0.48, 0.36, 0.48]} {...shared} />
     <mesh ref={refs[0]} geometry={G.cyl} material={MATS[3]} position={[0, 0.65, 0]} scale={[0.16, 0.9, 0.16]} {...shared} />
-    <mesh geometry={G.torus} material={MATS[4]} position={[0, 0.38, 0]} rotation={[Math.PI / 2, 0, 0]} scale={0.56} {...shared} />
+    <mesh geometry={G.torus} material={mat(accent, accent)} position={[0, 0.38, 0]} rotation={[Math.PI / 2, 0, 0]} scale={0.56} {...shared} />
   </group>
   if (kind === 'erupcion') return <group>
     <mesh geometry={G.cone} material={MATS[0]} position={[0, 0.35, 0]} scale={[0.8, 0.7, 0.8]} {...shared} />
@@ -86,7 +114,7 @@ function Piece({ kind, accent, refs }) {
   </group>
   return <group>
     <mesh geometry={G.cyl} material={MATS[1]} position={[0, 0.65, 0]} scale={[0.12, 1.3, 0.12]} {...shared} />
-    <mesh ref={refs[0]} geometry={G.torus} material={accent ? mat('#ffffff') : MATS[3]} position={[0, 1.0, 0]} rotation={[Math.PI / 2, 0, 0]} {...shared} />
+    <mesh ref={refs[0]} geometry={G.torus} material={mat(accent, accent)} position={[0, 1.0, 0]} rotation={[Math.PI / 2, 0, 0]} {...shared} />
     <mesh geometry={G.torus} material={MATS[4]} position={[0, 1.0, 0]} rotation={[0, Math.PI / 2, 0]} scale={0.72} {...shared} />
   </group>
 }
@@ -140,19 +168,21 @@ function Mechanism({ item, events }) {
   </group>
 }
 
+const T_S = new THREE.Vector3(); const T_Q = new THREE.Quaternion(); const T_M = new THREE.Matrix4(); const T_P = new THREE.Vector3()
 function FlightTrails({ items }) {
   const mesh = useRef();
   const geo = useMemo(() => G.sphere, [])
   const trailMat = useMemo(() => mat('#ffffff', '#bcefff'), [])
   const cap = Math.max(1, items.length * 10)
   const inst = useMemo(() => { const m = new THREE.InstancedMesh(geo, trailMat, cap); m.count = 0; m.frustumCulled = false; m.userData.noCull = true; return m }, [geo, trailMat, cap])
+  const bySw = useMemo(() => new Map(items.map((x) => [x.sw, x])), [items])
   useFrame(() => {
     const m = mesh.current; if (!m) return
     m.count = 0
-    const scale = new THREE.Vector3(); const q = new THREE.Quaternion(); const mat4 = new THREE.Matrix4(); const p = new THREE.Vector3()
+    const scale = T_S; const q = T_Q; const mat4 = T_M; const p = T_P
     for (const b of getBallitas()) {
       if (!b?.airborne || !b.flight) continue
-      const item = items.find((x) => x.sw === b.flight.sw)
+      const item = bySw.get(b.flight.sw)
       if (!item) continue
       for (let i = 0; i < 10 && m.count < cap; i++) {
         const t = Math.max(0, b.flight.t - i * 0.018)
