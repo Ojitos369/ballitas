@@ -588,7 +588,8 @@ export class Sim {
   // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta línea.
   raceLine(b, s, push, edge) {
     let x = carrilLat(b.carril ?? 2, edge)
-    if (Math.abs(push) > 0.5 * TRACK_K) x = -Math.sign(push) * edge * clamp(Math.abs(push) / (6 * TRACK_K), 0, 0.7)
+    // en curva fuerte se cierra un poco al interior, sin abandonar su carril (máx. ~medio carril)
+    if (Math.abs(push) > 0.5 * TRACK_K) x -= Math.sign(push) * (edge / CARRILES) * clamp(Math.abs(push) / (6 * TRACK_K), 0, 1)
     const L = laneLength(s, b.lane)
     for (const o of this._near?.get(s) || []) {
       if (o === b || o.lane !== b.lane || o.flight) continue
