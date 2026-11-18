@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useFrame } from '@react-three/fiber'
 import { NODE_R, BALL_R, SPHERE_R, mulberry32 } from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { withCameraFade } from './Paths.jsx'
 import { resolveNodeBiome, buildCityDistricts } from './mundos/biomas.js'
-import { BUILDING_TYPES, getCityKitProcedural, getCachedBiomeCityKit, loadBiomeCityKit, buildFarSkylineGeo } from './mundos/arquitectura.js'
+import { buildFarSkylineGeo } from './mundos/arquitectura.js'
 import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
 import {
   resolvePlanetConfig,
@@ -20,16 +19,6 @@ import {
   getPlanetRingGeo,
   getPlanetOutlineMaterial,
 } from './mundos/planetaCartoon.js'
-import {
-  trafficGeo,
-  vehicleGeo,
-  creatureGeo,
-  vaporGeo,
-  windowZoneGeo,
-  buildPlanetLifeData,
-  initTrafficColors,
-  updatePlanetLife,
-} from './mundos/vidaMundo.js'
 import { registerWorldForVistas, focusWorldNode } from './Vistas.jsx'
 
 function applyCityFade(mat) {
@@ -48,15 +37,9 @@ function useCityFade(ref) {
 }
 
 const U = BALL_R * 2 // unidad de la ciudad: una ballita de ancho
-const R_SCALE = NODE_R / 7.5 // factor de escala respecto al radio base
-const AREA_SCALE = R_SCALE * R_SCALE // densidad proporcional al área (NODE_R^2)
-const CITY_U = U * Math.pow(R_SCALE, 0.3) // unidad arquitectónica escalada con el planeta
-const ROAD_W = Math.max(U * 2.0, NODE_R * 0.145) // avenidas anchas proporcionales a NODE_R
-const ROAD_H = Math.max(0.085, NODE_R * 0.011)
 const LOD_NEAR = Math.max(95, NODE_R * 7.5)
-const LOD_LAMPS = Math.max(68, NODE_R * 5.5)
 const LOD_CLOUDS = Math.max(260, SPHERE_R * 2.9)
-const LOD_ORBITALS = Math.max(240, SPHERE_R * 2.8)
+const LOD_ORBITALS = Math.max(240, SPHERE_R * 2.65)
 const UP = new THREE.Vector3(0, 1, 0)
 const GOLD = '#ffd54a'
 const GREEN = '#5dffb0'
@@ -81,67 +64,6 @@ export function getTerminals(node) {
     }
   }
   return list
-}
-
-// ───────────────────────── Carga cacheada de modelos GLB (public/models) ─────────────────────────
-const gltfLoader = new GLTFLoader()
-const glbPromiseCache = new Map()
-const glbResolvedCache = new Map()
-
-function loadGlbModel(name) {
-  if (glbPromiseCache.has(name)) return glbPromiseCache.get(name)
-  const base = (import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/')
-  const url = `${base}models/${name}.glb`
-  const promise = new Promise((resolve) => {
-    gltfLoader.load(
-      url,
-      (gltf) => {
-        let found = null
-        gltf.scene?.traverse((obj) => {
-          if (!found && obj.isMesh && obj.geometry) found = obj
-        })
-        if (!found) {
-          glbResolvedCache.set(name, null)
-          resolve(null)
-          return
-        }
-        const geometry = found.geometry.clone()
-        if (!geometry.attributes.normal) geometry.computeVertexNormals()
-        const srcMat = Array.isArray(found.material) ? found.material[0] : found.material
-        const material = srcMat
-          ? srcMat.clone()
-          : new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0.35 })
-        if ('flatShading' in material) material.flatShading = false
-        material.needsUpdate = true
-        const asset = { geometry, material }
-        glbResolvedCache.set(name, asset)
-        resolve(asset)
-      },
-      undefined,
-      () => {
-        glbResolvedCache.set(name, null)
-        resolve(null)
-      },
-    )
-  })
-  glbPromiseCache.set(name, promise)
-  return promise
-}
-
-function useGlbAsset(name) {
-  const [asset, setAsset] = useState(() => glbResolvedCache.get(name) ?? null)
-  useEffect(() => {
-    if (glbResolvedCache.has(name)) {
-      setAsset(glbResolvedCache.get(name))
-      return
-    }
-    let alive = true
-    loadGlbModel(name).then((res) => {
-      if (alive && res) setAsset(res)
-    })
-    return () => { alive = false }
-  }, [name])
-  return asset
 }
 
 // ───────────────────────── Texturas (public/tex con fallback procedural) ─────────────────────────
@@ -587,23 +509,7 @@ const goldIconGeo = makeLatheGeo([
 const greenIconGeo = new THREE.SphereGeometry(0.25, 12, 10)
 const iconHaloRingGeo = new THREE.TorusGeometry(0.36, 0.022, 6, 18)
 
-// Farola de pista (fallback suave de lamp.glb, base y=0, altura 1)
-const lampFallbackGeo = makeLatheGeo([
-  [0.09, 0],
-  [0.08, 0.08],
-  [0.038, 0.18],
-  [0.032, 0.78],
-  [0.085, 0.86],
-  [0.11, 0.94],
-  [0.06, 0.99],
-  [0.001, 1.0],
-], 10)
 const haloSphereGeo = new THREE.SphereGeometry(1, 10, 8)
-
-// Atmósfera y nubes suaves (segmentación alta sin sobrepasar presupuesto)
-const atmoOuterGeo = new THREE.SphereGeometry(NODE_R * 1.12, 48, 32)
-const atmoInnerGeo = new THREE.SphereGeometry(NODE_R * 1.018, 48, 32)
-const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.032, 56, 38)
 
 // Geometrías suaves de estaciones terminales
 const stBaseOut = makeLatheGeo([
@@ -713,38 +619,6 @@ function makeAtmoMaterial(color, { back = true, rimColor = '#d8f0ff', power, int
     depthWrite: false,
     toneMapped: false,
   })
-}
-
-// ───────────────────────── Esfera del planeta con ruido orgánico suave ─────────────────────────
-function fbm3(x, y, z) {
-  const o1 = Math.sin(x * 0.85 + 0.4) * Math.sin(y * 0.78 + 1.1) * Math.sin(z * 0.82 + 2.0)
-  const o2 = Math.sin(x * 1.85 + z * 1.2) * Math.cos(y * 1.65 - x * 0.7) * 0.45
-  const o3 = Math.cos(x * 3.1 - y * 2.4 + z * 2.7) * 0.2
-  return o1 + o2 + o3
-}
-
-function planetGeo(color) {
-  const g = new THREE.SphereGeometry(NODE_R - 0.02, 80, 60)
-  const p = g.attributes.position
-  const cols = new Float32Array(p.count * 3)
-  const a = new THREE.Color(color).multiplyScalar(0.11)
-  const b = new THREE.Color(color).multiplyScalar(0.24)
-  const d = new THREE.Color(color).multiplyScalar(0.36)
-  const c = new THREE.Color()
-  const v = new THREE.Vector3()
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i)
-    const n = fbm3(v.x, v.y, v.z)
-    const t = THREE.MathUtils.smoothstep(n, -0.55, 0.75)
-    v.multiplyScalar(1 + (n * 0.022) / NODE_R)
-    p.setXYZ(i, v.x, v.y, v.z)
-    if (t < 0.5) c.lerpColors(a, b, t * 2)
-    else c.lerpColors(b, d, (t - 0.5) * 2)
-    cols.set([c.r, c.g, c.b], i * 3)
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(cols, 3))
-  g.computeVertexNormals()
-  return g
 }
 
 // ───────────────────────── Calles continuas curvas sobre la esfera ─────────────────────────
@@ -971,24 +845,6 @@ function cityData(node, biome, surfaceR = NODE_R) {
   return { roadGeo, lineGeo, farSkylineGeo, cityLights, districts, terminals, monumentSpot }
 }
 
-function useCityKit(biome) {
-  const [kit, setKit] = useState(() => getCachedBiomeCityKit(biome.id) || getCityKitProcedural(biome.roofStyle))
-  useEffect(() => {
-    const cached = getCachedBiomeCityKit(biome.id)
-    if (cached) {
-      setKit(cached)
-      return undefined
-    }
-    setKit(getCityKitProcedural(biome.roofStyle))
-    let alive = true
-    loadBiomeCityKit(biome.id, biome.roofStyle).then((loaded) => {
-      if (alive && loaded) setKit(loaded)
-    })
-    return () => { alive = false }
-  }, [biome.id, biome.roofStyle])
-  return kit
-}
-
 function Instanced({ geo, material, items, children, ...rest }) {
   const ref = useRef()
   const initGeoRef = useRef(geo)
@@ -1077,23 +933,23 @@ function destinoStyle(name, kind) {
   }
 }
 
-const DEST_SCALE = Math.pow(R_SCALE, 0.35)
-const TERM_SCALE = Math.pow(R_SCALE, 0.22)
-
-function Destino({ d, base, tex, planetLodRef, surfaceR = NODE_R }) {
+function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
   const grp = useRef()
   const detailGrp = useRef()
   const icon = useRef()
+  const hoverRef = useRef(false)
   useCityFade(grp)
   const [hover, setHover] = useState(false)
+  hoverRef.current = hover
   const gain = d.kind === 'puntos'
   const color = gain ? GOLD : GREEN
   const bodyColor = gain ? '#7a5e18' : '#1e5b43'
   const roofColor = gain ? '#b98924' : '#2e8864'
   const style = destinoStyle(d.name, d.kind)
+  const baseY = style === 'torre' ? 2.5 : 2.1
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, d.dir), [d])
   const relPos = useMemo(() => d.dir.clone().multiplyScalar(surfaceR), [d, surfaceR])
-  const destScale = Math.pow(surfaceR / 7.5, 0.28) * 0.78
+  const destScale = useMemo(() => Math.pow(surfaceR / 7.5, 0.28) * 0.78, [surfaceR])
   const mats = useMemo(() => ({
     pad: getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })),
     icon: getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })),
@@ -1108,14 +964,16 @@ function Destino({ d, base, tex, planetLodRef, surfaceR = NODE_R }) {
     canopy: getCachedMat('dCanopy', () => new THREE.MeshStandardMaterial({ color: '#3c7d63', roughness: 0.6, side: THREE.DoubleSide })),
   }), [color, bodyColor, roofColor, tex, d.name])
 
-  useFrame(({ clock }) => {
-    const near = planetLodRef?.current?.near ?? true
-    if (detailGrp.current) detailGrp.current.visible = near
-    if (!near && !hover) return
-    const t = clock.elapsedTime
-    icon.current.rotation.y = t * 1.5
-    icon.current.position.y = (style === 'torre' ? 2.5 : 2.1) + Math.sin(t * 2 + d.idx) * 0.1
-  })
+  useLayoutEffect(() => {
+    if (!animRegRef?.current) return undefined
+    const list = animRegRef.current.destinos
+    const entry = { detailGrp, icon, baseY, idx: d.idx, hoverRef }
+    list.push(entry)
+    return () => {
+      const i = list.indexOf(entry)
+      if (i >= 0) list.splice(i, 1)
+    }
+  }, [animRegRef, baseY, d.idx])
 
   return (
     <group
@@ -1198,13 +1056,13 @@ function Destino({ d, base, tex, planetLodRef, surfaceR = NODE_R }) {
 }
 
 // ───────────────────────── Estaciones Terminales (Salida / Entrada) ─────────────────────────
-function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef, surfaceR = NODE_R }) {
+function Terminal({ node, term, color, tex, animRegRef, surfaceR = NODE_R }) {
   const dir = term.dir || node.verts[term.vert].dir
   const isOut = term.kind === 'out'
   const key = `${node.idx}:${term.vert}:${term.kind}`
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, dir), [dir])
   const relPos = useMemo(() => dir.clone().multiplyScalar(surfaceR), [dir, surfaceR])
-  const termScale = Math.pow(surfaceR / 7.5, 0.22)
+  const termScale = useMemo(() => Math.pow(surfaceR / 7.5, 0.22), [surfaceR])
   const tmats = useMemo(() => getSharedTerminalMats(tex), [tex])
   const portalMatObj = useMemo(() => new THREE.MeshStandardMaterial({
     color, emissive: color, emissiveIntensity: isOut ? 1.55 : 1.05, toneMapped: false,
@@ -1226,34 +1084,16 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef, 
   const openAmt = useRef(0)
   useCityFade(grp)
 
-  useFrame(({ clock }, dt) => {
-    const near = planetLodRef?.current?.near ?? true
-    if (microRef.current) microRef.current.visible = near
-    if (!near) return
-    const t = clock.elapsedTime
-    const entry = terminalPulse.get(key)
-    const active = entry && t - entry.at < 0.35 ? entry.power : 0
-    openAmt.current += (active - openAmt.current) * Math.min(1, dt * 8)
-
-    const slide = openAmt.current * 0.65
-    if (doorL.current && doorR.current) {
-      doorL.current.position.x = -0.48 - slide
-      doorR.current.position.x = 0.48 + slide
+  useLayoutEffect(() => {
+    if (!animRegRef?.current) return undefined
+    const list = animRegRef.current.terminals
+    const entry = { key, isOut, microRef, doorL, doorR, beacons, beaconHalos, portalMatObj, openAmt }
+    list.push(entry)
+    return () => {
+      const i = list.indexOf(entry)
+      if (i >= 0) list.splice(i, 1)
     }
-
-    const base = isOut ? 1.55 : 1.05
-    portalMatObj.emissiveIntensity = base + openAmt.current * 0.9
-
-    for (let i = 0; i < beacons.current.length; i++) {
-      const m = beacons.current[i]
-      if (!m) continue
-      const speed = 2.5 + openAmt.current * 5.5
-      const wave = 0.5 + 0.5 * Math.sin(t * speed + (isOut ? -i : i) * 1.1)
-      m.scale.setScalar(0.85 + wave * 0.35 + openAmt.current * 0.25)
-      const halo = beaconHalos.current[i]
-      if (halo) halo.scale.setScalar(0.24 + wave * 0.1 + openAmt.current * 0.12)
-    }
-  })
+  }, [animRegRef, key, isOut, portalMatObj])
 
   const pylonGeo = pylonFallbackGeo
   const podGeo = podFallbackGeo
@@ -1308,7 +1148,7 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef, 
   )
 }
 
-function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
+function Planet({ node, world, tex }) {
   const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
   const planetCfg = useMemo(() => resolvePlanetConfig(node, biome, world), [node, biome, world])
   const surfaceR = planetCfg.visualR
@@ -1330,6 +1170,14 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     () => planetCfg.moons.map((m) => createPlanetMoonMaterial(m, planetCfg.outlineColor)),
     [planetCfg],
   )
+  const moonsRender = useMemo(() => planetCfg.moons.map((m) => ({
+    tilt: m.tilt,
+    phase: m.phase,
+    speed: m.speed,
+    moonR: planetVisualR * m.radiusRatio,
+    outlineR: planetVisualR * m.radiusRatio * 1.08,
+    orbitPos: [planetVisualR * m.orbitRatio, 0, 0],
+  })), [planetCfg.moons, planetVisualR])
   const outlineMat = useMemo(() => getPlanetOutlineMaterial(planetCfg.outlineHex), [planetCfg.outlineHex])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity * 0.72 }), [biome])
   const farSkylineMat = useMemo(() => new THREE.MeshStandardMaterial({
@@ -1339,6 +1187,30 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     emissive: biome.emissiveColor,
     emissiveIntensity: biome.emissiveIntensity * 1.15,
   }), [biome])
+  const roadMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: biome.roadColor,
+    map: tex.asphalt,
+    normalMap: tex.asphaltNormal,
+    roughness: 0.72,
+    metalness: 0.14,
+  }), [biome.roadColor, tex])
+  const lineMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#2a3048',
+    emissive: biome.cityLight,
+    emissiveIntensity: 0.58,
+    roughness: 0.4,
+  }), [biome.cityLight])
+  const lightsMat = useMemo(() => new THREE.MeshBasicMaterial({
+    color: biome.cityLight,
+    toneMapped: false,
+  }), [biome.cityLight])
+  const labelPos = useMemo(() => [0, surfaceR + 3.4 * Math.pow(surfaceR / 7.5, 0.42), 0], [surfaceR])
+  const tagStyle = useMemo(() => ({
+    borderColor: biome.atmoRim,
+    background: `linear-gradient(135deg, ${biome.groundLow}e8, ${biome.groundMid}d8)`,
+    boxShadow: `0 0 12px ${biome.atmoBase}66`,
+  }), [biome])
+  const subTagStyle = useMemo(() => ({ display: 'block', fontSize: '0.72em', opacity: 0.85, color: biome.atmoRim }), [biome.atmoRim])
 
   useEffect(() => () => {
     planetMat.dispose()
@@ -1350,40 +1222,110 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     city.farSkylineGeo?.dispose()
     atmoOuterMat.dispose()
     farSkylineMat.dispose()
-  }, [planetMat, cloudMat, ringMat, moonMats, city, atmoOuterMat, farSkylineMat])
+    roadMat.dispose()
+    lineMat.dispose()
+    lightsMat.dispose()
+  }, [planetMat, cloudMat, ringMat, moonMats, city, atmoOuterMat, farSkylineMat, roadMat, lineMat, lightsMat])
 
   const planetBodyRef = useRef()
+  const planetMeshRef = useRef()
+  const outlineMeshRef = useRef()
   const cloudsRef = useRef()
   const ringRef = useRef()
   const moonsGroupRef = useRef()
   const moonPivotsRef = useRef([])
-  const planetLodRef = useRef({ near: false })
+  const animRegRef = useRef({ destinos: [], terminals: [], monument: null })
 
+  // Único useFrame por nodo: solo escribe uniforms, rotaciones escalares y flags LOD (cero asignaciones)
   useFrame(({ camera, clock }, dt) => {
     const t = clock.elapsedTime
     planetMat.uniforms.uTime.value = t
+    if (cloudMat) cloudMat.uniforms.uTime.value = t
+
     if (planetBodyRef.current) {
-      planetBodyRef.current.rotation.y += dt * planetCfg.spinSpeed
+      planetBodyRef.current.rotation.y = planetCfg.rotY0 + t * planetCfg.spinSpeed
     }
+
     const dist = camera.position.distanceTo(node.pos)
     const near = dist < LOD_NEAR
     const showOrbitals = dist < LOD_ORBITALS
-    planetLodRef.current.near = near
-    if (cloudsRef.current) {
-      cloudsRef.current.visible = dist < LOD_CLOUDS
-      if (cloudsRef.current.visible) {
-        cloudsRef.current.rotation.y += dt * planetCfg.clouds.speed
-        if (cloudMat) cloudMat.uniforms.uTime.value = t
-      }
+    const sphereGeo = showOrbitals ? unitSphereGeo : unitSphereLowGeo
+
+    if (planetMeshRef.current && planetMeshRef.current.geometry !== sphereGeo) {
+      planetMeshRef.current.geometry = sphereGeo
     }
+    if (outlineMeshRef.current && outlineMeshRef.current.geometry !== sphereGeo) {
+      outlineMeshRef.current.geometry = sphereGeo
+    }
+
+    if (cloudsRef.current) {
+      const showClouds = dist < LOD_CLOUDS
+      cloudsRef.current.visible = showClouds
+      if (showClouds) cloudsRef.current.rotation.y = t * planetCfg.clouds.speed
+    }
+
+    // Con LOD: a detalle bajo sin anillos ni lunas
     if (ringRef.current) ringRef.current.visible = showOrbitals
     if (moonsGroupRef.current) {
       moonsGroupRef.current.visible = showOrbitals
       if (showOrbitals) {
-        for (let i = 0; i < planetCfg.moons.length; i++) {
+        for (let i = 0; i < moonsRender.length; i++) {
           const piv = moonPivotsRef.current[i]
-          if (piv) piv.rotation.y += dt * planetCfg.moons[i].speed
+          if (piv) piv.rotation.y = moonsRender[i].phase + t * moonsRender[i].speed
         }
+      }
+    }
+
+    const reg = animRegRef.current
+    for (let i = 0; i < reg.destinos.length; i++) {
+      const d = reg.destinos[i]
+      if (d.detailGrp.current) d.detailGrp.current.visible = near
+      if ((near || d.hoverRef.current) && d.icon.current) {
+        d.icon.current.rotation.y = t * 1.5
+        d.icon.current.position.y = d.baseY + Math.sin(t * 2 + d.idx) * 0.1
+      }
+    }
+
+    for (let i = 0; i < reg.terminals.length; i++) {
+      const tr = reg.terminals[i]
+      if (tr.microRef.current) tr.microRef.current.visible = near
+      if (!near) continue
+      const entry = terminalPulse.get(tr.key)
+      const active = entry && t - entry.at < 0.35 ? entry.power : 0
+      tr.openAmt.current += (active - tr.openAmt.current) * Math.min(1, dt * 8)
+      const slide = tr.openAmt.current * 0.65
+      if (tr.doorL.current && tr.doorR.current) {
+        tr.doorL.current.position.x = -0.48 - slide
+        tr.doorR.current.position.x = 0.48 + slide
+      }
+      tr.portalMatObj.emissiveIntensity = (tr.isOut ? 1.55 : 1.05) + tr.openAmt.current * 0.9
+      for (let j = 0; j < tr.beacons.current.length; j++) {
+        const m = tr.beacons.current[j]
+        if (!m) continue
+        const speed = 2.5 + tr.openAmt.current * 5.5
+        const wave = 0.5 + 0.5 * Math.sin(t * speed + (tr.isOut ? -j : j) * 1.1)
+        m.scale.setScalar(0.85 + wave * 0.35 + tr.openAmt.current * 0.25)
+        const halo = tr.beaconHalos.current[j]
+        if (halo) halo.scale.setScalar(0.24 + wave * 0.1 + tr.openAmt.current * 0.12)
+      }
+    }
+
+    const mon = reg.monument
+    if (mon && near) {
+      const mt = t + mon.nodeIdx * 1.7
+      if (mon.animRef.current) {
+        if (mon.biomeId === 'mar') {
+          mon.animRef.current.rotation.y = mt * 1.35
+        } else if (mon.biomeId === 'nubes') {
+          mon.animRef.current.position.y = 1.65 + Math.sin(mt * 1.4) * 0.22
+          mon.animRef.current.rotation.y = mt * 0.3
+        } else {
+          mon.animRef.current.rotation.y = mt * 0.85
+        }
+      }
+      if (mon.animRef2.current) {
+        mon.animRef2.current.rotation.y = -mt * 0.6
+        mon.animRef2.current.rotation.z = Math.sin(mt * 1.2) * 0.08
       }
     }
   })
@@ -1394,6 +1336,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
       <group rotation={planetCfg.tilt}>
         <group ref={planetBodyRef} rotation-y={planetCfg.rotY0}>
           <mesh
+            ref={planetMeshRef}
             geometry={unitSphereGeo}
             material={planetMat}
             scale={planetVisualR}
@@ -1403,6 +1346,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
             }}
           />
           <mesh
+            ref={outlineMeshRef}
             geometry={unitSphereGeo}
             material={outlineMat}
             scale={planetVisualR * 1.045}
@@ -1435,35 +1379,31 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
       )}
 
       {/* Lunas pequeñas en órbita */}
-      {planetCfg.moons.length > 0 && (
+      {moonsRender.length > 0 && (
         <group ref={moonsGroupRef}>
-          {planetCfg.moons.map((m, i) => {
-            const moonR = planetVisualR * m.radiusRatio
-            const orbitR = planetVisualR * m.orbitRatio
-            return (
-              <group key={i} rotation={m.tilt}>
-                <group
-                  ref={(el) => { moonPivotsRef.current[i] = el }}
-                  rotation-y={m.phase}
-                >
-                  <group position={[orbitR, 0, 0]}>
-                    <mesh
-                      geometry={unitSphereLowGeo}
-                      material={moonMats[i]}
-                      scale={moonR}
-                      raycast={() => null}
-                    />
-                    <mesh
-                      geometry={unitSphereLowGeo}
-                      material={outlineMat}
-                      scale={moonR * 1.08}
-                      raycast={() => null}
-                    />
-                  </group>
+          {moonsRender.map((m, i) => (
+            <group key={i} rotation={m.tilt}>
+              <group
+                ref={(el) => { moonPivotsRef.current[i] = el }}
+                rotation-y={m.phase}
+              >
+                <group position={m.orbitPos}>
+                  <mesh
+                    geometry={unitSphereLowGeo}
+                    material={moonMats[i]}
+                    scale={m.moonR}
+                    raycast={() => null}
+                  />
+                  <mesh
+                    geometry={unitSphereLowGeo}
+                    material={outlineMat}
+                    scale={m.outlineR}
+                    raycast={() => null}
+                  />
                 </group>
               </group>
-            )
-          })}
+            </group>
+          ))}
         </group>
       )}
 
@@ -1472,26 +1412,20 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         <mesh geometry={city.farSkylineGeo} material={farSkylineMat} raycast={() => null} />
       )}
       {city.cityLights.length > 0 && (
-        <Instanced geo={haloSphereGeo} items={city.cityLights} raycast={() => null}>
-          <meshBasicMaterial color={biome.cityLight} toneMapped={false} />
-        </Instanced>
+        <Instanced geo={haloSphereGeo} material={lightsMat} items={city.cityLights} raycast={() => null} />
       )}
 
       {/* Atmósfera exterior escalada al radio visual del planeta */}
       <mesh geometry={unitSphereLowGeo} material={atmoOuterMat} scale={planetVisualR * 1.13} raycast={() => null} />
 
       {/* Calles curvas continuas y líneas guía */}
-      <mesh geometry={city.roadGeo} receiveShadow>
-        <meshStandardMaterial color={biome.roadColor} map={tex.asphalt} normalMap={tex.asphaltNormal} roughness={0.72} metalness={0.14} />
-      </mesh>
-      <mesh geometry={city.lineGeo}>
-        <meshStandardMaterial color="#2a3048" emissive={biome.cityLight} emissiveIntensity={0.58} roughness={0.4} />
-      </mesh>
+      <mesh geometry={city.roadGeo} material={roadMat} receiveShadow />
+      <mesh geometry={city.lineGeo} material={lineMat} />
 
       {/* Monumento único del bioma como silueta reconocible */}
-      <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} />
+      <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />
 
-      {node.destinos.map((d) => <Destino key={d.idx} d={d} base={node.pos} tex={tex} planetLodRef={planetLodRef} surfaceR={surfaceR} />)}
+      {node.destinos.map((d) => <Destino key={d.idx} d={d} tex={tex} animRegRef={animRegRef} surfaceR={surfaceR} />)}
       {city.terminals.map((t, i) => (
         <Terminal
           key={`${t.kind}-${t.to}-${t.vert}-${i}`}
@@ -1499,23 +1433,14 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
           term={t}
           color={world.nodes[t.to].color}
           tex={tex}
-          podAsset={podAsset}
-          pylonAsset={pylonAsset}
-          planetLodRef={planetLodRef}
+          animRegRef={animRegRef}
           surfaceR={surfaceR}
         />
       ))}
-      <WorldHtml center position={[0, surfaceR + 3.4 * Math.pow(surfaceR / 7.5, 0.42), 0]} distanceFactor={20} zIndexRange={[5, 0]}>
-        <div
-          className="tag node"
-          style={{
-            borderColor: biome.atmoRim,
-            background: `linear-gradient(135deg, ${biome.groundLow}e8, ${biome.groundMid}d8)`,
-            boxShadow: `0 0 12px ${biome.atmoBase}66`,
-          }}
-        >
+      <WorldHtml center position={labelPos} distanceFactor={20} zIndexRange={[5, 0]}>
+        <div className="tag node" style={tagStyle}>
           <span>{biome.emoji} {node.name}</span>
-          <span style={{ display: 'block', fontSize: '0.72em', opacity: 0.85, color: biome.atmoRim }}>{biome.title}</span>
+          <span style={subTagStyle}>{biome.title}</span>
         </div>
       </WorldHtml>
     </group>
@@ -1528,14 +1453,6 @@ export default function Nodes({ world }) {
     registerWorldForVistas(world)
   }, [world])
   return world.nodes.map((n) => (
-    <Planet
-      key={n.idx}
-      node={n}
-      world={world}
-      tex={tex}
-      lampAsset={null}
-      podAsset={null}
-      pylonAsset={null}
-    />
+    <Planet key={n.idx} node={n} world={world} tex={tex} />
   ))
 }
