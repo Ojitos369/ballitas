@@ -1833,7 +1833,7 @@ function relaxRibbons(world) {
     F.fill(0); cnt.fill(0)
     for (const g of live) { g.F.fill(0); g.c.fill(0) }
     for (let q = 0; q < hits.length; q += 3) {
-      const a = hits[q]; const b = hits[q + 1]; const d = hits[q + 2]; const m = (hitD - d) * 0.9 // cada lado casi todo el déficit: el suavizado lo reparte
+      const a = hits[q]; const b = hits[q + 1]; const d = hits[q + 2]; const m = (hitD - d) * 1.5 // cada lado casi todo el déficit: el suavizado lo reparte
       const A = ribs[R[a]]; const B = ribs[R[b]]
       let nx = X[a] - X[b]; let ny = Yy[a] - Yy[b]; let nz = Z[a] - Z[b]
       if (d > 1e-3) { nx /= d; ny /= d; nz /= d } else { const o = (a - A.start) * 3; nx = A.O[o]; ny = A.O[o + 1]; nz = A.O[o + 2]; const l = Math.hypot(nx, ny, nz); if (l > 1e-6) { nx /= l; ny /= l; nz /= l } else { nx = 0; ny = 1; nz = 0 } }
@@ -1902,7 +1902,7 @@ export function indexarColisiones(world, S = braidRibbons(world)) {
   const add = (g, x, y, z, i) => { const k = cellKey(cell(x), cell(y), cell(z)); let b = g.get(k); if (!b) g.set(k, b = []); b.push(i) }
   for (let i = 0; i < R.length; i++) add(grid, X[i], Yy[i], Z[i], i)
   const tR = new Int32Array(tx.length / 3)
-  for (const t of tubes) for (let i = 0; i <= t.n; i++) { tR[t.start + i] = tubes.indexOf(t); add(tgrid, tx[(t.start + i) * 3], tx[(t.start + i) * 3 + 1], tx[(t.start + i) * 3 + 2], t.start + i) }
+  tubes.forEach((t, ti) => { for (let i = 0; i <= t.n; i++) { tR[t.start + i] = ti; add(tgrid, tx[(t.start + i) * 3], tx[(t.start + i) * 3 + 1], tx[(t.start + i) * 3 + 2], t.start + i) } })
   const same = (a, b) => b == null || a === b || a?.idx === b
   // con `si` (índice del tramo en su camino) cuentan también los tramos vecinos (si ± 1): el objeto vive en la unión
   const near = (o, ig) => same(o.way, ig.way) && Math.abs(o.way.segments.indexOf(o.seg) - ig.si) <= 1
