@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { angleDiff, clampYaw, decayOffset, POV_YAW_MAX, povZoomView, POV_ZOOM_EYE, raySpherePenetration } from './povLook.js'
+import { angleDiff, clampYaw, decayOffset, POV_YAW_MAX, povZoomView, POV_ZOOM_EYE, raySpherePenetration, rayEnterSphere } from './povLook.js'
 
 test('angleDiff cruza ±180° sin salto', () => {
   const d = angleDiff(-Math.PI + 0.1, Math.PI - 0.1)
@@ -47,3 +47,11 @@ test('povZoomView: continuo, espalda a ojos a zoom óptico', () => {
     prev = v
   }
 })
+
+test('rayEnterSphere da la fraccion de entrada o 1 si no toca', () => {
+  const o = { x: 0, y: 0, z: 0 }
+  const e = { x: 10, y: 0, z: 0 }
+  assert.ok(Math.abs(rayEnterSphere(o, e, { x: 5, y: 0, z: 0 }, 1) - 0.4) < 1e-9)
+  assert.equal(rayEnterSphere(o, e, { x: 5, y: 3, z: 0 }, 1), 1)
+  assert.equal(rayEnterSphere(o, e, { x: -5, y: 0, z: 0 }, 1), 1)
+});

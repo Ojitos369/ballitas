@@ -66,3 +66,21 @@ export function raySpherePenetration(origin, end, center, radius) {
   const penetration = radius - Math.sqrt(ex * ex + ey * ey + ez * ez)
   return penetration > 0 ? penetration : 0
 }
+
+// Fraccion (0..1) del segmento origin->end donde entra por primera vez en la esfera; 1 si no la toca.
+export function rayEnterSphere(origin, end, center, radius) {
+  const dx = end.x - origin.x
+  const dy = end.y - origin.y
+  const dz = end.z - origin.z
+  const a = dx * dx + dy * dy + dz * dz
+  if (a < 1e-8) return 1
+  const fx = origin.x - center.x
+  const fy = origin.y - center.y
+  const fz = origin.z - center.z
+  const b = 2 * (fx * dx + fy * dy + fz * dz)
+  const c = fx * fx + fy * fy + fz * fz - radius * radius
+  const disc = b * b - 4 * a * c
+  if (disc < 0) return 1
+  const t = (-b - Math.sqrt(disc)) / (2 * a)
+  return t >= 0 && t <= 1 ? t : 1
+}
