@@ -9,7 +9,16 @@ import { withCameraFade } from './Paths.jsx'
 import { resolveNodeBiome, buildBiomePlanetGeo, buildCityDistricts } from './mundos/biomas.js'
 import { BUILDING_TYPES, getCityKitProcedural, getCachedBiomeCityKit, loadBiomeCityKit, buildFarSkylineGeo } from './mundos/arquitectura.js'
 import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
-import { trafficGeo, creatureGeo, vaporGeo, buildPlanetLifeData, updatePlanetLife } from './mundos/vidaMundo.js'
+import {
+  trafficGeo,
+  vehicleGeo,
+  creatureGeo,
+  vaporGeo,
+  windowZoneGeo,
+  buildPlanetLifeData,
+  initTrafficColors,
+  updatePlanetLife,
+} from './mundos/vidaMundo.js'
 import { registerWorldForVistas, focusWorldNode } from './Vistas.jsx'
 
 function applyCityFade(mat) {
@@ -1384,7 +1393,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const city = useMemo(() => cityData(node, biome), [node, biome])
   const geo = useMemo(() => buildBiomePlanetGeo(node, biome, city.districts), [node, biome, city.districts])
   const kitGeos = useCityKit(biome)
-  const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot), [node, biome, city.monumentSpot])
+  const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot, city), [node, biome, city])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   const atmoInnerMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: false, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   const buildingMat = useMemo(() => {
@@ -1438,10 +1447,27 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const farSkylineRef = useRef()
   const detailRef = useRef()
   const trafficRef = useRef()
+  const vehiclesRef = useRef()
   const creaturesRef = useRef()
   const vaporRef = useRef()
+  const windowsRef = useRef()
   const planetLodRef = useRef({ near: false })
   const normalScale = useMemo(() => new THREE.Vector2(0.32, 0.32), [])
+
+  useLayoutEffect(() => {
+    if (trafficRef.current) initTrafficColors(life, trafficRef.current)
+    const wm = windowsRef.current
+    if (wm && life.windowZones.length) {
+      const c = new THREE.Color(biome.emissiveColor || '#ffd98a')
+      for (let i = 0; i < life.windowZones.length; i++) {
+        wm.setMatrixAt(i, life.windowZones[i].m)
+        wm.setColorAt(i, c)
+      }
+      wm.instanceMatrix.needsUpdate = true
+      if (wm.instanceColor) wm.instanceColor.needsUpdate = true
+      wm.computeBoundingSphere?.()
+    }
+  }, [life, biome])
 
   useFrame(({ camera, clock }, dt) => {
     const dist = camera.position.distanceTo(node.pos)
@@ -1463,7 +1489,13 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     if (detailRef.current) detailRef.current.visible = near
     if (near) {
       const t = clock.elapsedTime
-      updatePlanetLife(life, t, trafficRef.current, creaturesRef.current, vaporRef.current)
+      updatePlanetLife(life, t, biome, {
+        trafficMesh: trafficRef.current,
+        vehiclesMesh: vehiclesRef.current,
+        creaturesMesh: creaturesRef.current,
+        vaporMesh: vaporRef.current,
+        windowsMesh: windowsRef.current,
+      })
       const night = 0.65 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.28 + node.idx * 1.3))
       buildingMat.emissiveIntensity = biome.emissiveIntensity * night
     }
@@ -1549,10 +1581,15 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
           />
         ))}
 
-        {/* Vida del mundo: tráfico en calles, criaturas en órbita baja y vapor/humo */}
+        {/* Vida del mundo: tráfico por avenidas, vehículos urbanos, criaturas, vapor y ventanas por zonas */}
         {life.traffic.length > 0 && (
           <instancedMesh ref={trafficRef} args={[trafficGeo, null, life.traffic.length]} frustumCulled={false}>
-            <meshBasicMaterial color={biome.cityLight} toneMapped={false} />
+            <meshBasicMaterial toneMapped={false} />
+          </instancedMesh>
+        )}
+        {life.vehicles.length > 0 && (
+          <instancedMesh ref={vehiclesRef} args={[vehicleGeo, null, life.vehicles.length]} frustumCulled={false}>
+            <meshStandardMaterial color={biome.atmoRim} emissive={biome.cityLight} emissiveIntensity={0.8} roughness={0.28} metalness={0.55} />
           </instancedMesh>
         )}
         {life.creatures.length > 0 && (
@@ -1563,6 +1600,11 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         {life.vapor.length > 0 && (
           <instancedMesh ref={vaporRef} args={[vaporGeo, null, life.vapor.length]} frustumCulled={false}>
             <meshStandardMaterial color={biome.cloudColor} transparent opacity={0.42} depthWrite={false} roughness={1} />
+          </instancedMesh>
+        )}
+        {life.windowZones.length > 0 && (
+          <instancedMesh ref={windowsRef} args={[windowZoneGeo, null, life.windowZones.length]} frustumCulled={false}>
+            <meshBasicMaterial toneMapped={false} />
           </instancedMesh>
         )}
       </group>
