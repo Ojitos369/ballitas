@@ -555,7 +555,7 @@ function NebulaDome({ r }) {
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
-  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1, glide: new THREE.Vector3(), glideApplied: new THREE.Vector3(), cambioT: 0, prevEn: false, prevRad: new THREE.Vector3(), hasRad: false, nodeBlend: 0, nodeEnv: null, nodeEnvIdx: null })
+  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1, glide: new THREE.Vector3(), cambioT: 0, prevEn: false, prevRad: new THREE.Vector3(), hasRad: false, nodeBlend: 0, nodeEnv: null, nodeEnvIdx: null })
   const controls = useRef()
   const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
@@ -1043,7 +1043,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         fs.startPos.copy(camera.position)
         fs.quat.copy(camera.quaternion)
         fs.userRel = false
-        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1; fs.nodeBlend = 0; fs.nodeEnv = null; fs.nodeEnvIdx = null; fs.hasRad = false; fs.glide.set(0, 0, 0); fs.glideApplied.set(0, 0, 0); fs.cambioT = 0; fs.prevEn = false
+        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1; fs.nodeBlend = 0; fs.nodeEnv = null; fs.nodeEnvIdx = null; fs.hasRad = false; fs.glide.set(0, 0, 0); fs.cambioT = 0; fs.prevEn = false
         if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.copy(selected.dir).normalize()
       }
       ultima.current = selected
@@ -1103,7 +1103,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         corte = !entrando && paso > Math.max(2.5, fs.stepAvg * 5)
         fs.stepAvg += (Math.min(paso, 2.5) - fs.stepAvg) * 0.1
         // camino <-> planeta: en vez de cortar, la cámara se desliza desde donde estaba hasta la ballita
-        if (corte && fs.cambioT > 0 && fs.hasAnchor) { corteRaw = true; corte = false; fs.glide.copy(fs.anchor).sub(bp) }
+        if (corte && fs.cambioT > 0 && fs.hasAnchor) { corteRaw = true; corte = false; fs.glide.copy(camera.position).sub(bp).sub(fs.off) }
       }
       prevPos.current.copy(bp)
       hasPrevPos.current = true
@@ -1133,15 +1133,14 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
 
       // objetivo: la ballita misma (rígido, sin retraso: no se sale del cuadro en curvas ni a 8×)
       // El anclaje sigue rígido adelante/arriba pero amortigua el vaivén lateral (cambios de carril): la cámara no tiembla.
-      fs.anchor.sub(fs.glideApplied)
       if (entrando || corte || corteRaw || !fs.hasAnchor) { fs.anchor.copy(bp); fs.hasAnchor = true }
       else {
         const lat = sideVec.copy(bp).sub(fs.anchor).dot(posSide)
         fs.anchor.copy(bp).addScaledVector(posSide, -lat * Math.exp(-FOLLOW_LAT_W * h))
       }
-      fs.glide.multiplyScalar(Math.exp(-4 * h))
+      // el deslizamiento mueve solo la cámara (sigue mirando a la ballita) y se disuelve en ~1 s
+      fs.glide.multiplyScalar(Math.exp(-3.5 * h))
       if (fs.glide.lengthSq() < 1e-4) fs.glide.set(0, 0, 0)
-      fs.glideApplied.copy(fs.glide); fs.anchor.add(fs.glideApplied)
       // la cámara mira un poco por delante de la ballita (hacia donde va el camino), no a ella
       lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, fs.rel.dist * (selected.phase === 'travel' ? 0.5 : 0.25))
       if (enNodo) lookAhead.addScaledVector(nodeRadial, 0.5 * fs.nodeBlend)
@@ -1175,7 +1174,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         c.target.copy(lookAhead)
         if (corte) { fs.off.copy(desiredOff); fs.offV.set(0, 0, 0) }
         else springCD(fs.off, fs.offV, desiredOff, enTubo ? FOLLOW_TUBE_W : FOLLOW_OFF_W + 3 * fs.nodeBlend, h)
-        camera.position.copy(fs.anchor).add(fs.off)
+        camera.position.copy(fs.anchor).add(fs.off).add(fs.glide)
       }
 
       // Colisión de cámara contra la escena: recorta el brazo antes de atravesar una pista, berma u objeto.
