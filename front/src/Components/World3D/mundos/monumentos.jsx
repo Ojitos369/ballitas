@@ -184,7 +184,7 @@ export function Monument({ node, biome, spot, surfaceR = NODE_R, animRegRef = nu
     }
   }, [animRegRef, biome.id, node.idx])
 
-  const monScale = useMemo(() => Math.pow(surfaceR / 7.5, 0.45), [surfaceR])
+  const monScale = useMemo(() => surfaceR / 7.5, [surfaceR])
 
   return (
     <group position={spot.pos} quaternion={spot.quat} scale={monScale}>

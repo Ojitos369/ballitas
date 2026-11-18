@@ -3,7 +3,7 @@ import { NODE_R, BALL_R, mulberry32 } from '../../../Core/world.js'
 
 const U = BALL_R * 2
 const R_SCALE = NODE_R / 7.5
-const CITY_U = U * Math.pow(R_SCALE, 0.3)
+const CITY_U = U * R_SCALE
 const ROAD_W = Math.max(U * 2.0, NODE_R * 0.145)
 const ROAD_H = Math.max(0.085, NODE_R * 0.011)
 
@@ -63,7 +63,7 @@ export function buildPlanetLifeData(node, biome, monumentSpot, city = null) {
 
   // Tráfico de luces por avenidas (dos sentidos, escala con NODE_R)
   const traffic = []
-  const lifeScale = Math.pow(R_SCALE, 0.28)
+  const lifeScale = R_SCALE
   const headCol = new THREE.Color('#fff4d2')
   const tailCol = new THREE.Color(biome.cityLight || '#ff7a7a')
   const accentCol = new THREE.Color(biome.emissiveColor || biome.cityLight || '#88e8ff')

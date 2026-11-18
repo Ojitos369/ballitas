@@ -756,7 +756,7 @@ function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
 function cityData(node, biome, surfaceR = NODE_R) {
   const rng = mulberry32(1000 + node.idx)
   const surfScale = surfaceR / 7.5
-  const cityU = U * Math.pow(surfScale, 0.25)
+  const cityU = U * surfScale
   const m4 = (x, y, z, pos) => new THREE.Matrix4().makeBasis(x, y, z).setPosition(pos)
 
   const terminals = getTerminals(node)
@@ -766,8 +766,8 @@ function cityData(node, biome, surfaceR = NODE_R) {
     return [dir.multiplyScalar(surfaceR).add(node.pos), roadClear]
   })
   const vClear = Math.max(1.6, surfaceR * 0.14)
-  const dClear = Math.max(1.9, 1.9 * Math.pow(surfScale, 0.3))
-  const tClear = Math.max(2.6, 2.6 * Math.pow(surfScale, 0.25))
+  const dClear = 1.9 * surfScale
+  const tClear = 2.6 * surfScale
   node.verts.forEach((v) => near.push([v.dir.clone().multiplyScalar(surfaceR).add(node.pos), vClear]))
   node.destinos.forEach((d) => near.push([d.dir.clone().multiplyScalar(surfaceR).add(node.pos), dClear]))
   terminals.forEach((t) => {
@@ -776,7 +776,7 @@ function cityData(node, biome, surfaceR = NODE_R) {
   })
 
   const monumentSpot = pickMonumentSpot(node, near, surfaceR)
-  near.push([monumentSpot.pos.clone().add(node.pos), Math.max(2.3, 2.3 * Math.pow(surfScale, 0.4))])
+  near.push([monumentSpot.pos.clone().add(node.pos), 2.3 * surfScale])
 
   const districts = buildCityDistricts(node, monumentSpot, terminals)
   const { roadGeo, lineGeo } = buildRoadGeometries(node, districts.centroDir, surfaceR)
@@ -828,7 +828,7 @@ function cityData(node, biome, surfaceR = NODE_R) {
       )
       skylineCandidates.push({ m, c, h })
     } else if (cityLights.length < 110) {
-      const ls = (0.11 + rng() * 0.11) * Math.pow(surfScale, 0.25)
+      const ls = (0.11 + rng() * 0.11) * surfScale
       const m = m4(
         vX.clone().multiplyScalar(ls),
         dir.clone().multiplyScalar(ls * 0.65),
@@ -949,7 +949,7 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
   const baseY = style === 'torre' ? 2.5 : 2.1
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, d.dir), [d])
   const relPos = useMemo(() => d.dir.clone().multiplyScalar(surfaceR), [d, surfaceR])
-  const destScale = useMemo(() => Math.pow(surfaceR / 7.5, 0.28) * 0.78, [surfaceR])
+  const destScale = useMemo(() => (surfaceR / 7.5) * 0.78, [surfaceR])
   const mats = useMemo(() => ({
     pad: getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })),
     icon: getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })),
@@ -1061,7 +1061,7 @@ function Terminal({ node, term, color, tex, animRegRef, surfaceR = NODE_R }) {
   const key = `${node.idx}:${term.vert}:${term.kind}`
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, dir), [dir])
   const relPos = useMemo(() => dir.clone().multiplyScalar(surfaceR), [dir, surfaceR])
-  const termScale = useMemo(() => Math.pow(surfaceR / 7.5, 0.22), [surfaceR])
+  const termScale = useMemo(() => surfaceR / 7.5, [surfaceR])
   const tmats = useMemo(() => getSharedTerminalMats(tex), [tex])
   const portalMatObj = useMemo(() => new THREE.MeshStandardMaterial({
     color, emissive: color, emissiveIntensity: isOut ? 1.55 : 1.05, toneMapped: false,
@@ -1203,7 +1203,7 @@ function Planet({ node, world, tex }) {
     color: biome.cityLight,
     toneMapped: false,
   }), [biome.cityLight])
-  const labelPos = useMemo(() => [0, surfaceR + 3.4 * Math.pow(surfaceR / 7.5, 0.42), 0], [surfaceR])
+  const labelPos = useMemo(() => [0, surfaceR + 3.4 * (surfaceR / 7.5), 0], [surfaceR])
   const tagStyle = useMemo(() => ({
     borderColor: biome.atmoRim,
     background: `linear-gradient(135deg, ${biome.groundLow}e8, ${biome.groundMid}d8)`,
