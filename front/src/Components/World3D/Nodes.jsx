@@ -19,7 +19,7 @@ import {
   getPlanetRingGeo,
   getPlanetOutlineMaterial,
 } from './mundos/planetaCartoon.js'
-import { registerWorldForVistas, focusWorldNode } from './Vistas.jsx'
+import { registerWorldForVistas, focusWorldNode, escalaMapa } from './Vistas.jsx'
 
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
@@ -1226,6 +1226,7 @@ function Planet({ node, world, tex }) {
     lightsMat.dispose()
   }, [planetMat, cloudMat, ringMat, moonMats, city, atmoOuterMat, farSkylineMat, roadMat, lineMat, lightsMat])
 
+  const rootRef = useRef()
   const planetBodyRef = useRef()
   const planetMeshRef = useRef()
   const outlineMeshRef = useRef()
@@ -1236,10 +1237,12 @@ function Planet({ node, world, tex }) {
   const animRegRef = useRef({ destinos: [], terminals: [], monument: null })
 
   // Único useFrame por nodo: solo escribe uniforms, rotaciones escalares y flags LOD (cero asignaciones)
-  useFrame(({ camera, clock }, dt) => {
+  useFrame(({ camera, clock, size }, dt) => {
     const t = clock.elapsedTime
     planetMat.uniforms.uTime.value = t
     if (cloudMat) cloudMat.uniforms.uTime.value = t
+    // impostor de mapa: el planeta entero (con sus terminales) se infla de lejos; los caminos acaban dentro de la esfera
+    if (rootRef.current) rootRef.current.scale.setScalar(escalaMapa(surfaceR, camera.position.distanceTo(node.pos), camera, size.height))
 
     if (planetBodyRef.current) {
       planetBodyRef.current.rotation.y = planetCfg.rotY0 + t * planetCfg.spinSpeed
@@ -1331,7 +1334,7 @@ function Planet({ node, world, tex }) {
   })
 
   return (
-    <group position={node.pos}>
+    <group ref={rootRef} position={node.pos}>
       {/* Esfera cartoon procedural con inclinación, giro, sombreado toon, nubes y contorno oscuro */}
       <group rotation={planetCfg.tilt}>
         <group ref={planetBodyRef} rotation-y={planetCfg.rotY0}>
@@ -1435,7 +1438,7 @@ function Planet({ node, world, tex }) {
           surfaceR={surfaceR}
         />
       ))}
-      <WorldHtml center position={labelPos} distanceFactor={20} zIndexRange={[5, 0]}>
+      <WorldHtml center position={labelPos} distanceFactor={20} farScale={0.8} farLift={16} farFrom={350} farTo={600} zIndexRange={[5, 0]}>
         <div className="tag node" style={tagStyle}>
           <span>{biome.emoji} {node.name}</span>
           <span style={subTagStyle}>{biome.title}</span>

@@ -733,15 +733,24 @@ function createTubeMat(id, focusU, detailU) {
   return m
 }
 
+// Mundo por píxel a distancia 1 (2·tan(fov/2)/alto); se actualiza en Paths. Con él la cinta de neón lejana
+// nunca baja de ~EXT_MIN_PX píxeles de ancho (de lejos el tubo fino se veía como hilo de puntos).
+const EXT_PX = { value: 0.001 }
+const EXT_MIN_PX = 3.2
 function createExtCoreMat(focusU, detailU) {
   const m = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: true })
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = SHARED_TIME
     shader.uniforms.uFocus = focusU
     shader.uniforms.uDetail = detailU
+    shader.uniforms.uPx = EXT_PX
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vCoreUv;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCoreUv = uv;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vCoreUv;\nuniform float uPx;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vCoreUv = uv;
+{ vec3 wp = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  float want = ${EXT_MIN_PX.toFixed(1)} * 0.5 * uPx * distance(cameraPosition, wp);
+  transformed += normal * max(0.0, want - 0.2); }`)
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uFocus;\nuniform float uDetail;\nvarying vec2 vCoreUv;')
       .replace(
@@ -757,7 +766,7 @@ function createExtCoreMat(focusU, detailU) {
         #include <opaque_fragment>`
       )
   }
-  m.customProgramCacheKey = () => 'ext-core-flow-v2'
+  m.customProgramCacheKey = () => 'ext-core-flow-v3'
   return m
 }
 
@@ -1470,10 +1479,11 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
   const prevForceRef = useRef(forceFocusDetail)
   const prevPrefetchRef = useRef(prefetchWays)
 
-  useFrame(({ camera, clock }, dt) => {
+  useFrame(({ camera, clock, size }, dt) => {
     const t = clock.elapsedTime
     const h = Math.min(dt, 0.1)
     SHARED_TIME.value = t
+    EXT_PX.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height)
     VIDA_BUS.sim = sim
 
     const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail || prevPrefetchRef.current !== prefetchWays

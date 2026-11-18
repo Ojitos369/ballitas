@@ -706,7 +706,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     const v = THREE.MathUtils.degToRad(FOV / 2)
     const h = Math.min(v, Math.atan(Math.tan(v) * Math.max(0.3, camera.aspect || 1)))
     // maxDistance de OrbitControls es r*6: si la casa lo supera, 'volviendo' nunca termina.
-    return off.copy(mundo.center).addScaledVector(VISTA_DIR, Math.min(mundo.r / Math.sin(h), mundo.r * 5.8))
+    return off.copy(mundo.center).addScaledVector(VISTA_DIR, Math.min(mundo.r * 0.8 / Math.sin(h), mundo.r * 5.8)) // 0.8: el mapa ocupa ~80% de la pantalla
   }
 
   useLayoutEffect(() => {
