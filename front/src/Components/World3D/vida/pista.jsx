@@ -15,6 +15,7 @@ import Decor from './decor.jsx'
 import Estructuras, { estructurasWarmup } from './estructuras.jsx'
 import Eventos, { eventosWarmup } from './eventos.jsx'
 import KartPista from './kartPista.jsx'
+import Paisaje, { paisajeWarmup } from './paisaje.jsx'
 
 // Bandas de la sección en U (las mismas que TRACK_U de tools/assets/generate_textures.py).
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
@@ -29,7 +30,7 @@ const CHEV_K = 0.12 / TRACK_K // umbral de curvatura expresado en las unidades e
 export const PISTA = {
   sombrio: { asfalto: '#2b2538', a: '#a24bff', b: '#e8dcff', linea: '#d9c8ff', terreno: '#3a2759', roca: '#1d1530', mec: '#c08cff', chev: '#ffd36b' },
   bosque: { asfalto: '#3a3a35', a: '#e53935', b: '#f5f5ef', linea: '#f6f2c8', terreno: '#3f8f3a', roca: '#5a4636', mec: '#ffd54f', chev: '#ffd54f' },
-  mar: { asfalto: '#2d4b5e', a: '#ff8a65', b: '#eefcff', linea: '#cff6ff', terreno: '#e3d2a2', roca: '#7a6a55', mec: '#4dd0e1', chev: '#ffd166' },
+  mar: { asfalto: '#8a6a4c', a: '#ff8a65', b: '#eefcff', linea: '#fff4d6', terreno: '#cdb98a', roca: '#6a5a4c', mec: '#4dd0e1', chev: '#ffd166' },
   desierto: { asfalto: '#5b4733', a: '#d84315', b: '#fff3d6', linea: '#ffe9b0', terreno: '#d9a95b', roca: '#9a5b32', mec: '#ffb74d', chev: '#fff3d6' },
   hielo: { asfalto: '#566d80', a: '#2f80ed', b: '#ffffff', linea: '#e8f6ff', terreno: '#dcefff', roca: '#7fa3c4', mec: '#7fd6ff', chev: '#ff6b8a' },
   volcan: { asfalto: '#2b2220', a: '#ff5a1f', b: '#ffd166', linea: '#ffcc80', terreno: '#4a2c22', roca: '#24140f', mec: '#ff3d00', chev: '#ffd166' },
@@ -74,7 +75,7 @@ const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
 const THEME_TEX = {
   sombrio: 'terreno_tierra_oscura.webp',
   bosque: 'terreno_musgo.webp',
-  mar: 'terreno_coral.webp',
+  mar: 'terreno_arena.webp',
   desierto: 'terreno_arena.webp',
   hielo: 'terreno_hielo_agrietado.webp',
   volcan: 'terreno_lava.webp',
@@ -173,6 +174,15 @@ function trackMat(themeId) {
         vec3 asfPure = uAsfalto * (0.45 + asfTex * 1.45);
         vec3 asfBase = mix(asfPure, asfPure * 0.55 + temaTex * 0.55, uTemaMix * 0.45);
         vec3 col = asfBase * mix(0.86, 1.06, L.r);
+        if (abs(uThemeMode - 1.0) < 0.1) {
+          // Mar: pasarela de tablones mojados (juntas oscuras, tono por tablón y brillo húmedo).
+          float pk = vTrackUv.y * 1.9;
+          float pl = fract(pk);
+          float gap = smoothstep(0.0, 0.06, pl) * smoothstep(1.0, 0.94, pl);
+          float tone = 0.82 + 0.3 * fract(sin(floor(pk) * 12.9898) * 43758.5453);
+          float grain = 0.88 + 0.12 * sin(x * 140.0 + floor(pk) * 7.0 + sin(vTrackUv.y * 30.0));
+          col = mix(col, uAsfalto * tone * grain * (0.7 + 0.6 * asfTex.r) * mix(0.3, 1.0, gap), asf);
+        }
         col = mix(col, mix(uB, uA, L.g), curb);
         vec3 terr = mix(uTerreno * 0.6, temaTex * (0.55 + uTerreno * 0.6), 0.78) * mix(0.84, 1.08, L.r);
         terr = mix(terr, uRoca * mix(0.7, 1.15, L.r), smoothstep(0.0, 0.6, vUnder));
@@ -228,7 +238,7 @@ function trackMat(themeId) {
         float _distFog = smoothstep(55.0, 175.0, length(vViewPosition)) * 0.42;
         totalEmissiveRadiance += diffuseColor.rgb * mix(0.24, 0.1, vUnder) + _tfx + uFxFog * _distFog;`)
   }
-  m.customProgramCacheKey = () => 'pista-v5'
+  m.customProgramCacheKey = () => 'pista-v6'
   markShared(m)
   matCache.set(themeId, m)
   return m
@@ -372,7 +382,7 @@ export function pistaWarmup(extra = []) {
   tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   tiny.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
-  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...estructurasWarmup(), ...extra]) {
+  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...estructurasWarmup(), ...paisajeWarmup(), ...extra]) {
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
@@ -427,6 +437,7 @@ export default function Pista({ way, detail, focused, time }) {
       <Anillos way={way} />
       <Decor way={way} focused={focused} />
       <Estructuras way={way} detail={detail} focused={focused} time={time} />
+      <Paisaje way={way} detail={detail} focused={focused} time={time} />
       <Eventos way={way} />
     </>
   )
