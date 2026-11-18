@@ -12,7 +12,7 @@ import Precompilado from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 import Neon from './Neon.jsx'
 import Fauna from './Fauna.jsx'
-import Ecosistema, { ecoMaterial } from './Ecosistema.jsx'
+import Ecosistema, { ecoMaterial, withObjLight } from './Ecosistema.jsx'
 
 const TAU = Math.PI * 2
 const X = new THREE.Vector3(1, 0, 0)
@@ -885,11 +885,13 @@ function createFresnelGlowMat(focusU, detailU, fadeOpts, camFade = null, { core 
 function createWayMaterials(id, focusU, detailU) {
   const orgNorm = getOrganicNormalTex()
   const orgRough = getOrganicRoughnessTex()
+  const tint = VISUALS[id]?.rail ?? '#aabbff'
+  const L = (m) => withObjLight(m, tint) // luz base + rim del tema, antes del fade
   return {
     tube: createTubeMat(id, focusU, detailU),
     // Exterior (uDetail -> 0)
     extCore: createExtCoreMat(focusU, detailU),
-    extMetal: withWayFade(new THREE.MeshPhysicalMaterial({
+    extMetal: withWayFade(L(new THREE.MeshPhysicalMaterial({
       normalMap: getHullNormalTex(),
       normalScale: new THREE.Vector2(0.28, 0.28),
       roughnessMap: getHullRoughnessTex(),
@@ -898,22 +900,22 @@ function createWayMaterials(id, focusU, detailU) {
       clearcoat: 0.72,
       clearcoatRoughness: 0.16,
       envMapIntensity: 1.35,
-    }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior' }),
-    extFlora: withWayFade(new THREE.MeshStandardMaterial({
+    })), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior' }),
+    extFlora: withWayFade(L(new THREE.MeshStandardMaterial({
       normalMap: orgNorm,
       normalScale: new THREE.Vector2(0.24, 0.24),
       roughnessMap: orgRough,
       roughness: 0.72,
       metalness: 0.06,
-    }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    })), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
     extFloraGlow: createFresnelGlowMat(focusU, detailU, { minAlpha: 0.16, minBright: 0.2, minSat: 0.25, lod: 'exterior', scaleLod: true }),
-    extRuins: withWayFade(new THREE.MeshStandardMaterial({
+    extRuins: withWayFade(L(new THREE.MeshStandardMaterial({
       normalMap: orgNorm,
       normalScale: new THREE.Vector2(0.32, 0.32),
       roughnessMap: orgRough,
       roughness: 0.82,
       metalness: 0.18,
-    }), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    })), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
   }
 }
 

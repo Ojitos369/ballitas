@@ -12,8 +12,8 @@ import { NEON_DECOR } from './themes.js'
 // Ahora cada color se escala hasta una luminancia objetivo (tope por canal HDR) y el pulso nunca baja de 0.85.
 const GLOW_LUM = 2.4
 const GLOW_MAX = 8
-const HALO_K = 0.5 // intensidad de la banda aditiva (falso glow sobre la pista)
-const HALO_ARC = 0.9 // medio ángulo (rad) de la banda alrededor del lateral del tubo
+const HALO_K = 0.12 // intensidad de la banda aditiva: bajo el umbral del Bloom, solo tiñe (más alto florece como cinta ancha)
+const HALO_ARC = 0.28 // medio ángulo (rad) de la banda alrededor del lateral del tubo
 const Y = new THREE.Vector3(0, 1, 0)
 const _m = new THREE.Matrix4()
 

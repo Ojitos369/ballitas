@@ -7,6 +7,29 @@ import { cargarModelosEco } from './Modelos.jsx'
 
 const matCache = new WeakMap()
 
+// Iluminación de objetos de camino sin luces reales: emisivo base suave del color propio + rim (fresnel) del color del tema.
+// Máximo ≈ base+rim < 1 sobre el color: queda bajo el umbral del Bloom (solo los emisivos reales florecen).
+export const OBJ_LIGHT = { base: 0.2, rim: 0.3, power: 2.4 }
+export function withObjLight(mat, tint = '#aabbff') {
+  const prev = mat.onBeforeCompile
+  const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
+  const u = { value: new THREE.Vector3(OBJ_LIGHT.base, OBJ_LIGHT.rim, OBJ_LIGHT.power) }
+  const t = { value: new THREE.Color(tint) }
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r)
+    sh.uniforms.uObjL = u; sh.uniforms.uObjTint = t
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uObjL;\nuniform vec3 uObjTint;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      {
+        float _ond = abs(dot(normalize(normal), normalize(vViewPosition)));
+        totalEmissiveRadiance += diffuseColor.rgb * uObjL.x + uObjTint * (pow(clamp(1.0 - _ond, 0.0, 1.0), uObjL.z) * uObjL.y);
+      }`)
+  }
+  mat.customProgramCacheKey = () => `${prevKey}|objlight-v1`
+  return mat
+}
+
 /** Material único (se comparte entre caminos y se precalienta en Paths: no se desecha por camino). */
 export function ecoMaterial(time) {
   let m = matCache.get(time)
@@ -78,6 +101,7 @@ varying float vGlow;
     )
   }
   m.customProgramCacheKey = () => 'eco-v1'
+  withObjLight(m)
   matCache.set(time, m)
   return m
 }
