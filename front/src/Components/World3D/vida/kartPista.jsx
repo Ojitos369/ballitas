@@ -8,6 +8,7 @@ import { basisQuat } from './dyn.js'
 import { useKit, precargarKit } from '../Modelos.jsx'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { CURB, TERR, halfWidth, lanesOf, pal, surfFrame } from './pista.jsx'
+import { TRACK_K } from '../../../Core/world.js'
 
 const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
@@ -15,13 +16,13 @@ const Q_Y90 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI / 2)
 const Q_YN90 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, -Math.PI / 2)
 const Q_Y180 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI)
 
-const PIANO_K = 0.072 // curvatura (1/u) mínima para pianos en curvas cerradas
-const BARRIER_K = 0.062 // curvatura (1/u) mínima para barreras exteriores
-const STRAIGHT_K = 0.025 // curvatura máxima para considerar un tramo recto (túnel)
+const PIANO_K = 0.072 / TRACK_K // curvatura (1/u) mínima para pianos en curvas cerradas
+const BARRIER_K = 0.062 / TRACK_K // curvatura (1/u) mínima para barreras exteriores
+const STRAIGHT_K = 0.025 / TRACK_K // curvatura máxima para considerar un tramo recto (túnel)
 const MAX_PIANOS = 40
 const MAX_BARRIERS = 32
 const TUNNEL_RIBS = 7
-const TUNNEL_STEP = 1.9
+const TUNNEL_STEP = 1.9 * TRACK_K
 
 export const KART_KIT_PIECES = ['arco_salida', 'tunel_arco_lod', 'bordillo_lod', 'barrera_lod']
 
@@ -103,7 +104,7 @@ function capStride(arr, max) {
 }
 
 const kartDataCache = new WeakMap()
-const WAY_KART_RANGE = 620
+const WAY_KART_RANGE = 620 * TRACK_K
 
 function buildKartPistaData(way) {
   if (kartDataCache.has(way)) return kartDataCache.get(way)
@@ -225,7 +226,7 @@ function buildKartPistaData(way) {
         // En puntas donde los carriles coinciden (d < 2*E), solo carril 0 evita duplicar
         if (lane.id !== lanes[0].id) {
           const f0 = surfFrame(seg, lanes[0].id, u, F0)
-          if (f.pos.distanceToSquared(f0.pos) < (E * 2.2) ** 2) continue
+    if (f.pos.distanceToSquared(f0.pos) < (E * 2.2) ** 2) continue
         }
         const inSide = Math.sign(sgn)
         const outSide = -inSide

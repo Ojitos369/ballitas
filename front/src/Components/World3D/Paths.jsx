@@ -1,6 +1,7 @@
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { TRACK_K } from '../../Core/world.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mulberry32 } from '../../Core/world.js'
 import { VISUALS } from './themes.js'
@@ -1425,7 +1426,7 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
   const wayMetas = useMemo(() => world.ways.map((w) => {
     const pts = []
     for (const s of w.segments) {
-      const nSamp = Math.max(3, Math.ceil(s.length / 8))
+      const nSamp = Math.max(3, Math.ceil(s.length / (8 * TRACK_K)))
       for (let i = 0; i <= nSamp; i++) pts.push(s.curve.getPointAt(i / nSamp))
     }
     const sphere = new THREE.Box3().setFromPoints(pts).getBoundingSphere(new THREE.Sphere())

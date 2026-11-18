@@ -16,10 +16,11 @@ import KartPista from './kartPista.jsx'
 // Bandas de la sección en U (las mismas que TRACK_U de tools/assets/generate_textures.py).
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
 const TRACK_TILE = 4 // unidades de mundo por repetición de la textura en V
+const TRACK_K = WORLD.TRACK_K
 export const CURB = 0.17
 export const TERR = 0.55 // berma estrecha: menos de media calzada por lado
-const STEP = 1.5 // muestreo a lo largo del carril
-const CHEV_K = 0.12 // curvatura (1/u) a partir de la cual una curva lleva flechas antes
+const STEP = 1.5 * TRACK_K // conserva la densidad de geometría por camino
+const CHEV_K = 0.12 / TRACK_K // umbral de curvatura expresado en las unidades escaladas
 
 // Colores por tema: asfalto, bordillo A/B, pintura, terreno de la berma y roca de la quilla.
 export const PISTA = {

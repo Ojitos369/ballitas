@@ -8,6 +8,7 @@ import { bermaAjusta, getBallitas, getWayDetail, Instanced, markShared, mergePla
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
 import { halfWidth, lanesOf, pal, surfFrame, TERR, CURB } from './pista.jsx'
+import { TRACK_K } from '../../../Core/world.js'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 
 const Z_AXIS = new THREE.Vector3(0, 0, 1)
@@ -791,7 +792,7 @@ function AnimKindMesh({ kind, entries, events, way, detail }) {
     let dirty = false
     for (let i = 0; i < entries.length; i++) {
       const { item, idx } = entries[i]
-      if (camPos.distanceToSquared(item.pos) > 85 * 85) continue
+      if (camPos.distanceToSquared(item.pos) > (85 * TRACK_K) ** 2) continue
       const ev = events[idx]
       const t = tBase + (item.seed % 1000) * 0.00628
       evalAnimPose(spec.animMode, t, ev.glow > 0.15)

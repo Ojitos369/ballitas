@@ -8,9 +8,10 @@ import { getWayDetail, markShared, routeInfo } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
 import { CURB, TERR, halfWidth, lanesOf, pal, surfFrame } from './pista.jsx'
+import { TRACK_K } from '../../../Core/world.js'
 
-const RING_STEP = 55
-const RING_RANGE = 250
+const RING_STEP = 55 * TRACK_K
+const RING_RANGE = 250 * TRACK_K
 const ROUTE_COLS = ['#38e8ff', '#ff5c8a', '#ffd24a']
 const RING_TIME = { value: 0 }
 
@@ -91,7 +92,7 @@ function buildAnillosData(way) {
       const H = halfWidth(lane)
       const E = H + CURB
       const sc = (E + TERR * 0.55) * 2.15
-      const minSep2 = Math.max(8, E * 3.0) ** 2
+      const minSep2 = Math.max(8 * TRACK_K, E * 3.0) ** 2
       const step = li === 0 ? RING_STEP : RING_STEP + 4
       for (let s = 14; s <= L - 10; s += step) {
         const u = s / L
@@ -124,7 +125,7 @@ function buildAnillosData(way) {
     tints[i * 3 + 2] = rings[i].color.b
   }
   const sphere = new THREE.Sphere()
-  if (!box.isEmpty()) { box.getBoundingSphere(sphere); sphere.radius += 6 } else sphere.radius = 60
+  if (!box.isEmpty()) { box.getBoundingSphere(sphere); sphere.radius += 6 * TRACK_K } else sphere.radius = 60 * TRACK_K
 
   const out = { rings, phases, tints, sphere }
   ringsCache.set(way, out)
