@@ -28,3 +28,22 @@ export function decayOffset(v, h, idleS, centering = false) {
   const out = v * Math.exp(-(centering ? POV_CENTER_RATE : POV_DECAY_RATE) * h)
   return Math.abs(out) < 1e-4 ? 0 : out
 }
+
+// Zoom continuo del POV: z 0..1. 0 = tercera persona a la espalda, POV_ZOOM_EYE = ojos de la ballita,
+// 1 = ojos con zoom óptico (FOV bajo). Todo con suavizado en S: sin saltos entre tramos.
+export const POV_ZOOM_EYE = 0.5
+export const POV_BACK_MAX = 2.2 // distancia atrás con z = 0
+export const POV_UP_MAX = 0.55 // altura extra con z = 0
+export const POV_FOV_MIN = 28
+const smooth = (t) => t * t * (3 - 2 * t)
+const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t)
+
+export function povZoomView(z) {
+  const k = smooth(clamp01(z / POV_ZOOM_EYE)) // 0 espalda ? 1 ojos
+  const t = smooth(clamp01((z - POV_ZOOM_EYE) / (1 - POV_ZOOM_EYE))) // 0 ojos ? 1 zoom máximo
+  const base = 68 + 7 * k
+  return { back: POV_BACK_MAX * (1 - k), up: POV_UP_MAX * (1 - k), fov: base + (POV_FOV_MIN - base) * t, body: 1 - k > 0.1 }
+}
+
+// La escena escribe aquí cada cuadro si la ballita debe dibujarse en POV (tercera persona); Ballita.jsx lo lee.
+export const povView = { body: false }
