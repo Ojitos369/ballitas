@@ -1627,7 +1627,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
 // RIBBON_CLEAR: que una ballita quepa entre ambas, también si una pasa por encima de otra. Una cinta contra sí misma
 // sólo cuenta a más de RIB_SELF de arco. Única excepción, las uniones diseñadas: dos cintas que nacen en un mismo punto
 // (punta de tramo donde los carriles convergen, fork/cross/merge, nodo) pueden tocarse sólo en el tramo contiguo a ese
-// punto mientras aún no se separan (prefijo que sigue chocando), y como mucho hasta que la trenza termina de abrirse:
+// punto mientras aún no se separan JOINT_SEP (prefijo contiguo desde la unión), y como mucho hasta que la trenza termina de abrirse:
 // braidDelay + BRAID_RAMP en esa punta. En la zona cerrada (braidDelay: parrilla, recta de meta y junto a las uniones de
 // rutas) los carriles de un mismo tramo van juntos, coinciden por diseño y ni se comparan.
 export const RIBBON_CURB = 0.17
@@ -1637,6 +1637,9 @@ export const RIBBON_GAP = BALL_R * 2
 export const RIBBON_CLEAR = 2 * RIBBON_HALF + RIBBON_GAP
 const RIB_STEP = 1.5
 const RIB_SELF = 12
+// histéresis de la unión: dos cintas que nacen juntas quedan exentas hasta separarse esto (una ballita y un margen);
+// desde ahí ya no pueden volver a bajar de RIBBON_CLEAR
+export const JOINT_SEP = RIBBON_CLEAR + 0.4
 
 function ribbonEndKey(world, x, y, z) {
   for (const n of world.nodes) if ((x - n.pos.x) ** 2 + (y - n.pos.y) ** 2 + (z - n.pos.z) ** 2 < (NODE_R + 1) ** 2) return 'n' + n.idx
@@ -1718,7 +1721,8 @@ function gatherPairs(S, lim) {
   for (const b of grid.values()) for (const i of b) nearCells(S, grid, lim, i, (j) => { if (j > i) testPair(S, i, j, L2, out) })
   return out
 }
-// Juzga pares (d < hitD choca) con la excepción de uniones. { hits: [i, j, d, ...], slack (peor d - RIBBON_CLEAR fuera
+
+// Juzga pares (d < hitD choca) con la excepción de uniones (prefijo: pares a menos de JOINT_SEP). { hits: [i, j, d, ...], slack (peor d - RIBBON_CLEAR fuera
 // de uniones; Infinity si no hubo pares), joint (arco máximo exento desde una unión, u) }.
 function judgePairs(S, pairs, hitD) {
   const { ribs, R } = S; const hits = []; let slack = Infinity; let joint = 0
@@ -1731,7 +1735,7 @@ function judgePairs(S, pairs, hitD) {
       for (let ea = 0; ea < 2; ea++) for (let eb = 0; eb < 2; eb++) if (A.ends[ea] === B.ends[eb]) (zones ||= []).push([ea, eb, A.seg === B.seg])
       if (zones) {
         const inA = new Set(); const inB = new Set()
-        for (let k = 0; k < l.length; k += 3) if (l[k + 2] < hitD) { inA.add(l[k] - A.start); inB.add(l[k + 1] - B.start) }
+        for (let k = 0; k < l.length; k += 3) if (l[k + 2] < JOINT_SEP) { inA.add(l[k] - A.start); inB.add(l[k + 1] - B.start) }
         zones = zones.map(([ea, eb, ss]) => [ea, pre(inA, A, ea, ss), eb, pre(inB, B, eb, ss)])
       }
     }
@@ -1750,7 +1754,7 @@ function judgePairs(S, pairs, hitD) {
 
 // Choques reales entre cintas visibles (ver arriba). { hits: [i, j, d, ...] (índices de muestra en S), slack, joint, S }.
 export function ribbonHits(world, S = ribbonSamples(world)) {
-  return { ...judgePairs(S, gatherPairs(S, RIBBON_CLEAR + 1), RIBBON_CLEAR), S }
+  return { ...judgePairs(S, gatherPairs(S, JOINT_SEP + 0.6), RIBBON_CLEAR), S }
 }
 
 // Repulsión: cada par de muestras en choque empuja sus cintas en direcciones opuestas, sobre los vértices de la trenza.
@@ -1759,10 +1763,12 @@ export function ribbonHits(world, S = ribbonSamples(world)) {
 // a lo largo del tramo (curva continua y transitable), se ancla a 0 en las puntas (las uniones no se mueven) y un resorte
 // lo devuelve hacia la forma original. Se repite hasta 0 choques o RELAX_IT pasadas.
 const RELAX_IT = 60
-const RELAX_MARGIN = 0.4 // (u) se separa un poco más de RIBBON_CLEAR: el dibujo interpola entre vértices
+const RELAX_MARGIN = JOINT_SEP - RIBBON_CLEAR // (u) se separa un poco más de RIBBON_CLEAR: el dibujo interpola entre vértices
+const RELAX_DONE = 0.3 // (u) se para cuando ningún par fuera de uniones queda a menos de RIBBON_CLEAR + esto
 const RELAX_PIN = 4 // (u) rampa de anclaje en cada punta
 const RELAX_SPRING = 0.004
-const RELAX_SMOOTH = 2 // pasadas de suavizado laplaciano por iteración
+const RELAX_SIG = 6 // (vértices, ~1.5 u cada uno) ancho de la campana con que se reparte cada empuje
+const RELAX_K = 18
 function relaxRibbons(world) {
   const t0 = performance.now()
   const S = braidRibbons(world); const { ribs, X, Y: Yy, Z, R } = S; const N = X.length
@@ -1775,36 +1781,50 @@ function relaxRibbons(world) {
     } else for (let i = 0; i <= r.n; i++) if (i < r.closed[0] || r.n - i < r.closed[1]) shadow[r.start + i] = 1
     g.ribs.push(r); r.g = g
   }
-  const D = new Float32Array(N * 3); const F = new Float32Array(N * 3); const cnt = new Uint16Array(N); const T = new Float32Array((Math.max(...[...segs.values()].map((g) => g.n)) + 1) * 3)
+  const D = new Float32Array(N * 3); const F = new Float32Array(N * 3); const cnt = new Uint16Array(N)
   const pinOf = (i, n, ds) => smooth01((Math.min(i, n - i) * ds) / RELAX_PIN)
-  // suaviza, ancla y relaja hacia 0 un campo de desplazamiento (n + 1 vértices desde el índice o)
-  const settle = (A, o, n, ds) => {
-    for (let pass = 0; pass < RELAX_SMOOTH; pass++) {
-      T.set(A.subarray(o * 3, (o + n + 1) * 3))
-      for (let i = 1; i < n; i++) for (let k = 0; k < 3; k++) A[(o + i) * 3 + k] += 0.5 * ((T[i * 3 - 3 + k] + T[i * 3 + 3 + k]) / 2 - T[i * 3 + k])
+  const G = Array.from({ length: RELAX_K + 1 }, (_, d) => Math.exp(-(d * d) / (2 * RELAX_SIG * RELAX_SIG)))
+  // reparte los empujes (F, promediados por c) en campanas gaussianas de amplitud completa sobre A (desde el índice o):
+  // cerca de un choque manda la media de los empujes vecinos; lejos, decae. Luego ancla las puntas y aplica el resorte.
+  const push = (A, Fv, c, fo, o, n, ds) => {
+    for (let j = 0; j <= n; j++) {
+      let sx = 0; let sy = 0; let sz = 0; let sw = 0
+      for (let i = Math.max(0, j - RELAX_K); i <= Math.min(n, j + RELAX_K); i++) {
+        const q = fo + i; if (!c[q]) continue
+        const w = G[Math.abs(i - j)] / c[q]; sw += G[Math.abs(i - j)]; sx += w * Fv[q * 3]; sy += w * Fv[q * 3 + 1]; sz += w * Fv[q * 3 + 2]
+      }
+      const k = sw > 0 ? Math.min(1, sw) / sw : 0; const t = (o + j) * 3; const pw = pinOf(j, n, ds) * (1 - RELAX_SPRING)
+      A[t] = (A[t] + sx * k) * pw; A[t + 1] = (A[t + 1] + sy * k) * pw; A[t + 2] = (A[t + 2] + sz * k) * pw
     }
-    for (let i = 0; i <= n; i++) { const w = pinOf(i, n, ds) * (1 - RELAX_SPRING); for (let k = 0; k < 3; k++) A[(o + i) * 3 + k] *= w }
   }
   const hitD = RIBBON_CLEAR + RELAX_MARGIN; const L2 = hitD * hitD; const act = new Uint8Array(ribs.length); const live = new Set()
   // cada pasada busca los pares de las muestras de tramos que se mueven contra las demás que se mueven (posición actual)
   // y contra las quietas (rejilla fija de la posición inicial)
   const still = sampleGrid(S, hitD, (i) => !shadow[i])
+  // muestras ya desplazadas: sólo sus pares cambian; los de las quietas se toman de la búsqueda inicial
+  const moved = new Uint8Array(N); let base = null
   let it = 0; let left = 0
   for (; it < RELAX_IT; it++) {
     let pairs
-    if (!it) pairs = gatherPairs(S, hitD)
+    if (!it) pairs = base = gatherPairs(S, hitD)
     else {
       pairs = new Map()
-      const mov = sampleGrid(S, hitD, (i) => act[R[i]] && !shadow[i])
+      for (const [k, l] of base) {
+        let a = null
+        for (let q = 0; q < l.length; q += 3) if (!moved[l[q]] && !moved[l[q + 1]]) (a ||= []).push(l[q], l[q + 1], l[q + 2])
+        if (a) pairs.set(k, a)
+      }
+      const mov = sampleGrid(S, hitD, (i) => moved[i] && !shadow[i])
       for (const b of mov.values()) for (const i of b) {
         nearCells(S, mov, hitD, i, (j) => { if (j > i) testPair(S, i, j, L2, pairs) })
-        nearCells(S, still, hitD, i, (j) => { if (!act[R[j]]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
+        nearCells(S, still, hitD, i, (j) => { if (!moved[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
       }
     }
     const { hits } = judgePairs(S, pairs, hitD)
     left = hits.length / 3
     if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0 })
-    if (!left) break
+    let deep = 0; for (let q = 2; q < hits.length; q += 3) if (hits[q] < RIBBON_CLEAR + RELAX_DONE) deep++
+    if (!deep) break // lo que queda ya pasa la medida con holgura: no se gastan más pasadas en el margen
     F.fill(0); cnt.fill(0)
     for (const g of live) { g.F.fill(0); g.c.fill(0) }
     for (let q = 0; q < hits.length; q += 3) {
@@ -1812,10 +1832,14 @@ function relaxRibbons(world) {
       const A = ribs[R[a]]; const B = ribs[R[b]]
       let nx = X[a] - X[b]; let ny = Yy[a] - Yy[b]; let nz = Z[a] - Z[b]
       if (d > 1e-3) { nx /= d; ny /= d; nz /= d } else { const o = (a - A.start) * 3; nx = A.O[o]; ny = A.O[o + 1]; nz = A.O[o + 2]; const l = Math.hypot(nx, ny, nz); if (l > 1e-6) { nx /= l; ny /= l; nz /= l } else { nx = 0; ny = 1; nz = 0 } }
-      for (const [r, s, sg] of [[A, a, 1], [B, b, -1]]) {
+      for (const [r, s, sg, o] of [[A, a, 1, b], [B, b, -1, a]]) {
         if (A.seg !== B.seg) {
-          const g = r.g; const i = s - r.start
-          g.F[i * 3] += sg * nx * m; g.F[i * 3 + 1] += sg * ny * m; g.F[i * 3 + 2] += sg * nz * m; g.c[i]++
+          // el haz se aparta desde la muestra ajena hacia su propio eje (carril central): si la otra cinta lo atraviesa
+          // por dentro, sus carriles empujarían en sentidos opuestos y se anularían
+          const g = r.g; const i = s - r.start; const c = g.ribs[0].start + i
+          let ex = X[c] - X[o]; let ey = Yy[c] - Yy[o]; let ez = Z[c] - Z[o]; const el = Math.hypot(ex, ey, ez)
+          if (el > 0.3) { ex /= el; ey /= el; ez /= el } else { ex = sg * nx; ey = sg * ny; ez = sg * nz }
+          g.F[i * 3] += ex * m; g.F[i * 3 + 1] += ey * m; g.F[i * 3 + 2] += ez * m; g.c[i]++
           if (!g.on) { g.on = true; live.add(g); for (const x of g.ribs) act[x.idx] = 1 }
         } else {
           F[s * 3] += sg * nx * m; F[s * 3 + 1] += sg * ny * m; F[s * 3 + 2] += sg * nz * m; cnt[s]++
@@ -1824,17 +1848,18 @@ function relaxRibbons(world) {
       }
     }
     for (const g of live) {
-      for (let i = 0; i <= g.n; i++) if (g.c[i]) for (let k = 0; k < 3; k++) g.D[i * 3 + k] += g.F[i * 3 + k] / g.c[i]
-      settle(g.D, 0, g.n, g.ds)
+      push(g.D, g.F, g.c, 0, 0, g.n, g.ds)
+
       const rep = g.ribs[0]
       for (const r of g.ribs) {
         const s0 = r.start
-        for (let i = 0; i <= r.n; i++) if (cnt[s0 + i]) for (let k = 0; k < 3; k++) D[(s0 + i) * 3 + k] += F[(s0 + i) * 3 + k] / cnt[s0 + i]
-        settle(D, s0, r.n, g.ds)
+        push(D, F, cnt, s0, s0, r.n, g.ds)
+
         for (let i = 0; i <= r.n; i++) {
           const s = s0 + i; const o = i * 3
           if (shadow[s]) { const t = rep.start + i; D[s * 3] = D[t * 3]; D[s * 3 + 1] = D[t * 3 + 1]; D[s * 3 + 2] = D[t * 3 + 2] }
           X[s] = r.P[o] + r.O[o] + g.D[o] + D[s * 3]; Yy[s] = r.P[o + 1] + r.O[o + 1] + g.D[o + 1] + D[s * 3 + 1]; Z[s] = r.P[o + 2] + r.O[o + 2] + g.D[o + 2] + D[s * 3 + 2]
+          if (!moved[s] && Math.abs(g.D[o]) + Math.abs(g.D[o + 1]) + Math.abs(g.D[o + 2]) + Math.abs(D[s * 3]) + Math.abs(D[s * 3 + 1]) + Math.abs(D[s * 3 + 2]) > 1e-3) moved[s] = 1
         }
       }
     }
