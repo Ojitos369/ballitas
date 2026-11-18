@@ -19,15 +19,15 @@ function routeGlowColor(themeMec, rIdx) {
 function buildPillarGeo() {
   return mergeColoredParts([
     [new THREE.CylinderGeometry(0.24, 0.32, 0.16, 8).translate(0, 0.08, 0), '#1f242e'],
-    [new THREE.CylinderGeometry(0.11, 0.14, 2.5, 8).translate(0, 1.35, 0), '#3b4354'],
-    [new THREE.BoxGeometry(0.32, 0.18, 0.34).translate(0, 2.6, 0), '#242a36'],
+    [new THREE.CylinderGeometry(0.1, 0.13, 3.4, 8).translate(0, 1.8, 0), '#3b4354'],
+    [new THREE.BoxGeometry(0.3, 0.16, 0.32).translate(0, 3.5, 0), '#242a36'],
   ], 'uniones:pillar')
 }
 
 function buildBeamGeo() {
   return mergeColoredParts([
-    [new THREE.BoxGeometry(1, 0.22, 0.28), '#232936'],
-    [new THREE.BoxGeometry(1, 0.08, 0.32).translate(0, -0.1, 0), '#3d4659'],
+    [new THREE.BoxGeometry(1, 0.16, 0.24), '#232936'],
+    [new THREE.BoxGeometry(1, 0.06, 0.28).translate(0, -0.07, 0), '#3d4659'],
   ], 'uniones:beam')
 }
 
@@ -142,8 +142,8 @@ function buildUnionesData(way) {
 
     let beamMid; let beamSpan; let beamQuat; let sideDir
     if (pL && pR) {
-      const topL = pL.clone().addScaledVector(hubUp, 2.55)
-      const topR = pR.clone().addScaledVector(hubUp, 2.55)
+      const topL = pL.clone().addScaledVector(hubUp, 3.45)
+      const topR = pR.clone().addScaledVector(hubUp, 3.45)
       const span = topR.clone().sub(topL)
       beamSpan = span.length() + 0.36
       beamMid = topL.lerp(topR, 0.5)
@@ -153,7 +153,7 @@ function buildUnionesData(way) {
       const anchor = pL ?? pR
       const sign = pL ? 1 : -1
       beamSpan = halfSpan * 2
-      beamMid = anchor.clone().addScaledVector(hubUp, 2.55).addScaledVector(hubSide, sign * halfSpan * 0.85)
+      beamMid = anchor.clone().addScaledVector(hubUp, 3.45).addScaledVector(hubSide, sign * halfSpan * 0.85)
       sideDir = hubSide.clone()
       beamQuat = spanQuat(sideDir, hubUp)
     }

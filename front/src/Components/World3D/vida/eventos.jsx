@@ -475,8 +475,8 @@ function buildWayData(way) {
             if (uMark < 0.02) continue
             surfFrame(seg, lane.id, uMark, fPre)
             const dir = fPre.tangent.clone().multiplyScalar(0.72).addScaledVector(fPre.side, side * 0.69).normalize()
-            const pos = fPre.pos.clone().addScaledVector(fPre.up, 0.032).addScaledVector(fPre.side, side * H * 0.16)
-            const sc = 0.72 + k * 0.13
+            const pos = fPre.pos.clone().addScaledVector(fPre.up, 0.032).addScaledVector(fPre.side, side * H * 0.28)
+            const sc = 0.64 + k * 0.1
             chevrons.push({ pos, quat: basisQuat(fPre.up, dir), scale: [sc, 1, sc], color: mecCol })
           }
 
@@ -574,7 +574,7 @@ function ArcTrails({ items, events, way }) {
     for (let i = 0; i < items.length; i++) events[i].flightT = -1
 
     for (const b of getBallitas()) {
-      if (!b) continue
+      if (!b || b.way !== way) continue
       if (b.airborne && b.flight?.sw) {
         const idx = bySwIdx.get(b.flight.sw)
         if (idx !== undefined) {
