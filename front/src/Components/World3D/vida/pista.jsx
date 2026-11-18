@@ -3,7 +3,7 @@
 // construida solo desde laneFrame(segment, laneId, u): así cada camino sigue su propia orientación y
 // gravedad (de cabeza, de lado, tirabuzón) sin depender de cómo el núcleo lo calcule. Una malla fusionada
 // por camino; la decoración (decor.jsx) y los eventos de cambio (eventos.jsx) se apoyan en el mismo perfil.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
@@ -381,36 +381,21 @@ export function pistaWarmup(extra = []) {
 }
 
 const BASE_FOG_COLOR = new THREE.Color('#050711')
-const FWD_TMP = new THREE.Vector3()
 
 function TemaAtmosfera({ focused, themeId }) {
   const fx = useMemo(() => themeFx(themeId), [themeId])
   const fogTarget = useMemo(() => new THREE.Color(fx.fog), [fx])
   const scene = useThree((s) => s.scene)
-  const camera = useThree((s) => s.camera)
-  const ptRef = useRef()
 
   useEffect(() => () => {
     if (scene.fog) scene.fog.color.copy(BASE_FOG_COLOR)
   }, [scene, focused])
 
   useFrame((_, dt) => {
-    if (!focused) return
-    if (scene.fog) scene.fog.color.lerp(fogTarget, Math.min(1, dt * 3.5))
-    if (ptRef.current) {
-      camera.getWorldDirection(FWD_TMP)
-      ptRef.current.position.copy(camera.position).addScaledVector(FWD_TMP, 16)
-      ptRef.current.position.y += 5
-    }
+    if (focused && scene.fog) scene.fog.color.lerp(fogTarget, Math.min(1, dt * 3.5))
   })
 
-  if (!focused) return null
-  return (
-    <>
-      <hemisphereLight args={[fx.hemi[0], fx.hemi[1], fx.hemi[2]]} />
-      <pointLight ref={ptRef} color={fx.point[0]} intensity={fx.point[1]} distance={fx.point[2]} decay={1.5} />
-    </>
-  )
+  return null
 }
 
 export default function Pista({ way, detail, focused, time }) {
@@ -440,8 +425,8 @@ export default function Pista({ way, detail, focused, time }) {
       {geo && <mesh geometry={geo} material={mat} receiveShadow />}
       <KartPista way={way} />
       <Anillos way={way} />
-      <Decor way={way} />
-      <Estructuras way={way} detail={detail} time={time} />
+      <Decor way={way} focused={focused} />
+      <Estructuras way={way} detail={detail} focused={focused} time={time} />
       <Eventos way={way} />
     </>
   )

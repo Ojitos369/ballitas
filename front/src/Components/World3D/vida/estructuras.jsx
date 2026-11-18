@@ -20,13 +20,14 @@ const TAU = Math.PI * 2
 const Q_YAW = new THREE.Quaternion()
 const Q_ROTX = new THREE.Quaternion()
 
-const SEG_ACTIVE_DIST = 165 // distancia real a la curva del tramo para activarlo (solo 1-3 tramos activos)
-const TALL_CULL_DIST = 148
-const MED_CULL_DIST = 104
-const ARCH_CULL_DIST = 148
+const SEG_ACTIVE_DIST = 98 // distancia real a la curva del tramo para activarlo (solo 1-2 tramos activos)
+const TALL_CULL_DIST = 96
+const MED_CULL_DIST = 58
+const ARCH_CULL_DIST = 104
+const OVERVIEW_DIST_SQ = 36 * 36 // > 36 u del tramo más cercano = vista general Camino -> LOD reducido
 const POOL_CAP = 128
 const ARCH_CAP = 48
-const MOVE_RECOMPACT_SQ = 16 // recompila instancias visibles solo al moverse >= 4 u
+const MOVE_RECOMPACT_SQ = 20 // recompila instancias visibles solo al moverse >= 4.5 u
 
 // ═══════════════════════════ CATÁLOGO POR TEMA (4 piezas clave + arco + ribera) ═══════════════════════════
 const THEME_STRUCTS = {
@@ -601,7 +602,7 @@ function FixedPoolInst({ model, themeId, cat, tall, waySphere, regPool }) {
 
   useEffect(() => {
     if (!mesh) return undefined
-    regPool(model, mesh, tall ? TALL_CULL_DIST : MED_CULL_DIST)
+    regPool(model, mesh, tall ? TALL_CULL_DIST : MED_CULL_DIST, tall)
     return () => {
       regPool(model, null)
       mesh.dispose()
@@ -612,7 +613,7 @@ function FixedPoolInst({ model, themeId, cat, tall, waySphere, regPool }) {
   return <primitive object={mesh} />
 }
 
-export default function Estructuras({ way, detail, time }) {
+export default function Estructuras({ way, detail, focused, time }) {
   const themeId = way.theme?.id
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
   const models = useMemo(() => spec.props.filter((p) => !p.model.startsWith('proc:')).map((p) => p.model), [spec])
@@ -645,6 +646,9 @@ export default function Estructuras({ way, detail, time }) {
   const nearSegsRef = useRef([]) // [{ seg, si }]
   const poolsRef = useRef(new Map()) // model -> { mesh, rangeSq }
   const lastCamRef = useRef(new THREE.Vector3(Infinity, 0, 0))
+  const lastFwdRef = useRef(new THREE.Vector3(0, 0, 1))
+  const camFwdTmp = useMemo(() => new THREE.Vector3(), [])
+  const deltaTmp = useMemo(() => new THREE.Vector3(), [])
   const lastSegCheckRef = useRef(new THREE.Vector3(Infinity, 0, 0))
   const dirtyPoolRef = useRef(true)
   const groupRef = useRef()
@@ -652,9 +656,10 @@ export default function Estructuras({ way, detail, time }) {
   const tmpS = useMemo(() => new THREE.Vector3(), [])
   const white = useMemo(() => new THREE.Color('#ffffff'), [])
 
-  const regPool = useMemo(() => (model, mesh, range = MED_CULL_DIST) => {
+  const minDistSqRef = useRef(Infinity)
+  const regPool = useMemo(() => (model, mesh, range = MED_CULL_DIST, tall = false) => {
     if (!mesh) { poolsRef.current.delete(model); return }
-    poolsRef.current.set(model, { mesh, rangeSq: range * range })
+    poolsRef.current.set(model, { mesh, rangeSq: range * range, tall })
     dirtyPoolRef.current = true
   }, [])
 
@@ -662,20 +667,25 @@ export default function Estructuras({ way, detail, time }) {
   useFrame(() => {
     if (time) LAVA_TIME.value = time.value
     const det = detail ? detail.value : 1
-    if (groupRef.current) groupRef.current.visible = det >= 0.2
-    if (det < 0.2) return
+    const show = det >= (focused ? 0.2 : 0.45)
+    if (groupRef.current) groupRef.current.visible = show
+    if (!show) return
 
     const cam = camera.position
-    // 1) Detectar tramos cercanos (curva <= SEG_ACTIVE_DIST + seg.length * 0.25)
+    // 1) Detectar tramos cercanos (curva <= SEG_ACTIVE_DIST + seg.length * 0.2)
     let segChanged = false
     if (cam.distanceToSquared(lastSegCheckRef.current) >= 100) {
       lastSegCheckRef.current.copy(cam)
       const near = []
+      let bestD2 = Infinity
       for (let i = 0; i < nonAirSegs.length; i++) {
         const x = nonAirSegs[i]
-        const lim = SEG_ACTIVE_DIST + Math.min(260, x.seg.length * 0.28)
-        if (minSegDistSq(x.seg, cam) <= lim * lim) near.push(x)
+        const d2 = minSegDistSq(x.seg, cam)
+        if (d2 < bestD2) bestD2 = d2
+        const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
+        if (d2 <= lim * lim) near.push(x)
       }
+      minDistSqRef.current = bestD2
       nearSegsRef.current = near
       dirtyPoolRef.current = true
       segChanged = true
@@ -706,11 +716,14 @@ export default function Estructuras({ way, detail, time }) {
       }
     }
 
-    // 3) Compactar instancias cercanas solo cuando la cámara se mueve >= 4 u o llegó un pool/tramo nuevo
-    if (!dirtyPoolRef.current && cam.distanceToSquared(lastCamRef.current) < MOVE_RECOMPACT_SQ) return
+    // 3) Compactar instancias cercanas solo cuando la cámara se mueve >= 4.5 u, gira > 14°, o llegó un tramo nuevo
+    camera.getWorldDirection(camFwdTmp)
+    if (!dirtyPoolRef.current && cam.distanceToSquared(lastCamRef.current) < MOVE_RECOMPACT_SQ && camFwdTmp.dot(lastFwdRef.current) > 0.97) return
     lastCamRef.current.copy(cam)
+    lastFwdRef.current.copy(camFwdTmp)
     dirtyPoolRef.current = false
 
+    const overview = minDistSqRef.current > OVERVIEW_DIST_SQ
     const nearData = []
     for (let i = 0; i < nearSegsRef.current.length; i++) {
       const sd = segDataCache.get(nearSegsRef.current[i].seg)
@@ -719,12 +732,14 @@ export default function Estructuras({ way, detail, time }) {
 
     if (archMesh) {
       let ac = 0
-      const rSq = ARCH_CULL_DIST * ARCH_CULL_DIST
+      const rSq = (overview ? 105 : ARCH_CULL_DIST) ** 2
       for (let s = 0; s < nearData.length && ac < ARCH_CAP; s++) {
         const list = nearData[s].arches
-        for (let i = 0; i < list.length && ac < ARCH_CAP; i++) {
+        for (let i = 0; i < list.length && ac < ARCH_CAP; i += (overview ? 2 : 1)) {
           const it = list[i]
-          if (cam.distanceToSquared(it.pos) > rSq) continue
+          deltaTmp.copy(it.pos).sub(cam)
+          const d2 = deltaTmp.lengthSq()
+          if (d2 > rSq || (!overview && d2 > 400 && deltaTmp.dot(camFwdTmp) < -16)) continue
           tmpS.set(it.scale[0], it.scale[1], it.scale[2])
           archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
         }
@@ -733,16 +748,25 @@ export default function Estructuras({ way, detail, time }) {
       if (ac > 0) archMesh.instanceMatrix.needsUpdate = true
     }
 
+    let tallSlot = 0
     for (const [model, entry] of poolsRef.current) {
-      const { mesh, rangeSq } = entry
+      const { mesh, rangeSq, tall } = entry
+      if (overview && (!tall || tallSlot++ >= 2)) {
+        mesh.count = 0
+        continue
+      }
+      const stride = overview ? 2 : 1
+      const effRangeSq = overview ? 96 * 96 : rangeSq
       let count = 0
       let tinted = false
       for (let s = 0; s < nearData.length && count < POOL_CAP; s++) {
         const list = nearData[s].byModel.get(model)
         if (!list) continue
-        for (let i = 0; i < list.length && count < POOL_CAP; i++) {
+        for (let i = 0; i < list.length && count < POOL_CAP; i += stride) {
           const it = list[i]
-          if (cam.distanceToSquared(it.pos) > rangeSq) continue
+          deltaTmp.copy(it.pos).sub(cam)
+          const d2 = deltaTmp.lengthSq()
+          if (d2 > effRangeSq || (!overview && d2 > 400 && deltaTmp.dot(camFwdTmp) < -16)) continue
           tmpS.setScalar(it.scale)
           mesh.setMatrixAt(count, tmpM.compose(it.pos, it.quat, tmpS))
           if (it.color) { mesh.setColorAt(count, it.color); tinted = true }

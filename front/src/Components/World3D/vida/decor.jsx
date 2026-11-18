@@ -2,9 +2,9 @@
 // rebote_<tema> en los puntos de salto de switches y bordes de calzada, más deco_<tema>_hito,
 // deco_<tema>_flora, farola_pista y banderin colocados en la berma sin invadir otras pistas.
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Instanced, getWayDetail, mulberry32 } from './base.jsx'
+import { Instanced, getWayDetail, minSegDistSq, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
 import { colisionDe, colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
@@ -18,8 +18,8 @@ const SPACING = 2.8 * TRACK_K // ~13 u entre hitos/farolas/banderines de berma
 const FLORA_SPACING = 1.15 * TRACK_K // ~5.4 u entre matas de flora en ambas bermas
 const MAX_REBOTES_JUMP = 16
 const MAX_REBOTES_SIDE = 10
-const MAX_DECO_TOTAL = 180 // InstanceCuller recorta >= 48 a 60 u
-const MAX_FLORA_TOTAL = 460 // flora densa continua en bermas, recortada por InstanceCuller a 60 u
+const MAX_DECO_TOTAL = 150 // InstanceCuller recorta >= 48 a 60 u
+const MAX_FLORA_TOTAL = 200 // flora densa continua en bermas, recortada por InstanceCuller a 60 u
 
 function capStride(arr, max) {
   if (arr.length <= max) return arr
@@ -207,7 +207,7 @@ function KitPieza({ nombre, items }) {
   return <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow />
 }
 
-export default function Decor({ way }) {
+export default function Decor({ way, focused }) {
   const data = useMemo(() => buildDecorData(way), [way])
   const { names, rebotes, hito, flora, farola, banderin } = data
   useEffect(() => {
@@ -216,8 +216,25 @@ export default function Decor({ way }) {
 
   const detail = getWayDetail(way)
   const solidRef = useRef()
+  const camera = useThree((s) => s.camera)
+  const nonAirSegs = useMemo(() => (way.segments ?? []).filter((s) => !s.air), [way])
+  const lastCam = useRef(new THREE.Vector3(Infinity, 0, 0))
+  const nearRef = useRef(true)
   useFrame(() => {
-    if (solidRef.current && detail) solidRef.current.visible = detail.value >= 0.25
+    if (!solidRef.current) return
+    const det = detail ? detail.value : 1
+    if (det < (focused ? 0.25 : 0.45)) { solidRef.current.visible = false; return }
+    const cam = camera.position
+    if (cam.distanceToSquared(lastCam.current) >= 100) {
+      lastCam.current.copy(cam)
+      let best = Infinity
+      for (let i = 0; i < nonAirSegs.length; i++) {
+        const d2 = minSegDistSq(nonAirSegs[i], cam)
+        if (d2 < best) best = d2
+      }
+      nearRef.current = best <= 62 * 62
+    }
+    solidRef.current.visible = nearRef.current
   })
 
   return (

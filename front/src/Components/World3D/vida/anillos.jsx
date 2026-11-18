@@ -13,7 +13,7 @@ import { TRACK_K } from '../../../Core/world.js'
 const RING_STEP = 55 * TRACK_K
 // El culling conserva la escala del trazado, con un radio acotado para no triplicar
 // los aros visibles desde la cámara pegada a la ballita.
-const RING_RANGE = 250 // culling desde la cámara de la ballita; no escala con el trazado
+const RING_RANGE = 135 // culling desde la cámara de la ballita; no escala con el trazado
 const ROUTE_COLS = ['#38e8ff', '#ff5c8a', '#ffd24a']
 const RING_TIME = { value: 0 }
 
@@ -196,6 +196,8 @@ export default function Anillos({ way }) {
 
   const frameMatrix = useMemo(() => new THREE.Matrix4(), [])
   const frameScale = useMemo(() => new THREE.Vector3(), [])
+  const lastCam = useRef(new THREE.Vector3(Infinity, 0, 0))
+  const lastLow = useRef(null)
   useFrame(({ clock }) => {
     RING_TIME.value = clock.elapsedTime
     const isLow = detail ? detail.value < 0.3 : false
@@ -203,6 +205,9 @@ export default function Anillos({ way }) {
     if (loRef.current) loRef.current.visible = isLow
     const mesh = isLow ? loRef.current : hiRef.current
     if (!mesh) return
+    if (lastLow.current === isLow && camera.position.distanceToSquared(lastCam.current) < 9) return
+    lastLow.current = isLow
+    lastCam.current.copy(camera.position)
     const phaseAttr = mesh.geometry.getAttribute('aPhase')
     const tintAttr = mesh.geometry.getAttribute('aTint')
     let count = 0
@@ -216,9 +221,11 @@ export default function Anillos({ way }) {
       count++
     }
     mesh.count = count
-    if (count) mesh.instanceMatrix.needsUpdate = true
-    phaseAttr.needsUpdate = true
-    tintAttr.needsUpdate = true
+    if (count) {
+      mesh.instanceMatrix.needsUpdate = true
+      phaseAttr.needsUpdate = true
+      tintAttr.needsUpdate = true
+    }
   })
 
   if (!data.rings.length) return null

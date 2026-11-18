@@ -22,7 +22,7 @@ import { TRACK_K } from '../../../Core/world.js'
 
 const PI2 = Math.PI / 2
 const TAU = Math.PI * 2
-const CAM_RANGE_SQ = 155 * 155
+const CAM_RANGE_SQ = 115 * 115
 const FAUNA_TIME = { value: 0 }
 
 const THEME_FAUNA = {
@@ -383,10 +383,10 @@ const Q_TMP = new THREE.Quaternion()
 const Q_ROLL = new THREE.Quaternion()
 const Z_AXIS = new THREE.Vector3(0, 0, 1)
 
-function updateFleetMesh(mesh, list, paths, dt, t, cam, isBerm) {
+function updateFleetMesh(mesh, list, paths, dt, t, cam, isBerm, stride = 1) {
   if (!mesh || !list.length) return
   let count = 0
-  for (let i = 0; i < list.length; i++) {
+  for (let i = 0; i < list.length; i += stride) {
     const it = list[i]
     const path = paths[it.pathIdx]
     const total = path.total
@@ -424,12 +424,15 @@ function updateFleetMesh(mesh, list, paths, dt, t, cam, isBerm) {
   }
 }
 
-export default function Criaturas({ way, time }) {
+export default function Criaturas({ way, focused, time }) {
   const { spec, paths, primary, wisp, critters } = useMemo(() => getWayFaunaData(way), [way])
   const waySphere = useMemo(() => getWayBoundingSphere(way, 24 * TRACK_K), [way])
   const detail = getWayDetail(way)
   const groupRef = useRef()
   const camera = useThree((s) => s.camera)
+  const nonAirSegs = useMemo(() => (way.segments ?? []).filter((s) => !s.air), [way])
+  const lastDistChk = useRef(new THREE.Vector3(Infinity, 0, 0))
+  const overviewRef = useRef(false)
 
   const primaryMesh = useMemo(() => {
     if (!primary.length) return null
@@ -484,20 +487,36 @@ export default function Criaturas({ way, time }) {
     const t = time ? time.value : clock.elapsedTime
     FAUNA_TIME.value = t
     const det = detail ? detail.value : 1
-    if (groupRef.current) groupRef.current.visible = det >= 0.25
-    if (det < 0.25) return
+    const show = det >= (focused ? 0.3 : 0.55)
+    if (groupRef.current) groupRef.current.visible = show
+    if (!show) return
 
     const cam = camera.position
+    if (cam.distanceToSquared(lastDistChk.current) >= 100) {
+      lastDistChk.current.copy(cam)
+      let best = Infinity
+      for (let i = 0; i < nonAirSegs.length; i++) {
+        const d2 = minSegDistSq(nonAirSegs[i], cam)
+        if (d2 < best) best = d2
+      }
+      overviewRef.current = best > 36 * 36
+    }
+    const overview = overviewRef.current
     const stepDt = Math.min(dt, 0.05)
-    updateFleetMesh(primaryMesh, primary, paths, stepDt, t, cam, false)
-    updateFleetMesh(wispMesh, wisp, paths, stepDt, t, cam, true)
+    updateFleetMesh(primaryMesh, primary, paths, stepDt, t, cam, false, overview ? 2 : 1)
+    if (overview) {
+      if (wispMesh) wispMesh.count = 0
+      if (critterMesh) critterMesh.count = 0
+      return
+    }
+    updateFleetMesh(wispMesh, wisp, paths, stepDt, t, cam, true, 1)
 
     if (critterMesh && critters.length) {
       const balls = getBallitas()
       let dirty = false
       for (let i = 0; i < critters.length; i++) {
         const c = critters[i]
-        if (cam.distanceToSquared(c.pos) > 85 * 85) continue
+        if (cam.distanceToSquared(c.pos) > 72 * 72) continue
         let startled = false
         for (let b = 0; b < balls.length; b++) {
           const bp = balls[b]?.pos

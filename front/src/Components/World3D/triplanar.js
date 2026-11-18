@@ -216,7 +216,9 @@ export function triplanarMaterial(theme, category = 'terreno', { glow = 0, stand
           _fx = mix(uFxC2, uFxC1, mist) * (mist * 0.28 + _triFres * uTriRim * 1.2);
         }
         float _distFog = smoothstep(55.0, 175.0, length(vViewPosition)) * 0.45;
-        totalEmissiveRadiance += diffuseColor.rgb * (uTriGlow + uTriLift) + _fx + uFxFog * _distFog;`)
+        float _hemi = 0.5 + 0.5 * normalize(vTriWorldPos).y;
+        vec3 _hemiTint = mix(uFxC2, uFxC1, _hemi) * 0.12;
+        totalEmissiveRadiance += diffuseColor.rgb * (uTriGlow + uTriLift) + _hemiTint + _fx + uFxFog * _distFog;`)
   }
   material.customProgramCacheKey = () => `triplanar-v4:${category}:${standard}`
   cache.set(key, markShared(material))
