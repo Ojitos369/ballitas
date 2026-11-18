@@ -1046,6 +1046,15 @@ export function getWayDetail(way) {
   return way ? (wayDetailBus.get(way) ?? null) : null
 }
 
+/** Mantiene un objeto de berma en su franja lateral al ser repelido por colocar() (mismo contrato que decor.jsx). */
+export function bermaAjusta(o, side, up, E, terr, rad) {
+  return (p) => {
+    const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z
+    const a = Math.max(Math.abs(xx), E + rad * 0.5)
+    return a > E + terr + rad + 0.6 ? null : o.clone().addScaledVector(side, Math.sign(xx || 1) * a).addScaledVector(up, -0.02)
+  }
+}
+
 /**
  * mergeColoredParts(parts, name?) -> BufferGeometry compartida con atributo `color`.
  * parts: [[BufferGeometry, hexColor], ...]. Limpia atributos extra y libera las piezas temporales.
@@ -1078,4 +1087,19 @@ export function mergeColoredParts(parts, name = '') {
   merged.computeBoundingSphere()
   if (name) merged.name = name
   return markShared(merged)
+}
+
+let _vidaMats = null
+/** Materiales instanciados compartidos (sólido con vertexColors, emisivo 3D y calca sobre asfalto). */
+export function vidaSharedMats() {
+  if (!_vidaMats) {
+    _vidaMats = {
+      body: markShared(new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true })),
+      glow: markShared(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })),
+      decal: markShared(new THREE.MeshBasicMaterial({
+        color: '#ffffff', toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      })),
+    }
+  }
+  return _vidaMats
 }

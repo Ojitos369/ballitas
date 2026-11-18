@@ -2,9 +2,10 @@
 // Los antiguos dioramas por tema (gradas, carteles, criaturas, ciudad) se retiraron para dejar el tubo
 // limpio; viven en el historial de git si hace falta recuperar alguna pieza.
 import { createElement, useLayoutEffect, useRef } from 'react'
-import { VidaGuard, disposeObject3D } from './base.jsx'
+import { VidaGuard, disposeObject3D, setWayDetail } from './base.jsx'
 import Pista from './pista.jsx'
 import Criaturas from './criaturas.jsx'
+import Uniones from './uniones.jsx'
 
 export const VIDA_PERF = {
   active: 0,
@@ -16,6 +17,7 @@ export const VIDA_PERF = {
 export function VidaDeCamino(props) {
   const id = props.way?.theme?.id
   const wrapRef = useRef(null)
+  setWayDetail(props.way, props.detail)
   // Layout y no pasivo: al desmontar, r3f desengancha los hijos antes de los efectos pasivos y el traverse quedaba vacío (fuga).
   useLayoutEffect(() => {
     VIDA_PERF.active += 1
@@ -34,6 +36,7 @@ export function VidaDeCamino(props) {
     'group',
     { ref: wrapRef },
     createElement(VidaGuard, { themeId: id }, createElement(Pista, props), createElement(Criaturas, props)),
+    createElement(VidaGuard, { themeId: id }, createElement(Uniones, props)),
   )
 }
 

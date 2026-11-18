@@ -5,7 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import * as WORLD from '../../../Core/world.js'
-import { getBallitas, getWayDetail, Instanced, markShared, mergeColoredParts } from './base.jsx'
+import { bermaAjusta, getBallitas, getWayDetail, Instanced, markShared, mergeColoredParts, vidaSharedMats } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { halfWidth, lanesOf, pal, surfFrame, TERR, CURB } from './pista.jsx'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
@@ -81,11 +81,7 @@ const G = {
 }
 
 // ═══════════════════════════ MATERIALES COMPARTIDOS ═══════════════════════════
-const EMISSIVE_INST_MAT = markShared(new THREE.MeshBasicMaterial({
-  color: '#ffffff', toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-}))
-const GLOW_MAT = markShared(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }))
-const BODY_VTX_MAT = markShared(new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true }))
+const { decal: EMISSIVE_INST_MAT, glow: GLOW_MAT, body: BODY_VTX_MAT } = vidaSharedMats()
 const STRUT_MAT = markShared(new THREE.MeshLambertMaterial({ color: '#2b3240' }))
 const TRAIL_MAT = markShared(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }))
 export const eventosWarmup = () => [EMISSIVE_INST_MAT, GLOW_MAT, BODY_VTX_MAT, STRUT_MAT, TRAIL_MAT]
@@ -366,14 +362,6 @@ export function destSide(seg, sw, f) {
   return d < 0 ? -1 : 1
 }
 
-function bermaAjusta(o, side, up, E, rad) {
-  return (p) => {
-    const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z
-    const a = Math.max(Math.abs(xx), E + rad * 0.5)
-    return a > E + TERR + rad + 0.6 ? null : o.clone().addScaledVector(side, Math.sign(xx || 1) * a).addScaledVector(up, -0.02)
-  }
-}
-
 const P0 = new THREE.Vector3(); const P1 = new THREE.Vector3(); const P2 = new THREE.Vector3()
 function arcPoint(seg, sw, t, out) {
   if (typeof WORLD.switchArc === 'function') {
@@ -454,7 +442,7 @@ function buildWayData(way) {
         const E = halfWidth(lane) + CURB
         const o = fFrom.pos.clone()
         const want = o.clone().addScaledVector(fFrom.side, side * (E + TERR * 0.43))
-        mechPos = colocar(world, { pos: want, seed, ajusta: bermaAjusta(o, fFrom.side, fFrom.up, E, 0.6) }, 0.6, { way: way.idx, si, lane: lane.id }, 4, local)
+        mechPos = colocar(world, { pos: want, seed, ajusta: bermaAjusta(o, fFrom.side, fFrom.up, E, TERR, 0.6) }, 0.6, { way: way.idx, si, lane: lane.id }, 4, local)
         if (mechPos) {
           // Puente/anclaje físico entre el borde del carril origen y el mecanismo en la berma
           const edge = o.clone().addScaledVector(fFrom.side, side * (halfWidth(lane) + 0.05)).addScaledVector(fFrom.up, 0.03)
@@ -499,7 +487,7 @@ function buildWayData(way) {
             const o = fPre.pos.clone(); const fSide = fPre.side.clone(); const fUp = fPre.up.clone(); const fTan = fPre.tangent.clone()
             const want = o.clone().addScaledVector(fSide, side * (E + TERR * 0.44))
             const pSeed = Math.floor(sw.u * 1e6) + lane.id * 271 + way.idx * 911 + (side > 0 ? 17 : 31)
-            const pPos = colocar(world, { pos: want, seed: pSeed, ajusta: bermaAjusta(o, fSide, fUp, E, 0.38) }, 0.38, { way: way.idx, si, lane: lane.id }, 4, local)
+            const pPos = colocar(world, { pos: want, seed: pSeed, ajusta: bermaAjusta(o, fSide, fUp, E, TERR, 0.38) }, 0.38, { way: way.idx, si, lane: lane.id }, 4, local)
             if (pPos) {
               posts.push({ pos: pPos, quat: basisQuat(fUp, fTan), scale: 1 })
               _bX.copy(fSide).multiplyScalar(side).addScaledVector(fUp, 0.28).normalize()
