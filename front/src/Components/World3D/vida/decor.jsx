@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { Instanced, markShared, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { useModelo } from './modelos.js'
+import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
 
 // [modelo, escala mín, escala máx, medio ancho a escala 1, tinte]
@@ -50,6 +51,7 @@ function buildItems(way) {
   const kit = KITS[way.theme.id] ?? KITS.bosque
   const rng = mulberry32(7717 + way.idx * 97)
   const out = kit.map(() => [])
+  const world = mundoDe(way); const local = nuevoLocal()
   way.segments.forEach((seg, si) => {
     for (const lane of lanesOf(seg)) {
       const L = seg.length; const E = halfWidth(lane) + CURB
@@ -66,10 +68,15 @@ function buildItems(way) {
         const ax = E + r * sc + rng() * Math.max(0, room - r * sc * 2)
         const x = (rng() < 0.5 ? -1 : 1) * ax
         const f = surfFrame(seg, lane.id, s / L, F)
-        const pos = f.pos.clone().addScaledVector(f.side, x).addScaledVector(f.up, bermY(ax, E) - 0.03)
+        const [o, side, up] = [f.pos.clone(), f.side.clone(), f.up.clone()]
+        const at = (xx) => o.clone().addScaledVector(side, xx).addScaledVector(up, bermY(Math.abs(xx), E) - 0.03)
         const quat = basisQuat(f.up, f.tangent).multiply(YAW.setFromAxisAngle(Yv, rng() * Math.PI * 2))
         const c = new THREE.Color(tint).multiplyScalar(0.85 + rng() * 0.25)
-        out[k].push({ pos, quat, scale: sc, color: c })
+        const rad = r * sc
+        // repulsión solo a lo ancho: se mantiene en su berma y nunca pisa el asfalto de su carril
+        const ajusta = (p) => { const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z; const a = Math.max(Math.abs(xx), E + rad * 0.5); return a > E + TERR + rad + 0.6 ? null : at(Math.sign(xx || x) * a) }
+        const pos = colocar(world, { pos: at(x), seed: way.idx * 9719 + si * 131 + lane.id * 17 + Math.floor(s * 10), ajusta }, rad, { way: way.idx, si, lane: lane.id }, 4, local)
+        if (pos) out[k].push({ pos, quat, scale: sc, color: c })
       }
     }
   })

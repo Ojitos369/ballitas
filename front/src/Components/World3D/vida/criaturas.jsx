@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { getBallitas, markShared, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
+import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
 
 const G = {
@@ -54,7 +55,7 @@ const THEMES = {
 function placements(way) {
   const rng = mulberry32(9137 + way.idx * 701)
   const candidates = []
-  for (const seg of way.segments ?? []) for (const lane of lanesOf(seg)) {
+  ;(way.segments ?? []).forEach((seg, si) => { for (const lane of lanesOf(seg)) {
     const ev = (seg.switches ?? []).filter((s) => s.from === lane.id || s.to === lane.id).map((s) => s.u)
     for (const u of [0.18, 0.36, 0.57, 0.78, 0.91]) {
       if (ev.some((x) => Math.abs(x - u) * seg.length < 5)) continue
@@ -63,11 +64,20 @@ function placements(way) {
       const offset = sign * (halfWidth(lane) + CURB + TERR * (0.35 + rng() * 0.35))
       const pos = f.pos.clone().addScaledVector(f.side, offset).addScaledVector(f.up, -0.02)
       const quat = basisQuat(f.up, f.tangent)
-      candidates.push({ pos, quat, phase: rng() * Math.PI * 2, scale: 0.82 + rng() * 0.35 })
+      const [o, side] = [f.pos.clone(), f.side.clone()]
+      const scale = 0.82 + rng() * 0.35
+      const E = halfWidth(lane) + CURB
+      // repulsión solo a lo ancho: se queda en su berma, fuera del asfalto de su carril
+      const ajusta = (p) => { const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z; const a = Math.max(Math.abs(xx), E + 0.45 * scale); return a > E + TERR + 0.5 ? null : o.clone().addScaledVector(side, Math.sign(xx || offset) * a).addScaledVector(f.up, -0.02) }
+      candidates.push({ pos, quat, phase: rng() * Math.PI * 2, scale, ajusta, seed: way.idx * 7919 + si * 101 + lane.id * 13 + Math.round(u * 100), ig: { way: way.idx, si, lane: lane.id } })
     }
-  }
+  } })
   // Mantén el mundo poblado pero ligero, sin repetir criaturas en todos los segmentos.
-  return candidates.filter((_, i) => i % Math.max(1, Math.ceil(candidates.length / 5)) === 0).slice(0, 5)
+  const world = mundoDe(way); const local = nuevoLocal()
+  return candidates.filter((_, i) => i % Math.max(1, Math.ceil(candidates.length / 5)) === 0).slice(0, 5).flatMap((c) => {
+    const pos = colocar(world, c, 0.45 * c.scale, c.ig, 5, local)
+    return pos ? [{ ...c, pos }] : []
+  })
 }
 
 function Critter({ item, colors }) {

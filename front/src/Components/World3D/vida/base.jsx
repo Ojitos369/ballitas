@@ -309,18 +309,6 @@ export function laneFrame(seg, laneId, u) {
   return { pos: p.pos, tangent: p.tangent, up: p.up, side: p.side }
 }
 
-/** Distancia angular mínima (rad) de `angle` a cualquier carril del tramo. */
-export function laneGap(seg, angle) {
-  let best = Infinity
-  for (const l of lanesOf(seg)) {
-    const a = l.angle + (l.offset || 0) / Math.max(seg.radius, 1e-3)
-    let d = Math.abs(((angle - a + Math.PI) % TAU + TAU) % TAU - Math.PI)
-    d -= (l.width || BALL_R * 2.4) * 0.5 / Math.max(seg.radius, 1e-3)
-    if (d < best) best = d
-  }
-  return best
-}
-
 /** Altura máxima (desde la pared) que puede tener un objeto sin invadir el cauce central. */
 export function maxHeight(seg) {
   return seg.radius * FILL
@@ -398,45 +386,6 @@ export function segPath(segs) {
     return k === undefined ? null : cum[k] + u * seg.length
   }
   return { segs: list, cum, total, locate, arcOf }
-}
-
-// ═══════════════════════════ DISPERSIÓN ═══════════════════════════
-/**
- * scatter(way, n, rng, opts) -> items[] { seg, u, angle, offset, pos, quat, up, tangent, side, scale, rnd }
- * opts:
- *   segments: array de segmentos o función (seg) => bool (por defecto todos los que tienen tubo)
- *   angle: [min, max] rango angular sobre la pared (por defecto [-0.62π, 0.62π]: piso y laderas)
- *   clear: margen angular extra (rad) libre alrededor de cada carril (por defecto el ancho de la ballita)
- *   offset: [min, max] en unidades de mundo desde la pared (por defecto [0, 0])
- *   u: [min, max] rango a lo largo de cada tramo (por defecto [0.04, 0.96])
- *   scale: [min, max] escala uniforme (por defecto [1, 1])
- */
-export function scatter(way, n, rng, opts = {}) {
-  const {
-    segments = null, angle = [-Math.PI * 0.62, Math.PI * 0.62], clear = BALL_R * 0.6,
-    offset = [0, 0], u: uRange = [0.04, 0.96], scale = [1, 1],
-  } = opts
-  let segs = way.segments.filter((s) => !s.air)
-  if (Array.isArray(segments)) segs = segments.filter((s) => !s.air)
-  else if (typeof segments === 'function') segs = segs.filter(segments)
-  if (!segs.length || n <= 0) return []
-  const cum = []
-  let tot = 0
-  for (const s of segs) { tot += s.length; cum.push(tot) }
-  const out = []
-  for (let tries = 0; out.length < n && tries < n * 8; tries++) {
-    const pick = rng() * tot
-    let k = 0
-    while (k < cum.length - 1 && cum[k] < pick) k++
-    const seg = segs[k]
-    const u = uRange[0] + rng() * (uRange[1] - uRange[0])
-    const a = angle[0] + rng() * (angle[1] - angle[0])
-    if (laneGap(seg, a) < clear / Math.max(seg.radius, 1e-3)) continue
-    const off = offset[0] + rng() * (offset[1] - offset[0])
-    const p = placeAlong(seg, u, off, a)
-    out.push({ seg, u, angle: a, offset: off, ...p, scale: scale[0] + rng() * (scale[1] - scale[0]), rnd: rng() })
-  }
-  return out
 }
 
 // ═══════════════════════════ INSTANCIADO ═══════════════════════════
@@ -852,7 +801,7 @@ export function buildTerrainGeo(seg, opts = {}) {
     for (let j = 0; j <= nA; j++) {
       const a = -arc + (j / nA) * arc * 2
       const edge = 1 - smooth(arc * 0.7, arc, Math.abs(a)) // se funde con la pared al borde
-      const gap = laneGap(seg, a)
+      const gap = laneGapAt(seg, u, a)
       const chan = smooth(0.02, 0.32, gap) // cauce libre con rampa suave
       const hk = THREE.MathUtils.clamp(height(u, a), 0, 1) * edge * chan
       const r = R * 0.985 - hk * hMax
