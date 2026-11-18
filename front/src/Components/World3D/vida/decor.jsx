@@ -23,6 +23,7 @@ const KITS = {
 }
 const GLOW = { neon: 0.5, cristal: 0.2, sombrio: 0.12 }
 const SPACING = 2.6
+const MAX_ITEMS = 40
 
 const matCache = new Map()
 function decorMat(themeId) {
@@ -51,6 +52,7 @@ function buildItems(way) {
   const kit = KITS[way.theme.id] ?? KITS.bosque
   const rng = mulberry32(7717 + way.idx * 97)
   const out = kit.map(() => [])
+  let order = 0
   const world = mundoDe(way); const local = nuevoLocal()
   way.segments.forEach((seg, si) => {
     for (const lane of lanesOf(seg)) {
@@ -76,10 +78,21 @@ function buildItems(way) {
         // repulsión solo a lo ancho: se mantiene en su berma y nunca pisa el asfalto de su carril
         const ajusta = (p) => { const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z; const a = Math.max(Math.abs(xx), E + rad * 0.5); return a > E + TERR + rad + 0.6 ? null : at(Math.sign(xx || x) * a) }
         const pos = colocar(world, { pos: at(x), seed: way.idx * 9719 + si * 131 + lane.id * 17 + Math.floor(s * 10), ajusta }, rad, { way: way.idx, si, lane: lane.id }, 4, local)
-        if (pos) out[k].push({ pos, quat, scale: sc, color: c })
+        if (pos) out[k].push({ pos, quat, scale: sc, color: c, order: order++ })
       }
     }
   })
+  const placed = out.flatMap((items, k) => items.map((item) => ({ ...item, k }))).sort((a, b) => a.order - b.order)
+  if (placed.length > MAX_ITEMS) {
+    for (const items of out) items.length = 0
+    const step = placed.length / MAX_ITEMS
+    for (let i = 0; i < MAX_ITEMS; i++) {
+      const { k, order: _order, ...item } = placed[Math.floor(i * step)]
+      out[k].push(item)
+    }
+  } else {
+    for (const items of out) for (const item of items) delete item.order
+  }
   return { kit, out }
 }
 
