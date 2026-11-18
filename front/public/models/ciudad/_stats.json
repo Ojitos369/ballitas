@@ -1,0 +1,422 @@
+{
+ "bosque_casa": {
+  "bytes": 9468,
+  "tris": 140,
+  "x": 1.0,
+  "y_alto": 1.0,
+  "z": 0.935
+ },
+ "bosque_comercio": {
+  "bytes": 11884,
+  "tris": 184,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "bosque_estacion": {
+  "bytes": 18164,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "bosque_parque": {
+  "bytes": 24560,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "bosque_rascacielos": {
+  "bytes": 9516,
+  "tris": 140,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "bosque_torre": {
+  "bytes": 9392,
+  "tris": 158,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "cristal_casa": {
+  "bytes": 6844,
+  "tris": 86,
+  "x": 0.92,
+  "y_alto": 1.0,
+  "z": 0.86
+ },
+ "cristal_comercio": {
+  "bytes": 15804,
+  "tris": 264,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "cristal_estacion": {
+  "bytes": 18168,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "cristal_parque": {
+  "bytes": 24564,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "cristal_rascacielos": {
+  "bytes": 9912,
+  "tris": 154,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "cristal_torre": {
+  "bytes": 6356,
+  "tris": 78,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "desierto_casa": {
+  "bytes": 11040,
+  "tris": 176,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.953
+ },
+ "desierto_comercio": {
+  "bytes": 15808,
+  "tris": 264,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "desierto_estacion": {
+  "bytes": 18168,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "desierto_parque": {
+  "bytes": 24568,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "desierto_rascacielos": {
+  "bytes": 13436,
+  "tris": 220,
+  "x": 0.949,
+  "y_alto": 1.0,
+  "z": 0.949
+ },
+ "desierto_torre": {
+  "bytes": 8820,
+  "tris": 106,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "hielo_casa": {
+  "bytes": 9092,
+  "tris": 146,
+  "x": 0.92,
+  "y_alto": 1.0,
+  "z": 0.86
+ },
+ "hielo_comercio": {
+  "bytes": 15796,
+  "tris": 264,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "hielo_estacion": {
+  "bytes": 18160,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "hielo_parque": {
+  "bytes": 24384,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "hielo_rascacielos": {
+  "bytes": 9904,
+  "tris": 154,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "hielo_torre": {
+  "bytes": 8012,
+  "tris": 134,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "jardin_casa": {
+  "bytes": 8764,
+  "tris": 140,
+  "x": 1.0,
+  "y_alto": 1.0,
+  "z": 0.935
+ },
+ "jardin_comercio": {
+  "bytes": 11884,
+  "tris": 184,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "jardin_estacion": {
+  "bytes": 18164,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "jardin_parque": {
+  "bytes": 24384,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "jardin_rascacielos": {
+  "bytes": 9516,
+  "tris": 140,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "jardin_torre": {
+  "bytes": 9392,
+  "tris": 158,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "mar_casa": {
+  "bytes": 14284,
+  "tris": 306,
+  "x": 1.0,
+  "y_alto": 1.0,
+  "z": 0.954
+ },
+ "mar_comercio": {
+  "bytes": 14816,
+  "tris": 270,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "mar_estacion": {
+  "bytes": 18156,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "mar_parque": {
+  "bytes": 24376,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "mar_rascacielos": {
+  "bytes": 14120,
+  "tris": 270,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "mar_torre": {
+  "bytes": 14832,
+  "tris": 318,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "neon_casa": {
+  "bytes": 11028,
+  "tris": 176,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.953
+ },
+ "neon_comercio": {
+  "bytes": 15796,
+  "tris": 264,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "neon_estacion": {
+  "bytes": 18156,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "neon_parque": {
+  "bytes": 24556,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "neon_rascacielos": {
+  "bytes": 15132,
+  "tris": 240,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "neon_torre": {
+  "bytes": 11032,
+  "tris": 176,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "nubes_casa": {
+  "bytes": 14288,
+  "tris": 306,
+  "x": 1.0,
+  "y_alto": 1.0,
+  "z": 0.954
+ },
+ "nubes_comercio": {
+  "bytes": 14820,
+  "tris": 270,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "nubes_estacion": {
+  "bytes": 18160,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "nubes_parque": {
+  "bytes": 24384,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "nubes_rascacielos": {
+  "bytes": 14124,
+  "tris": 270,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "nubes_torre": {
+  "bytes": 14840,
+  "tris": 318,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "sombrio_casa": {
+  "bytes": 9800,
+  "tris": 146,
+  "x": 0.92,
+  "y_alto": 1.0,
+  "z": 0.86
+ },
+ "sombrio_comercio": {
+  "bytes": 15804,
+  "tris": 264,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "sombrio_estacion": {
+  "bytes": 18168,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "sombrio_parque": {
+  "bytes": 24564,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "sombrio_rascacielos": {
+  "bytes": 9912,
+  "tris": 154,
+  "x": 0.94,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "sombrio_torre": {
+  "bytes": 8016,
+  "tris": 134,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ },
+ "volcan_casa": {
+  "bytes": 11036,
+  "tris": 176,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.953
+ },
+ "volcan_comercio": {
+  "bytes": 15800,
+  "tris": 264,
+  "x": 0.926,
+  "y_alto": 1.0,
+  "z": 1.02
+ },
+ "volcan_estacion": {
+  "bytes": 18164,
+  "tris": 276,
+  "x": 0.98,
+  "y_alto": 1.0,
+  "z": 0.94
+ },
+ "volcan_parque": {
+  "bytes": 24560,
+  "tris": 566,
+  "x": 1.02,
+  "y_alto": 1.0,
+  "z": 0.994
+ },
+ "volcan_rascacielos": {
+  "bytes": 13432,
+  "tris": 220,
+  "x": 0.949,
+  "y_alto": 1.0,
+  "z": 0.949
+ },
+ "volcan_torre": {
+  "bytes": 8816,
+  "tris": 106,
+  "x": 0.84,
+  "y_alto": 1.0,
+  "z": 0.84
+ }
+}

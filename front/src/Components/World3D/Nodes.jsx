@@ -7,7 +7,7 @@ import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { withCameraFade } from './Paths.jsx'
 import { resolveNodeBiome, buildBiomePlanetGeo, buildCityDistricts } from './mundos/biomas.js'
-import { BUILDING_TYPES, getCityKitProcedural, buildFarSkylineGeo } from './mundos/arquitectura.js'
+import { BUILDING_TYPES, getCityKitProcedural, getCachedBiomeCityKit, loadBiomeCityKit, buildFarSkylineGeo } from './mundos/arquitectura.js'
 import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
 import { trafficGeo, creatureGeo, vaporGeo, buildPlanetLifeData, updatePlanetLife } from './mundos/vidaMundo.js'
 import { registerWorldForVistas, focusWorldNode } from './Vistas.jsx'
@@ -350,25 +350,27 @@ function getTextures() {
     { repeatX: 3, repeatY: 2 },
   )
 
-  // Nubes finas procedurales con transparencia suave
+  // Nubes finas procedurales con transparencia suave (alta resolución y volutas suaves)
   const planetClouds = makeProceduralTex(
     '__planet_clouds_proc',
-    256,
+    512,
     (g, s) => {
       const img = g.createImageData(s, s)
       const d = img.data
       for (let y = 0; y < s; y++) {
         const v = y / s
-        const latFade = Math.sin(v * Math.PI)
+        const latFade = Math.pow(Math.sin(v * Math.PI), 0.75)
         for (let x = 0; x < s; x++) {
           const u = x / s
-          const n = tileNoise2D(u * 1.5, v * 1.5) * 0.5 + 0.5
-          const a = THREE.MathUtils.smoothstep(n, 0.52, 0.88) * latFade
+          const n1 = tileNoise2D(u * 1.5, v * 1.5) * 0.5 + 0.5
+          const n2 = tileNoise2D(u * 3.0 + 0.37, v * 3.0 - 0.21) * 0.5 + 0.5
+          const n = n1 * 0.68 + n2 * 0.32
+          const a = THREE.MathUtils.smoothstep(n, 0.48, 0.86) * latFade
           const idx = (y * s + x) * 4
-          d[idx] = 235
-          d[idx + 1] = 244
+          d[idx] = 240
+          d[idx + 1] = 247
           d[idx + 2] = 255
-          d[idx + 3] = Math.round(a * 170)
+          d[idx + 3] = Math.round(a * 165)
         }
       }
       g.putImageData(img, 0, 0)
@@ -554,10 +556,11 @@ const lampFallbackGeo = makeLatheGeo([
 ], 10)
 const haloSphereGeo = new THREE.SphereGeometry(1, 10, 8)
 
-// Atmósfera y nubes suaves (alta resolución para evitar facetas)
+// Atmósfera y nubes suaves (alta resolución en dos velos para evitar facetas)
 const atmoOuterGeo = new THREE.SphereGeometry(NODE_R * 1.12, 64, 44)
 const atmoInnerGeo = new THREE.SphereGeometry(NODE_R * 1.018, 64, 44)
-const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.032, 72, 48)
+const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.030, 80, 56)
+const cloudsOuterGeo = new THREE.SphereGeometry(NODE_R * 1.046, 80, 56)
 
 // Geometrías suaves de estaciones terminales
 const stBaseOut = makeLatheGeo([
@@ -1037,8 +1040,33 @@ function cityData(node, biome) {
   return { roadGeo, lineGeo, lamps, lampHalos, byType, farSkylineGeo, districts, terminals, monumentSpot }
 }
 
+function useCityKit(biome) {
+  const [kit, setKit] = useState(() => getCachedBiomeCityKit(biome.id) || getCityKitProcedural(biome.roofStyle))
+  useEffect(() => {
+    const cached = getCachedBiomeCityKit(biome.id)
+    if (cached) {
+      setKit(cached)
+      return undefined
+    }
+    setKit(getCityKitProcedural(biome.roofStyle))
+    let alive = true
+    loadBiomeCityKit(biome.id, biome.roofStyle).then((loaded) => {
+      if (alive && loaded) setKit(loaded)
+    })
+    return () => { alive = false }
+  }, [biome.id, biome.roofStyle])
+  return kit
+}
+
 function Instanced({ geo, material, items, children, ...rest }) {
   const ref = useRef()
+  useLayoutEffect(() => {
+    const o = ref.current
+    if (!o || !geo) return
+    if (o.geometry !== geo) o.geometry = geo
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+    o.computeBoundingSphere?.()
+  }, [geo])
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
@@ -1355,7 +1383,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
   const city = useMemo(() => cityData(node, biome), [node, biome])
   const geo = useMemo(() => buildBiomePlanetGeo(node, biome, city.districts), [node, biome, city.districts])
-  const kitGeos = useMemo(() => getCityKitProcedural(biome.roofStyle), [biome.roofStyle])
+  const kitGeos = useCityKit(biome)
   const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot), [node, biome, city.monumentSpot])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   const atmoInnerMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: false, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
@@ -1405,6 +1433,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   }, [geo, city, atmoOuterMat, atmoInnerMat, buildingMat, parkMat, farSkylineMat])
 
   const cloudsRef = useRef()
+  const cloudsOuterRef = useRef()
   const lampsRef = useRef()
   const farSkylineRef = useRef()
   const detailRef = useRef()
@@ -1421,6 +1450,13 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     if (cloudsRef.current) {
       cloudsRef.current.visible = dist < LOD_CLOUDS
       if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * biome.cloudSpeed
+    }
+    if (cloudsOuterRef.current) {
+      cloudsOuterRef.current.visible = dist < LOD_CLOUDS
+      if (cloudsOuterRef.current.visible) {
+        cloudsOuterRef.current.rotation.y -= dt * biome.cloudSpeed * 0.55
+        cloudsOuterRef.current.rotation.z += dt * biome.cloudSpeed * 0.18
+      }
     }
     if (lampsRef.current) lampsRef.current.visible = dist < LOD_LAMPS
     if (farSkylineRef.current) farSkylineRef.current.visible = !near
@@ -1463,13 +1499,24 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         <mesh ref={farSkylineRef} geometry={city.farSkylineGeo} material={farSkylineMat} raycast={() => null} />
       )}
 
-      {/* Nubes finas suaves */}
+      {/* Nubes finas suaves en dos velos sin facetas */}
       <mesh ref={cloudsRef} geometry={cloudsGeo} raycast={() => null}>
         <meshStandardMaterial
           color={biome.cloudColor}
           map={tex.planetClouds}
           transparent
           opacity={biome.cloudOpacity}
+          depthWrite={false}
+          roughness={1}
+          metalness={0}
+        />
+      </mesh>
+      <mesh ref={cloudsOuterRef} geometry={cloudsOuterGeo} rotation={[0.45, 1.2, 0.2]} raycast={() => null}>
+        <meshStandardMaterial
+          color={biome.cloudColor}
+          map={tex.planetClouds}
+          transparent
+          opacity={biome.cloudOpacity * 0.55}
           depthWrite={false}
           roughness={1}
           metalness={0}

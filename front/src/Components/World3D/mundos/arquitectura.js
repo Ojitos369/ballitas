@@ -1,7 +1,87 @@
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 export const BUILDING_TYPES = ['casa', 'torre', 'rascacielos', 'comercio', 'estacion', 'parque']
+
+const BASE_CITY_URL = (import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/') + 'models/ciudad/'
+const gltfLoader = new GLTFLoader()
+const glbGeoCache = new Map()
+const glbKitPromises = new Map()
+const glbKitCache = new Map()
+
+function extractCityGlbGeo(gltf) {
+  let found = null
+  gltf.scene?.updateMatrixWorld(true)
+  gltf.scene?.traverse((o) => {
+    if (found || !o.isMesh || !o.geometry) return
+    const g = o.geometry.clone()
+    g.applyMatrix4(o.matrixWorld)
+    if (!g.attributes.normal) g.computeVertexNormals()
+    const pos = g.attributes.position
+    if (!g.attributes.uv) {
+      const uv = new Float32Array(pos.count * 2)
+      for (let i = 0; i < pos.count; i++) {
+        uv[i * 2] = pos.getX(i) + 0.5
+        uv[i * 2 + 1] = pos.getY(i)
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+    }
+    const srcCol = g.attributes.color_1 ?? g.attributes.color
+    const cArr = new Float32Array(pos.count * 3)
+    for (let i = 0; i < pos.count; i++) {
+      cArr[i * 3] = srcCol ? srcCol.getX(i) : 1
+      cArr[i * 3 + 1] = srcCol ? srcCol.getY(i) : 1
+      cArr[i * 3 + 2] = srcCol ? srcCol.getZ(i) : 1
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(cArr, 3))
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k)
+    }
+    g.computeBoundingSphere()
+    found = g
+  })
+  return found
+}
+
+function loadCityPiece(biomeId, type) {
+  const key = `${biomeId}_${type}`
+  if (glbGeoCache.has(key)) return Promise.resolve(glbGeoCache.get(key))
+  return gltfLoader
+    .loadAsync(`${BASE_CITY_URL}${key}.glb`)
+    .then((gltf) => {
+      const g = extractCityGlbGeo(gltf)
+      if (g) glbGeoCache.set(key, g)
+      return g
+    })
+    .catch(() => null)
+}
+
+export function getCachedBiomeCityKit(biomeId) {
+  return glbKitCache.get(biomeId) ?? null
+}
+
+/**
+ * Carga en caché de módulo los 6 modelos GLB (`public/models/ciudad/<bioma>_<tipo>.glb`)
+ * y devuelve `{ casa, torre, rascacielos, comercio, estacion, parque }`, cayendo al
+ * kit procedural por pieza si algún GLB faltase.
+ */
+export function loadBiomeCityKit(biomeId, roofStyle) {
+  if (glbKitCache.has(biomeId)) return Promise.resolve(glbKitCache.get(biomeId))
+  if (glbKitPromises.has(biomeId)) return glbKitPromises.get(biomeId)
+
+  const fallback = getCityKitProcedural(roofStyle)
+  const p = Promise.all(BUILDING_TYPES.map((t) => loadCityPiece(biomeId, t))).then((geos) => {
+    const kit = {}
+    BUILDING_TYPES.forEach((t, idx) => {
+      kit[t] = geos[idx] || fallback[t]
+    })
+    glbKitCache.set(biomeId, kit)
+    return kit
+  })
+  glbKitPromises.set(biomeId, p)
+  return p
+}
 
 // Normaliza una geometría para fusión segura: no-indexada y con position, normal, uv y color lineal.
 function prepGeo(geo, tintHex = '#ffffff') {
@@ -229,13 +309,8 @@ export function buildFarSkylineGeo(items) {
   const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)
   const parts = []
   const tmpColor = new THREE.Color()
-  const posAttr = box.attributes.position
-  const normAttr = box.attributes.normal
   const baseBox = box.toNonIndexed()
   const bPos = baseBox.attributes.position
-  const bNorm = baseBox.attributes.normal
-  const v = new THREE.Vector3()
-  const nMat = new THREE.Matrix3()
 
   for (const it of items) {
     const g = baseBox.clone()
@@ -244,9 +319,8 @@ export function buildFarSkylineGeo(items) {
     const cols = new Float32Array(count * 3)
     tmpColor.copy(it.c)
     // Ligero degradado luminoso en los pisos altos para silueta nocturna legible desde lejos
-    const gPos = g.attributes.position
     for (let i = 0; i < count; i++) {
-      const k = 0.85 + 0.3 * (bPos.getY(i))
+      const k = 0.85 + 0.3 * bPos.getY(i)
       cols[i * 3] = Math.min(1, tmpColor.r * k)
       cols[i * 3 + 1] = Math.min(1, tmpColor.g * k)
       cols[i * 3 + 2] = Math.min(1, tmpColor.b * k)

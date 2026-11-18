@@ -4,7 +4,7 @@ import { NODE_R, mulberry32 } from '../../../Core/world.js'
 // Geometrías compartidas en caché de módulo para vida planetaria
 export const trafficGeo = new THREE.SphereGeometry(0.11, 8, 6).scale(0.85, 0.65, 1.55)
 export const creatureGeo = new THREE.OctahedronGeometry(0.14, 0).scale(1.6, 0.45, 0.85)
-export const vaporGeo = new THREE.DodecahedronGeometry(0.18, 0)
+export const vaporGeo = new THREE.SphereGeometry(0.18, 12, 8)
 
 // Scratch objects a nivel de módulo (cero asignaciones por cuadro)
 const _m = new THREE.Matrix4()
