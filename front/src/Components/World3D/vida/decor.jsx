@@ -104,5 +104,5 @@ function Pieza({ name, mat, items }) {
 export default function Decor({ way }) {
   const { kit, out } = useMemo(() => buildItems(way), [way])
   const mat = decorMat(way.theme.id)
-  return kit.map(([name], k) => <Pieza key={k} name={name} mat={mat} items={out[k]} />)
+  return kit.flatMap(([name], k) => out[k].length ? [<Pieza key={k} name={name} mat={mat} items={out[k]} />] : [])
 }
