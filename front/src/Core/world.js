@@ -1247,7 +1247,8 @@ function placeWay(world, circuit, from, to, placed) {
   const N_ANG = 16
   let best = null; let bestScore = -Infinity
 
-  const evalCand = (cand, steps) => {
+  // floor: puntaje a superar. Se corta en cuanto el resultado ya no puede superarlo NI cumplir okRes (mismo desenlace en tryCand).
+  const evalCand = (cand, steps, floor = -Infinity) => {
     const pts = sampleWayPoints(cand, steps)
     let minNode = Infinity
     const nodeMargin = PORT_ZONE // un camino ajeno no debe pasar por la zona de puertos de un nodo
@@ -1267,6 +1268,7 @@ function placeWay(world, circuit, from, to, placed) {
     for (const prev of placed) {
       for (const h1 of cand.junctions) for (const h2 of prev.hubs) minHub = Math.min(minHub, h1.pos.distanceTo(h2.pos))
     }
+    if ((minNode < 1.5 || minHub < 24) && Math.min(TARGET, minNode + 1, minHub * 0.2) <= floor) return { minTube: -Infinity, minNode, minHub, minAt: null }
     const grid = placed.grid
     if (grid) for (const pt of pts) {
       const x = Math.floor(pt.p.x / SPATIAL_CELL); const y = Math.floor(pt.p.y / SPATIAL_CELL); const z = Math.floor(pt.p.z / SPATIAL_CELL)
@@ -1276,7 +1278,10 @@ function placeWay(world, circuit, from, to, placed) {
         for (const q of bucket) {
           if (inPort(pt, q)) continue // puerto común (la ida y la vuelta de un circuito también deben guardar huelgo entre sí fuera de él)
           const r = pt.r + q.r + MIN_GAP_K * Math.max(pt.tube, q.tube); const d2 = pt.p.distanceToSquared(q.p) // holgura sobre 1.5 radios de pista (igual que tools/overlap.mjs)
-          if (d2 < (r + TARGET) ** 2 && Math.sqrt(d2) - r < minTube) { minTube = Math.sqrt(d2) - r; minAt = [pt.kind, q.kind, pt.c === q.c] }
+          if (d2 < (r + TARGET) ** 2 && Math.sqrt(d2) - r < minTube) {
+            minTube = Math.sqrt(d2) - r; minAt = [pt.kind, q.kind, pt.c === q.c]
+            if ((minTube < CLEAR ? minTube - 10 : minTube) <= floor) return { minTube, minNode, minHub, minAt } // minTube < TARGET: okRes ya es falso
+          }
         }
       }
     }
@@ -1316,9 +1321,9 @@ function placeWay(world, circuit, from, to, placed) {
   const tryCand = (theta, bowExtra, salt) => {
     if (hubBound(theta, bowExtra) <= bestScore) return false // ponytail: cota heurística (minNode puede sesgarla), basta para podar
     // criba gruesa sin búsqueda de fila de rutas (sólo cota para podar); la fina mide el camino exacto que se colocaría
-    const coarse = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt, false), 14)
+    const coarse = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt, false), 14, bestScore)
     if (!coarse || scoreOf(coarse) <= bestScore) return false
-    const res = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt), 28)
+    const res = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt), 28, bestScore)
     if (!res) return false
     const score = scoreOf(res)
     if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt }; bestRes = res }
@@ -1877,7 +1882,8 @@ function relaxRibbons(world) {
 // world.colision = { libre(p, r, ignora), cercano(p) } (p: THREE.Vector3). libre: true si una esfera de radio r en p no toca
 // ninguna cinta visible (semiancho RIBBON_HALF) ni ningún tubo (seg.radius alrededor del eje de los tramos con tubo).
 // ignora = { way, seg, lane } (objetos o índices; los que se den deben coincidir todos): no choca con esa cinta; el tubo
-// de un tramo se ignora si coinciden way/seg. cercano(p): { d, way, seg, lane } de la cinta más cercana (d = distancia a
+// de un tramo se ignora si coinciden way/seg. ignora = { way, si, lane } (si = índice del tramo en el camino): se ignoran
+// los tubos de los tramos si-1..si+1 y, si se da lane, ese carril en ellos (sin lane, las cintas sí cuentan). cercano(p): { d, way, seg, lane } de la cinta más cercana (d = distancia a
 // la línea de su superficie), o null a más de COL_FAR. Índice por celdas: cada consulta mira un vecindario fijo, O(1).
 const COL_CELL = 4
 const COL_FAR = 24
@@ -1898,7 +1904,10 @@ export function indexarColisiones(world, S = braidRibbons(world)) {
   const tR = new Int32Array(tx.length / 3)
   for (const t of tubes) for (let i = 0; i <= t.n; i++) { tR[t.start + i] = tubes.indexOf(t); add(tgrid, tx[(t.start + i) * 3], tx[(t.start + i) * 3 + 1], tx[(t.start + i) * 3 + 2], t.start + i) }
   const same = (a, b) => b == null || a === b || a?.idx === b
-  const skip = (o, ig) => ig && (ig.way != null || ig.seg != null || ig.lane != null) && same(o.way, ig.way) && same(o.seg, ig.seg) && (ig.lane == null || o.lane === ig.lane)
+  // con `si` (índice del tramo en su camino) cuentan también los tramos vecinos (si ± 1): el objeto vive en la unión
+  const near = (o, ig) => same(o.way, ig.way) && Math.abs(o.way.segments.indexOf(o.seg) - ig.si) <= 1
+  const skip = (o, ig) => ig && (ig.si != null ? ig.lane != null && o.lane === ig.lane && near(o, ig)
+    : (ig.way != null || ig.seg != null || ig.lane != null) && same(o.way, ig.way) && same(o.seg, ig.seg) && (ig.lane == null || o.lane === ig.lane))
   // distancia de p al trozo de polilínea [i, i+1] (o al punto si es el último)
   const segDist = (px, py, pz, A, i, last) => {
     const ax = A(i, 0); const ay = A(i, 1); const az = A(i, 2)
@@ -1934,7 +1943,7 @@ export function indexarColisiones(world, S = braidRibbons(world)) {
       let hit = false
       visitRing(tgrid, p, g, (i) => {
         if (hit) return
-        const t = tubes[tR[i]]; if (ignora && same(t.way, ignora.way) && same(t.seg, ignora.seg) && (ignora.way != null || ignora.seg != null)) return
+        const t = tubes[tR[i]]; if (ignora && (ignora.si != null ? near(t, ignora) : same(t.way, ignora.way) && same(t.seg, ignora.seg) && (ignora.way != null || ignora.seg != null))) return
         const last = i === t.start + t.n
         if (segDist(p.x, p.y, p.z, TA, i, last) < r + t.seg.radius) hit = true
       })

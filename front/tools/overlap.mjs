@@ -112,7 +112,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     for (const k of Object.keys(worst)) { worst[k] = Math.min(worst[k], m[k].gap); worstS[k] = Math.min(worstS[k], m[k].slack) }
     minNode = Math.min(minNode, m.node)
     if (process.argv[5] === 'malas' && ok) continue // 5º arg: sólo semillas que incumplen
-    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left}` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
+    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
   }
   console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)}; rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
 }
