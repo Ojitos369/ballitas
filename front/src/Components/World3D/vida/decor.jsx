@@ -10,16 +10,16 @@ import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
 
 // [modelo, escala mín, escala máx, medio ancho a escala 1, tinte]
 const KITS = {
-  bosque: [['pine', 1.6, 2.8, 0.24, '#ffffff'], ['tree', 1.3, 2.2, 0.35, '#ffffff'], ['mushroom', 0.35, 0.7, 0.45, '#ffffff'], ['rock', 0.25, 0.55, 0.67, '#ffffff']],
-  volcan: [['rock', 0.6, 1.3, 0.67, '#6b4a40'], ['monolith', 0.9, 1.7, 0.34, '#5a3a30'], ['crystal', 0.4, 0.8, 0.35, '#ff8a50']],
-  mar: [['coral', 0.6, 1.2, 0.26, '#ffffff'], ['palm', 1.6, 2.4, 0.45, '#ffffff'], ['rock', 0.3, 0.6, 0.67, '#e8dcc0']],
-  hielo: [['ice_spire', 1, 2.2, 0.23, '#ffffff'], ['pine', 1.2, 2, 0.24, '#dff2ff'], ['rock', 0.3, 0.6, 0.67, '#cfe6ff']],
-  desierto: [['cactus', 0.9, 1.8, 0.35, '#ffffff'], ['pyramid', 0.7, 1.4, 0.39, '#ffffff'], ['rock', 0.3, 0.7, 0.67, '#e0a070']],
-  cristal: [['crystal', 0.7, 1.8, 0.35, '#ffffff'], ['monolith', 0.9, 1.6, 0.34, '#b8a8ff'], ['crystal', 0.3, 0.6, 0.35, '#9ffcff']],
-  nubes: [['cloud', 0.5, 1, 1.05, '#ffffff'], ['flower', 0.4, 0.7, 0.32, '#ffffff'], ['torii', 1.1, 1.6, 0.53, '#ffd1e8']],
-  neon: [['lamp', 1.2, 1.8, 0.26, '#ffffff'], ['pylon', 1.1, 1.8, 0.37, '#c8fff8'], ['pod', 0.5, 0.9, 0.38, '#ffffff']],
-  jardin: [['flower', 0.5, 1, 0.32, '#ffffff'], ['tree', 1.3, 2, 0.35, '#e8ffe0'], ['mushroom', 0.4, 0.7, 0.45, '#ffffff']],
-  sombrio: [['tomb', 0.6, 1, 0.24, '#ffffff'], ['mushroom', 0.5, 0.9, 0.45, '#d9b8ff'], ['tree', 1.3, 2, 0.35, '#6b5a8a']],
+  bosque: [['pine', 1.6, 2.8, 0.24, '#ffffff'], ['bosque_nido', 0.65, 1.05, 0.5, '#ffffff'], ['bosque_casita', 0.62, 0.92, 0.5, '#ffffff'], ['rock', 0.25, 0.55, 0.67, '#ffffff']],
+  volcan: [['volcan_altar', 0.62, 0.92, 0.5, '#ffffff'], ['monolith', 0.9, 1.7, 0.34, '#5a3a30'], ['volcan_farol', 0.72, 1.05, 0.22, '#ffffff']],
+  mar: [['mar_boya', 0.72, 1.05, 0.4, '#ffffff'], ['palm', 1.6, 2.4, 0.45, '#ffffff'], ['mar_concha', 0.72, 1.05, 0.5, '#ffffff']],
+  hielo: [['hielo_iglu', 0.72, 1.05, 0.5, '#ffffff'], ['hielo_farol', 0.72, 1.05, 0.22, '#ffffff'], ['rock', 0.3, 0.6, 0.67, '#cfe6ff']],
+  desierto: [['desierto_oasis', 0.68, 1.0, 0.5, '#ffffff'], ['desierto_molino', 0.72, 1.05, 0.24, '#ffffff'], ['rock', 0.3, 0.7, 0.67, '#e0a070']],
+  cristal: [['cristal_prisma', 0.65, 1.0, 0.4, '#ffffff'], ['cristal_arco', 0.72, 1.0, 0.36, '#ffffff'], ['crystal', 0.3, 0.6, 0.35, '#9ffcff']],
+  nubes: [['nubes_globo', 0.72, 1.05, 0.34, '#ffffff'], ['flower', 0.4, 0.7, 0.32, '#ffffff'], ['nubes_casita', 0.62, 0.92, 0.5, '#ffffff']],
+  neon: [['lamp', 1.2, 1.8, 0.26, '#ffffff'], ['neon_kiosco', 0.62, 0.92, 0.5, '#ffffff'], ['neon_molino', 0.72, 1.05, 0.24, '#ffffff']],
+  jardin: [['jardin_gazebo', 0.72, 1.0, 0.36, '#ffffff'], ['tree', 1.3, 2, 0.35, '#e8ffe0'], ['jardin_flor', 0.68, 1.0, 0.34, '#ffffff']],
+  sombrio: [['sombrio_farol', 0.72, 1.05, 0.22, '#ffffff'], ['sombrio_altar', 0.62, 0.92, 0.5, '#ffffff'], ['tree', 1.3, 2, 0.35, '#6b5a8a']],
 }
 const GLOW = { neon: 0.5, cristal: 0.2, sombrio: 0.12 }
 const SPACING = 2.6
