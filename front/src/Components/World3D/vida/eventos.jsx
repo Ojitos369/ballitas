@@ -404,9 +404,9 @@ function buildWayData(way) {
       const boxKey = `${si}:${lane.id}:${Math.round(sw.u * 1000)}`
       if (!seenBox.has(boxKey)) {
         seenBox.add(boxKey)
-        const boxScale = THREE.MathUtils.clamp(halfWidth(lane) * 1.15, 0.65, 0.92)
+        const boxScale = THREE.MathUtils.clamp(halfWidth(lane) * 0.92, 0.5, 0.78)
         switchBoxes.push({
-          pos: fFrom.pos.clone().addScaledVector(fFrom.up, isAir ? WORLD.BALL_R + 0.42 : 0.62),
+          pos: fFrom.pos.clone().addScaledVector(fFrom.up, isAir ? WORLD.BALL_R + 0.36 : 0.52),
           quat: qFrom,
           up: fFrom.up.clone(),
           scale: boxScale,
@@ -521,14 +521,14 @@ function buildWayData(way) {
       for (const uEv of uList) {
         if ((seg.switches ?? []).some((sw) => (sw.from === lane.id || sw.to === lane.id) && Math.abs(sw.u - uEv) * L < 5.5)) continue
         surfFrame(seg, lane.id, uEv, fPre)
-        const boxPos = fPre.pos.clone().addScaledVector(fPre.up, 0.54)
+        const boxPos = fPre.pos.clone().addScaledVector(fPre.up, 0.46)
         if (eventBoxes.some((b) => b.pos.distanceToSquared(boxPos) < minSep2)) continue
         if (eventBoxes.length < 18) {
           eventBoxes.push({
             pos: boxPos,
             quat: basisQuat(fPre.up, fPre.tangent),
             up: fPre.up.clone(),
-            scale: THREE.MathUtils.clamp(H * 1.15, 0.65, 0.92),
+            scale: THREE.MathUtils.clamp(H * 0.92, 0.5, 0.78),
             seg,
             laneId: lane.id,
             u: uEv,

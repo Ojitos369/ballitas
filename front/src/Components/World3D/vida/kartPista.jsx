@@ -249,18 +249,16 @@ function buildKartPistaData(way) {
     }
   })
 
-  // Priorizar curvas más cerradas sin amontonamiento
-  pianoCands.sort((a, b) => b.k - a.k)
-  for (const c of pianoCands) {
+  // Repartir pianos y barreras por todas las curvas cerradas (en grupos contiguos de curva, sin acumular en una sola)
+  const pianoPicked = capStride(pianoCands, MAX_PIANOS)
+  for (const c of pianoPicked) {
     if (nearAny(bordillos, c.pos, 1.32)) continue
     bordillos.push({ pos: c.pos, quat: c.quat, scale: c.scale })
-    if (bordillos.length >= MAX_PIANOS * 2) break
   }
-  bordillos = capStride(bordillos, MAX_PIANOS)
 
-  barrierCands.sort((a, b) => b.k - a.k)
-  for (const c of barrierCands) {
-    if (nearAny(barreras, c.want, 1.55)) continue
+  const barrierPicked = capStride(barrierCands, MAX_BARRIERS)
+  for (const c of barrierPicked) {
+    if (nearAny(barreras, c.want, 1.5)) continue
     const p = colocar(
       world,
       { pos: c.want, seed: c.seed, ajusta: bermaAjusta(c.o, c.fSide, c.fUp, c.E, TERR, 0.32) },
@@ -269,11 +267,9 @@ function buildKartPistaData(way) {
       2,
       local,
     )
-    if (!p || nearAny(barreras, p, 1.5)) continue
+    if (!p || nearAny(barreras, p, 1.45)) continue
     barreras.push({ pos: p, quat: c.quat, scale: [1.5, 1.0, 0.55], color: barrierTint })
-    if (barreras.length >= MAX_BARRIERS * 2) break
   }
-  barreras = capStride(barreras, MAX_BARRIERS)
 
   const out = { arcos, startLines, finishLines, tuneles, bordillos, barreras }
   kartDataCache.set(way, out)

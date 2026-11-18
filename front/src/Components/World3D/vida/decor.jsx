@@ -13,10 +13,10 @@ import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
 const KIT_THEMES = new Set(['sombrio', 'bosque', 'mar', 'desierto', 'hielo', 'volcan', 'cristal', 'nubes', 'neon', 'jardin'])
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const Q_Y180 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI)
-const SPACING = 4.2
+const SPACING = 3.2
 const MAX_REBOTES_JUMP = 12
 const MAX_REBOTES_SIDE = 4
-const MAX_DECO_TOTAL = 36 // hito + flora + farola + banderin (+ <=16 rebotes => <= 52 kit instancias en decor)
+const MAX_DECO_TOTAL = 42 // hito + flora + farola + banderin (+ <=16 rebotes => <= 58 kit instancias en decor)
 
 // Altura de la berma en |x| (mismo perfil que pista.jsx)
 function bermY(ax, E) {
