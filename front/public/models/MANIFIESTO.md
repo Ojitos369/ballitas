@@ -54,3 +54,51 @@ Los 20 modelos de vida se generaron con Blender 5.3 y se reparten de dos en dos 
 lava_albedo, lava_emissive (derivado de lava_albedo), roca_volcanica, arena_dunas, hielo_agrietado, coral, nube_suave,
 musgo_bosque, adoquin_neon. Originales de Codex, recortados y con costura suavizada por `tools/blender/postprocesar_tex.py`.
 Pendiente: cristal_prisma (cuota de Codex agotada).
+
+## Kit de piezas para pistas kart
+
+Modelos GLB texturizados, con un mesh por archivo, origen en la base y máximo de 900 triángulos. `anillo_neon` conserva banda emisiva blanca con diámetro interior de 1 unidad para teñido por instancia.
+
+| nombre | pieza | tema | tris | dimensiones X×Y×Z | móvil | emisivo |
+|---|---|---:|---:|---:|:---:|:---:|
+| anillo_neon | aro | común | 800 | 1.34 × 1.34 × 0.28 | no | sí |
+| caja_evento | evento | común | 468 | 0.78 × 0.85 × 0.78 | no | sí |
+| caja_cambio | cambio | común | 592 | 0.72 × 0.725 × 0.75 | no | sí |
+| turbo_placa | turbo | común | 416 | 1.0 × 0.18 × 0.72 | no | sí |
+| barrera | barrera | común | 284 | 1.02 × 0.44 × 0.61 | no | no |
+| bordillo | bordillo | común | 284 | 1.02 × 0.28 × 0.61 | no | no |
+| arco_salida | arco | común | 536 | 1.06 × 0.99 × 0.265 | no | sí |
+| tunel_arco | tunel | común | 792 | 1.08 × 0.675 × 0.28 | no | sí |
+| pilar | soporte | común | 588 | 0.56 × 0.97 × 0.56 | no | no |
+| banderin | bandera | común | 432 | 0.7153 × 1.05 × 0.4305 | no | no |
+| farola_pista | farola | común | 496 | 0.5849 × 0.96 × 0.3899 | no | sí |
+| rebote_sombrio | rebote | sombrio | 620 | 0.72 × 0.49 × 0.715 | no | sí |
+| rebote_bosque | rebote | bosque | 792 | 0.8579 × 0.68 × 0.88 | no | sí |
+| rebote_mar | rebote | mar | 556 | 0.84 × 0.5411 × 0.7959 | no | sí |
+| rebote_desierto | rebote | desierto | 532 | 0.7191 × 0.75 × 0.56 | no | sí |
+| rebote_hielo | rebote | hielo | 384 | 0.96 × 0.35 × 0.8721 | no | sí |
+| rebote_volcan | rebote | volcan | 620 | 0.8832 × 0.46 × 0.9059 | no | sí |
+| rebote_cristal | rebote | cristal | 288 | 0.8805 × 0.3381 × 0.9023 | no | sí |
+| rebote_nubes | rebote | nubes | 616 | 0.8965 × 0.4146 × 0.7572 | no | sí |
+| rebote_neon | rebote | neon | 552 | 0.9103 × 0.275 × 0.9103 | no | sí |
+| rebote_jardin | rebote | jardin | 644 | 0.8094 × 0.48 × 0.7392 | no | sí |
+| deco_sombrio_hito | deco | sombrio | 240 | 0.56 × 0.68 × 0.34 | no | sí |
+| deco_sombrio_flora | deco | sombrio | 412 | 0.68 × 0.5748 × 0.64 | no | sí |
+| deco_bosque_hito | deco | bosque | 364 | 0.6846 × 0.7577 × 0.5161 | no | no |
+| deco_bosque_flora | deco | bosque | 300 | 0.7549 × 0.3276 × 0.7037 | no | no |
+| deco_mar_hito | deco | mar | 548 | 0.76 × 0.74 × 0.7485 | no | sí |
+| deco_mar_flora | deco | mar | 440 | 0.5289 × 0.6961 × 0.4695 | no | no |
+| deco_desierto_hito | deco | desierto | 292 | 0.9913 × 0.6577 × 0.3171 | no | no |
+| deco_desierto_flora | deco | desierto | 760 | 0.56 × 0.655 × 0.56 | no | no |
+| deco_hielo_hito | deco | hielo | 140 | 0.5473 × 0.8639 × 0.5035 | no | sí |
+| deco_hielo_flora | deco | hielo | 720 | 0.546 × 0.99 × 0.56 | no | no |
+| deco_volcan_hito | deco | volcan | 416 | 0.6708 × 0.94 × 0.6708 | no | sí |
+| deco_volcan_flora | deco | volcan | 188 | 0.6415 × 0.541 × 0.632 | no | sí |
+| deco_cristal_hito | deco | cristal | 160 | 0.5812 × 0.84 × 0.5812 | no | sí |
+| deco_cristal_flora | deco | cristal | 80 | 0.5625 × 0.7419 × 0.4839 | no | sí |
+| deco_nubes_hito | deco | nubes | 372 | 0.6 × 0.95 × 0.6 | no | no |
+| deco_nubes_flora | deco | nubes | 680 | 0.86 × 0.5494 × 0.5862 | no | no |
+| deco_neon_hito | deco | neon | 468 | 0.4294 × 0.8986 × 0.4294 | no | sí |
+| deco_neon_flora | deco | neon | 228 | 0.48 × 0.76 × 0.48 | no | sí |
+| deco_jardin_hito | deco | jardin | 508 | 0.546 × 0.95 × 0.56 | no | no |
+| deco_jardin_flora | deco | jardin | 656 | 0.6227 × 0.7 × 0.6547 | no | no |
