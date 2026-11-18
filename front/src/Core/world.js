@@ -625,16 +625,19 @@ export function switchPath(seg, sw, t, out = {}) {
   out.vis = via === 'portal' ? clamp(Math.abs(t - 0.5) / 0.18, 0, 1) : 1
   return out
 }
+// Parábola balística (gravedad -Y): avance lineal de p0 a p3 más una joroba vertical de altura sw.apex; el botado da
+// un bote grande y otro chico (rebota en el rebotante a 60 % del vuelo).
+const arcLift = (bote, t) => bote ? (t < 0.6 ? 4 * (t / 0.6) * (1 - t / 0.6) : 1.4 * ((t - 0.6) / 0.4) * (1 - (t - 0.6) / 0.4)) : 4 * t * (1 - t)
+const arcLiftD = (bote, t) => bote ? (t < 0.6 ? (4 / 0.6) * (1 - (2 * t) / 0.6) : (1.4 / 0.4) * (1 - (2 * (t - 0.6)) / 0.4)) : 4 * (1 - 2 * t)
 export function switchArc(seg, sw, t, out = {}) {
   const c = sw._arc || (sw._arc = arcCtrl(seg, sw))
   t = Number.isFinite(t) ? clamp(t, 0, 1) : 0
-  const s = 1 - t
+  const bote = sw.kind === 'botado'
   const pos = out.pos || (out.pos = new THREE.Vector3())
-  pos.copy(c.p0).multiplyScalar(s * s * s).addScaledVector(c.p1, 3 * s * s * t).addScaledVector(c.p2, 3 * s * t * t).addScaledVector(c.p3, t * t * t)
+  pos.copy(c.p0).lerp(c.p3, t).addScaledVector(Y, sw.apex * arcLift(bote, t))
   const T = out.tangent || (out.tangent = new THREE.Vector3())
-  T.subVectors(c.p1, c.p0).multiplyScalar(3 * s * s).addScaledVector(FRAME_TMP.subVectors(c.p2, c.p1), 6 * s * t)
-    .addScaledVector(FRAME_TMP.subVectors(c.p3, c.p2), 3 * t * t)
-  if (T.lengthSq() < 1e-10) T.subVectors(c.p3, c.p0)
+  T.subVectors(c.p3, c.p0).addScaledVector(Y, sw.apex * arcLiftD(bote, t))
+  if (T.lengthSq() < 1e-10) T.copy(c.t0)
   T.normalize()
   const up = out.up || (out.up = new THREE.Vector3())
   up.copy(c.u0).lerp(c.u1, smooth01(t)).addScaledVector(T, -up.dot(T))
@@ -833,8 +836,8 @@ function buildLanes(way) {
   const mk = (s, u, from, to, kind, carril) => {
     const M = MECHANISMS[kind]; const sk = s.speedK ?? 1; const via = CAMBIOS[kind]
     const duration = +((M.dur / Math.sqrt(sk)) * (s.drag > 2 ? 1.25 : 1)).toFixed(2)
-    const span = via === 'portal' ? (2 * TK) / s.length : (duration * (14 * TK * sk + (s.boost || 0) * 0.4)) / s.length
-    const uLand = +Math.min(0.96, u + Math.max(via === 'portal' ? 0.004 : 0.03, span)).toFixed(4)
+    const span = via === 'portal' ? 0 : (duration * (14 * TK * sk + (s.boost || 0) * 0.4)) / s.length
+    const uLand = +Math.min(0.96, u + Math.max(via === 'portal' ? 0.05 : 0.08, span)).toFixed(4)
     return {
       u: +u.toFixed(4), uLand, uEnd: uLand, from, to, carril, kind, via, apex: +((kind === 'botado' ? 5.5 : 3.5) + Math.abs(to - from) * 0.6).toFixed(2) * TK,
       name: THEME_MECHS[theme][kind] || M.name, emoji: M.emoji, style: via, duration,

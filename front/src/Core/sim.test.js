@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Sim, POP, TIME_SCALE, TRAVEL_SLOW } from './sim.js'
@@ -7,7 +8,7 @@ import {
   mulberry32, cityPath, NODE_R, BALL_R, TRACK_K, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
   MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff, segmentTangent,
   laneRelief, reliefSlope, OUT_GATES, IN_GATES, SPHERE_R, buildWorld, setWorldPicks,
-  laneLength, laneCurve, switchArc, braidEnv,
+  laneLength, laneCurve, switchArc, braidEnv, switchPath, CARRILES, CAMBIOS,
 } from './world.js'
 
 const { world } = new Sim({ rng: mulberry32(1) })
@@ -449,4 +450,70 @@ test('elecciones precalculadas (worker/caché): mismo mundo sin repetir la búsq
   // tope holgado: con la suite en paralelo y la máquina ocupada pasaba de 1500 ms sin regresión real
   // (sin caché la búsqueda tarda ~5 s, así que 3000 ms sigue detectando que no se reutilizó)
   assert.ok(ms < 3000, `reconstrucción lenta: ${ms.toFixed(0)} ms`)
+})
+
+test('carriles: cada camino tiene eventos en sus 5 carriles, hacia otro camino y con kind según la geometría', () => {
+  const kinds = new Set()
+  for (const s of world.segments) {
+    for (const l of s.lanes) {
+      const evs = s.switchesByLane.get(l.id)
+      assert.deepEqual([...new Set(evs.map((sw) => sw.carril))].sort(), [0, 1, 2, 3, 4], `${s.way.id} ${s.kind} camino ${l.id}`)
+      for (const sw of evs) {
+        assert.ok(sw.to !== sw.from && s.lanes.some((x) => x.id === sw.to))
+        assert.ok(sw.u > 0 && sw.u < sw.uLand && sw.uLand < 1)
+        assert.equal(sw.via, CAMBIOS[sw.kind])
+        kinds.add(sw.kind)
+        const a = laneFrame(s, sw.from, sw.u).pos; const b = laneFrame(s, sw.to, sw.u).pos
+        if (sw.kind === 'caida') assert.ok(b.y < a.y, 'caída sólo hacia un camino más bajo')
+        if (sw.kind === 'elevador') assert.ok(b.y > a.y, 'elevador sólo hacia uno más alto')
+        for (let k = 0; k <= 10; k++) { const f = switchPath(s, sw, k / 10); assert.ok(Number.isFinite(f.pos.x + f.pos.y + f.pos.z + f.vis)) }
+      }
+    }
+  }
+  for (const k of ['salto', 'botado', 'caida', 'rampa', 'portal', 'elevador', 'laberinto']) assert.ok(kinds.has(k), `falta ${k}`)
+  assert.equal(CARRILES, 5)
+})
+
+test('carriles: aleatorio al entrar a la ruta y al aterrizar; sólo toma eventos de su carril', () => {
+  const sim = new Sim({ rng: mulberry32(21) })
+  const entered = new Set(); const landed = new Set(); const prev = new Map(); let starts = 0
+  for (let i = 0; i < 9000; i++) {
+    const before = new Map(sim.ballitas.map((b) => [b.id, { flight: b.flight, carril: b.carril, phase: b.phase }]))
+    sim.tick(0.02)
+    for (const b of sim.ballitas) {
+      const p = before.get(b.id)
+      if (b.phase !== 'travel' || !p) continue
+      if (p.phase !== 'travel') entered.add(b.carril)
+      if (b.flight && !p.flight) { starts++; assert.equal(b.flight.sw.carril, p.carril, 'evento de otro carril') }
+      if (p.flight && !b.flight && b.seg === prev.get(b.id)) landed.add(b.carril)
+      prev.set(b.id, b.seg)
+    }
+  }
+  assert.ok(starts > 10, `pocos eventos: ${starts}`)
+  assert.ok(entered.size >= 4, `carril de entrada poco variado: ${[...entered]}`)
+  assert.ok(landed.size >= 4, `carril de aterrizaje poco variado: ${[...landed]}`)
+})
+
+test('cada kind deja a la ballita en el camino destino, con su trayectoria', () => {
+  const sim = new Sim({ rng: mulberry32(22), pop: 1 })
+  const b = sim.ballitas[0]
+  const seen = new Set()
+  for (const way of world.ways) for (const s of way.segments) for (const sw of s.switches) {
+    if (seen.has(sw.kind) || !s.next.length) continue
+    seen.add(sw.kind)
+    Object.assign(b, { phase: 'travel', way, seg: s, segT: sw.u, lane: sw.from, carril: sw.carril, flight: null, sw: null, e: 100, p: 100 })
+    sim.startSwitch(b, s, sw)
+    const start = switchPath(s, sw, 0).pos.clone(); const end = switchPath(s, sw, 1).pos.clone(); const chord = new THREE.Line3(start, end); const q = new THREE.Vector3(); let hidden = false; let top = 0
+    for (let k = 0; k < 400 && b.flight; k++) {
+      sim.travelStep(b, 0.02)
+      if (b.vis < 0.5) hidden = true
+      top = Math.max(top, chord.closestPointToPoint(b.pos, true, q).distanceTo(b.pos))
+    }
+    assert.equal(b.flight, null, `${sw.kind}: no terminó`)
+    assert.equal(b.seg, s); assert.equal(b.lane, sw.to, `${sw.kind}: no quedó en el camino destino`)
+    assert.ok(b.pos.distanceTo(laneFrame(s, sw.to, sw.uLand).pos) < 0.5, `${sw.kind}: aterriza lejos del destino`)
+    if (sw.via === 'portal') assert.ok(hidden, 'el portal la oculta')
+    if (sw.via === 'arco') assert.ok(top > TRACK_K, `${sw.kind}: sin arco`)
+  }
+  assert.ok(seen.size >= 7)
 })
