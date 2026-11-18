@@ -4,12 +4,15 @@
 // gravedad (de cabeza, de lado, tirabuzón) sin depender de cómo el núcleo lo calcule. Una malla fusionada
 // por camino; la decoración (decor.jsx) y los eventos de cambio (eventos.jsx) se apoyan en el mismo perfil.
 import { useEffect, useMemo, useState } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { applyLoadedImage } from '../texUtils.js'
+import { TRI_TIME, themeFx } from '../triplanar.js'
 import { BALL_R, markShared } from './base.jsx'
 import Anillos, { anillosWarmup } from './anillos.jsx'
 import Decor from './decor.jsx'
+import Estructuras, { estructurasWarmup } from './estructuras.jsx'
 import Eventos, { eventosWarmup } from './eventos.jsx'
 import KartPista from './kartPista.jsx'
 
@@ -45,6 +48,26 @@ export function surfFrame(seg, laneId, u, out = {}) {
 }
 export const lanesOf = (seg) => (seg.air ? [] : seg.lanes ?? [])
 export const halfWidth = (lane) => (lane?.width ?? BALL_R * 2.6) / 2
+
+const F_SIDE_CHK = {}
+/** True si `pos` guarda al menos `minClear` desde el bordillo de cualquier otro carril del tramo en `u`. */
+export function laneSideClear(seg, lane, u, pos, minClear) {
+  const lanes = lanesOf(seg)
+  for (let i = 0; i < lanes.length; i++) {
+    const other = lanes[i]
+    if (other.id === lane.id) continue
+    const fo = surfFrame(seg, other.id, u, F_SIDE_CHK)
+    const need = halfWidth(other) + CURB + minClear
+    if (pos.distanceToSquared(fo.pos) < need * need) return false
+  }
+  return true
+}
+
+/** Altura relativa de la berma respecto a `pos` del carril según distancia lateral `ax` y borde `E`. */
+export function bermY(ax, E) {
+  const t = Math.max(0, Math.min(1, (ax - E) / TERR))
+  return t < 0.5 ? 0.025 + (0.06 - 0.025) * (t / 0.5) : 0.06 - 0.22 * ((t - 0.5) / 0.5)
+}
 
 // ─────────────────────────── texturas (generate_textures.py --pista) ───────────────────────────
 const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
@@ -84,10 +107,12 @@ function trackTex(file, fallback, opts = true) {
 }
 
 // ─────────────────────────── material de pista (uno por tema, compartido) ───────────────────────────
+const TRACK_TIME = { value: 0 }
 const matCache = new Map()
 function trackMat(themeId) {
   if (matCache.has(themeId)) return matCache.get(themeId)
   const P = pal(themeId)
+  const fx = themeFx(themeId)
   const isNeon = themeId === 'neon'
   // Lambert: enlace del shader y relleno mucho más baratos que Standard; para asfalto mate basta.
   const m = new THREE.MeshLambertMaterial({
@@ -98,7 +123,7 @@ function trackMat(themeId) {
     uLayout: { value: trackTex('track_layout.png', [225, 0, 0, 255]) },
     uAsfaltoTex: { value: trackTex('carrera_asfalto.webp', [55, 55, 62], { repeatS: true, repeatT: true, srgb: true }) },
     uTemaTex: { value: trackTex(THEME_TEX[themeId] ?? 'terreno_pasto.webp', [128, 128, 128], { repeatS: true, repeatT: true, srgb: true }) },
-    uTemaMix: { value: isNeon ? 0.55 : 0.25 },
+    uTemaMix: { value: isNeon ? 0.55 : 0.3 },
     uAsfalto: { value: new THREE.Color(P.asfalto) },
     uA: { value: new THREE.Color(P.a) },
     uB: { value: new THREE.Color(P.b) },
@@ -106,18 +131,25 @@ function trackMat(themeId) {
     uTerreno: { value: new THREE.Color(P.terreno) },
     uRoca: { value: new THREE.Color(P.roca) },
     uChev: { value: new THREE.Color(P.chev) },
+    uTrackTime: TRACK_TIME,
+    uThemeMode: { value: fx.mode },
+    uFxC1: { value: new THREE.Color(fx.c1) },
+    uFxC2: { value: new THREE.Color(fx.c2) },
+    uFxFog: { value: new THREE.Color(fx.fog) },
   }
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U)
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aChev;\nattribute float aUnder;\nvarying vec2 vTrackUv;\nvarying float vChev;\nvarying float vUnder;')
+      .replace('#include <common>', '#include <common>\nattribute float aChev;\nattribute float aUnder;\nvarying vec2 vTrackUv;\nvarying float vChev;\nvarying float vUnder;\nvarying vec3 vTrackWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTrackUv = uv;\nvChev = aChev;\nvUnder = aUnder;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvTrackWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;')
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform sampler2D uLayout; uniform sampler2D uAsfaltoTex; uniform sampler2D uTemaTex;
-        uniform float uTemaMix;
+        uniform float uTemaMix; uniform float uTrackTime; uniform float uThemeMode;
         uniform vec3 uAsfalto; uniform vec3 uA; uniform vec3 uB; uniform vec3 uLinea; uniform vec3 uTerreno; uniform vec3 uRoca; uniform vec3 uChev;
-        varying vec2 vTrackUv; varying float vChev; varying float vUnder;
+        uniform vec3 uFxC1; uniform vec3 uFxC2; uniform vec3 uFxFog;
+        varying vec2 vTrackUv; varying float vChev; varying float vUnder; varying vec3 vTrackWPos;
         vec3 sampleCropped(sampler2D tex, vec2 p) {
           vec2 uv = 0.15 + fract(p) * 0.70;
           #if __VERSION__ >= 300
@@ -157,9 +189,46 @@ function trackMat(themeId) {
           col = mix(col, uChev, chev * asf * smoothstep(0.0, 0.5, ca) * 0.85);
         }
         diffuseColor.rgb *= col;`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * mix(0.22, 0.08, vUnder);')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        float _t = uTrackTime;
+        vec3 _wp = vTrackWPos;
+        vec3 _tfx = vec3(0.0);
+        float _bermMask = (1.0 - smoothstep(${TRACK_U[0]} - 0.02, ${TRACK_U[0]} + 0.02, vTrackUv.x) * (1.0 - smoothstep(${TRACK_U[3]} - 0.02, ${TRACK_U[3]} + 0.02, vTrackUv.x))) * (1.0 - smoothstep(0.0, 0.25, vUnder));
+        if (uThemeMode < 0.5) {
+          float dap = 0.5 + 0.5 * sin(_wp.x * 0.22 + _t * 0.65) * cos(_wp.z * 0.22 - _t * 0.5);
+          _tfx = uFxC1 * (dap * 0.08 * (1.0 - vUnder));
+        } else if (uThemeMode < 1.5) {
+          float ca = pow(0.5 + 0.5 * sin(_wp.x * 0.42 + _t * 1.7 + sin(_wp.z * 0.32 - _t)), 3.0) * (0.5 + 0.5 * cos(_wp.z * 0.38 - _t * 1.3));
+          _tfx = mix(uFxC2, uFxC1, ca) * (ca * 0.36 * (1.0 - vUnder * 0.6));
+        } else if (uThemeMode < 2.5) {
+          float rip = pow(0.5 + 0.5 * sin(vTrackUv.y * 1.2 + _t * 0.9), 2.0);
+          _tfx = uFxC1 * (rip * 0.08 * _bermMask);
+        } else if (uThemeMode < 3.5) {
+          float au = smoothstep(0.32, 0.95, 0.5 + 0.5 * sin(_wp.x * 0.09 + _wp.z * 0.11 + _t * 1.1));
+          _tfx = mix(uFxC2, uFxC1, au) * (au * 0.22 * (1.0 - vUnder * 0.5));
+        } else if (uThemeMode < 4.5) {
+          float lv = pow(0.5 + 0.5 * sin(vTrackUv.y * 1.8 - _t * 2.2 + sin(_wp.x * 0.35)), 4.0);
+          _tfx = mix(uFxC1, uFxC2, lv) * (lv * (0.12 + 0.48 * _bermMask));
+        } else if (uThemeMode < 5.5) {
+          vec3 irid = 0.5 + 0.5 * cos(6.28318 * (vTrackUv.x * 1.3 + _t * 0.16 + (_wp.x + _wp.z) * 0.03 + vec3(0.0, 0.33, 0.67)));
+          _tfx = mix(uFxC1, irid, 0.7) * (0.12 + 0.14 * _bermMask);
+        } else if (uThemeMode < 6.5) {
+          float gld = 0.5 + 0.5 * sin(vTrackUv.y * 0.8 + _t * 0.8);
+          _tfx = mix(uFxC2, uFxC1, gld) * (0.12 * (1.0 - vUnder * 0.5));
+        } else if (uThemeMode < 7.5) {
+          float swp = pow(max(0.0, sin(vTrackUv.y * 0.6 - _t * 3.4)), 7.0);
+          float edge = smoothstep(0.02, 0.0, abs(vTrackUv.x - ${TRACK_U[1]})) + smoothstep(0.02, 0.0, abs(vTrackUv.x - ${TRACK_U[2]}));
+          _tfx = mix(uFxC1, uFxC2, 0.5 + 0.5 * sin(vTrackUv.y * 0.25 + _t)) * (swp * 0.42 + edge * 0.28 * (1.0 - vUnder));
+        } else if (uThemeMode < 8.5) {
+          _tfx = mix(uFxC1, uFxC2, 0.5 + 0.5 * sin(_wp.x * 0.25 + _t)) * (0.09 * _bermMask);
+        } else {
+          float mist = smoothstep(0.25, 0.9, 0.5 + 0.5 * sin(_wp.x * 0.14 - _t * 0.8 + cos(_wp.z * 0.16 + _t * 0.5)));
+          _tfx = mix(uFxC2, uFxC1, mist) * (mist * 0.22 * (0.4 + 0.6 * _bermMask));
+        }
+        float _distFog = smoothstep(55.0, 175.0, length(vViewPosition)) * 0.42;
+        totalEmissiveRadiance += diffuseColor.rgb * mix(0.24, 0.1, vUnder) + _tfx + uFxFog * _distFog;`)
   }
-  m.customProgramCacheKey = () => 'pista-v4'
+  m.customProgramCacheKey = () => 'pista-v5'
   markShared(m)
   matCache.set(themeId, m)
   return m
@@ -301,8 +370,9 @@ export function pistaWarmup(extra = []) {
   tiny.setAttribute('aUnder', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
   tiny.setAttribute('aPhase', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
   tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
+  tiny.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
-  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...extra]) {
+  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...estructurasWarmup(), ...extra]) {
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
@@ -310,7 +380,25 @@ export function pistaWarmup(extra = []) {
   return g
 }
 
-export default function Pista({ way }) {
+const BASE_FOG_COLOR = new THREE.Color('#050711')
+
+function TemaAtmosfera({ focused, themeId }) {
+  const fx = useMemo(() => themeFx(themeId), [themeId])
+  const fogTarget = useMemo(() => new THREE.Color(fx.fog), [fx])
+  const scene = useThree((s) => s.scene)
+
+  useEffect(() => () => {
+    if (scene.fog) scene.fog.color.copy(BASE_FOG_COLOR)
+  }, [scene, focused])
+
+  useFrame((_, dt) => {
+    if (focused && scene.fog) scene.fog.color.lerp(fogTarget, Math.min(1, dt * 3.5))
+  })
+
+  return null
+}
+
+export default function Pista({ way, detail, focused, time }) {
   const geo = geoCache.get(way)
   const [, listo] = useState(0)
   // Sin precalcular aún: se termina en porciones de ~6 ms por cuadro y aparece al estar lista (entra volando).
@@ -325,13 +413,20 @@ export default function Pista({ way }) {
     raf = requestAnimationFrame(paso)
     return () => cancelAnimationFrame(raf)
   }, [way])
+  useFrame(({ clock }) => {
+    const t = time ? time.value : clock.elapsedTime
+    TRI_TIME.value = t
+    TRACK_TIME.value = t
+  })
   const mat = useMemo(() => trackMat(way.theme.id), [way])
   return (
     <>
+      <TemaAtmosfera focused={focused} themeId={way.theme?.id} />
       {geo && <mesh geometry={geo} material={mat} receiveShadow />}
       <KartPista way={way} />
       <Anillos way={way} />
-      <Decor way={way} />
+      <Decor way={way} focused={focused} />
+      <Estructuras way={way} detail={detail} focused={focused} time={time} />
       <Eventos way={way} />
     </>
   )

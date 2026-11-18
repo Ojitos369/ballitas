@@ -7,7 +7,7 @@
 //                      amplitudes y caídas (`drop`) de obstáculos.
 //   TUBE_SCALE  (1.8): factor del radio de los tubos (`P.radius`); `BALL_R` queda fijo (0.5)
 //                      para dejar espacio interior a pórticos, gradas y decoración.
-//   SIZE_K      (2.5): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
+//   SIZE_K      (2.8): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
 //   TRACK_K     (4.7): escala uniforme de todo lo espacial del trazado (incluidos NODE_R, LANE_W y el efecto de
 //                      WORLD_SCALE/TUBE_SCALE); BALL_R no escala: calzada LANE_W = 4.89 u (~6 ballitas de ancho).
 //   PORT_ZONE: radio desde el centro de un nodo donde los caminos que llegan a él se unen (inPort); fuera de él y de
@@ -111,14 +111,14 @@ import * as THREE from 'three'
 export const WORLD_SCALE = 2.8
 export const TUBE_SCALE = 1.8
 // Ampliación del mapa (esfera de nodos, panza y arco de los caminos) sin agrandar las pistas: más espacio entre caminos.
-export const SIZE_K = 2.5
+export const SIZE_K = 2.8
 // Escala uniforme del trazado: TODO lo espacial (nodos, radios, separaciones, anchos, trenzas, rectas, márgenes, alturas y
 // pasos de muestreo) se multiplica por TRACK_K; la ballita no (BALL_R fijo). Las holguras en radios de pista quedan como con
 // TRACK_K = 1 y la calzada (LANE_W) queda TRACK_K veces más ancha respecto a la ballita: ~6 ballitas de ancho.
 export const TRACK_K = 4.7
 const TK = TRACK_K
 const WS = WORLD_SCALE * TK
-export const NODE_R = 7.5 * TK
+export const NODE_R = 8.5 * TK
 export const BALL_R = 0.4
 export const MIN_GAP_K = 1.5 // huelgo mínimo, en radios de pista, entre caminos de cualquier ruta (fuera de uniones)
 const Y = new THREE.Vector3(0, 1, 0)
@@ -445,8 +445,8 @@ export const LANE_W = +(0.4 * 2.6).toFixed(2) * TK
 // Semiancho útil de la calzada para el centro de la ballita y desvío lateral (u) del carril c (0..CARRILES-1).
 export const CARRIL_EDGE = LANE_W / 2 - BALL_R * 0.85
 export const carrilLat = (c, edge = CARRIL_EDGE) => ((clamp(c, 0, CARRILES - 1) / (CARRILES - 1)) - 0.5) * 2 * edge
-export const BRAID_A = 4.6 * TK // separación nominal (u) de cada camino respecto al central en el tramo abierto
-const BRAID_PAD = 4 * TK // holgura del envolvente para ancho de pista, ballita y arcos
+export const BRAID_A = 5.2 * TK // separación nominal (u) de cada camino respecto al central en el tramo abierto
+const BRAID_PAD = 4.5 * TK // holgura del envolvente para ancho de pista, ballita y arcos
 const BRAID_OPEN = 16 * TK // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
 const BRAID_RAMP = 18 * TK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
 export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon', 'tirabuzon_inv']
@@ -882,13 +882,13 @@ function buildLanes(way) {
   for (const s of way.segments) for (const sw of s.switches) delete sw._arc
 }
 
-const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un nodo
+const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si la distribución no admite 0.82
 
 // Elecciones de la búsqueda de huecos ({theta, bowExtra, salt} por camino), calculadas aparte (worker/caché):
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 5
+export const WORLD_GEN = 7
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -944,7 +944,7 @@ function buildCity(world, node, def, rng) {
     pool.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r))
   }
   const pickTerminal = (biasDir) => {
-    for (const minAng of [0.68, TERM_MIN_ANG]) {
+    for (const minAng of [0.82, TERM_MIN_ANG]) {
       const minDot = Math.cos(minAng)
       const cands = pool.filter((d) => dirs.every((u) => u.dot(d) < minDot))
       if (!cands.length) continue
@@ -1235,7 +1235,7 @@ function wrapMid(node, dir, target) {
 // Extensión real de la ruta en `u` (carriles abiertos de la trenza + ancho de pista), para medir rutas de un mismo sentido.
 export const routeExtent = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + LANE_W / 2 + 0.5 * TK)
 export const ROUTE_JOIN = 56 * TK // radio (u, euclidiano) alrededor de fork/cross/merge donde las rutas aún se abren en abanico por diseño
-export const SPREAD_K = 1.2 // separación lateral entre rutas de un mismo sentido, sobre P.spread
+export const SPREAD_K = 1.3 // separación lateral entre rutas de un mismo sentido, sobre P.spread
 // Si dos rutas de una mitad se tocan (routeSlack < ROUTE_MARGIN) se prueba otra fila: otro orden de las rutas (PERMS) y luego más apertura.
 const SPREAD_STEPS = [1, 1.4, 1.9]
 const PERMS = { 2: [[0, 1], [1, 0]], 3: [[0, 1, 2], [2, 1, 0], [1, 0, 2], [0, 2, 1], [1, 2, 0], [2, 0, 1]] }
@@ -1256,7 +1256,9 @@ function sampleWayPoints(way, steps = 14) {
       const p = s.curve.getPointAt(u)
       // zona de puerto: cerca del centro de uno de sus dos nodos los caminos se unen y no se mide separación entre ellos
       const zn = way.ends.findIndex((n) => p.distanceToSquared(n.pos) < PORT_ZONE * PORT_ZONE)
-      const hubD = Math.min(...way.junctions.map((j) => j.pos.distanceTo(p)))
+      let hubD2 = Infinity
+      for (const j of way.junctions) hubD2 = Math.min(hubD2, j.pos.distanceToSquared(p))
+      const hubD = Math.sqrt(hubD2)
       pts.push({ p, r: braidRadius(s, u), kind: s.kind, zn: zn < 0 ? -1 : way.ends[zn].idx, f: way.from, t: way.to, c: way.circuit.idx, route: s.route, hubD, ext: routeExtent(s, u), tube: s.radius })
     }
   }
@@ -1297,11 +1299,11 @@ const pointCell = (p) => cellKey(Math.floor(p.x / SPATIAL_CELL), Math.floor(p.y 
 function indexPlacedWay(placed, entry) {
   placed.push(entry)
   const grid = placed.grid || (placed.grid = new Map())
-  for (const q of entry.pts) {
-    const key = pointCell(q.p); let bucket = grid.get(key)
-    if (!bucket) grid.set(key, bucket = [])
-    bucket.push(q)
-  }
+  const gridC = placed.gridC || (placed.gridC = new Map()) // rejilla rala (1 de cada 4 puntos): sólo la usa la criba gruesa, que únicamente poda
+  entry.pts.forEach((q, i) => {
+    const key = pointCell(q.p)
+    for (const g of i % 4 === 0 ? [grid, gridC] : [grid]) { let bucket = g.get(key); if (!bucket) g.set(key, bucket = []); bucket.push(q) }
+  })
 }
 
 function placeWayAt(world, circuit, from, to, placed, pick) {
@@ -1322,7 +1324,7 @@ function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
   const baseTheta = ((circuit.idx * 0.6180339887 + (from < to ? 0 : 0.5) + (world.attempt || 0) * 0.137) % 1) * TAU
-  const N_ANG = 16
+  const N_ANG = 12
   let best = null; let bestScore = -Infinity
 
   // floor: puntaje a superar. Se corta en cuanto el resultado ya no puede superarlo NI cumplir okRes (mismo desenlace en tryCand).
@@ -1347,12 +1349,18 @@ function placeWay(world, circuit, from, to, placed) {
       for (const h1 of cand.junctions) for (const h2 of prev.hubs) minHub = Math.min(minHub, h1.pos.distanceTo(h2.pos))
     }
     if ((minNode < 1.5 * TK || minHub < 24 * TK) && Math.min(TARGET, minNode + TK, minHub * 0.2) <= floor) return { minTube: -Infinity, minNode, minHub, minAt: null }
-    const grid = placed.grid
+    const grid = steps === 14 ? placed.gridC : placed.grid
+    let lastKey = NaN; let near = null // puntos consecutivos comparten celda: se reúnen sus 27 cubetas una sola vez
     if (grid) for (const pt of pts) {
       const x = Math.floor(pt.p.x / SPATIAL_CELL); const y = Math.floor(pt.p.y / SPATIAL_CELL); const z = Math.floor(pt.p.z / SPATIAL_CELL)
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const bucket = grid.get(cellKey(x + dx, y + dy, z + dz))
-        if (!bucket) continue
+      const ck = cellKey(x, y, z)
+      if (ck !== lastKey) {
+        lastKey = ck; near = []
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+          const bucket = grid.get(cellKey(x + dx, y + dy, z + dz)); if (bucket) near.push(bucket)
+        }
+      }
+      for (const bucket of near) {
         for (const q of bucket) {
           if (inPort(pt, q)) continue // puerto común (la ida y la vuelta de un circuito también deben guardar huelgo entre sí fuera de él)
           const r = pt.r + q.r + MIN_GAP_K * Math.max(pt.tube, q.tube); const d2 = pt.p.distanceToSquared(q.p) // holgura sobre 1.5 radios de pista (igual que tools/overlap.mjs)
@@ -1410,8 +1418,11 @@ function placeWay(world, circuit, from, to, placed) {
   const BOWS = [-12, 0, 10, 20, 32, 46, 62, 80, 100].map((x) => x * WS * SIZE_K)
   const search = () => {
     for (const [half, salt] of [[0, 0], [0.5, 1], [0.25, 2]]) {
-      for (const bowExtra of BOWS) for (let k = 0; k < N_ANG; k++) {
-        if (tryCand((baseTheta + ((k + half) / N_ANG) * TAU) % TAU, bowExtra, salt)) return true
+      for (const bowExtra of BOWS) {
+        for (let k = 0; k < N_ANG; k++) {
+          if (tryCand((baseTheta + ((k + half) / N_ANG) * TAU) % TAU, bowExtra, salt)) return true
+        }
+        if (bestRes && okRes(bestRes, TARGET_LOW)) return true // holgura cómoda tras cada panza: no recorrer las demás
       }
       if (bestRes && okRes(bestRes, TARGET_LOW)) return true // tras cada pasada completa basta una holgura cómoda: no agotar las demás
     }
@@ -1419,7 +1430,7 @@ function placeWay(world, circuit, from, to, placed) {
   }
   if (!search() && !(bestRes && okRes(bestRes, CLEAR))) {
     // fases intermedias y más apertura de panza
-    extra: for (const salt of [3, 4, 5, 6, 7, 8]) for (const bow of [-30, 0, 40, 120, 200, 300]) for (let k = 0; k < N_ANG; k += 2) {
+    extra: for (const salt of [3, 4]) for (const bow of [-30, 0, 40, 120, 200, 300]) for (let k = 0; k < N_ANG; k += 2) {
       if (tryCand((baseTheta + ((k + 0.375) / N_ANG) * TAU) % TAU, bow * WS * SIZE_K, salt) || (bestRes && okRes(bestRes, CLEAR))) break extra
     }
   }
@@ -1624,7 +1635,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       const kinds = halves[h]
       const [Q0, Q1] = Qs[r]
       // las paradas intermedias tampoco se hunden por dentro de la esfera
-      for (const Q of [Q0, Q1]) if (Q.length() < SPHERE_R * 0.5) Q.setLength(SPHERE_R * 0.5)
+      for (const Q of [Q0, Q1]) if (Q.length() < SPHERE_R * 0.53) Q.setLength(SPHERE_R * 0.53)
       const Tbase = [Q1.clone().sub(A).normalize(), B.clone().sub(Q0).normalize()]
       const pts = [A, Q0, Q1, B]
       const cs = [null, null, null]
@@ -1718,6 +1729,10 @@ export const RIBBON_TERR = 0.55 * TK
 export const RIBBON_HALF = LANE_W / 2 + RIBBON_CURB + RIBBON_TERR
 export const RIBBON_GAP = 0.8 * TK // hueco entre cintas: una ballita con TRACK_K = 1 (escala con el trazado)
 export const RIBBON_CLEAR = 2 * RIBBON_HALF + RIBBON_GAP
+// Margen que sobresale de la berma para cubrir los anillos neón y la decoración lateral.
+// El anillo de anillos.jsx usa escala (H + CURB + TERR * 0.55) * 2.15; se toma su
+// envolvente completa respecto del centro del carril para medir el espacio que ve la cámara.
+export const VISUAL_PAD = Math.max(0, (LANE_W / 2 + RIBBON_CURB + RIBBON_TERR * 0.55) * 2.15 - RIBBON_HALF)
 const RIB_STEP = 1.5 * TK
 const RIB_SELF = 12 * TK
 // histéresis de la unión: dos cintas que nacen juntas quedan exentas hasta separarse esto (una ballita y un margen);

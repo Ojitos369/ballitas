@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as THREE from 'three'
-import { buildWorld, ribbonHits, ribbonSamples, RIBBON_CLEAR } from './world.js'
+import { buildWorld, ribbonHits, ribbonSamples, RIBBON_CLEAR, LANE_W } from './world.js'
 import { measure, MIN_GAP_K } from '../../tools/overlap.mjs'
 
 const SEEDS = [1, 2, 3, 27, 369, 7, 11, 40] // 27: semilla que antes dejaba un camino sin hueco
@@ -18,6 +18,13 @@ for (const seed of SEEDS) {
     for (const [k, name] of Object.entries(CATS)) {
       assert.ok(m[k].slack >= 0, `semilla ${seed}, ${name}: huelgo ${m[k].gap.toFixed(2)} (holgura ${m[k].slack.toFixed(2)}) ways ${m[k].a}/${m[k].b}: ${m[k].info}`)
     }
+  })
+}
+
+for (const seed of SEEDS) {
+  test(`envolvente visual separada por dos calzadas (semilla ${seed})`, () => {
+    const m = measure(mundo(seed)).visual
+    assert.ok(m.slack >= 0, `semilla ${seed}: huelgo visual ${m.gap.toFixed(2)}u, faltan ${(-m.slack).toFixed(2)}u para 2 calzadas (${2 * LANE_W}u): ways ${m.a}/${m.b} ${m.info}`)
   })
 }
 

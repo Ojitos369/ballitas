@@ -54,8 +54,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three'
 import {
-  buildWorld, cityPath, slerpDir, NODE_R, BALL_R, TRACK_K, LANE_W, OBSTACLES, KINDS,
-  laneFrame, laneLength, switchPath, laneAngle, nearestLane, angDiff,
+  buildWorld, cityPath, slerpDir, NODE_R, BALL_R, TRACK_K, SIZE_K, LANE_W, OBSTACLES, KINDS,
+  wallFrame, laneFrame, laneLength, switchPath, laneAngle, nearestLane, lowestLane, angDiff,
   segmentTangent, laneRelief, reliefSlope, segmentCurvature, CARRILES, carrilLat,
 } from './world.js'
 import { voice, moodOf, archetype } from './personality.js'
@@ -72,11 +72,12 @@ const DRAIN_E = 0.22 // energía/s siempre
 const DRAIN_P = 0.25 // puntos/s siempre
 const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
 const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
+const MAP_SPEED_K = (SIZE_K / 2.5) * 1.42 // compensa la ampliación de arcos, alturas y desvíos de rutas
 // Física del tubo. Distancias, velocidades y aceleraciones escalan con el trazado (TRACK_K): mismos tiempos de carrera.
 const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
 const GRAV = 24 * TRACK_K
 const FRIC = 0.14
-const VMAX = 48 * TRACK_K
+const VMAX = 48 * TRACK_K * MAP_SPEED_K
 const LANE_EASE = 3.5 // rapidez con la que la ballita sigue el vaivén de su carril
 const RAIL_EASE = 6 // rapidez con la que se pega a la pared (o se separa en el aire)
 const G_WALL = 24 * TRACK_K // gravedad hacia la pared del carril: tras una cresta la ballita vuela y cae a su pista
@@ -287,7 +288,7 @@ export class Sim {
   }
 
   // ───────────── ciudad: caminar por las carreteras de la esfera ─────────────
-  cruise(b) { return (4 + b.genome.traits.velocidad * 3) * TRACK_K }
+  cruise(b) { return (4 + b.genome.traits.velocidad * 3) * TRACK_K * MAP_SPEED_K }
 
   walkTo(b, vert, phase) {
     const node = this.world.nodes[b.node]
@@ -474,7 +475,7 @@ export class Sim {
       b.route = b.way.routes[seg.route]
       if (b.route !== prevRoute) b.visitedRoutes[b.route.idx] = (b.visitedRoutes[b.route.idx] || 0) + 1
     }
-    b.speed = Math.max(b.speed, seg.boost * 1.35, this.cruise(b) * TUBE_SPEED_K * (seg.speedK ?? 1))
+    b.speed = Math.max(b.speed, seg.boost * 1.35 * MAP_SPEED_K, this.cruise(b) * TUBE_SPEED_K * (seg.speedK ?? 1))
     if (WOW.includes(seg.kind)) this.say(b, seg.kind)
   }
 

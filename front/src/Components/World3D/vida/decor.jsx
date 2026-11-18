@@ -1,29 +1,25 @@
 // Rebotantes y decoración temática del bioma (kit GLB con texturas embebidas):
 // rebote_<tema> en los puntos de salto de switches y bordes de calzada, más deco_<tema>_hito,
-// deco_<tema>_flora, farola_pista y banderin colocados en la berma con colocar() sin invadir otras pistas.
+// deco_<tema>_flora, farola_pista y banderin colocados en la berma sin invadir otras pistas.
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Instanced, bermaAjusta, getWayDetail, mulberry32 } from './base.jsx'
+import { Instanced, getWayDetail, minSegDistSq, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
-import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
-import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
+import { colisionDe, colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
+import { CURB, TERR, bermY, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 import { TRACK_K } from '../../../Core/world.js'
 
 const KIT_THEMES = new Set(['sombrio', 'bosque', 'mar', 'desierto', 'hielo', 'volcan', 'cristal', 'nubes', 'neon', 'jardin'])
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const Q_Y180 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI)
-const SPACING = 3.2 * TRACK_K
-const MAX_REBOTES_JUMP = 12
-const MAX_REBOTES_SIDE = 4
-const MAX_DECO_TOTAL = 42 // hito + flora + farola + banderin (+ <=16 rebotes => <= 58 kit instancias en decor)
-
-// Altura de la berma en |x| (mismo perfil que pista.jsx)
-function bermY(ax, E) {
-  const t = Math.max(0, Math.min(1, (ax - E) / TERR))
-  return t < 0.5 ? 0.025 + (0.06 - 0.025) * (t / 0.5) : 0.06 - 0.22 * ((t - 0.5) / 0.5)
-}
+const SPACING = 2.8 * TRACK_K // ~13 u entre hitos/farolas/banderines de berma
+const FLORA_SPACING = 1.15 * TRACK_K // ~5.4 u entre matas de flora en ambas bermas
+const MAX_REBOTES_JUMP = 16
+const MAX_REBOTES_SIDE = 10
+const MAX_DECO_TOTAL = 150 // InstanceCuller recorta >= 48 a 60 u
+const MAX_FLORA_TOTAL = 200 // flora densa continua en bermas, recortada por InstanceCuller a 60 u
 
 function capStride(arr, max) {
   if (arr.length <= max) return arr
@@ -43,12 +39,14 @@ function buildDecorData(way) {
   const theme = KIT_THEMES.has(rawTheme) ? rawTheme : 'bosque'
   const rng = mulberry32(7717 + way.idx * 97)
   const world = mundoDe(way)
+  const col = world ? colisionDe(world) : null
   const local = nuevoLocal()
 
   let rebotesJump = []
   const rebotesSide = []
   const seenJump = new Set()
   const decoCands = []
+  const floraCands = []
 
   way.segments?.forEach((seg, si) => {
     if (seg.air) return
@@ -65,8 +63,8 @@ function buildDecorData(way) {
       seenJump.add(key)
       const f = surfFrame(seg, lane.id, sw.u, F)
       const H = halfWidth(lane)
-      const wSc = THREE.MathUtils.clamp(H * 1.35, 0.72, 1.15)
-      const hSc = THREE.MathUtils.clamp(H * 0.9, 0.58, 0.95)
+      const wSc = THREE.MathUtils.clamp(H * 1.35, 0.85, 1.45)
+      const hSc = THREE.MathUtils.clamp(H * 0.9, 0.68, 1.15)
       rebotesJump.push({
         pos: f.pos.clone().addScaledVector(f.up, -0.01),
         quat: basisQuat(f.up, f.tangent),
@@ -74,73 +72,97 @@ function buildDecorData(way) {
       })
     }
 
-    // 2) Decoración del bioma (hito, flora, farola_pista, banderin) y algunos rebotes laterales en bermas
+    // 2) Decoración continua en las bermas (proporcional al ancho de la calzada)
     for (const lane of lanes) {
       const H = halfWidth(lane)
       const E = H + CURB
+      const widthK = Math.max(1, H / 2.45)
       const busy = (seg.switches ?? [])
         .filter((w) => w.from === lane.id || w.to === lane.id)
         .map((w) => w.u * L)
 
-      for (let s = 5; s < L - 5; s += SPACING * (0.75 + rng() * 0.55)) {
-        const zone = 0.5 + 0.5 * Math.sin(s * 0.05 + si * 1.9 + lane.id * 1.3)
-        if (rng() > 0.14 + 0.55 * zone * zone) continue
+      let altSide = rng() < 0.5 ? -1 : 1
+      for (let s = 5; s < L - 5; s += SPACING * (0.78 + rng() * 0.44)) {
         if (busy.some((b) => Math.abs(b - s) < 4.5)) continue
 
         const u = s / L
         const f = surfFrame(seg, lane.id, u, F)
-        // Evitar amontonar si los carriles están juntos en los extremos del tramo
-        if (lane.id !== lanes[0].id) {
-          const f0 = surfFrame(seg, lanes[0].id, u, {})
-          if (f.pos.distanceToSquared(f0.pos) < (E * 2.3) ** 2) continue
-        }
 
-        const sideSign = rng() < 0.5 ? -1 : 1
+        altSide = -altSide
+        const sideSign = rng() < 0.8 ? altSide : -altSide
         const pick = rng()
         let kind = 'flora'
-        let sc = 0.65 + rng() * 0.35
+        let sc = (1.35 + rng() * 0.65) * widthK
         let rad = 0.34 * sc
-        if (pick < 0.09 && rebotesSide.length < MAX_REBOTES_SIDE * 2) {
+        if (pick < 0.06 && rebotesSide.length < MAX_REBOTES_SIDE * 2) {
           kind = 'rebote'
-          sc = 0.78 + rng() * 0.18
+          sc = (1.25 + rng() * 0.35) * widthK
           rad = 0.42 * sc
-        } else if (pick < 0.21) {
+        } else if (pick < 0.24) {
           kind = 'farola'
-          sc = 0.95 + rng() * 0.22
+          sc = (1.85 + rng() * 0.45) * widthK
           rad = 0.28 * sc
-        } else if (pick < 0.31) {
+        } else if (pick < 0.36) {
           kind = 'banderin'
-          sc = 0.9 + rng() * 0.25
+          sc = (1.75 + rng() * 0.45) * widthK
           rad = 0.26 * sc
-        } else if (pick < 0.64) {
+        } else if (pick < 0.68) {
           kind = 'hito'
-          sc = 0.68 + rng() * 0.36
+          sc = (1.45 + rng() * 0.75) * widthK
           rad = 0.34 * sc
         }
 
-        const room = TERR + 0.12
-        const ax = E + Math.min(room * 0.72, Math.max(0.24, rad + rng() * Math.max(0, room - rad * 2)))
-        const x = sideSign * ax
+        const room = TERR + 0.16
+        const ax = E + Math.min(room * 0.76, Math.max(0.32, rad * 0.55 + rng() * Math.max(0, room - rad * 1.2)))
         const o = f.pos.clone()
         const side = f.side.clone()
         const up = f.up.clone()
-        const at = (xx) => o.clone().addScaledVector(side, xx).addScaledVector(up, bermY(Math.abs(xx), E) - 0.025)
-        const ajusta = bermaAjusta(o, side, up, E, TERR, rad)
-        const seed = way.idx * 9719 + si * 131 + lane.id * 17 + Math.floor(s * 10)
-        const pos = colocar(world, { pos: at(x), seed, ajusta }, rad, { way: way.idx, si, lane: lane.id }, 4, local)
+        const rChk = rad * 0.65
+        let pos = null
+        let chosenSign = sideSign
+        for (const sgn of [sideSign, -sideSign]) {
+          const cand = o.clone().addScaledVector(side, sgn * ax).addScaledVector(up, bermY(ax, E) - 0.025)
+          if (!laneSideClear(seg, lane, u, cand, 0.35)) continue
+          if (col && !col.libre(cand, rChk, { way: way.idx })) continue
+          if (!local.libre(cand, rChk)) continue
+          pos = colocar(world, { pos: cand, seed: way.idx * 9719 + si * 131 + lane.id * 17 + Math.floor(s * 10) }, rChk, { way: way.idx }, 0, local)
+          if (pos) { chosenSign = sgn; break }
+        }
         if (!pos) continue
 
         let quat = basisQuat(up, f.tangent)
         if (kind === 'farola' || kind === 'banderin') {
-          if (sideSign > 0) quat = quat.multiply(Q_Y180)
+          if (chosenSign > 0) quat = quat.multiply(Q_Y180)
         } else {
           quat = quat.multiply(YAW.setFromAxisAngle(Y_AXIS, rng() * Math.PI * 2))
         }
 
-        if (kind === 'rebote') {
-          rebotesSide.push({ pos, quat, scale: sc })
-        } else {
-          decoCands.push({ kind, pos, quat, scale: sc })
+        if (kind === 'rebote') rebotesSide.push({ pos, quat, scale: sc })
+        else decoCands.push({ kind, pos, quat, scale: sc })
+      }
+
+      // 3) Flora densa en ambas bermas a lo largo de todo el tramo
+      for (let s = 3.2; s < L - 3.2; s += FLORA_SPACING * (0.8 + rng() * 0.4)) {
+        if (busy.some((b) => Math.abs(b - s) < 3.6)) continue
+        const u = s / L
+        const f = surfFrame(seg, lane.id, u, F)
+        const o = f.pos.clone()
+        const side = f.side.clone()
+        const up = f.up.clone()
+        const baseQuat = basisQuat(up, f.tangent)
+        for (const sgn of [-1, 1]) {
+          if (rng() > 0.86) continue
+          const sc = (1.25 + rng() * 0.95) * widthK
+          const rChk = 0.24 * sc
+          const ax = E + 0.24 + rng() * Math.max(0.15, TERR * 0.82 - 0.24)
+          const cand = o.clone().addScaledVector(side, sgn * ax).addScaledVector(up, bermY(ax, E) - 0.03)
+          if (!laneSideClear(seg, lane, u, cand, 0.3)) continue
+          if (col && !col.libre(cand, rChk, { way: way.idx })) continue
+          if (!local.libre(cand, rChk)) continue
+          const pos = colocar(world, { pos: cand, seed: way.idx * 14983 + si * 211 + lane.id * 31 + Math.floor(s * 13) + (sgn > 0 ? 5 : 0) }, rChk, { way: way.idx }, 0, local)
+          if (!pos) continue
+          const quat = baseQuat.clone().multiply(YAW.setFromAxisAngle(Y_AXIS, rng() * Math.PI * 2))
+          floraCands.push({ pos, quat, scale: sc })
         }
       }
     }
@@ -151,7 +173,7 @@ function buildDecorData(way) {
   const decos = capStride(decoCands, MAX_DECO_TOTAL)
 
   const hito = []
-  const flora = []
+  const flora = capStride(floraCands, MAX_FLORA_TOTAL)
   const farola = []
   const banderin = []
   for (const d of decos) {
@@ -185,7 +207,7 @@ function KitPieza({ nombre, items }) {
   return <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow />
 }
 
-export default function Decor({ way }) {
+export default function Decor({ way, focused }) {
   const data = useMemo(() => buildDecorData(way), [way])
   const { names, rebotes, hito, flora, farola, banderin } = data
   useEffect(() => {
@@ -194,8 +216,25 @@ export default function Decor({ way }) {
 
   const detail = getWayDetail(way)
   const solidRef = useRef()
+  const camera = useThree((s) => s.camera)
+  const nonAirSegs = useMemo(() => (way.segments ?? []).filter((s) => !s.air), [way])
+  const lastCam = useRef(new THREE.Vector3(Infinity, 0, 0))
+  const nearRef = useRef(true)
   useFrame(() => {
-    if (solidRef.current && detail) solidRef.current.visible = detail.value >= 0.3
+    if (!solidRef.current) return
+    const det = detail ? detail.value : 1
+    if (det < (focused ? 0.25 : 0.45)) { solidRef.current.visible = false; return }
+    const cam = camera.position
+    if (cam.distanceToSquared(lastCam.current) >= 100) {
+      lastCam.current.copy(cam)
+      let best = Infinity
+      for (let i = 0; i < nonAirSegs.length; i++) {
+        const d2 = minSegDistSq(nonAirSegs[i], cam)
+        if (d2 < best) best = d2
+      }
+      nearRef.current = best <= 62 * 62
+    }
+    solidRef.current.visible = nearRef.current
   })
 
   return (
