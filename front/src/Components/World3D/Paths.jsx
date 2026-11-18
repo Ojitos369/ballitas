@@ -12,6 +12,7 @@ import Precompilado from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 import Neon from './Neon.jsx'
 import Fauna from './Fauna.jsx'
+import { registrarMundo } from './colisionObjetos.js'
 import Ecosistema, { ecoMaterial, withObjLight } from './Ecosistema.jsx'
 
 const TAU = Math.PI * 2
@@ -1411,6 +1412,7 @@ function selectTopIds(list, maxCount) {
 }
 
 export default function Paths({ world, sim = null, focusWay = null, prefetchWays = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
+  useMemo(() => registrarMundo(world), [world]) // los objetos procedurales de cada camino consultan sus colisiones por el mundo
   const wayMetas = useMemo(() => world.ways.map((w) => {
     const pts = []
     for (const s of w.segments) {

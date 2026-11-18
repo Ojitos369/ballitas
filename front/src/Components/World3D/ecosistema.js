@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mulberry32 } from '../../Core/world.js'
+import { colocar, mundoDe, nuevoLocal } from './colisionObjetos.js'
 
 const PI = Math.PI
 const TAU = PI * 2
@@ -433,6 +434,7 @@ const EVENT_PIECES = { geiser: 'geiser', canon: 'geiser', erupcion: 'volcan', ca
 
 const WHITE = new THREE.Color('#ffffff')
 const rr = (rng, [a, b]) => a + (b - a) * rng()
+const radioEco = (key) => { const g = ecoGeometry(key); g.boundingSphere ?? g.computeBoundingSphere(); return g.boundingSphere.radius }
 
 /**
  * Reparte detalles y transiciones del camino. `getFrames(seg)` y `sample(frames, u)` son los de Paths.jsx
@@ -441,6 +443,8 @@ const rr = (rng, [a, b]) => a + (b - a) * rng()
 export function buildEcosistema(way, getFrames, sample) {
   const id = way.theme.id
   const rng = mulberry32(way.idx * 7307 + 53)
+  const world = mundoDe(way) // sin mundo registrado (tests, vistas sueltas) no se revisan choques
+  const local = nuevoLocal()
   const groups = new Map()
   const add = (key, m, c, sc) => {
     let g = groups.get(key)
@@ -479,9 +483,10 @@ export function buildEcosistema(way, getFrames, sample) {
     pieces++
     if (pk === 'geiser' || pk === 'volcan') {
       const sc = R * (pk === 'volcan' ? 1.6 : 1.3)
-      const mm = new THREE.Matrix4().compose(f0.pos.clone().addScaledVector(Yw, -R * 0.6), yaw(), new THREE.Vector3(sc, sc, sc))
+      const at = colocar(world, { pos: f0.pos.clone().addScaledVector(Yw, -R * 0.6), seed: way.idx * 7307 + pieces }, sc * 0.5, { way: way.idx, si: way.segments.indexOf(s), lane: null }, 4, local)
+      const mm = new THREE.Matrix4().compose(at ?? f0.pos, yaw(), new THREE.Vector3(sc, sc, sc))
       const gl = rng() < 0.7 // 70% con el GLB como base, el resto procedural
-      add(pk === 'volcan' ? (gl ? 'm:volcan_erupcion' : 'volcan:-') : gl ? `m:geiser:${id}` : `geiser:${id}`, mm, WHITE, sc)
+      if (at) add(pk === 'volcan' ? (gl ? 'm:volcan_erupcion' : 'volcan:-') : gl ? `m:geiser:${id}` : `geiser:${id}`, mm, WHITE, sc)
     } else if (pk === 'cascada') {
       const f1 = sample(frames, 1)
       const top = f0.pos.clone().addScaledVector(f0.right, R * 1.25)
@@ -508,6 +513,7 @@ export function buildEcosistema(way, getFrames, sample) {
     for (const s of way.segments) {
       if (s.air || cnt >= cap || total >= TOTAL_CAP) continue
       const R = s.radius
+      const si = way.segments.indexOf(s)
       const frames = getFrames(s)
       const n = Math.round(s.length * spec.d)
       for (let i = 0; i < n && cnt < cap && total < TOTAL_CAP; i++) {
@@ -531,13 +537,15 @@ export function buildEcosistema(way, getFrames, sample) {
         }
         const sc = rr(rng, spec.s)
         const mn = spec.mod ?? (ALT[spec.k] && rng() < (ALT_P[spec.k] ?? 0.4) ? ALT[spec.k] : null)
-        if (mn && mTris + TRIS[mn] <= MODEL_TRIS_CAP) {
-          mTris += TRIS[mn]
-          add(`m:${mn}`, new THREE.Matrix4().compose(pos, q, _s.set(sc, sc, sc)), tints[Math.floor(rng() * tints.length)], sc)
-          cnt++; total++
-          continue
-        }
-        add(`s:${spec.k}`, new THREE.Matrix4().compose(pos, q, _s.set(sc, sc, sc)), tints[Math.floor(rng() * tints.length)], sc)
+        const asModel = mn && mTris + TRIS[mn] <= MODEL_TRIS_CAP
+        const tint = tints[Math.floor(rng() * tints.length)]
+        const key = asModel ? `m:${mn}` : `s:${spec.k}`
+        // sin sitio (cinta o tubo ajenos, u otro detalle) se descarta; lo grande también esquiva a sus vecinos
+        const rad = world ? radioEco(key) * sc : 0
+        const at = colocar(world, { pos, seed: way.idx * 7307 + total * 53 + cnt }, rad, { way: way.idx, si, lane: null }, 4, rad > 0.5 ? local : null)
+        if (!at) continue
+        if (asModel) mTris += TRIS[mn]
+        add(key, new THREE.Matrix4().compose(at, q, _s.set(sc, sc, sc)), tint, sc)
         cnt++; total++
       }
     }

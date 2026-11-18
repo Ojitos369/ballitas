@@ -39,7 +39,6 @@ Los elementos del mini mundo son los mecanismos que cambian de carril a la balli
 
 - `routeInfo(way)` devuelve el tema, `V` (los VISUALS), el radio, los tramos con `{ kind, event, speedK, length, start, mid, lanes, switches }`, las rutas con su `profile` y los tramos compartidos y de evento. Queda en caché por `way`.
 - `placeAlong(seg, u, offset, angle)` devuelve `{ pos, quat, up, tangent, side, center, R }`: Y local apunta al eje y Z local a la tangente. En bucles por frame se usa `placeAlongInto` con un objeto de `makePlacement()`, para no crear objetos.
-- `scatter(way, n, rng, opts)` reparte objetos por la pared y respeta el cauce de los carriles. Sus opciones son `segments`, `angle`, `clear`, `offset`, `u` y `scale`.
 - `segPath(segs)` arma un camino continuo sobre varios tramos con `locate(s)` y `arcOf(seg, u)`.
 - `useInstanced(geo, mat, items)` e `<Instanced>` sirven para instanciar. Cada item lleva `{ pos, quat, scale, color }`, y las matrices se escriben solo cuando cambian los items.
 - `CanvasText(texto, estilo)`, `textMaterial(ct)` y `<Billboard>` dan carteles con textura y material en caché por texto y estilo. `faceCamera` usa el Billboard de drei.

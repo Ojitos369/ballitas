@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mulberry32 } from '../../Core/world.js'
 import { FAUNA } from './themes.js'
+import { colocar, mundoDe, nuevoLocal } from './colisionObjetos.js'
 
 const MAX_PER_SPECIES = 60
 const _m = new THREE.Matrix4()
@@ -118,11 +119,14 @@ function makeMaterial(k, time) {
 }
 
 const rr = (rng, [a, b]) => a + (b - a) * rng()
+const boundR = (k) => { const g = speciesGeo(k); g.boundingSphere ?? g.computeBoundingSphere(); return g.boundingSphere.radius }
 
 function buildFauna(way, getFrames, sample) {
   const specs = FAUNA[way.theme.id] ?? []
   const rng = mulberry32(way.idx * 4421 + 311)
   const out = []
+  const world = mundoDe(way)
+  const local = nuevoLocal() // la fauna no se atraviesa entre sí
   specs.forEach((spec) => {
     const items = []; const mv = []
     const cols = spec.c.map((c) => new THREE.Color(c))
@@ -149,8 +153,13 @@ function buildFauna(way, getFrames, sample) {
         const sc = rr(rng, spec.s)
         const r = rr(rng, spec.r)
         const dir = rng() < 0.5 ? 1 : -1
-        items.push({ m: new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(sc, sc, sc)), c: cols[Math.floor(rng() * cols.length)] })
-        mv.push(dir * rr(rng, spec.spd), rng() * 6.28, (top ? r * 0.2 : r * 0.4) / sc, r / sc)
+        const c = cols[Math.floor(rng() * cols.length)]
+        const mv4 = [dir * rr(rng, spec.spd), rng() * 6.28]
+        // su propio tubo no cuenta; ni cintas ni tubos ajenos (el radio incluye la patrulla del shader)
+        const placed = colocar(world, { pos, seed: way.idx * 4421 + items.length * 37 + mv.length }, boundR(spec.k) * sc + r * 0.5, { way: way.idx, si: way.segments.indexOf(s), lane: null }, 4, local)
+        if (!placed) continue
+        items.push({ m: new THREE.Matrix4().compose(placed, quat, new THREE.Vector3(sc, sc, sc)), c })
+        mv.push(...mv4, (top ? r * 0.2 : r * 0.4) / sc, r / sc)
       }
     }
     if (items.length) out.push({ k: spec.k, items, mv: new Float32Array(mv) })
