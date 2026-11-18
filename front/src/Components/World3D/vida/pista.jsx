@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { applyLoadedImage } from '../texUtils.js'
 import { BALL_R, markShared } from './base.jsx'
+import Anillos, { anillosWarmup } from './anillos.jsx'
 import Decor from './decor.jsx'
 import Eventos, { eventosWarmup } from './eventos.jsx'
 import KartPista from './kartPista.jsx'
@@ -288,8 +289,10 @@ export function pistaWarmup(extra = []) {
   const tiny = new THREE.PlaneGeometry(0.01, 0.01)
   tiny.setAttribute('aChev', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
   tiny.setAttribute('aUnder', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
+  tiny.setAttribute('aPhase', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
+  tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
-  for (const mat of [...eventosWarmup(), ...extra]) {
+  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...extra]) {
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
@@ -317,6 +320,7 @@ export default function Pista({ way }) {
     <>
       {geo && <mesh geometry={geo} material={mat} receiveShadow />}
       <KartPista way={way} />
+      <Anillos way={way} />
       <Decor way={way} />
       <Eventos way={way} />
     </>
