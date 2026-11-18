@@ -4,23 +4,22 @@
 //   cross : circuitos distintos.
 //   same  : ida contra vuelta del mismo circuito.
 //   route : rutas distintas dentro de un mismo sentido (extensión real de carriles, routeExtent; se excluye la zona de unión fork/cross/merge, ROUTE_JOIN).
-//   lane  : carriles trenzados de un mismo tramo entre sí (centro-a-centro menos LANE_W, contra 1.5 radios de carril = 0.75 LANE_W; se excluyen las puntas
-//           donde la trenza aún no está abierta, env < LANE_OPEN, y un mismo carril contra sí mismo a menos de LANE_SELF u de arco).
-// Zona de puerto: dos ways que llegan al mismo nodo se unen allí; no se mide un par si uno de sus puntos está a menos de
-// PORT_ZONE del centro de un nodo de ambos ways (world.inPort).
+//   lane  : cintas visibles de carriles de un mismo tramo entre sí (ver measureRibbons).
+//   cintas: toda cinta visible contra toda cinta (geometría que dibuja pista.jsx), fuera de uniones diseñadas.
+// Zona de puerto (sólo cross/same, medidos sobre el eje): dos ways que llegan al mismo nodo se unen allí; no se mide un par
+// si uno de sus puntos está a menos de PORT_ZONE del centro de un nodo de ambos ways (world.inPort). Las cintas no tienen
+// esa zona: sólo la excepción de unión de world.ribbonHits.
 //   uso: node tools/overlap.mjs [nSemillas=20] [semilla0=1] [rutaModulo=../src/Core/world.js] [-] [malas]
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
 const modPath = process.argv[4] && process.argv[4] !== '-' ? pathToFileURL(resolve(process.argv[4])).href : '../src/Core/world.js'
 const W = await import(modPath)
-const { buildWorld, braidRadius, routeExtent, NODE_R, GRID_LEN, LANE_W } = W
+const { buildWorld, braidRadius, routeExtent, NODE_R, GRID_LEN, ribbonHits, RIBBON_CLEAR } = W
 const inPort = W.inPort ?? ((p, q) => p.zn >= 0 && p.zn === q.zn)
 export const MIN_GAP_K = W.MIN_GAP_K ?? 1.5 // huelgo mínimo, en radios de pista (seg.radius mayor del par)
 const PORT_ZONE = W.PORT_ZONE ?? NODE_R + GRID_LEN + 20
 const ROUTE_JOIN = W.ROUTE_JOIN ?? 56 // radio (u, euclidiano) alrededor de fork/cross/merge donde las rutas se abren en abanico por diseño
-const LANE_OPEN = 0.75 // trenza abierta: el carril más cercano al central ya está a >= LANE_GAP
-const LANE_SELF = 25 // un carril sólo se compara consigo mismo a más de esto de arco
 const CELL = 40
 
 function sampleWay(way) {
@@ -37,37 +36,24 @@ function sampleWay(way) {
   return out
 }
 
-// Carriles trenzados de un mismo tramo entre sí.
-function measureLanes(world) {
-  const res = { gap: Infinity, slack: Infinity, info: '' }
-  const key = (x, y, z) => `${x},${y},${z}`; const C = 10
-  for (const way of world.ways) for (const s of way.segments) {
-    const br = s._braid; if (!br || s.lanes.length < 2) continue
-    const step = s.length / br.N; const grid = new Map(); const pts = []
-    for (const l of s.lanes) {
-      const P = br.P[l.id]
-      for (let i = 0; i <= br.N; i++) {
-        if (br.env[i] < LANE_OPEN) continue
-        const q = { x: P[i * 3], y: P[i * 3 + 1], z: P[i * 3 + 2], id: l.id, i }
-        pts.push(q)
-        const k = key(Math.floor(q.x / C), Math.floor(q.y / C), Math.floor(q.z / C)); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(q)
-      }
-    }
-    for (const q of pts) {
-      const cx = Math.floor(q.x / C); const cy = Math.floor(q.y / C); const cz = Math.floor(q.z / C)
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const b = grid.get(key(cx + dx, cy + dy, cz + dz)); if (!b) continue
-        for (const o of b) {
-          if (o.id < q.id || (o.id === q.id && o.i <= q.i)) continue
-          if (o.id === q.id && Math.abs(o.i - q.i) * step < LANE_SELF) continue
-          const gap = Math.hypot(q.x - o.x, q.y - o.y, q.z - o.z) - LANE_W
-          const slack = gap - MIN_GAP_K * LANE_W / 2 // radio de carril = LANE_W / 2
-          if (slack < res.slack) Object.assign(res, { gap, slack, info: `way ${way.idx} ${s.kind}/r${s.route} lanes ${q.id}-${o.id}@${(q.i / br.N).toFixed(2)}/${(o.i / br.N).toFixed(2)}` })
-        }
-      }
-    }
+// Cintas visibles (world.ribbonHits): toda cinta de carril contra toda cinta (también del mismo tramo y consigo misma),
+// con su superficie real (relieve y puntas incluidos) y semiancho RIBBON_HALF; choque si d < RIBBON_CLEAR. Holgura =
+// d - RIBBON_CLEAR del peor par fuera de uniones (>= 0 cumple; 1.00 = ningún par a menos de RIBBON_CLEAR + 1).
+// lane = los choques de cintas de un mismo tramo; cintas = todos.
+function measureRibbons(world) {
+  const { hits, slack, joint, S } = ribbonHits(world)
+  const { ribs, R } = S
+  const lane = { gap: Infinity, slack: Infinity, info: '' }; const cint = { gap: Infinity, slack: Math.min(1, slack), info: '', n: hits.length / 3, joint }
+  const tag = (r, i) => `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}`
+  for (let k = 0; k < hits.length; k += 3) {
+    const A = ribs[R[hits[k]]]; const B = ribs[R[hits[k + 1]]]; const d = hits[k + 2]; const info = `${tag(A, hits[k])} vs ${tag(B, hits[k + 1])}`
+    if (d < cint.gap) Object.assign(cint, { gap: d, info })
+    if (A.seg === B.seg && d - RIBBON_CLEAR < lane.slack) Object.assign(lane, { gap: d, slack: d - RIBBON_CLEAR, info })
   }
-  return res
+  if (lane.slack === Infinity) lane.slack = Math.max(0, cint.slack)
+  if (cint.gap === Infinity) cint.gap = RIBBON_CLEAR + cint.slack
+  if (lane.gap === Infinity) lane.gap = RIBBON_CLEAR + lane.slack
+  return { lane, cintas: cint }
 }
 
 // slack = huelgo - K * radio de pista (>= 0 cumple).
@@ -108,23 +94,25 @@ export function measure(world) {
     const w = world.ways[q.way]
     for (const n of world.nodes) if (n.idx !== w.from && n.idx !== w.to) node = Math.min(node, q.p.distanceTo(n.pos) - PORT_ZONE - q.r)
   }
-  return { cross, same, route, lane: measureLanes(world), node }
+  return { cross, same, route, ...measureRibbons(world), node }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const n = +(process.argv[2] ?? 20); const s0 = +(process.argv[3] ?? 1)
-  const worst = { cross: Infinity, same: Infinity, route: Infinity, lane: Infinity }; const worstS = { cross: Infinity, same: Infinity, route: Infinity, lane: Infinity }
+  const KEYS = ['cross', 'same', 'route', 'lane', 'cintas']
+  const worst = {}; const worstS = {}; for (const k of KEYS) { worst[k] = Infinity; worstS[k] = Infinity }
+  let maxJoint = 0
   let bad = 0; let tot = 0; let minNode = Infinity; let maxMs = 0
   const fmt = (m) => `${m.gap.toFixed(2)} (holg ${m.slack.toFixed(2)})`
   for (let seed = s0; seed < s0 + n; seed++) {
     const t = performance.now(); const w = buildWorld(seed); const ms = performance.now() - t
     const m = measure(w); tot += ms; maxMs = Math.max(maxMs, ms)
-    const ok = ['cross', 'same', 'route', 'lane'].every((k) => m[k].slack >= 0)
+    const ok = KEYS.every((k) => m[k].slack >= 0); maxJoint = Math.max(maxJoint, m.cintas.joint)
     if (!ok) bad++
     for (const k of Object.keys(worst)) { worst[k] = Math.min(worst[k], m[k].gap); worstS[k] = Math.min(worstS[k], m[k].slack) }
     minNode = Math.min(minNode, m.node)
     if (process.argv[5] === 'malas' && ok) continue // 5º arg: sólo semillas que incumplen
-    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
+    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left}` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
   }
-  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)}; rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
+  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)}; rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
 }
