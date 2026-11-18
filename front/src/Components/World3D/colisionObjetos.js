@@ -5,13 +5,17 @@ import * as THREE from 'three'
 import * as WORLD from '../../Core/world.js'
 
 const RIBBON = WORLD.RIBBON_HALF ?? 1.24 // semiancho visible de una cinta: calzada + bordillo + berma
-const STEP = 1.5 // separación de las muestras de cinta
+const STEP = 3 // separación de las muestras de cinta; entre muestras consecutivas se mide contra el tramo recto
 const CELL = 8
 const BRAID_MARGIN = 8 // las cintas se abren en trenza fuera de la caja del tubo
 const WORLDS = new WeakMap() // way -> world (lo registra Paths al montar)
 const RESPALDO = new WeakMap() // world -> { libre, cercano }
 
-export const registrarMundo = (world) => { for (const w of world?.ways ?? []) WORLDS.set(w, world); return world }
+export const registrarMundo = (world) => {
+  for (const w of world?.ways ?? []) WORLDS.set(w, world)
+  if (world && !world.colision) setTimeout(() => colisionDe(world).calienta?.(), 300).unref?.() // el índice de cintas se completa en segundo plano
+  return world
+}
 export const mundoDe = (way) => WORLDS.get(way) ?? null
 
 const key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0
@@ -20,52 +24,65 @@ const cellOf = (v) => Math.floor(v / CELL)
 function respaldo(world) {
   let col = RESPALDO.get(world)
   if (col) return col
-  const X = []; const Y = []; const Z = []; const RAD = []; const WAY = []; const SI = []; const LANE = []; const SEG = []
+  const X = []; const Y = []; const Z = []; const NX = []; const RAD = []; const WAY = []; const SI = []; const LANE = []; const SEG = []
   const cells = new Map()
   let maxR = 0
   const push = (x, y, z, rad, way, si, lane, seg) => {
     const k = X.length
-    X.push(x); Y.push(y); Z.push(z); RAD.push(rad); WAY.push(way); SI.push(si); LANE.push(lane); SEG.push(seg)
+    X.push(x); Y.push(y); Z.push(z); NX.push(-1); RAD.push(rad); WAY.push(way); SI.push(si); LANE.push(lane); SEG.push(seg)
     if (rad > maxR) maxR = rad
+    if (k > 0 && SEG[k - 1] === seg && LANE[k - 1] === lane) NX[k - 1] = k
     const h = key(cellOf(x), cellOf(y), cellOf(z))
     const a = cells.get(h)
     if (a) a.push(k); else cells.set(h, [k])
   }
   const F = {}
-  // Tubos al crear el índice (barato); las cintas (laneFrame, caro) de cada camino solo cuando se consulta cerca de él.
-  const pend = world.ways.map((way) => {
-    const box = new THREE.Box3()
+  // Tubos al crear el índice (barato); las cintas (laneFrame, caro) de cada tramo solo cuando se consulta cerca de él.
+  const pend = []
+  for (const way of world.ways) {
     way.segments.forEach((seg, si) => {
       if (seg.air) return
       const R = seg.radius
       const ts = Math.max(1.5, R * 0.7)
       const nt = Math.max(1, Math.ceil(seg.length / ts))
-      for (let i = 0; i <= nt; i++) { const p = seg.curve.getPointAt(i / nt); box.expandByPoint(p); push(p.x, p.y, p.z, R * 1.07, way.idx, si, -1, seg) }
+      const box = new THREE.Box3()
+      for (let i = 0; i <= nt; i++) { const p = seg.curve.getPoint(i / nt); box.expandByPoint(p); push(p.x, p.y, p.z, R, way.idx, si, -1, seg) }
+      pend.push({ seg, si, way: way.idx, box: box.expandByScalar(BRAID_MARGIN), hecho: false })
     })
-    return { way, box: box.expandByScalar(BRAID_MARGIN), hecho: false }
-  })
-  const asegura = (p, q) => {
-    for (const e of pend) {
-      if (e.hecho || e.box.distanceToPoint(p) > q) continue
-      e.hecho = true
-      e.way.segments.forEach((seg, si) => {
-        if (seg.air) return
-        for (const lane of seg.lanes ?? []) {
-          const n = Math.max(1, Math.ceil(seg.length / STEP))
-          for (let i = 0; i <= n; i++) {
-            const c = WORLD.laneFrame(seg, lane.id, i / n, F).surface
-            push(c.x, c.y, c.z, RIBBON + STEP * 0.17, e.way.idx, si, lane.id, seg)
-          }
-        }
-      })
+  }
+  const haz = (e) => {
+    e.hecho = true
+    for (const lane of e.seg.lanes ?? []) {
+      const n = Math.max(1, Math.ceil(e.seg.length / STEP))
+      for (let i = 0; i <= n; i++) {
+        const c = WORLD.laneFrame(e.seg, lane.id, i / n, F).surface
+        push(c.x, c.y, c.z, RIBBON, e.way, e.si, lane.id, e.seg)
+      }
     }
   }
-  // las muestras de tubo llevan lane -1; las de cinta, el id del carril
+  const asegura = (p, q) => { for (const e of pend) if (!e.hecho && e.box.distanceToPoint(p) <= q) haz(e) }
+  // Calienta el resto en ratos libres (rebanadas de ~6 ms) para que al entrar a un camino casi no quede nada por indexar.
+  const calienta = () => {
+    const t0 = performance.now()
+    for (const e of pend) { if (!e.hecho) haz(e); if (performance.now() - t0 > 6) break }
+    if (pend.some((e) => !e.hecho)) setTimeout(calienta, 40).unref?.()
+  }  // las muestras de tubo llevan lane -1; las de cinta, el id del carril
   const salta = (k, ig) => {
     if (!ig || ig.way !== WAY[k]) return false
     if (ig.si == null) return true // sin tramo: se ignora el camino entero
     if (Math.abs(SI[k] - ig.si) > 1) return false
     return LANE[k] < 0 || (ig.lane != null && LANE[k] === ig.lane)
+  }
+  // distancia² del punto al tramo recto que une la muestra k con la siguiente de su cadena (o a la muestra sola)
+  const dist2 = (k, p) => {
+    const n = NX[k]; const ax = X[k]; const ay = Y[k]; const az = Z[k]
+    let t = 0
+    if (n >= 0) {
+      const bx = X[n] - ax; const by = Y[n] - ay; const bz = Z[n] - az
+      t = Math.min(1, Math.max(0, ((p.x - ax) * bx + (p.y - ay) * by + (p.z - az) * bz) / (bx * bx + by * by + bz * bz || 1)))
+      return (ax + bx * t - p.x) ** 2 + (ay + by * t - p.y) ** 2 + (az + bz * t - p.z) ** 2
+    }
+    return (ax - p.x) ** 2 + (ay - p.y) ** 2 + (az - p.z) ** 2
   }
   const visita = (p, q, fn) => {
     for (let x = cellOf(p.x - q); x <= cellOf(p.x + q); x++) for (let y = cellOf(p.y - q); y <= cellOf(p.y + q); y++) for (let z = cellOf(p.z - q); z <= cellOf(p.z + q); z++) {
@@ -75,19 +92,20 @@ function respaldo(world) {
     return false
   }
   col = {
+    calienta,
     libre(p, r, ig) {
       asegura(p, r + 3)
-      return !visita(p, r + maxR, (k) => {
+      return !visita(p, r + maxR + 4, (k) => {
         if (salta(k, ig)) return false
-        const dx = X[k] - p.x; const dy = Y[k] - p.y; const dz = Z[k] - p.z; const l = r + RAD[k]
-        return dx * dx + dy * dy + dz * dz < l * l
+        const l = r + RAD[k]
+        return dist2(k, p) < l * l
       })
     },
     cercano(p) {
       let best = null; let d = Infinity
       asegura(p, CELL)
-      visita(p, CELL, (k) => {
-        const dk = Math.hypot(X[k] - p.x, Y[k] - p.y, Z[k] - p.z) - RAD[k]
+      visita(p, CELL + 4, (k) => {
+        const dk = Math.sqrt(dist2(k, p)) - RAD[k]
         if (dk < d) { d = dk; best = k }
         return false
       })
@@ -115,7 +133,8 @@ export function nuevoLocal() {
   }
 }
 
-export const ESTADO = { colocados: 0, descartados: 0 }
+export const ESTADO = { colocados: 0, descartados: 0 } // ?stats=1: window.__colisionObjetos
+if (typeof window !== 'undefined') window.__colisionObjetos = ESTADO
 const E = 0.25
 const _g = new THREE.Vector3(); const _q = new THREE.Vector3()
 
