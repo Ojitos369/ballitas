@@ -8,6 +8,7 @@ import { Component, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard as DreiBillboard } from '@react-three/drei'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import * as WORLD from '../../../Core/world.js'
 import { VISUALS } from '../themes.js'
 
@@ -1032,4 +1033,99 @@ export function useWayBounds(ref, way) {
     mesh.boundingSphere = sphere.clone()
     mesh.frustumCulled = true
   }, [ref, way])
+}
+
+// ═══════════════════════════ LOD BUS Y FUSIÓN DE PARTES ═══════════════════════════
+const wayDetailBus = new WeakMap()
+/** Registra el objeto `{ value }` de LOD del camino para que submódulos (p. ej. eventos) lo lean en useFrame. */
+export function setWayDetail(way, detail) {
+  if (way && detail) wayDetailBus.set(way, detail)
+}
+/** Obtiene el `{ value }` de LOD registrado para `way` (o null si no existe). */
+export function getWayDetail(way) {
+  return way ? (wayDetailBus.get(way) ?? null) : null
+}
+
+/** Mantiene un objeto de berma en su franja lateral al ser repelido por colocar() (mismo contrato que decor.jsx). */
+export function bermaAjusta(o, side, up, E, terr, rad) {
+  return (p) => {
+    const xx = (p.x - o.x) * side.x + (p.y - o.y) * side.y + (p.z - o.z) * side.z
+    const a = Math.max(Math.abs(xx), E + rad * 0.5)
+    return a > E + terr + rad + 0.6 ? null : o.clone().addScaledVector(side, Math.sign(xx || 1) * a).addScaledVector(up, -0.02)
+  }
+}
+
+/**
+ * mergePlainParts(geos, name?) -> BufferGeometry compartida sin atributo `color` (para instanciado con instanceColor).
+ * Limpia atributos extra y libera las piezas temporales.
+ */
+export function mergePlainParts(geos, name = '') {
+  if (!geos?.length) return null
+  const clean = []
+  for (let i = 0; i < geos.length; i++) {
+    const raw = geos[i]
+    if (!raw) continue
+    const g = raw.index ? raw.toNonIndexed() : raw
+    if (!g.attributes.normal) g.computeVertexNormals()
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== 'position' && k !== 'normal') g.deleteAttribute(k)
+    }
+    clean.push(g)
+    if (g !== raw) raw.dispose()
+  }
+  if (!clean.length) return null
+  const merged = mergeGeometries(clean, false)
+  for (let i = 0; i < clean.length; i++) clean[i].dispose()
+  merged.computeBoundingSphere()
+  if (name) merged.name = name
+  return markShared(merged)
+}
+
+/**
+ * mergeColoredParts(parts, name?) -> BufferGeometry compartida con atributo `color`.
+ * parts: [[BufferGeometry, hexColor], ...]. Limpia atributos extra y libera las piezas temporales.
+ */
+export function mergeColoredParts(parts, name = '') {
+  if (!parts?.length) return null
+  const clean = []
+  const col = new THREE.Color()
+  for (let i = 0; i < parts.length; i++) {
+    const [raw, hex] = parts[i]
+    if (!raw) continue
+    const g = raw.index ? raw.toNonIndexed() : raw
+    if (!g.attributes.normal) g.computeVertexNormals()
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== 'position' && k !== 'normal') g.deleteAttribute(k)
+    }
+    const n = g.attributes.position.count
+    const arr = new Float32Array(n * 3)
+    col.set(hex ?? '#ffffff')
+    for (let j = 0; j < n; j++) {
+      arr[j * 3] = col.r; arr[j * 3 + 1] = col.g; arr[j * 3 + 2] = col.b
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(arr, 3))
+    clean.push(g)
+    if (g !== raw) raw.dispose()
+  }
+  if (!clean.length) return null
+  const merged = mergeGeometries(clean, false)
+  for (let i = 0; i < clean.length; i++) clean[i].dispose()
+  merged.computeBoundingSphere()
+  if (name) merged.name = name
+  return markShared(merged)
+}
+
+let _vidaMats = null
+/** Materiales instanciados compartidos (compatibles 1:1 con pistaWarmup: instanceColor, sin vertexColors). */
+export function vidaSharedMats() {
+  if (!_vidaMats) {
+    _vidaMats = {
+      body: markShared(new THREE.MeshLambertMaterial({ color: '#ffffff' })),
+      glow: markShared(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })),
+      decal: markShared(new THREE.MeshBasicMaterial({
+        color: '#ffffff', toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      })),
+    }
+  }
+  return _vidaMats
 }

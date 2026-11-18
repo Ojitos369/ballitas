@@ -1,0 +1,890 @@
+[
+  {
+    "nombre": "pasto",
+    "categoría": "terreno",
+    "temas": [
+      "bosque",
+      "jardin"
+    ],
+    "archivo": "terreno_pasto.webp"
+  },
+  {
+    "nombre": "arena",
+    "categoría": "terreno",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "terreno_arena.webp"
+  },
+  {
+    "nombre": "nieve",
+    "categoría": "terreno",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "terreno_nieve.webp"
+  },
+  {
+    "nombre": "lava",
+    "categoría": "terreno",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "terreno_lava.webp"
+  },
+  {
+    "nombre": "cristal",
+    "categoría": "terreno",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "terreno_cristal.webp"
+  },
+  {
+    "nombre": "nube",
+    "categoría": "terreno",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "terreno_nube.webp"
+  },
+  {
+    "nombre": "musgo",
+    "categoría": "terreno",
+    "temas": [
+      "bosque",
+      "jardin"
+    ],
+    "archivo": "terreno_musgo.webp"
+  },
+  {
+    "nombre": "adoquin_neon",
+    "categoría": "terreno",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "terreno_adoquin_neon.webp"
+  },
+  {
+    "nombre": "coral",
+    "categoría": "terreno",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "terreno_coral.webp"
+  },
+  {
+    "nombre": "tierra_oscura",
+    "categoría": "terreno",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "terreno_tierra_oscura.webp"
+  },
+  {
+    "nombre": "arenisca",
+    "categoría": "terreno",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "terreno_arenisca.webp"
+  },
+  {
+    "nombre": "hojarasca",
+    "categoría": "terreno",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "terreno_hojarasca.webp"
+  },
+  {
+    "nombre": "hielo_agrietado",
+    "categoría": "terreno",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "terreno_hielo_agrietado.webp"
+  },
+  {
+    "nombre": "tierra_roja",
+    "categoría": "terreno",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "terreno_tierra_roja.webp"
+  },
+  {
+    "nombre": "magico",
+    "categoría": "terreno",
+    "temas": [
+      "sombrio",
+      "cristal"
+    ],
+    "archivo": "terreno_magico.webp"
+  },
+  {
+    "nombre": "pradera",
+    "categoría": "terreno",
+    "temas": [
+      "jardin",
+      "bosque"
+    ],
+    "archivo": "terreno_pradera.webp"
+  },
+  {
+    "nombre": "bosque_mix",
+    "categoría": "terreno",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "terreno_bosque_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "cristal_mix",
+    "categoría": "terreno",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "terreno_cristal_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "desierto_mix",
+    "categoría": "terreno",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "terreno_desierto_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "hielo_mix",
+    "categoría": "terreno",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "terreno_hielo_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "jardin_mix",
+    "categoría": "terreno",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "terreno_jardin_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "mar_mix",
+    "categoría": "terreno",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "terreno_mar_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "neon_mix",
+    "categoría": "terreno",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "terreno_neon_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "nubes_mix",
+    "categoría": "terreno",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "terreno_nubes_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "sombrio_mix",
+    "categoría": "terreno",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "terreno_sombrio_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "volcan_mix",
+    "categoría": "terreno",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "terreno_volcan_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "estuco",
+    "categoría": "fachada",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "fachada_estuco.webp"
+  },
+  {
+    "nombre": "ladrillo_rojo",
+    "categoría": "fachada",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "fachada_ladrillo_rojo.webp"
+  },
+  {
+    "nombre": "madera_nieve",
+    "categoría": "fachada",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "fachada_madera_nieve.webp"
+  },
+  {
+    "nombre": "vidrio_azul",
+    "categoría": "fachada",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "fachada_vidrio_azul.webp"
+  },
+  {
+    "nombre": "coral",
+    "categoría": "fachada",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "fachada_coral.webp"
+  },
+  {
+    "nombre": "basalto",
+    "categoría": "fachada",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "fachada_basalto.webp"
+  },
+  {
+    "nombre": "cristal",
+    "categoría": "fachada",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "fachada_cristal.webp"
+  },
+  {
+    "nombre": "nube",
+    "categoría": "fachada",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "fachada_nube.webp"
+  },
+  {
+    "nombre": "neon",
+    "categoría": "fachada",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "fachada_neon.webp"
+  },
+  {
+    "nombre": "adobe",
+    "categoría": "fachada",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "fachada_adobe.webp"
+  },
+  {
+    "nombre": "castillo_musgo",
+    "categoría": "fachada",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "fachada_castillo_musgo.webp"
+  },
+  {
+    "nombre": "madera_verde",
+    "categoría": "fachada",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "fachada_madera_verde.webp"
+  },
+  {
+    "nombre": "magica",
+    "categoría": "fachada",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "fachada_magica.webp"
+  },
+  {
+    "nombre": "arenisca",
+    "categoría": "fachada",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "fachada_arenisca.webp"
+  },
+  {
+    "nombre": "hielo",
+    "categoría": "fachada",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "fachada_hielo.webp"
+  },
+  {
+    "nombre": "menta",
+    "categoría": "fachada",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "fachada_menta.webp"
+  },
+  {
+    "nombre": "bosque_mix",
+    "categoría": "fachada",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "fachada_bosque_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "cristal_mix",
+    "categoría": "fachada",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "fachada_cristal_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "desierto_mix",
+    "categoría": "fachada",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "fachada_desierto_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "hielo_mix",
+    "categoría": "fachada",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "fachada_hielo_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "jardin_mix",
+    "categoría": "fachada",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "fachada_jardin_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "mar_mix",
+    "categoría": "fachada",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "fachada_mar_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "neon_mix",
+    "categoría": "fachada",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "fachada_neon_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "nubes_mix",
+    "categoría": "fachada",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "fachada_nubes_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "sombrio_mix",
+    "categoría": "fachada",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "fachada_sombrio_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "volcan_mix",
+    "categoría": "fachada",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "fachada_volcan_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "terracota",
+    "categoría": "techo",
+    "temas": [
+      "desierto",
+      "volcan"
+    ],
+    "archivo": "techo_terracota.webp"
+  },
+  {
+    "nombre": "pizarra",
+    "categoría": "techo",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "techo_pizarra.webp"
+  },
+  {
+    "nombre": "nieve",
+    "categoría": "techo",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "techo_nieve.webp"
+  },
+  {
+    "nombre": "lava",
+    "categoría": "techo",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "techo_lava.webp"
+  },
+  {
+    "nombre": "cobre",
+    "categoría": "techo",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "techo_cobre.webp"
+  },
+  {
+    "nombre": "metal_azul",
+    "categoría": "techo",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "techo_metal_azul.webp"
+  },
+  {
+    "nombre": "madera",
+    "categoría": "techo",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "techo_madera.webp"
+  },
+  {
+    "nombre": "piedra",
+    "categoría": "techo",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "techo_piedra.webp"
+  },
+  {
+    "nombre": "ladrillo",
+    "categoría": "techo",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "techo_ladrillo.webp"
+  },
+  {
+    "nombre": "adoquin",
+    "categoría": "techo",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "techo_adoquin.webp"
+  },
+  {
+    "nombre": "arenisca",
+    "categoría": "techo",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "techo_arenisca.webp"
+  },
+  {
+    "nombre": "metal_verde",
+    "categoría": "techo",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "techo_metal_verde.webp"
+  },
+  {
+    "nombre": "cristal",
+    "categoría": "techo",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "techo_cristal.webp"
+  },
+  {
+    "nombre": "nubes",
+    "categoría": "techo",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "techo_nubes.webp"
+  },
+  {
+    "nombre": "musgo",
+    "categoría": "techo",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "techo_musgo.webp"
+  },
+  {
+    "nombre": "magico",
+    "categoría": "techo",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "techo_magico.webp"
+  },
+  {
+    "nombre": "bosque_mix",
+    "categoría": "techo",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "techo_bosque_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "cristal_mix",
+    "categoría": "techo",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "techo_cristal_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "desierto_mix",
+    "categoría": "techo",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "techo_desierto_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "hielo_mix",
+    "categoría": "techo",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "techo_hielo_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "jardin_mix",
+    "categoría": "techo",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "techo_jardin_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "mar_mix",
+    "categoría": "techo",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "techo_mar_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "neon_mix",
+    "categoría": "techo",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "techo_neon_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "nubes_mix",
+    "categoría": "techo",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "techo_nubes_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "sombrio_mix",
+    "categoría": "techo",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "techo_sombrio_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "volcan_mix",
+    "categoría": "techo",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "techo_volcan_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "asfalto",
+    "categoría": "carrera",
+    "temas": [
+      "bosque",
+      "desierto",
+      "volcan",
+      "hielo",
+      "cristal",
+      "mar",
+      "nubes",
+      "neon",
+      "jardin",
+      "sombrio"
+    ],
+    "archivo": "carrera_asfalto.webp"
+  },
+  {
+    "nombre": "carril_blanco",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_carril_blanco.webp"
+  },
+  {
+    "nombre": "bordillo_rojo",
+    "categoría": "carrera",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "carrera_bordillo_rojo.webp"
+  },
+  {
+    "nombre": "bordillo_azul",
+    "categoría": "carrera",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "carrera_bordillo_azul.webp"
+  },
+  {
+    "nombre": "bordillo_amarillo",
+    "categoría": "carrera",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "carrera_bordillo_amarillo.webp"
+  },
+  {
+    "nombre": "salida",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_salida.webp"
+  },
+  {
+    "nombre": "pintura_cian",
+    "categoría": "carrera",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "carrera_pintura_cian.webp"
+  },
+  {
+    "nombre": "pintura_magenta",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_pintura_magenta.webp"
+  },
+  {
+    "nombre": "chevrones",
+    "categoría": "carrera",
+    "temas": [
+      "bosque",
+      "volcan"
+    ],
+    "archivo": "carrera_chevrones.webp"
+  },
+  {
+    "nombre": "senal_naranja",
+    "categoría": "carrera",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "carrera_senal_naranja.webp"
+  },
+  {
+    "nombre": "carril_verde",
+    "categoría": "carrera",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "carrera_carril_verde.webp"
+  },
+  {
+    "nombre": "circuito_neon",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_circuito_neon.webp"
+  },
+  {
+    "nombre": "pit_concreto",
+    "categoría": "carrera",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "carrera_pit_concreto.webp"
+  },
+  {
+    "nombre": "marcas_neumatico",
+    "categoría": "carrera",
+    "temas": [
+      "bosque",
+      "volcan"
+    ],
+    "archivo": "carrera_marcas_neumatico.webp"
+  },
+  {
+    "nombre": "flechas",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_flechas.webp"
+  },
+  {
+    "nombre": "meta",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_meta.webp"
+  },
+  {
+    "nombre": "bosque_mix",
+    "categoría": "carrera",
+    "temas": [
+      "bosque"
+    ],
+    "archivo": "carrera_bosque_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "cristal_mix",
+    "categoría": "carrera",
+    "temas": [
+      "cristal"
+    ],
+    "archivo": "carrera_cristal_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "desierto_mix",
+    "categoría": "carrera",
+    "temas": [
+      "desierto"
+    ],
+    "archivo": "carrera_desierto_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "hielo_mix",
+    "categoría": "carrera",
+    "temas": [
+      "hielo"
+    ],
+    "archivo": "carrera_hielo_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "jardin_mix",
+    "categoría": "carrera",
+    "temas": [
+      "jardin"
+    ],
+    "archivo": "carrera_jardin_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "mar_mix",
+    "categoría": "carrera",
+    "temas": [
+      "mar"
+    ],
+    "archivo": "carrera_mar_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "neon_mix",
+    "categoría": "carrera",
+    "temas": [
+      "neon"
+    ],
+    "archivo": "carrera_neon_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "nubes_mix",
+    "categoría": "carrera",
+    "temas": [
+      "nubes"
+    ],
+    "archivo": "carrera_nubes_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "sombrio_mix",
+    "categoría": "carrera",
+    "temas": [
+      "sombrio"
+    ],
+    "archivo": "carrera_sombrio_mix.webp",
+    "resolución": 1024
+  },
+  {
+    "nombre": "volcan_mix",
+    "categoría": "carrera",
+    "temas": [
+      "volcan"
+    ],
+    "archivo": "carrera_volcan_mix.webp",
+    "resolución": 1024
+  }
+]

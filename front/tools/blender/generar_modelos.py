@@ -457,4 +457,5 @@ def main():
     json.dump(stats, open(stats_path, "w"), indent=1)
 
 
-main()
+if __name__ == "__main__":  # generar_vida.py importa M/hexc sin regenerar estos modelos
+    main()

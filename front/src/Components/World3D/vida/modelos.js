@@ -10,6 +10,15 @@ const BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
 const cache = new Map() // name -> { geo, promise }
 
 function withWhite(g) {
+  // Blender escribe el color del material en COLOR_1; COLOR_0 puede ser blanco uniforme.
+  const src = g.attributes.color_1 ?? g.attributes.color_0
+  if (src && !g.attributes.color) {
+    const values = new Float32Array(src.count * 3)
+    for (let i = 0; i < src.count; i++) {
+      values[i * 3] = src.getX(i); values[i * 3 + 1] = src.getY(i); values[i * 3 + 2] = src.getZ(i)
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(values, 3))
+  }
   if (!g.attributes.color) g.setAttribute('color', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count * 3).fill(1), 3))
   return g
 }

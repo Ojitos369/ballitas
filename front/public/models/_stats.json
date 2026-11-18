@@ -124,5 +124,145 @@
   "y_alto": 1.0,
   "z": 0.357,
   "bytes": 19564
+ },
+ "sombrio_farol": {
+  "tris": 188,
+  "x": 0.371,
+  "y_alto": 1.0,
+  "z": 0.38,
+  "bytes": 16420
+ },
+ "sombrio_altar": {
+  "tris": 179,
+  "x": 0.95,
+  "y_alto": 1.0,
+  "z": 0.965,
+  "bytes": 16404
+ },
+ "bosque_nido": {
+  "tris": 216,
+  "x": 1.0,
+  "y_alto": 0.354,
+  "z": 0.951,
+  "bytes": 19304
+ },
+ "bosque_casita": {
+  "tris": 117,
+  "x": 1.0,
+  "y_alto": 0.958,
+  "z": 1.0,
+  "bytes": 10656
+ },
+ "mar_boya": {
+  "tris": 196,
+  "x": 0.751,
+  "y_alto": 1.0,
+  "z": 0.762,
+  "bytes": 16164
+ },
+ "mar_concha": {
+  "tris": 174,
+  "x": 1.0,
+  "y_alto": 0.458,
+  "z": 0.951,
+  "bytes": 15304
+ },
+ "desierto_oasis": {
+  "tris": 175,
+  "x": 1.0,
+  "y_alto": 0.625,
+  "z": 0.951,
+  "bytes": 14136
+ },
+ "desierto_molino": {
+  "tris": 139,
+  "x": 0.479,
+  "y_alto": 1.0,
+  "z": 0.48,
+  "bytes": 12352
+ },
+ "hielo_iglu": {
+  "tris": 170,
+  "x": 1.0,
+  "y_alto": 0.938,
+  "z": 0.951,
+  "bytes": 14776
+ },
+ "hielo_farol": {
+  "tris": 188,
+  "x": 0.371,
+  "y_alto": 1.0,
+  "z": 0.38,
+  "bytes": 16416
+ },
+ "volcan_altar": {
+  "tris": 179,
+  "x": 0.95,
+  "y_alto": 1.0,
+  "z": 0.965,
+  "bytes": 16400
+ },
+ "volcan_farol": {
+  "tris": 188,
+  "x": 0.371,
+  "y_alto": 1.0,
+  "z": 0.38,
+  "bytes": 16420
+ },
+ "cristal_prisma": {
+  "tris": 120,
+  "x": 0.804,
+  "y_alto": 1.0,
+  "z": 0.569,
+  "bytes": 10752
+ },
+ "cristal_arco": {
+  "tris": 99,
+  "x": 0.701,
+  "y_alto": 1.0,
+  "z": 0.339,
+  "bytes": 9296
+ },
+ "nubes_globo": {
+  "tris": 172,
+  "x": 0.658,
+  "y_alto": 1.0,
+  "z": 0.648,
+  "bytes": 15240
+ },
+ "nubes_casita": {
+  "tris": 117,
+  "x": 1.0,
+  "y_alto": 0.958,
+  "z": 1.0,
+  "bytes": 10652
+ },
+ "neon_kiosco": {
+  "tris": 181,
+  "x": 0.985,
+  "y_alto": 0.592,
+  "z": 1.0,
+  "bytes": 16328
+ },
+ "neon_molino": {
+  "tris": 139,
+  "x": 0.479,
+  "y_alto": 1.0,
+  "z": 0.48,
+  "bytes": 12340
+ },
+ "jardin_gazebo": {
+  "tris": 99,
+  "x": 0.701,
+  "y_alto": 1.0,
+  "z": 0.339,
+  "bytes": 9300
+ },
+ "jardin_flor": {
+  "tris": 291,
+  "x": 0.659,
+  "y_alto": 1.0,
+  "z": 0.656,
+  "bytes": 26580
  }
 }
