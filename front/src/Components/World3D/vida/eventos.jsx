@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { bermaAjusta, getBallitas, getWayDetail, Instanced, markShared, mergePlainParts, vidaSharedMats } from './base.jsx'
 import { basisQuat } from './dyn.js'
+import { precargarKit, useKit } from '../Modelos.jsx'
 import { halfWidth, lanesOf, pal, surfFrame, TERR, CURB } from './pista.jsx'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 
@@ -372,12 +373,14 @@ function buildWayData(way) {
   const items = []
   const chevrons = []; const posts = []; const arrows = []
   const pads = []; const originRings = []; const landRings = []; const struts = []
+  const switchBoxes = []; const eventBoxes = []; const turboPads = []
   const world = mundoDe(way); const local = nuevoLocal()
   const P = pal(way.theme.id)
   const mecCol = new THREE.Color(P.mec).multiplyScalar(1.35)
   const landCol = new THREE.Color(P.chev).multiplyScalar(1.4)
   const arrowCol = new THREE.Color(P.mec).multiplyScalar(1.45)
   const seenPre = new Set()
+  const seenBox = new Set()
   const fFrom = {}; const fTo = {}; const fPre = {}
 
   way.segments?.forEach((seg, si) => {
@@ -397,6 +400,23 @@ function buildWayData(way) {
       const qTo = basisQuat(fTo.up, fTo.tangent)
       const pFrom = fFrom.pos.clone().addScaledVector(fFrom.up, 0.02)
       const pTo = fTo.pos.clone().addScaledVector(fTo.up, 0.02)
+
+      const boxKey = `${si}:${lane.id}:${Math.round(sw.u * 1000)}`
+      if (!seenBox.has(boxKey)) {
+        seenBox.add(boxKey)
+        const boxScale = THREE.MathUtils.clamp(halfWidth(lane) * 0.92, 0.5, 0.78)
+        switchBoxes.push({
+          pos: fFrom.pos.clone().addScaledVector(fFrom.up, isAir ? WORLD.BALL_R + 0.36 : 0.52),
+          quat: qFrom,
+          up: fFrom.up.clone(),
+          scale: boxScale,
+          seg,
+          laneId: lane.id,
+          u: sw.u,
+          segLen: L,
+          seed: Math.floor(sw.u * 1e6) + lane.id * 97 + way.idx * 509,
+        })
+      }
 
       if (!isAir) {
         pads.push({ pos: pFrom, quat: qFrom, scale: 1, color: PAD_COL })
@@ -486,6 +506,54 @@ function buildWayData(way) {
     }
   })
 
+  const Q_Y180 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI)
+  way.segments?.forEach((seg, si) => {
+    if (seg.air) return
+    const L = Math.max(seg.length ?? 1, 1)
+    const lanes = seg.lanes ?? []
+    const hasEvent = !!(seg.event || (seg.boost ?? 0) > 0)
+    if (!hasEvent) return
+    const uList = L > 160 ? [0.38, 0.72] : [0.5]
+    for (let li = 0; li < lanes.length; li++) {
+      const lane = lanes[li]
+      const H = halfWidth(lane)
+      const minSep2 = Math.max(3.5, H * 2.6) ** 2
+      for (const uEv of uList) {
+        if ((seg.switches ?? []).some((sw) => (sw.from === lane.id || sw.to === lane.id) && Math.abs(sw.u - uEv) * L < 5.5)) continue
+        surfFrame(seg, lane.id, uEv, fPre)
+        const boxPos = fPre.pos.clone().addScaledVector(fPre.up, 0.46)
+        if (eventBoxes.some((b) => b.pos.distanceToSquared(boxPos) < minSep2)) continue
+        if (eventBoxes.length < 18) {
+          eventBoxes.push({
+            pos: boxPos,
+            quat: basisQuat(fPre.up, fPre.tangent),
+            up: fPre.up.clone(),
+            scale: THREE.MathUtils.clamp(H * 0.92, 0.5, 0.78),
+            seg,
+            laneId: lane.id,
+            u: uEv,
+            segLen: L,
+            seed: si * 311 + lane.id * 73 + Math.round(uEv * 1000) + way.idx * 997,
+          })
+        }
+      }
+      if ((seg.boost ?? 0) > 0 && turboPads.length < 12) {
+        const uPad = seg.kind === 'salida' ? Math.min(0.45, 9 / L) : 0.45
+        if (!(seg.switches ?? []).some((sw) => sw.from === lane.id && Math.abs(sw.u - uPad) * L < 4.0)) {
+          surfFrame(seg, lane.id, uPad, fPre)
+          const padPos = fPre.pos.clone().addScaledVector(fPre.up, 0.01)
+          if (!turboPads.some((p) => p.pos.distanceToSquared(padPos) < minSep2)) {
+            turboPads.push({
+              pos: padPos,
+              quat: basisQuat(fPre.up, fPre.tangent).multiply(Q_Y180),
+              scale: [Math.min(1.6, H * 1.4), 0.75, 1.5],
+            })
+          }
+        }
+      }
+    }
+  })
+
   const byKind = new Map()
   for (let i = 0; i < items.length; i++) {
     const it = items[i]
@@ -495,7 +563,7 @@ function buildWayData(way) {
     bucket.push({ item: it, idx: i })
   }
 
-  const out = { items, chevrons, posts, arrows, pads, originRings, landRings, struts, byKind }
+  const out = { items, chevrons, posts, arrows, pads, originRings, landRings, struts, byKind, switchBoxes, eventBoxes, turboPads }
   switchCache.set(way, out)
   return out
 }
@@ -781,9 +849,117 @@ function FlightTrails({ items, way }) {
   return <primitive ref={mesh} object={inst} />
 }
 
+const _boxP = new THREE.Vector3(); const _boxQ = new THREE.Quaternion(); const _boxS = new THREE.Vector3()
+const _boxM = new THREE.Matrix4(); const _boxSpin = new THREE.Quaternion()
+
+function CajasMesh({ nombre, items, way, detail }) {
+  const kit = useKit(`${nombre}_lod`)
+  const cap = Math.max(1, items.length)
+  const inst = useMemo(() => {
+    if (!kit || !items.length) return null
+    const m = new THREE.InstancedMesh(kit.geometry, kit.material, cap)
+    m.count = items.length
+    m.boundingSphere = computePointsSphere(items.map((it) => it.pos), 3)
+    m.frustumCulled = true
+    return m
+  }, [kit, items, cap])
+  useEffect(() => () => inst?.dispose(), [inst])
+
+  const state = useMemo(
+    () => items.map((it) => ({ burst: 0, cooldown: 0, respawn: 1, phase: (it.seed % 1000) * 0.00628 })),
+    [items],
+  )
+
+  useLayoutEffect(() => {
+    if (!inst) return
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      _boxS.setScalar(it.scale)
+      inst.setMatrixAt(i, _boxM.compose(it.pos, it.quat, _boxS))
+    }
+    inst.instanceMatrix.needsUpdate = true
+  }, [inst, items])
+
+  const wasLowRef = useRef(false)
+  useFrame(({ clock }, dt) => {
+    if (!inst || !items.length) return
+    const h = Math.min(dt, 0.1)
+    const t = clock.elapsedTime
+    const bolls = getBallitas()
+    const lowDetail = detail ? detail.value < 0.3 : false
+    const hitR2 = (WORLD.BALL_R + 0.55) ** 2
+    let anyActive = false
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      const st = state[i]
+      if (st.cooldown <= 0 && st.burst === 0) {
+        for (let k = 0; k < bolls.length; k++) {
+          const b = bolls[k]
+          if (!b || b.way !== way) continue
+          const byPos = b.pos && b.pos.distanceToSquared(it.pos) < hitR2
+          const bySeg = b.seg === it.seg && b.lane === it.laneId && Math.abs((b.segT ?? 0) - it.u) * it.segLen < 1.35
+          if (byPos || bySeg) {
+            st.burst = 0.001
+            st.cooldown = 3.5
+            st.respawn = 0
+            break
+          }
+        }
+      }
+
+      let sc = it.scale
+      let extraSpin = 0
+      const active = st.burst > 0 || st.cooldown > 0 || st.respawn < 1
+      if (active) anyActive = true
+      if (st.burst > 0 && st.burst < 1) {
+        st.burst = Math.min(1, st.burst + h / 0.28)
+        sc = it.scale * (1 + Math.sin(st.burst * Math.PI) * 0.9) * (1 - st.burst * 0.85)
+        extraSpin = st.burst * 10
+      } else if (st.cooldown > 0) {
+        st.cooldown -= h
+        sc = 0
+        if (st.cooldown <= 0) {
+          st.burst = 0
+          st.respawn = 0.001
+        }
+      } else if (st.respawn < 1) {
+        st.respawn = Math.min(1, st.respawn + h / 0.3)
+        const r = st.respawn
+        sc = it.scale * r * (1.25 - 0.25 * r)
+      }
+
+      if (lowDetail && !active && wasLowRef.current) continue
+      if (lowDetail && !active) {
+        _boxP.copy(it.pos)
+        _boxQ.copy(it.quat)
+      } else {
+        const bob = Math.sin(t * 2.6 + st.phase) * 0.09
+        _boxP.copy(it.pos).addScaledVector(it.up, bob)
+        _boxSpin.setFromAxisAngle(Y_AXIS, t * 1.7 + st.phase + extraSpin)
+        _boxQ.copy(it.quat).multiply(_boxSpin)
+      }
+      _boxS.setScalar(sc)
+      inst.setMatrixAt(i, _boxM.compose(_boxP, _boxQ, _boxS))
+    }
+    if (!lowDetail || anyActive || !wasLowRef.current) inst.instanceMatrix.needsUpdate = true
+    wasLowRef.current = lowDetail
+  })
+
+  if (!inst) return null
+  return <primitive object={inst} />
+}
+
+function TurboPlacasMesh({ items }) {
+  const kit = useKit('turbo_placa')
+  if (!kit || !items.length) return null
+  return <Instanced geo={kit.geometry} mat={kit.material} items={items} />
+}
+
 export default function Eventos({ way }) {
+  useEffect(() => { precargarKit(['caja_cambio_lod', 'caja_evento_lod', 'turbo_placa']) }, [])
   const data = useMemo(() => buildWayData(way), [way])
-  const { items, chevrons, posts, arrows, pads, originRings, landRings, struts, byKind } = data
+  const { items, chevrons, posts, arrows, pads, originRings, landRings, struts, byKind, switchBoxes, eventBoxes, turboPads } = data
   const ev = useMemo(() => items.map(() => ({ active: 0, glow: 0, flightT: -1, wasLit: false })), [items])
   const kindList = useMemo(() => [...byKind.entries()], [byKind])
   const detail = getWayDetail(way)
@@ -793,10 +969,12 @@ export default function Eventos({ way }) {
     if (solidRef.current && detail) solidRef.current.visible = detail.value >= 0.3
   })
 
-  if (!items.length && !chevrons.length) return null
+  if (!items.length && !chevrons.length && !switchBoxes.length && !eventBoxes.length) return null
   return (
     <group>
-      {/* Capa emisiva: siempre visible, incluso a detalle bajo (detail.value < 0.3) */}
+      {/* Capa emisiva + cajas: siempre visible, incluso a detalle bajo (detail.value < 0.3) */}
+      <CajasMesh nombre="caja_cambio" items={switchBoxes} way={way} detail={detail} />
+      <CajasMesh nombre="caja_evento" items={eventBoxes} way={way} detail={detail} />
       <Instanced geo={G.chevron} mat={EMISSIVE_INST_MAT} items={chevrons} />
       <Instanced geo={G.beaconArrow} mat={GLOW_MAT} items={arrows} />
       <Instanced geo={G.originRing} mat={EMISSIVE_INST_MAT} items={originRings} />
@@ -812,6 +990,7 @@ export default function Eventos({ way }) {
 
       {/* Capa sólida/estructural: oculta cuando detail.value < 0.3 */}
       <group ref={solidRef}>
+        <TurboPlacasMesh items={turboPads} />
         <Instanced geo={G.beaconPost} mat={BODY_INST_MAT} items={posts} />
         <Instanced geo={G.anchorPad} mat={BODY_INST_MAT} items={pads} />
         <Instanced geo={G.strut} mat={BODY_INST_MAT} items={struts} />

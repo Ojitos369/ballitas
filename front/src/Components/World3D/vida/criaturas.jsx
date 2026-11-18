@@ -4,7 +4,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { getBallitas, markShared, mulberry32 } from './base.jsx'
+import { getBallitas, getWayDetail, markShared, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { CURB, TERR, halfWidth, lanesOf, surfFrame } from './pista.jsx'
@@ -80,9 +80,10 @@ function placements(way) {
   })
 }
 
-function Critter({ item, colors }) {
+function Critter({ item, colors, detail }) {
   const root = useRef()
   useFrame(({ clock }, dt) => {
+    if (detail && detail.value < 0.3) return
     const o = root.current
     if (!o) return
     let startled = false
@@ -103,5 +104,10 @@ function Critter({ item, colors }) {
 export default function Criaturas({ way }) {
   const items = useMemo(() => placements(way), [way])
   const colors = THEMES[way.theme.id] ?? THEMES.bosque
-  return <group>{items.map((item, i) => <Critter key={i} item={item} colors={colors} />)}</group>
+  const detail = getWayDetail(way)
+  const groupRef = useRef()
+  useFrame(() => {
+    if (groupRef.current && detail) groupRef.current.visible = detail.value >= 0.3
+  })
+  return <group ref={groupRef}>{items.map((item, i) => <Critter key={i} item={item} colors={colors} detail={detail} />)}</group>
 }

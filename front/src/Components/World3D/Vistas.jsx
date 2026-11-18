@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import * as WORLD from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { resolveNodeBiome } from './mundos/biomas.js'
+import { resolvePlanetConfig } from './mundos/planetaCartoon.js'
 
 let _worldRef = null
 const _worldListeners = new Set()
@@ -11,6 +12,23 @@ const _worldListeners = new Set()
 export function registerWorldForVistas(world) {
   _worldRef = world
   _worldListeners.forEach((fn) => fn(world))
+}
+
+// Impostor de mapa: de lejos el planeta se infla (la esfera real, sin geometría extra) para no bajar de
+// MAPA_DIAM_PX píxeles de diámetro. Con la cámara cerca vale 1 (escala real).
+const MAPA_DIAM_PX = 46
+export function escalaMapa(R, dist, camera, height) {
+  const diam = (R * height) / Math.max(1e-3, dist * Math.tan((camera.fov * Math.PI) / 360))
+  return Math.min(8, Math.max(1, MAPA_DIAM_PX / Math.max(diam, 1e-3)))
+}
+
+// Radio visual real del planeta (1.0-1.6 × NODE_R): el enfoque se mide en radios para que quepa entero con terminales.
+const ENFOQUE_RADIOS = 3.2
+const _rv = new WeakMap()
+function radioVisual(n, world) {
+  let r = _rv.get(n)
+  if (r == null) { r = resolvePlanetConfig(n, resolveNodeBiome(n, world), world).visualR; _rv.set(n, r) }
+  return r
 }
 
 export function focusWorldNode(nodeIdx) {
@@ -233,7 +251,7 @@ function VistaMundos({ enabled }) {
       _vmDir.copy(camera.position).sub(n.pos)
       if (_vmDir.lengthSq() < 1e-4) _vmDir.set(0.6, 0.35, 0.72)
       _vmDir.y = Math.max(_vmDir.y * 0.4, 0.25 * WORLD.NODE_R)
-      _vmDir.normalize().multiplyScalar(WORLD.NODE_R * 3.15)
+      _vmDir.normalize().multiplyScalar(radioVisual(n, world) * ENFOQUE_RADIOS)
       nav.current.goal.copy(n.pos).add(_vmDir)
       setFocusedIdx(safe)
     }
@@ -278,7 +296,8 @@ function VistaMundos({ enabled }) {
       ray.setFromCamera(ndc, camera)
       let best = -1; let bd = Infinity
       nodes.forEach((n, i) => {
-        sph.set(n.pos, WORLD.NODE_R)
+        const rr = WORLD.NODE_R * 1.3
+        sph.set(n.pos, rr * escalaMapa(rr, n.pos.distanceTo(camera.position), camera, r.height))
         if (ray.ray.intersectSphere(sph, hit)) { const d = hit.distanceTo(camera.position); if (d < bd) { bd = d; best = i } }
       })
       if (best >= 0) { nav.current.fly = 1; setFocusedIdx(best); abrirSuperficie(best) }
@@ -334,8 +353,15 @@ function VistaMundos({ enabled }) {
     if (s.fly < 1) {
       s.fly = Math.min(1, s.fly + h / 1.1)
       const e = sm(s.fly, 0, 1)
-      _vmGoal.copy(s.goal)
-      camera.position.copy(s.p0).lerp(_vmGoal, e)
+      // órbita alrededor del planeta: el rumbo gira por arco (slerp) y la distancia cambia en escala log (zoom suave)
+      _vmGoal.copy(s.goal).sub(node.pos)
+      _vmOff.copy(s.p0).sub(node.pos)
+      const l0 = Math.max(_vmOff.length(), 1e-3); const l1 = Math.max(_vmGoal.length(), 1e-3)
+      _vmOff.divideScalar(l0); _vmGoal.divideScalar(l1)
+      _qA.setFromUnitVectors(_vmOff, _vmGoal)
+      _qB.identity().slerp(_qA, e)
+      _vmOff.applyQuaternion(_qB).multiplyScalar(l0 * Math.pow(l1 / l0, e))
+      camera.position.copy(node.pos).add(_vmOff)
     } else if (!s.dragging) {
       _vmOff.copy(camera.position).sub(node.pos)
       if (_vmOff.lengthSq() > 1e-4) {
@@ -353,7 +379,7 @@ function VistaMundos({ enabled }) {
   return (
     <WorldHtml
       center
-      position={[focusedNode.pos.x, focusedNode.pos.y + WORLD.NODE_R + 4.9, focusedNode.pos.z]}
+      position={[focusedNode.pos.x, focusedNode.pos.y + radioVisual(focusedNode, world) * 1.25 + 2.5, focusedNode.pos.z]}
       distanceFactor={20}
       zIndexRange={[10, 0]}
     >

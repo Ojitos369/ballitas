@@ -15,6 +15,10 @@ export default function WorldHtml({
   position,
   center = false,
   distanceFactor,
+  farScale,
+  farLift = 0,
+  farFrom = 300,
+  farTo = 500,
   zIndexRange = [16777271, 0],
   style,
   className,
@@ -78,6 +82,7 @@ export default function WorldHtml({
     const y = -(_objPos.y * (size.height * 0.5)) + (size.height * 0.5)
 
     let scale = 1
+    let lift = 0
     if (distanceFactor !== undefined) {
       if (camera.isOrthographicCamera) {
         scale = camera.zoom * distanceFactor
@@ -87,11 +92,18 @@ export default function WorldHtml({
       }
     }
 
+    // Rótulo de mapa: de lejos (farFrom→farTo) crece hasta farScale fija en pantalla.
+    if (farScale !== undefined && scale < farScale) {
+      const k = THREE.MathUtils.smoothstep(dist, farFrom, farTo)
+      scale += (farScale - scale) * k
+      lift = farLift * k
+    }
+
     const span = Math.max(camera.far - camera.near, 1e-4)
     const a = (zIndexRange[1] - zIndexRange[0]) / span
     const b = zIndexRange[1] - a * camera.far
     el.style.zIndex = `${Math.round(a * dist + b)}`
-    el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) scale(${scale.toFixed(4)})`
+    el.style.transform = `translate3d(${x.toFixed(1)}px,${(y - lift).toFixed(1)}px,0) scale(${scale.toFixed(4)})`
   })
 
   return <group ref={group} position={position} />

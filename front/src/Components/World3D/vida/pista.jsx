@@ -8,8 +8,10 @@ import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { applyLoadedImage } from '../texUtils.js'
 import { BALL_R, markShared } from './base.jsx'
+import Anillos, { anillosWarmup } from './anillos.jsx'
 import Decor from './decor.jsx'
 import Eventos, { eventosWarmup } from './eventos.jsx'
+import KartPista from './kartPista.jsx'
 
 // Bandas de la sección en U (las mismas que TRACK_U de tools/assets/generate_textures.py).
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
@@ -45,15 +47,29 @@ export const halfWidth = (lane) => (lane?.width ?? BALL_R * 2.6) / 2
 
 // ─────────────────────────── texturas (generate_textures.py --pista) ───────────────────────────
 const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
+const THEME_TEX = {
+  sombrio: 'terreno_tierra_oscura.webp',
+  bosque: 'terreno_musgo.webp',
+  mar: 'terreno_coral.webp',
+  desierto: 'terreno_arena.webp',
+  hielo: 'terreno_hielo_agrietado.webp',
+  volcan: 'terreno_lava.webp',
+  cristal: 'terreno_cristal.webp',
+  nubes: 'terreno_nube.webp',
+  neon: 'carrera_circuito_neon.webp',
+  jardin: 'terreno_pasto.webp',
+}
 const texCache = new Map()
-function trackTex(file, fallback, repeatT = true) {
-  if (texCache.has(file)) return texCache.get(file)
+function trackTex(file, fallback, opts = true) {
+  const { repeatS = false, repeatT = true, srgb = false } = typeof opts === 'boolean' ? { repeatT: opts } : opts
+  const key = `${file}|${repeatS}|${repeatT}|${srgb}`
+  if (texCache.has(key)) return texCache.get(key)
   // Lienzo 1×1 de reserva (no DataTexture: esa ruta de subida no acepta luego una imagen)
   const c = document.createElement('canvas'); c.width = c.height = 1
   const cx = c.getContext('2d'); cx.fillStyle = `rgb(${fallback[0]},${fallback[1]},${fallback[2]})`; cx.fillRect(0, 0, 1, 1)
   const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.NoColorSpace
-  tex.wrapS = THREE.ClampToEdgeWrapping
+  tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace
+  tex.wrapS = repeatS ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping
   tex.wrapT = repeatT ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping
   tex.anisotropy = 8
   tex.magFilter = THREE.LinearFilter
@@ -62,7 +78,7 @@ function trackTex(file, fallback, repeatT = true) {
   tex.needsUpdate = true
   new THREE.TextureLoader().load(BASE_TEX + file, (t) => applyLoadedImage(tex, t.image))
   markShared(tex)
-  texCache.set(file, tex)
+  texCache.set(key, tex)
   return tex
 }
 
@@ -71,6 +87,7 @@ const matCache = new Map()
 function trackMat(themeId) {
   if (matCache.has(themeId)) return matCache.get(themeId)
   const P = pal(themeId)
+  const isNeon = themeId === 'neon'
   // Lambert: enlace del shader y relleno mucho más baratos que Standard; para asfalto mate basta.
   const m = new THREE.MeshLambertMaterial({
     color: '#ffffff', side: THREE.DoubleSide,
@@ -78,6 +95,9 @@ function trackMat(themeId) {
   })
   const U = {
     uLayout: { value: trackTex('track_layout.png', [225, 0, 0, 255]) },
+    uAsfaltoTex: { value: trackTex('carrera_asfalto.webp', [55, 55, 62], { repeatS: true, repeatT: true, srgb: true }) },
+    uTemaTex: { value: trackTex(THEME_TEX[themeId] ?? 'terreno_pasto.webp', [128, 128, 128], { repeatS: true, repeatT: true, srgb: true }) },
+    uTemaMix: { value: isNeon ? 0.55 : 0.25 },
     uAsfalto: { value: new THREE.Color(P.asfalto) },
     uA: { value: new THREE.Color(P.a) },
     uB: { value: new THREE.Color(P.b) },
@@ -93,23 +113,38 @@ function trackMat(themeId) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTrackUv = uv;\nvChev = aChev;\nvUnder = aUnder;')
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform sampler2D uLayout;
+        uniform sampler2D uLayout; uniform sampler2D uAsfaltoTex; uniform sampler2D uTemaTex;
+        uniform float uTemaMix;
         uniform vec3 uAsfalto; uniform vec3 uA; uniform vec3 uB; uniform vec3 uLinea; uniform vec3 uTerreno; uniform vec3 uRoca; uniform vec3 uChev;
-        varying vec2 vTrackUv; varying float vChev; varying float vUnder;`)
+        varying vec2 vTrackUv; varying float vChev; varying float vUnder;
+        vec3 sampleCropped(sampler2D tex, vec2 p) {
+          vec2 uv = 0.15 + fract(p) * 0.70;
+          #if __VERSION__ >= 300
+          return textureGrad(tex, uv, dFdx(p) * 0.70, dFdy(p) * 0.70).rgb;
+          #else
+          return texture2D(tex, uv).rgb;
+          #endif
+        }`)
       .replace('#include <map_fragment>', `
         vec3 L = texture2D(uLayout, vTrackUv).rgb;
+        vec2 asfUv = vec2(vTrackUv.x * 1.4 + 0.17, vTrackUv.y * 0.75);
+        vec2 terUv = vec2(vTrackUv.x * 1.6 + 0.31, vTrackUv.y * 0.85);
+        vec3 asfTex = sampleCropped(uAsfaltoTex, asfUv);
+        vec3 temaTex = sampleCropped(uTemaTex, terUv);
         float x = vTrackUv.x;
         float fw = max(fwidth(x), 1e-4);
         float top = 1.0 - step(0.001, vUnder);
         float inner = top * smoothstep(${TRACK_U[0]} - fw, ${TRACK_U[0]} + fw, x) * (1.0 - smoothstep(${TRACK_U[3]} - fw, ${TRACK_U[3]} + fw, x));
         float asf = top * smoothstep(${TRACK_U[1]} - fw, ${TRACK_U[1]} + fw, x) * (1.0 - smoothstep(${TRACK_U[2]} - fw, ${TRACK_U[2]} + fw, x));
         float curb = inner - asf;
-        vec3 col = uAsfalto * mix(0.8, 1.08, L.r);
+        vec3 asfPure = uAsfalto * (0.45 + asfTex * 1.45);
+        vec3 asfBase = mix(asfPure, asfPure * 0.55 + temaTex * 0.55, uTemaMix * 0.45);
+        vec3 col = asfBase * mix(0.86, 1.06, L.r);
         col = mix(col, mix(uB, uA, L.g), curb);
-        vec3 terr = uTerreno * mix(0.72, 1.1, L.r);
+        vec3 terr = mix(uTerreno * 0.6, temaTex * (0.55 + uTerreno * 0.6), 0.78) * mix(0.84, 1.08, L.r);
         terr = mix(terr, uRoca * mix(0.7, 1.15, L.r), smoothstep(0.0, 0.6, vUnder));
         col = mix(terr, col, inner);
-        col = mix(col, uLinea, L.b * asf * 0.5);
+        col = mix(col, uLinea, L.b * asf * 0.65);
         // flechas (chevrones) antes de curvas cerradas, apuntando hacia dentro de la curva
         float ca = abs(vChev);
         if (ca > 0.01) {
@@ -123,7 +158,7 @@ function trackMat(themeId) {
         diffuseColor.rgb *= col;`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * mix(0.22, 0.08, vUnder);')
   }
-  m.customProgramCacheKey = () => 'pista-v2'
+  m.customProgramCacheKey = () => 'pista-v4'
   markShared(m)
   matCache.set(themeId, m)
   return m
@@ -263,8 +298,10 @@ export function pistaWarmup(extra = []) {
   const tiny = new THREE.PlaneGeometry(0.01, 0.01)
   tiny.setAttribute('aChev', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
   tiny.setAttribute('aUnder', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
+  tiny.setAttribute('aPhase', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
+  tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
-  for (const mat of [...eventosWarmup(), ...extra]) {
+  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...extra]) {
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
@@ -291,6 +328,8 @@ export default function Pista({ way }) {
   return (
     <>
       {geo && <mesh geometry={geo} material={mat} receiveShadow />}
+      <KartPista way={way} />
+      <Anillos way={way} />
       <Decor way={way} />
       <Eventos way={way} />
     </>
