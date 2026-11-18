@@ -12,7 +12,7 @@ export const trafficGeo = new THREE.SphereGeometry(0.11, 8, 6).scale(0.85, 0.55,
 export const vehicleGeo = new THREE.CapsuleGeometry(0.085, 0.22, 4, 8).rotateX(Math.PI / 2).scale(1.1, 0.72, 1.2)
 export const creatureGeo = new THREE.SphereGeometry(0.13, 8, 6).scale(1.85, 0.34, 0.92)
 export const vaporGeo = new THREE.SphereGeometry(0.18, 12, 8)
-export const windowZoneGeo = new THREE.BoxGeometry(0.82, 0.09, 0.82)
+export const windowZoneGeo = new THREE.BoxGeometry(1, 0.048, 1)
 
 // Scratch objects a nivel de módulo (cero asignaciones por cuadro)
 const _m = new THREE.Matrix4()
@@ -165,13 +165,15 @@ export function buildPlanetLifeData(node, biome, monumentSpot, city = null) {
       const it = candidates[i]
       it.m.extractBasis(bx, by, bz)
       bpos.setFromMatrixPosition(it.m)
-      // Banda luminosa alrededor de la planta media/alta del edificio
-      const bandFrac = it.type === 'rascacielos' ? (rng() < 0.5 ? 0.42 : 0.68) : 0.42
+      // Banda luminosa ajustada al contorno real de cada tipo de edificio GLB
+      const upper = it.type === 'rascacielos' && rng() < 0.45
+      const bandFrac = it.type === 'rascacielos' ? (upper ? 0.64 : 0.34) : it.type === 'comercio' ? 0.36 : 0.34
+      const xzFit = it.type === 'rascacielos' ? (upper ? 0.59 : 0.77) : it.type === 'comercio' ? 0.90 : it.type === 'estacion' ? 0.84 : 0.81
       const bandPos = bpos.clone().addScaledVector(by, bandFrac)
       const bandM = new THREE.Matrix4().makeBasis(
-        bx.clone().multiplyScalar(0.96),
-        by.clone().multiplyScalar(it.type === 'rascacielos' ? 0.55 : 0.72),
-        bz.clone().multiplyScalar(0.96),
+        bx.clone().multiplyScalar(xzFit),
+        by.clone().multiplyScalar(it.type === 'rascacielos' ? 0.65 : 0.85),
+        bz.clone().multiplyScalar(xzFit),
       ).setPosition(bandPos)
       const lon = Math.atan2(bpos.z, bpos.x)
       const lat = Math.asin(THREE.MathUtils.clamp(bpos.y / Math.max(1, bpos.length()), -1, 1))

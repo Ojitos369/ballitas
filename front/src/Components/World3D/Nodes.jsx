@@ -190,6 +190,28 @@ function tileNoise2D(u, v) {
 }
 
 function getTextures() {
+  // Fachada luminosa procedural para los edificios GLB (no oscurece los vertex colors)
+  const buildingFacade = makeProceduralTex(
+    '__building_facade_proc',
+    512,
+    (g, s) => {
+      g.fillStyle = '#f2f5fc'
+      g.fillRect(0, 0, s, s)
+      const rng = mulberry32(11)
+      for (let y = 0; y < s; y += 16) {
+        g.fillStyle = rng() < 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(40,54,88,0.06)'
+        g.fillRect(0, y, s, 14)
+        g.fillStyle = 'rgba(40,52,82,0.12)'
+        g.fillRect(0, y + 14, s, 2)
+      }
+      for (let x = 0; x < s; x += 32) {
+        g.fillStyle = 'rgba(40,52,82,0.08)'
+        g.fillRect(x, 0, 2, s)
+      }
+    },
+    { srgb: true },
+  )
+
   const buildingAlbedo = loadTexWithFallback(
     'building_albedo.png',
     () => makeCanvas(512, (g, s) => {
@@ -417,6 +439,7 @@ function getTextures() {
 
   return {
     buildingAlbedo,
+    buildingFacade,
     buildingNormal,
     buildingEmissive,
     hullNormal,
@@ -885,11 +908,11 @@ function cityData(node, biome) {
 
   // Zona prohibida: avenidas, vértices, destinos y terminales (escalada por NODE_R).
   const terminals = getTerminals(node)
-  const roadClear = BALL_R + ROAD_W * 0.62 + CITY_U * 0.32
+  const roadClear = ROAD_W * 0.56 + CITY_U * 0.25
   const near = node.roads.flatMap((r) => r.points).map((p) => [p, roadClear])
-  const vClear = Math.max(1.95, ROAD_W * 1.35)
-  const dClear = Math.max(2.45, 2.45 * Math.pow(R_SCALE, 0.35))
-  const tClear = Math.max(3.05, 3.05 * Math.pow(R_SCALE, 0.25))
+  const vClear = Math.max(1.65, ROAD_W * 1.1)
+  const dClear = Math.max(2.15, 2.15 * Math.pow(R_SCALE, 0.35))
+  const tClear = Math.max(2.65, 2.65 * Math.pow(R_SCALE, 0.25))
   node.verts.forEach((v) => near.push([v.pos, vClear]))
   node.destinos.forEach((d) => near.push([d.pos, dClear]))
   terminals.forEach((t) => near.push([t.pos || node.verts[t.vert].pos, tClear]))
@@ -933,7 +956,7 @@ function cityData(node, biome) {
   const palette = (biome?.buildingColors || [node.color]).map((hex) => new THREE.Color(hex))
   const parkCol = new THREE.Color(biome?.parkColor || '#4ca662')
   // Densidad proporcional al área del planeta (NODE_R^2)
-  const N = Math.min(4800, Math.round(720 * AREA_SCALE))
+  const N = Math.min(5400, Math.round(1150 * AREA_SCALE))
   const rot = rng() * Math.PI * 2
   const col = new THREE.Color()
   const hsl = {}
@@ -1020,11 +1043,11 @@ function cityData(node, biome) {
 
     const baseCol = type === 'parque' ? parkCol : palette[Math.floor(rng() * palette.length)]
     baseCol.getHSL(hsl)
-    const minL = type === 'parque' ? 0.36 : 0.42
+    const minL = type === 'parque' ? 0.45 : 0.54
     const c = col.setHSL(
       hsl.h + (rng() - 0.5) * 0.04,
       THREE.MathUtils.clamp(hsl.s + (rng() - 0.5) * 0.12, 0.08, 0.95),
-      THREE.MathUtils.clamp(hsl.l + (rng() - 0.5) * 0.14, minL, 0.92),
+      THREE.MathUtils.clamp(hsl.l + (rng() - 0.5) * 0.12, minL, 0.94),
     ).clone()
 
     const sink = -0.04 * Math.pow(R_SCALE, 0.3)
@@ -1069,16 +1092,13 @@ function useCityKit(biome) {
 
 function Instanced({ geo, material, items, children, ...rest }) {
   const ref = useRef()
-  useLayoutEffect(() => {
-    const o = ref.current
-    if (!o || !geo) return
-    if (o.geometry !== geo) o.geometry = geo
-    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
-    o.computeBoundingSphere?.()
-  }, [geo])
+  const initGeoRef = useRef(geo)
+  const initMatRef = useRef(material ?? null)
   useLayoutEffect(() => {
     const o = ref.current
     if (!o) return
+    if (geo && o.geometry !== geo) o.geometry = geo
+    if (material && o.material !== material) o.material = material
     items.forEach((it, i) => {
       o.setMatrixAt(i, it.m ?? it)
       if (it.c) o.setColorAt(i, it.c)
@@ -1087,10 +1107,10 @@ function Instanced({ geo, material, items, children, ...rest }) {
     if (o.instanceColor) o.instanceColor.needsUpdate = true
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
     o.computeBoundingSphere?.()
-  }, [items])
+  }, [geo, material, items])
   if (!items.length) return null
   return (
-    <instancedMesh key={items.length} ref={ref} args={[geo, material ?? null, items.length]} {...rest}>
+    <instancedMesh key={items.length} ref={ref} args={[initGeoRef.current, initMatRef.current, items.length]} {...rest}>
       {children}
     </instancedMesh>
   )
@@ -1399,13 +1419,13 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const buildingMat = useMemo(() => {
     const m = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      map: tex.buildingAlbedo,
+      map: tex.buildingFacade,
       normalMap: tex.buildingNormal,
-      roughness: biome.buildingRoughness,
+      roughness: Math.min(0.65, biome.buildingRoughness),
       metalness: biome.buildingMetalness,
       emissive: biome.emissiveColor,
       emissiveMap: tex.buildingEmissive,
-      emissiveIntensity: biome.emissiveIntensity,
+      emissiveIntensity: biome.emissiveIntensity * 1.15,
     })
     applyCityFade(m)
     return m
@@ -1413,20 +1433,20 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const parkMat = useMemo(() => {
     const m = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.78,
+      roughness: 0.72,
       metalness: 0.05,
       emissive: biome.cityLight,
-      emissiveIntensity: 0.14,
+      emissiveIntensity: 0.2,
     })
     applyCityFade(m)
     return m
   }, [biome])
   const farSkylineMat = useMemo(() => new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.55,
+    roughness: 0.5,
     metalness: 0.25,
     emissive: biome.emissiveColor,
-    emissiveIntensity: biome.emissiveIntensity * 0.55,
+    emissiveIntensity: biome.emissiveIntensity * 1.1,
   }), [biome])
 
   useEffect(() => () => {
@@ -1520,7 +1540,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
           normalScale={normalScale}
           emissive={biome.cityLight}
           emissiveMap={tex.cityGridEmissive}
-          emissiveIntensity={0.42}
+          emissiveIntensity={0.62}
           roughness={biome.planetRoughness}
           metalness={biome.planetMetalness}
         />
