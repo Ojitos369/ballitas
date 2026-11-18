@@ -1177,7 +1177,8 @@ function sampleWayPoints(way, steps = 14) {
 // Celda ROUTE_CELL: todo par a menos de ROUTE_CELL se mide; más lejos la holgura ya pasa de ROUTE_CELL - 2·ext - 1.5·radio (> ROUTE_MARGIN).
 const ROUTE_CELL = 20
 function routeSlack(pts, only = -1) {
-  const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN)
+  // borde de la unión medido 6 u antes: allí las rutas convergen y el muestreo grueso (~5 u) se saltaba el punto más cercano
+  const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN - 6)
   const cell = (v) => Math.floor(v / ROUTE_CELL)
   for (const q of pool) { const key = cellKey(cell(q.p.x), cell(q.p.y), cell(q.p.z)); let b = grid.get(key); if (!b) grid.set(key, b = []); b.push(q) }
   let min = ROUTE_CELL
@@ -1472,14 +1473,16 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   const sampleHalf = (h) => {
     const out = []
     plans.forEach(({ halves }, r) => curves[r][h].forEach((cv, m) => {
-      const pre = []; let L = 0
-      for (let k = 0; k <= 24; k++) { pre.push(cv.getPoint(k / 24)); if (k) L += pre[k].distanceTo(pre[k - 1]) }
-      const n = clamp(Math.ceil(L / 5), 8, 200); const pseudo = { length: L, kind: halves[h][m], radius: P.radius }
-      let acc = 0; let prev = null
+      let L0 = 0; let q0 = cv.getPoint(0)
+      for (let k = 1; k <= 24; k++) { const q = cv.getPoint(k / 24); L0 += q.distanceTo(q0); q0 = q }
+      // 24 cuerdas subestiman el largo de hélices y rizos: u se normaliza con el acumulado fino (si no, acc/L > 1 cierra la trenza y la extensión sale corta)
+      const n = clamp(Math.ceil(L0 / 5), 8, 200); const ps = []; const accs = []; let acc = 0; let prev = null
+      for (let k = 0; k <= n; k++) { const p = cv.getPoint(k / n); if (prev) acc += p.distanceTo(prev); prev = p; ps.push(p); accs.push(acc) }
+      const pseudo = { length: acc, kind: halves[h][m], radius: P.radius }
       for (let k = 0; k <= n; k++) {
-        const p = cv.getPoint(k / n); if (prev) acc += p.distanceTo(prev); prev = p
+        const p = ps[k]
         const hubD = Math.min(p.distanceTo(hubs[0]), p.distanceTo(hubs[1]), p.distanceTo(hubs[2]))
-        out.push({ p, h, route: r, hubD, ext: routeExtent(pseudo, acc / L), tube: P.radius })
+        out.push({ p, h, route: r, hubD, ext: routeExtent(pseudo, accs[k] / acc), tube: P.radius })
       }
     }))
     halfPts[h] = out
