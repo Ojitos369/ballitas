@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { resolveNodeBiome } from './mundos/biomas.js'
+import { resolvePlanetConfig } from './mundos/planetaCartoon.js'
 
 let _worldRef = null
 const _worldListeners = new Set()
@@ -13,8 +14,45 @@ export function registerWorldForVistas(world) {
   _worldListeners.forEach((fn) => fn(world))
 }
 
+// Impostor de mapa: de lejos el planeta se infla (la esfera real, sin geometría extra) para no bajar de
+// MAPA_DIAM_PX píxeles de diámetro. Con la cámara cerca vale 1 (escala real).
+const MAPA_DIAM_PX = 46
+export function escalaMapa(R, dist, camera, height) {
+  const diam = (R * height) / Math.max(1e-3, dist * Math.tan((camera.fov * Math.PI) / 360))
+  return Math.min(8, Math.max(1, MAPA_DIAM_PX / Math.max(diam, 1e-3)))
+}
+
+// Radio visual real del planeta (1.0-1.6 × NODE_R): el enfoque se mide en radios para que quepa entero con terminales.
+const ENFOQUE_RADIOS = 3.2
+const _rv = new WeakMap()
+function radioVisual(n, world) {
+  let r = _rv.get(n)
+  if (r == null) { r = resolvePlanetConfig(n, resolveNodeBiome(n, world), world).visualR; _rv.set(n, r) }
+  return r
+}
+
 export function focusWorldNode(nodeIdx) {
   window.dispatchEvent(new CustomEvent('ballitas:focus-node', { detail: { nodeIdx } }))
+}
+
+// ── Vista de superficie: nodo abierto (índice) o null. Tienda mínima con fundido de entrada/salida. ──
+let _sup = null
+const _supListeners = new Set()
+let _fadeEl = null
+function fundido(fn) {
+  if (!_fadeEl) {
+    _fadeEl = document.createElement('div')
+    _fadeEl.style.cssText = 'position:fixed;inset:0;z-index:25;pointer-events:none;opacity:0;transition:opacity .38s ease;background:radial-gradient(circle,#0a0d22,#02030a);'
+    document.body.appendChild(_fadeEl)
+  }
+  _fadeEl.style.opacity = '1'
+  setTimeout(() => { fn(); setTimeout(() => { if (_fadeEl) _fadeEl.style.opacity = '0' }, 500) }, 400)
+}
+function fijarSuperficie(idx) { _sup = idx; _supListeners.forEach((f) => f()) }
+export function abrirSuperficie(nodeIdx) { if (_sup == null) fundido(() => fijarSuperficie(nodeIdx)) }
+export function cerrarSuperficie() { if (_sup != null) fundido(() => fijarSuperficie(null)) }
+export function useSuperficie() {
+  return useSyncExternalStore((f) => { _supListeners.add(f); return () => _supListeners.delete(f) }, () => _sup)
 }
 
 const Y = new THREE.Vector3(0, 1, 0)
@@ -172,6 +210,20 @@ function VistaMundos({ enabled }) {
   const [world, setWorld] = useState(() => _worldRef)
   const [focusedIdx, setFocusedIdx] = useState(null)
   const nav = useRef({ fly: 1, dragging: false, p0: new THREE.Vector3(), goal: new THREE.Vector3() })
+  const gl = useThree((s) => s.gl)
+  const sup = useSuperficie()
+  const supRef = useRef(sup)
+  supRef.current = sup
+  const guardada = useRef(null)
+  const focRef = useRef(null)
+  focRef.current = focusedIdx
+
+  // Al abrir la superficie se guarda la pose de la cámara general; al salir se restaura (mismo planeta enfocado).
+  useEffect(() => {
+    if (sup != null) {
+      guardada.current = { p: camera.position.clone(), t: controls?.target?.clone(), fov: camera.fov, near: camera.near, far: camera.far }
+    }
+  }, [sup, camera, controls])
 
   useEffect(() => {
     const onWorld = (w) => {
@@ -199,7 +251,7 @@ function VistaMundos({ enabled }) {
       _vmDir.copy(camera.position).sub(n.pos)
       if (_vmDir.lengthSq() < 1e-4) _vmDir.set(0.6, 0.35, 0.72)
       _vmDir.y = Math.max(_vmDir.y * 0.4, 0.25 * WORLD.NODE_R)
-      _vmDir.normalize().multiplyScalar(WORLD.NODE_R * 3.15)
+      _vmDir.normalize().multiplyScalar(radioVisual(n, world) * ENFOQUE_RADIOS)
       nav.current.goal.copy(n.pos).add(_vmDir)
       setFocusedIdx(safe)
     }
@@ -210,7 +262,14 @@ function VistaMundos({ enabled }) {
       if (e.metaKey || e.ctrlKey || e.altKey || !nodes.length) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      if (e.key === '[' || e.key === 'PageUp') {
+      if (supRef.current != null) { // superficie abierta: Esc sale; el resto de teclas de la vista general se ignoran
+        if (e.key === 'Escape') { e.preventDefault(); cerrarSuperficie() }
+        return
+      }
+      if (e.key === 'Enter' && focRef.current != null) {
+        e.preventDefault()
+        abrirSuperficie(focRef.current)
+      } else if (e.key === '[' || e.key === 'PageUp') {
         e.preventDefault()
         setFocusedIdx((cur) => {
           const next = cur == null ? nodes.length - 1 : (cur - 1 + nodes.length) % nodes.length
@@ -228,13 +287,31 @@ function VistaMundos({ enabled }) {
         setFocusedIdx(null)
       }
     }
+    // doble clic sobre un planeta: entra a su superficie
+    const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); const sph = new THREE.Sphere(); const hit = new THREE.Vector3()
+    const onDbl = (e) => {
+      if (supRef.current != null) return
+      const r = gl.domElement.getBoundingClientRect()
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+      ray.setFromCamera(ndc, camera)
+      let best = -1; let bd = Infinity
+      nodes.forEach((n, i) => {
+        const rr = WORLD.NODE_R * 1.3
+        sph.set(n.pos, rr * escalaMapa(rr, n.pos.distanceTo(camera.position), camera, r.height))
+        if (ray.ray.intersectSphere(sph, hit)) { const d = hit.distanceTo(camera.position); if (d < bd) { bd = d; best = i } }
+      })
+      if (best >= 0) { nav.current.fly = 1; setFocusedIdx(best); abrirSuperficie(best) }
+    }
+    const dom = gl.domElement
+    dom.addEventListener('dblclick', onDbl)
     window.addEventListener('ballitas:focus-node', onFocusEvent)
     window.addEventListener('keydown', onKey)
     return () => {
+      dom.removeEventListener('dblclick', onDbl)
       window.removeEventListener('ballitas:focus-node', onFocusEvent)
       window.removeEventListener('keydown', onKey)
     }
-  }, [enabled, world, camera])
+  }, [enabled, world, camera, gl])
 
   useEffect(() => {
     if (!controls) return undefined
@@ -252,7 +329,20 @@ function VistaMundos({ enabled }) {
   }, [controls])
 
   useFrame((_, dt) => {
-    if (!enabled || focusedIdx == null) return
+    const g = guardada.current
+    if (g && supRef.current == null) {
+      // Salida de la superficie: se restaura la pose guardada y se corta el «volviendo a casa» de CameraRig
+      // (que arranca al dejar de estar suspendido) simulando un toque del usuario sobre los controles.
+      guardada.current = null
+      camera.position.copy(g.p); camera.fov = g.fov; camera.near = g.near; camera.far = g.far
+      camera.updateProjectionMatrix()
+      if (g.t && controls?.target) controls.target.copy(g.t)
+      controls?.dispatchEvent?.({ type: 'start' }); controls?.dispatchEvent?.({ type: 'end' })
+      controls?.update?.()
+      nav.current.fly = 1
+      return
+    }
+    if (!enabled || focusedIdx == null || supRef.current != null) return
     const node = world?.nodes?.[focusedIdx]
     if (!node) return
     const h = Math.min(dt, 0.05)
@@ -263,8 +353,15 @@ function VistaMundos({ enabled }) {
     if (s.fly < 1) {
       s.fly = Math.min(1, s.fly + h / 1.1)
       const e = sm(s.fly, 0, 1)
-      _vmGoal.copy(s.goal)
-      camera.position.copy(s.p0).lerp(_vmGoal, e)
+      // órbita alrededor del planeta: el rumbo gira por arco (slerp) y la distancia cambia en escala log (zoom suave)
+      _vmGoal.copy(s.goal).sub(node.pos)
+      _vmOff.copy(s.p0).sub(node.pos)
+      const l0 = Math.max(_vmOff.length(), 1e-3); const l1 = Math.max(_vmGoal.length(), 1e-3)
+      _vmOff.divideScalar(l0); _vmGoal.divideScalar(l1)
+      _qA.setFromUnitVectors(_vmOff, _vmGoal)
+      _qB.identity().slerp(_qA, e)
+      _vmOff.applyQuaternion(_qB).multiplyScalar(l0 * Math.pow(l1 / l0, e))
+      camera.position.copy(node.pos).add(_vmOff)
     } else if (!s.dragging) {
       _vmOff.copy(camera.position).sub(node.pos)
       if (_vmOff.lengthSq() > 1e-4) {
@@ -278,11 +375,11 @@ function VistaMundos({ enabled }) {
   const focusedNode = enabled && focusedIdx != null ? world?.nodes?.[focusedIdx] : null
   const biome = useMemo(() => (focusedNode ? resolveNodeBiome(focusedNode, world) : null), [focusedNode, world])
 
-  if (!focusedNode || !biome) return null
+  if (!focusedNode || !biome || sup != null) return null
   return (
     <WorldHtml
       center
-      position={[focusedNode.pos.x, focusedNode.pos.y + WORLD.NODE_R + 4.9, focusedNode.pos.z]}
+      position={[focusedNode.pos.x, focusedNode.pos.y + radioVisual(focusedNode, world) * 1.25 + 2.5, focusedNode.pos.z]}
       distanceFactor={20}
       zIndexRange={[10, 0]}
     >
@@ -300,6 +397,13 @@ function VistaMundos({ enabled }) {
           {biome.emoji} {focusedNode.name}
         </div>
         <div style={{ fontSize: '0.8em', color: biome.atmoRim }}>{biome.title}</div>
+        <button
+          type="button"
+          onClick={() => abrirSuperficie(focusedIdx)}
+          style={{ pointerEvents: 'auto', cursor: 'pointer', marginTop: 4, padding: '3px 12px', borderRadius: 8, border: `1px solid ${biome.atmoRim}`, background: `${biome.atmoBase}66`, color: '#fff', font: 'inherit', fontWeight: 600 }}
+        >
+          Entrar (Enter)
+        </button>
         <div style={{ fontSize: '0.68em', opacity: 0.72, marginTop: 2 }}>
           [ / ] o PgUp / PgDn · Esc para salir
         </div>

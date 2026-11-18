@@ -1,0 +1,535 @@
+[
+  {
+    "nombre": "anillo_neon",
+    "pieza": "aro",
+    "tema": null,
+    "tris": 800,
+    "dims": [
+      1.34,
+      1.34,
+      0.28
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "caja_evento",
+    "pieza": "evento",
+    "tema": null,
+    "tris": 468,
+    "dims": [
+      0.78,
+      0.85,
+      0.78
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "caja_cambio",
+    "pieza": "cambio",
+    "tema": null,
+    "tris": 592,
+    "dims": [
+      0.72,
+      0.725,
+      0.75
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "turbo_placa",
+    "pieza": "turbo",
+    "tema": null,
+    "tris": 416,
+    "dims": [
+      1.0,
+      0.18,
+      0.72
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "barrera",
+    "pieza": "barrera",
+    "tema": null,
+    "tris": 284,
+    "dims": [
+      1.02,
+      0.44,
+      0.61
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "bordillo",
+    "pieza": "bordillo",
+    "tema": null,
+    "tris": 284,
+    "dims": [
+      1.02,
+      0.28,
+      0.61
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "arco_salida",
+    "pieza": "arco",
+    "tema": null,
+    "tris": 536,
+    "dims": [
+      1.06,
+      0.99,
+      0.265
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "tunel_arco",
+    "pieza": "tunel",
+    "tema": null,
+    "tris": 792,
+    "dims": [
+      1.08,
+      0.675,
+      0.28
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "pilar",
+    "pieza": "soporte",
+    "tema": null,
+    "tris": 588,
+    "dims": [
+      0.56,
+      0.97,
+      0.56
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "banderin",
+    "pieza": "bandera",
+    "tema": null,
+    "tris": 432,
+    "dims": [
+      0.7153,
+      1.05,
+      0.4305
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "farola_pista",
+    "pieza": "farola",
+    "tema": null,
+    "tris": 496,
+    "dims": [
+      0.5849,
+      0.96,
+      0.3899
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_sombrio",
+    "pieza": "rebote",
+    "tema": "sombrio",
+    "tris": 620,
+    "dims": [
+      0.72,
+      0.49,
+      0.715
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_bosque",
+    "pieza": "rebote",
+    "tema": "bosque",
+    "tris": 792,
+    "dims": [
+      0.8579,
+      0.68,
+      0.88
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_mar",
+    "pieza": "rebote",
+    "tema": "mar",
+    "tris": 556,
+    "dims": [
+      0.84,
+      0.5411,
+      0.7959
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_desierto",
+    "pieza": "rebote",
+    "tema": "desierto",
+    "tris": 532,
+    "dims": [
+      0.7191,
+      0.75,
+      0.56
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_hielo",
+    "pieza": "rebote",
+    "tema": "hielo",
+    "tris": 384,
+    "dims": [
+      0.96,
+      0.35,
+      0.8721
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_volcan",
+    "pieza": "rebote",
+    "tema": "volcan",
+    "tris": 620,
+    "dims": [
+      0.8832,
+      0.46,
+      0.9059
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_cristal",
+    "pieza": "rebote",
+    "tema": "cristal",
+    "tris": 288,
+    "dims": [
+      0.8805,
+      0.3381,
+      0.9023
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_nubes",
+    "pieza": "rebote",
+    "tema": "nubes",
+    "tris": 616,
+    "dims": [
+      0.8965,
+      0.4146,
+      0.7572
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_neon",
+    "pieza": "rebote",
+    "tema": "neon",
+    "tris": 552,
+    "dims": [
+      0.9103,
+      0.275,
+      0.9103
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "rebote_jardin",
+    "pieza": "rebote",
+    "tema": "jardin",
+    "tris": 644,
+    "dims": [
+      0.8094,
+      0.48,
+      0.7392
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_sombrio_hito",
+    "pieza": "deco",
+    "tema": "sombrio",
+    "tris": 240,
+    "dims": [
+      0.56,
+      0.68,
+      0.34
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_sombrio_flora",
+    "pieza": "deco",
+    "tema": "sombrio",
+    "tris": 412,
+    "dims": [
+      0.68,
+      0.5748,
+      0.64
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_bosque_hito",
+    "pieza": "deco",
+    "tema": "bosque",
+    "tris": 364,
+    "dims": [
+      0.6846,
+      0.7577,
+      0.5161
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_bosque_flora",
+    "pieza": "deco",
+    "tema": "bosque",
+    "tris": 300,
+    "dims": [
+      0.7549,
+      0.3276,
+      0.7037
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_mar_hito",
+    "pieza": "deco",
+    "tema": "mar",
+    "tris": 548,
+    "dims": [
+      0.76,
+      0.74,
+      0.7485
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_mar_flora",
+    "pieza": "deco",
+    "tema": "mar",
+    "tris": 440,
+    "dims": [
+      0.5289,
+      0.6961,
+      0.4695
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_desierto_hito",
+    "pieza": "deco",
+    "tema": "desierto",
+    "tris": 292,
+    "dims": [
+      0.9913,
+      0.6577,
+      0.3171
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_desierto_flora",
+    "pieza": "deco",
+    "tema": "desierto",
+    "tris": 760,
+    "dims": [
+      0.56,
+      0.655,
+      0.56
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_hielo_hito",
+    "pieza": "deco",
+    "tema": "hielo",
+    "tris": 140,
+    "dims": [
+      0.5473,
+      0.8639,
+      0.5035
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_hielo_flora",
+    "pieza": "deco",
+    "tema": "hielo",
+    "tris": 720,
+    "dims": [
+      0.546,
+      0.99,
+      0.56
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_volcan_hito",
+    "pieza": "deco",
+    "tema": "volcan",
+    "tris": 416,
+    "dims": [
+      0.6708,
+      0.94,
+      0.6708
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_volcan_flora",
+    "pieza": "deco",
+    "tema": "volcan",
+    "tris": 188,
+    "dims": [
+      0.6415,
+      0.541,
+      0.632
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_cristal_hito",
+    "pieza": "deco",
+    "tema": "cristal",
+    "tris": 160,
+    "dims": [
+      0.5812,
+      0.84,
+      0.5812
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_cristal_flora",
+    "pieza": "deco",
+    "tema": "cristal",
+    "tris": 80,
+    "dims": [
+      0.5625,
+      0.7419,
+      0.4839
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_nubes_hito",
+    "pieza": "deco",
+    "tema": "nubes",
+    "tris": 372,
+    "dims": [
+      0.6,
+      0.95,
+      0.6
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_nubes_flora",
+    "pieza": "deco",
+    "tema": "nubes",
+    "tris": 680,
+    "dims": [
+      0.86,
+      0.5494,
+      0.5862
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_neon_hito",
+    "pieza": "deco",
+    "tema": "neon",
+    "tris": 468,
+    "dims": [
+      0.4294,
+      0.8986,
+      0.4294
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_neon_flora",
+    "pieza": "deco",
+    "tema": "neon",
+    "tris": 228,
+    "dims": [
+      0.48,
+      0.76,
+      0.48
+    ],
+    "mov": false,
+    "emisivo": true
+  },
+  {
+    "nombre": "deco_jardin_hito",
+    "pieza": "deco",
+    "tema": "jardin",
+    "tris": 508,
+    "dims": [
+      0.546,
+      0.95,
+      0.56
+    ],
+    "mov": false,
+    "emisivo": false
+  },
+  {
+    "nombre": "deco_jardin_flora",
+    "pieza": "deco",
+    "tema": "jardin",
+    "tris": 656,
+    "dims": [
+      0.6227,
+      0.7,
+      0.6547
+    ],
+    "mov": false,
+    "emisivo": false
+  }
+]

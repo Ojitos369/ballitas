@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useFrame } from '@react-three/fiber'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { NODE_R, mulberry32 } from '../../../Core/world.js'
 
@@ -118,21 +117,21 @@ const BIOME_GLB = {
  * Elige un punto prominente y despejado en el hemisferio superior del planeta
  * para colocar el monumento único del mundo.
  */
-export function pickMonumentSpot(node, near) {
+export function pickMonumentSpot(node, near, surfaceR = NODE_R) {
   const rng = mulberry32(5150 + node.idx * 313)
   const rot = rng() * Math.PI * 2
   const samples = 64
   let bestDir = new THREE.Vector3(0, 1, 0)
   let bestScore = -Infinity
 
-  const scaleK = NODE_R / 7.5
+  const scaleK = surfaceR / 7.5
   const minClear = 2.2 * scaleK * scaleK
   for (let i = 0; i < samples; i++) {
     const yy = 0.96 - (i / samples) * 0.62 // hemisferio superior (y: 0.96 .. 0.34)
     const rr = Math.sqrt(Math.max(0, 1 - yy * yy))
     const ang = i * Math.PI * (3 - Math.sqrt(5)) + rot
     const dir = new THREE.Vector3(Math.cos(ang) * rr, yy, Math.sin(ang) * rr).normalize()
-    const worldPt = dir.clone().multiplyScalar(NODE_R).add(node.pos)
+    const worldPt = dir.clone().multiplyScalar(surfaceR).add(node.pos)
     let minD2 = Infinity
     for (const [p, rad] of near) {
       const d2 = p.distanceToSquared(worldPt) - rad * rad
@@ -150,12 +149,12 @@ export function pickMonumentSpot(node, near) {
 
   return {
     dir: bestDir,
-    pos: bestDir.clone().multiplyScalar(NODE_R - 0.06 * scaleK),
+    pos: bestDir.clone().multiplyScalar(surfaceR - 0.06 * scaleK),
     quat: new THREE.Quaternion().setFromUnitVectors(UP, bestDir),
   }
 }
 
-export function Monument({ node, biome, spot }) {
+export function Monument({ node, biome, spot, surfaceR = NODE_R, animRegRef = null }) {
   const glbName = BIOME_GLB[biome.id]
   const glbGeo = useMonumentGlb(glbName)
   const animRef = useRef()
@@ -175,27 +174,17 @@ export function Monument({ node, biome, spot }) {
     Object.values(mats).forEach((m) => m.dispose())
   }, [mats])
 
-  useFrame(({ clock, camera }) => {
-    if (camera.position.distanceTo(node.pos) > Math.max(140, NODE_R * 10)) return
-    const t = clock.elapsedTime + node.idx * 1.7
-    if (animRef.current) {
-      if (biome.id === 'mar') {
-        animRef.current.rotation.y = t * 1.35
-      } else if (biome.id === 'nubes') {
-        animRef.current.position.y = 1.65 + Math.sin(t * 1.4) * 0.22
-        animRef.current.rotation.y = t * 0.3
-      } else {
-        animRef.current.rotation.y = t * 0.85
-        animRef.current.position.y += Math.sin(t * 2.1) * 0.0018
-      }
+  useLayoutEffect(() => {
+    if (!animRegRef?.current) return undefined
+    const reg = animRegRef.current
+    const entry = { animRef, animRef2, biomeId: biome.id, nodeIdx: node.idx }
+    reg.monument = entry
+    return () => {
+      if (reg.monument === entry) reg.monument = null
     }
-    if (animRef2.current) {
-      animRef2.current.rotation.y = -t * 0.6
-      animRef2.current.rotation.z = Math.sin(t * 1.2) * 0.08
-    }
-  })
+  }, [animRegRef, biome.id, node.idx])
 
-  const monScale = Math.pow(NODE_R / 7.5, 0.45)
+  const monScale = useMemo(() => Math.pow(surfaceR / 7.5, 0.45), [surfaceR])
 
   return (
     <group position={spot.pos} quaternion={spot.quat} scale={monScale}>

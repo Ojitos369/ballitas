@@ -18,7 +18,8 @@ import Paths from './Paths.jsx'
 import Ballita from './Ballita.jsx'
 import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
-import { VistaCamino } from './Vistas.jsx'
+import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
+import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
 import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
 import { clampYaw, decayOffset } from './povLook.js'
@@ -38,6 +39,9 @@ const POV_JOY_PITCH_SPEED = 0.9
 const NOOP = () => {}
 const NEAR_DEFAULT = 0.15
 const NEAR_POV = 0.05
+const SEGUIR_DIST_MIN = 2.4
+const SEGUIR_DIST_MAX = 16
+const FOLLOW_LAT_W = 9 // rapidez con que el anclaje de la cámara absorbe el desvío lateral de la ballita
 const SEGUIR_DIST = 4.6 // distancia detrás y encima de la ballita en caminos abiertos
 const MIN_DIST = 1.4
 const VISTA_DIR = new THREE.Vector3(0.55, 0.45, 0.7).normalize()
@@ -509,7 +513,7 @@ function NebulaDome({ r }) {
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
-  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false })
+  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false })
   const controls = useRef()
   const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
@@ -705,7 +709,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     const v = THREE.MathUtils.degToRad(FOV / 2)
     const h = Math.min(v, Math.atan(Math.tan(v) * Math.max(0.3, camera.aspect || 1)))
     // maxDistance de OrbitControls es r*6: si la casa lo supera, 'volviendo' nunca termina.
-    return off.copy(mundo.center).addScaledVector(VISTA_DIR, Math.min(mundo.r / Math.sin(h), mundo.r * 5.8))
+    return off.copy(mundo.center).addScaledVector(VISTA_DIR, Math.min(mundo.r * 0.8 / Math.sin(h), mundo.r * 5.8)) // 0.8: el mapa ocupa ~80% de la pantalla
   }
 
   useLayoutEffect(() => {
@@ -876,6 +880,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         modo.current = 'entrando'
         hasPrevPos.current = false
         fs.hasLast = false
+        fs.hasAnchor = false
         fs.hasPosUp = false
         fs.stepAvg = 0
         fs.seg = fs.prevSeg = null
@@ -953,7 +958,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         const x = off.dot(posSide); const y = off.dot(posUpO); const z = -off.dot(fs.fwd)
         fs.rel.yaw = Math.atan2(x, z)
         fs.rel.pitch = Math.asin(THREE.MathUtils.clamp(y / len, -1, 1))
-        fs.rel.dist = len / distK
+        fs.rel.dist = THREE.MathUtils.clamp(len / distK, SEGUIR_DIST_MIN, SEGUIR_DIST_MAX) // zoom de rueda acotado
         fs.off.copy(off)
         fs.offV.set(0, 0, 0)
         fs.userRel = true
@@ -961,9 +966,16 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       }
 
       // objetivo: la ballita misma (rígido, sin retraso: no se sale del cuadro en curvas ni a 8×)
-      if (cine && selected.dir) lookAhead.copy(selected.pos).addScaledVector(fs.fwd, THREE.MathUtils.clamp(vel * 0.045, 0, 1.0))
-      else lookAhead.copy(selected.pos)
-      if (cine) targetFov = FOV + THREE.MathUtils.clamp(vel * 0.6, 0, 14)
+      // El anclaje sigue rígido adelante/arriba pero amortigua el vaivén lateral (cambios de carril): la cámara no tiembla.
+      if (entrando || corte || !fs.hasAnchor) { fs.anchor.copy(selected.pos); fs.hasAnchor = true }
+      else {
+        const lat = sideVec.copy(selected.pos).sub(fs.anchor).dot(posSide)
+        fs.anchor.copy(selected.pos).addScaledVector(posSide, -lat * Math.exp(-FOLLOW_LAT_W * h))
+      }
+      if (cine && selected.dir) lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, THREE.MathUtils.clamp(vel * 0.045, 0, 1.0))
+      else lookAhead.copy(fs.anchor)
+      // más campo de visión a más velocidad (sensación de carrera)
+      targetFov = FOV + THREE.MathUtils.clamp(vel * (cine ? 0.6 : 0.45), 0, cine ? 14 : 9)
 
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
       const yaw = fs.rel.yaw + sway
@@ -1248,6 +1260,8 @@ function PostFX({ dofOn, selected, highQuality }) {
 }
 
 export default function Scene({ sim, ballitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
+  const supIdx = useSuperficie()
+  const supOn = supIdx != null && Boolean(sim.world.nodes[supIdx])
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
@@ -1524,8 +1538,10 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         onIncline={handlePerfIncline}
         onChange={handlePerfChange}
       />
-      <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
+      {!supOn && <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />}
 
+      {/* Con la superficie abierta la escena general no se dibuja (visible=false) y no se paga doble. */}
+      <group visible={!supOn}>
       {/* fondo: cúpula oscura + nebulosa FBM + estrellas, centradas en el mundo */}
       {/* fondo en capas con parallax: cuanto más lejana la capa, más sigue a la cámara (se desplaza menos).
           Radios + desplazamiento máximo (zoom 6r) quedan bajo far 20r: nada se recorta. */}
@@ -1554,6 +1570,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <Sol r={r} shadowsOn={cameraOnBall} selected={selected} />
       <hemisphereLight args={['#9bb6f0', '#161124', 0.22]} />
       <directionalLight position={[-1, 0.25, -1]} intensity={0.25} color="#6d92e8" />
+      </group>
 
       {/* entorno generado en local (sin HDR de red): reflejos sutiles en cristal y esferas */}
       <Environment resolution={128} frames={1} environmentIntensity={0.45}>
@@ -1565,6 +1582,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       </Environment>
 
       <SimDriver sim={sim} speed={speed} />
+      {supOn && <Superficie world={sim.world} nodeIdx={supIdx} ballitas={ballitas} onSalir={cerrarSuperficie} />}
+      <group visible={!supOn}>
       <Nodes world={sim.world} />
       <Paths world={sim.world} sim={sim} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
       {/* Precompilado: las ballitas nacen con pieles nuevas tras el precompilado inicial; sin esto la primera
@@ -1583,6 +1602,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
           />
         </Precompilado>
       ))}
+      </group>
       <CameraRig
         mundo={mundo}
         nodes={sim.world.nodes}
@@ -1590,7 +1610,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         follow={follow}
         pov={pov}
         cine={cine}
-        suspend={caminoOn}
+        suspend={caminoOn || supOn}
         povControlRef={povControlRef}
         pointerLockedRef={pointerLockedRef}
         gyroActiveRef={gyroActiveRef}
