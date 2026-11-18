@@ -149,19 +149,25 @@ def build_caja_evento(mats):
         # Cubo flotante principal translúcido
         cube((0, 0, 0.46), (0.64, 0.64, 0.64), m_glass, bev=0.05, bev_seg=2),
     ]
-    # Estrella de 4 puntas en cada cara lateral y arriba
-    star_faces = [
-        ((0, -0.33, 0.46), (0, 0, 0)),
-        ((0, 0.33, 0.46), (0, 0, math.pi)),
-        ((-0.33, 0, 0.46), (0, 0, -math.pi / 2)),
-        ((0.33, 0, 0.46), (0, 0, math.pi / 2)),
-    ]
-    for pos, rot in star_faces:
-        objs.append(cube(pos, (0.34, 0.04, 0.10), m_star, rot=rot, bev=0.01))
-        objs.append(cube(pos, (0.10, 0.04, 0.34), m_star, rot=rot, bev=0.01))
+    # Estrella de 4 puntas afilada en cada cara lateral y arriba
+    # (pos, rot_para_apuntar_al_eje_de_la_cara)
+    for sx, sy, rx, ry, rz in (
+        (0, -0.33, 0, 0, 0),
+        (0, 0.33, 0, 0, math.pi),
+        (-0.33, 0, 0, 0, -math.pi / 2),
+        (0.33, 0, 0, 0, math.pi / 2),
+    ):
+        # Centro rombo + 4 puntas cónicas en plano XZ local
+        objs.append(cube((sx, sy, 0.46), (0.14, 0.04, 0.14), m_star, rot=(0, math.pi / 4, rz), bev=0.0))
+        for dx, dz, ang_p in ((0, 0.12, 0), (0, -0.12, math.pi), (0.12, 0, -math.pi / 2), (-0.12, 0, math.pi / 2)):
+            # rotar (dx, 0, dz) alrededor de Z por rz
+            wx = sx + dx * math.cos(rz)
+            wy = sy + dx * math.sin(rz)
+            objs.append(cyl((wx, wy, 0.46 + dz), 0.06, 0.16, m_star, v=4, r2=0.005, rot=(0, ang_p, rz)))
     # Estrella superior
-    objs.append(cube((0, 0, 0.79), (0.34, 0.10, 0.04), m_star, bev=0.01))
-    objs.append(cube((0, 0, 0.79), (0.10, 0.34, 0.04), m_star, bev=0.01))
+    objs.append(cube((0, 0, 0.79), (0.14, 0.14, 0.04), m_star, rot=(0, 0, math.pi / 4), bev=0.0))
+    for dx, dy, rx, ry in ((0, 0.12, -math.pi / 2, 0), (0, -0.12, math.pi / 2, 0), (0.12, 0, 0, math.pi / 2), (-0.12, 0, 0, -math.pi / 2)):
+        objs.append(cyl((dx, dy, 0.79), 0.06, 0.16, m_star, v=4, r2=0.005, rot=(rx, ry, 0)))
     return objs
 
 
@@ -169,18 +175,21 @@ def build_caja_cambio(mats):
     # Cajón con rayas de advertencia amarillo/negro y un rayo propio en relieve
     m_warn = mats['rayas_amarillas']
     m_dark = mats['metal_oscuro']
-    m_bolt = mats['neon']
+    m_bolt = mats['vidrio_dorado']
     objs = [
         cube((0, 0, 0.34), (0.68, 0.68, 0.68), m_warn, bev=0.03, bev_seg=2),
         # Marcos superior e inferior oscuros
         cube((0, 0, 0.06), (0.72, 0.72, 0.12), m_dark, bev=0.015),
         cube((0, 0, 0.62), (0.72, 0.72, 0.12), m_dark, bev=0.015),
     ]
-    # Rayo en relieve en frente y atrás
+    # Rayo dorado brillante en relieve en frente, atrás y arriba
     for sy, rot_z in ((-0.35, 0.0), (0.35, math.pi)):
-        objs.append(cube((0.04, sy, 0.44), (0.12, 0.05, 0.22), m_bolt, rot=(0, -0.45, rot_z), bev=0.008))
-        objs.append(cube((0.0, sy, 0.34), (0.22, 0.05, 0.09), m_bolt, rot=(0, 0.1, rot_z), bev=0.008))
-        objs.append(cube((-0.04, sy, 0.24), (0.12, 0.05, 0.22), m_bolt, rot=(0, -0.45, rot_z), bev=0.008))
+        objs.append(cube((0.05, sy, 0.46), (0.14, 0.05, 0.24), m_bolt, rot=(0, -0.5, rot_z), bev=0.008))
+        objs.append(cube((0.0, sy, 0.34), (0.28, 0.05, 0.10), m_bolt, rot=(0, 0.08, rot_z), bev=0.008))
+        objs.append(cube((-0.05, sy, 0.22), (0.14, 0.05, 0.24), m_bolt, rot=(0, -0.5, rot_z), bev=0.008))
+    objs.append(cube((0.05, 0.10, 0.70), (0.14, 0.22, 0.05), m_bolt, rot=(0, 0, -0.5), bev=0.008))
+    objs.append(cube((0.0, 0.0, 0.70), (0.26, 0.10, 0.05), m_bolt, rot=(0, 0, 0.08), bev=0.008))
+    objs.append(cube((-0.05, -0.10, 0.70), (0.14, 0.22, 0.05), m_bolt, rot=(0, 0, -0.5), bev=0.008))
     return objs
 
 
@@ -474,11 +483,12 @@ def build_deco(tema, variante, mats):
                 tor((0, 0, 0.68), 0.16, 0.045, m_det, maj=14, min_seg=8),
                 ball((0, 0, 0.84), (0.14, 0.14, 0.10), m_extra, seg=10, rings=6),
             ]
-        # flora: roca con grietas de lava
+        # flora: roca escarpada con grietas de lava brillante
         return [
-            ball((0, 0, 0.24), (0.36, 0.32, 0.26), m_main, seg=10, rings=6),
-            cube((0.0, -0.05, 0.34), (0.58, 0.10, 0.18), m_det, rot=(0.2, 0.3, 0.5), bev=0.01),
-            cube((0.05, 0.05, 0.28), (0.10, 0.54, 0.16), m_det, rot=(-0.2, 0.1, -0.4), bev=0.01),
+            cyl((0, 0, 0.24), 0.34, 0.48, m_main, v=7, r2=0.18, bev=0.02),
+            cyl((-0.14, 0.08, 0.18), 0.22, 0.36, m_main, v=6, r2=0.10, rot=(0.2, -0.25, 0)),
+            cube((0.0, -0.04, 0.28), (0.56, 0.12, 0.22), m_extra, rot=(0.15, 0.35, 0.4), bev=0.01),
+            cube((0.04, 0.04, 0.24), (0.12, 0.52, 0.20), m_det, rot=(-0.2, 0.1, -0.5), bev=0.01),
         ]
 
     if tema == 'cristal':
