@@ -87,6 +87,18 @@
 // laneLength mide el camino; laneCurve devuelve su THREE.Curve.
 // switches = {u,uLand,uEnd,apex,from,to,kind,...}; el vuelo entre las anclas lo da switchArc(seg,sw,t).
 // El id se conserva entre tramos cuando existe; los cambios de camino ocurren al aterrizar de un arco.
+//
+// CARRILES Y EVENTOS DE CAMBIO (ruta > camino > carril)
+// Cada camino (lane) tiene CARRILES = 5 carriles laterales: carrilLat(c, edge) es su desvío lateral (u) dentro de la
+// calzada, de -edge (c = 0) a +edge (c = 4); edge = CARRIL_EDGE para la calzada LANE_W. Cada switch es un EVENTO de un carril:
+//   { u, uLand, uEnd, from (camino origen), to (camino destino, siempre otro), carril (0..4, carril origen del evento),
+//     kind (CAMBIOS: salto, botado, caida, rampa, portal, elevador, laberinto, o uno temático: geiser, tirolina, erupcion),
+//     via (trayectoria: 'arco' | 'caida' | 'elevador' | 'portal' | 'laberinto'), style (= via), apex, duration, ... }
+// Todos los carriles de todos los caminos tienen eventos, repartidos a lo largo del tramo abierto. El kind sale de la
+// geometría en `u` (caida sólo hacia un camino más bajo, elevador hacia uno más alto, portal si está lejos,
+// salto/rampa/botado/laberinto a nivel) y del tema. switchPath(seg, sw, t) -> { pos, tangent, up, vis } recorre la
+// trayectoria (vis 0..1: el portal la oculta a mitad de camino). La sim elige carril al azar al entrar a una ruta y
+// al aterrizar, y sólo toma los eventos de su carril.
 // Helpers: frameAt(curve, u), cityPath(node, a, b), slerpDir(a, b, t, out), mulberry32(seed),
 //          wallFrame, laneFrame, laneAngle, laneRelief, reliefSlope, segmentCurvature, nearestLane,
 //          lowestLane, angDiff. Constantes: GRID_LEN, FINISH_LEN, OUT_GATES, IN_GATES.
@@ -204,9 +216,22 @@ export const MECHANISMS = {
   pantano: { name: 'Pantano', emoji: '🫧', style: 'pared', dur: 2.0, risk: 0.15, fail: 0.04, reward: { p: 0.3, e: 1.5 }, boost: 0.85 },
   hielo_resbaloso: { name: 'Hielo resbaloso', emoji: '🧊', style: 'pared', dur: 0.9, risk: 0.45, fail: 0.1, reward: { p: 1.8, e: -0.3 }, boost: 1.12 },
   canon: { name: 'Cañón', emoji: '💥', style: 'salto', dur: 0.9, risk: 0.95, fail: 0.2, reward: { p: 3.6, e: -1.2 }, boost: 1.25 },
-  caida: { name: 'Caída libre', emoji: '🪂', style: 'salto', dur: 1.0, risk: 0.8, fail: 0.18, reward: { p: 2.6, e: -0.5 }, boost: 1.1 },
+  caida: { name: 'Caída', emoji: '🕳️', style: 'caida', dur: 1.0, risk: 0.8, fail: 0.18, reward: { p: 2.6, e: -0.5 }, boost: 1.1 },
   arbol: { name: 'Árbol puente', emoji: '🌳', style: 'salto', dur: 1.1, risk: 0.3, fail: 0.05, reward: { p: 1.1, e: 0.2 }, boost: 1.05 },
   viento: { name: 'Ráfaga de viento', emoji: '💨', style: 'salto', dur: 0.9, risk: 0.4, fail: 0.08, reward: { p: 1.4, e: -0.1 }, boost: 1.1 },
+  salto: { name: 'Salto', emoji: '🦘', style: 'arco', dur: 1.0, risk: 0.4, fail: 0.07, reward: { p: 1.4, e: -0.4 }, boost: 1.08 },
+  botado: { name: 'Botado', emoji: '🏀', style: 'arco', dur: 1.15, risk: 0.5, fail: 0.09, reward: { p: 1.8, e: -0.3 }, boost: 1.1 },
+  elevador: { name: 'Elevador', emoji: '🛗', style: 'elevador', dur: 1.8, risk: 0.1, fail: 0.02, reward: { p: 0.6, e: 0.4 }, boost: 1 },
+  laberinto: { name: 'Laberinto', emoji: '🌀', style: 'laberinto', dur: 2.8, risk: 0.25, fail: 0.04, reward: { p: 2, e: -0.6 }, boost: 0.95 },
+}
+// Catálogo de eventos de cambio de camino por carril y su trayectoria (switchPath).
+export const CARRILES = 5
+export const CAMBIOS = { salto: 'arco', botado: 'arco', rampa: 'arco', caida: 'caida', portal: 'portal', elevador: 'elevador', laberinto: 'laberinto', geiser: 'arco', erupcion: 'arco', tirolina: 'arco' }
+// Cambios temáticos que se suman a los de geometría: arriba (lanzadores), abajo (descensos), nivel.
+const THEME_CAMBIOS = {
+  mar: { arriba: ['geiser'] }, volcan: { arriba: ['erupcion'] }, jardin: { arriba: ['geiser'], abajo: ['tirolina'] },
+  bosque: { abajo: ['tirolina'] }, nubes: { abajo: ['tirolina'] },
+  cristal: { nivel: ['portal'] }, neon: { nivel: ['portal'] }, sombrio: { nivel: ['portal'] },
 }
 // Mecanismos propios del paisaje de cada mini mundo (clave -> nombre temático).
 export const THEME_MECHS = {
@@ -417,6 +442,9 @@ const lerpArr = (arr, u) => {
 // ───────────────────────── caminos trenzados ─────────────────────────
 // ancho de calzada de cada camino: 1.04 u con TRACK_K = 1 (1.3 ballitas); escala con el trazado, no con la ballita
 export const LANE_W = +(0.4 * 2.6).toFixed(2) * TK
+// Semiancho útil de la calzada para el centro de la ballita y desvío lateral (u) del carril c (0..CARRILES-1).
+export const CARRIL_EDGE = LANE_W / 2 - BALL_R * 0.85
+export const carrilLat = (c, edge = CARRIL_EDGE) => ((clamp(c, 0, CARRILES - 1) / (CARRILES - 1)) - 0.5) * 2 * edge
 export const BRAID_A = 4.6 * TK // separación nominal (u) de cada camino respecto al central en el tramo abierto
 const BRAID_PAD = 4 * TK // holgura del envolvente para ancho de pista, ballita y arcos
 const BRAID_OPEN = 16 * TK // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
@@ -556,23 +584,60 @@ export function laneCurve(seg, laneId) {
 const ARC_A = {}; const ARC_B = {}
 function arcCtrl(seg, sw) {
   const A = laneFrame(seg, sw.from, sw.u, ARC_A); const B = laneFrame(seg, sw.to, sw.uLand, ARC_B)
-  const d = A.pos.distanceTo(B.pos); const h = sw.apex
+  const p0 = A.pos.clone().addScaledVector(A.side, sw.carril != null ? carrilLat(sw.carril) : 0) // despega desde su carril
+  const d = p0.distanceTo(B.pos); const h = sw.apex
   return {
-    p0: A.pos.clone(), p3: B.pos.clone(), u0: A.up.clone(), u1: B.up.clone(),
-    p1: A.pos.clone().addScaledVector(A.up, h).addScaledVector(A.tangent, d * 0.3),
+    p0, p3: B.pos.clone(), u0: A.up.clone(), u1: B.up.clone(), s0: A.side.clone(), t0: A.tangent.clone(), t1: B.tangent.clone(),
+    p1: p0.clone().addScaledVector(A.up, h).addScaledVector(A.tangent, d * 0.3),
     p2: B.pos.clone().addScaledVector(B.up, h).addScaledVector(B.tangent, -d * 0.3),
   }
 }
+// Trayectoria de un evento según su `via` (ver el contrato): arco balístico (switchArc), caída libre (avance constante y
+// descenso acelerado), elevador (sube vertical y luego entra al camino), portal (desaparece y aparece, sin arco) y
+// laberinto (avance lento en zigzag lateral hasta el destino). t 0..1 -> { pos, tangent, up, vis }.
+const SP_A = new THREE.Vector3(); const SP_B = new THREE.Vector3(); const SP_D = new THREE.Vector3(); const SP_V = new THREE.Vector3()
+function pathPos(c, via, t, out) {
+  const D = SP_D.subVectors(c.p3, c.p0); const V = SP_V.copy(Y).multiplyScalar(D.y); D.sub(V) // D: horizontal, V: vertical
+  if (via === 'caida') return out.copy(c.p0).addScaledVector(D, t).addScaledVector(V, t * t)
+  if (via === 'elevador') return out.copy(c.p0).addScaledVector(V, smooth01(t / 0.65)).addScaledVector(D, smooth01((t - 0.55) / 0.45))
+  if (via === 'portal') return t < 0.5 ? out.copy(c.p0).addScaledVector(c.t0, t * 2 * TK) : out.copy(c.p3).addScaledVector(c.t1, (t - 1) * 2 * TK)
+  // laberinto: pasillos en zigzag (onda triangular lateral) que se cierran al llegar
+  const tri = 1 - 4 * Math.abs(((t * 3 + 0.25) % 1) - 0.5)
+  return out.copy(c.p0).addScaledVector(D, smooth01(t)).addScaledVector(V, smooth01(t)).addScaledVector(c.s0, tri * 1.1 * TK * Math.sin(Math.PI * t))
+}
+export function switchPath(seg, sw, t, out = {}) {
+  const via = sw.via || 'arco'
+  if (via === 'arco') { switchArc(seg, sw, t, out); out.vis = 1; return out }
+  const c = sw._arc || (sw._arc = arcCtrl(seg, sw))
+  t = Number.isFinite(t) ? clamp(t, 0, 1) : 0
+  const pos = pathPos(c, via, t, out.pos || (out.pos = new THREE.Vector3()))
+  const T = out.tangent || (out.tangent = new THREE.Vector3())
+  if (via === 'portal') T.copy(t < 0.5 ? c.t0 : c.t1)
+  else {
+    T.subVectors(pathPos(c, via, Math.min(1, t + 0.01), SP_B), pathPos(c, via, Math.max(0, t - 0.01), SP_A))
+    if (T.lengthSq() < 1e-10) T.copy(c.t0)
+    T.normalize()
+  }
+  const up = out.up || (out.up = new THREE.Vector3())
+  up.copy(c.u0).lerp(c.u1, via === 'portal' ? (t < 0.5 ? 0 : 1) : smooth01(t)).addScaledVector(T, -up.dot(T))
+  if (up.lengthSq() < 1e-8) up.copy(c.u1)
+  up.normalize()
+  out.vis = via === 'portal' ? clamp(Math.abs(t - 0.5) / 0.18, 0, 1) : 1
+  return out
+}
+// Parábola balística (gravedad -Y): avance lineal de p0 a p3 más una joroba vertical de altura sw.apex; el botado da
+// un bote grande y otro chico (rebota en el rebotante a 60 % del vuelo).
+const arcLift = (bote, t) => bote ? (t < 0.6 ? 4 * (t / 0.6) * (1 - t / 0.6) : 1.4 * ((t - 0.6) / 0.4) * (1 - (t - 0.6) / 0.4)) : 4 * t * (1 - t)
+const arcLiftD = (bote, t) => bote ? (t < 0.6 ? (4 / 0.6) * (1 - (2 * t) / 0.6) : (1.4 / 0.4) * (1 - (2 * (t - 0.6)) / 0.4)) : 4 * (1 - 2 * t)
 export function switchArc(seg, sw, t, out = {}) {
   const c = sw._arc || (sw._arc = arcCtrl(seg, sw))
   t = Number.isFinite(t) ? clamp(t, 0, 1) : 0
-  const s = 1 - t
+  const bote = sw.kind === 'botado'
   const pos = out.pos || (out.pos = new THREE.Vector3())
-  pos.copy(c.p0).multiplyScalar(s * s * s).addScaledVector(c.p1, 3 * s * s * t).addScaledVector(c.p2, 3 * s * t * t).addScaledVector(c.p3, t * t * t)
+  pos.copy(c.p0).lerp(c.p3, t).addScaledVector(Y, sw.apex * arcLift(bote, t))
   const T = out.tangent || (out.tangent = new THREE.Vector3())
-  T.subVectors(c.p1, c.p0).multiplyScalar(3 * s * s).addScaledVector(FRAME_TMP.subVectors(c.p2, c.p1), 6 * s * t)
-    .addScaledVector(FRAME_TMP.subVectors(c.p3, c.p2), 3 * t * t)
-  if (T.lengthSq() < 1e-10) T.subVectors(c.p3, c.p0)
+  T.subVectors(c.p3, c.p0).addScaledVector(Y, sw.apex * arcLiftD(bote, t))
+  if (T.lengthSq() < 1e-10) T.copy(c.t0)
   T.normalize()
   const up = out.up || (out.up = new THREE.Vector3())
   up.copy(c.u0).lerp(c.u1, smooth01(t)).addScaledVector(T, -up.dot(T))
@@ -666,7 +731,7 @@ function buildSurface(s, rng) {
       feats.push({ c: (0.12 + rng() * 0.76) * L, w: (4 + rng() * 5) * TK, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * TK * (rng() < 0.35 ? -1 : 1) })
     }
     // [cresta, altura, subida]: una rampa por estación (varios mecanismos en la misma u comparten rampa)
-    const kicks = [...new Set((s.switchesByLane?.get(lane.id) || []).map((sw) => sw.u))].map((u) => [u * L, 0.3 * TK, 5 * TK])
+    const kicks = [...new Set((s.switchesByLane?.get(lane.id) || []).filter((sw) => sw.kind === 'rampa').map((sw) => sw.u))].map((u) => [u * L, 0.3 * TK, 5 * TK])
     for (let j = 0; j < R.jumps; j++) {
       let p = (0.2 + rng() * 0.6) * L
       while (kicks.some(([q]) => Math.abs(q - p) < 2.5 * KICK_DROP)) p += 2.5 * KICK_DROP // sus caídas no se apilan (pendiente máx. del relieve)
@@ -767,45 +832,50 @@ function buildLanes(way) {
   const theme = way.theme.id
   const mechs = Object.keys(THEME_MECHS[theme])
   const width = LANE_W
-  const mk = (s, u, from, to, kind, dur) => {
-    const M = MECHANISMS[kind]; const sk = s.speedK ?? 1
-    const duration = +(dur ?? (M.dur / Math.sqrt(sk)) * (s.drag > 2 ? 1.25 : 1)).toFixed(2)
-    const span = (duration * (14 * TK * sk + (s.boost || 0) * 0.4)) / s.length
+  const extra = THEME_CAMBIOS[theme] || {}
+  const mk = (s, u, from, to, kind, carril) => {
+    const M = MECHANISMS[kind]; const sk = s.speedK ?? 1; const via = CAMBIOS[kind]
+    const duration = +((M.dur / Math.sqrt(sk)) * (s.drag > 2 ? 1.25 : 1)).toFixed(2)
+    const span = via === 'portal' ? 0 : (duration * (14 * TK * sk + (s.boost || 0) * 0.4)) / s.length
+    const uLand = +Math.min(0.96, u + Math.max(via === 'portal' ? 0.05 : 0.08, span)).toFixed(4)
     return {
-      u: +u.toFixed(3), uLand: +Math.min(0.94, u + Math.max(0.08, span)).toFixed(3), uEnd: +Math.min(0.94, u + Math.max(0.08, span)).toFixed(3), from, to, kind, apex: +(3.5 + Math.abs(to - from) * 0.6).toFixed(2) * TK,
-      name: THEME_MECHS[theme][kind] || M.name, emoji: M.emoji, style: M.style, duration,
+      u: +u.toFixed(4), uLand, uEnd: uLand, from, to, carril, kind, via, apex: +((kind === 'botado' ? 5.5 : 3.5) + Math.abs(to - from) * 0.6).toFixed(2) * TK,
+      name: THEME_MECHS[theme][kind] || M.name, emoji: M.emoji, style: via, duration,
       risk: M.risk, fail: M.fail, reward: { ...M.reward }, boost: M.boost,
     }
   }
-  way.segments.forEach((s, i) => {
+  const fA = {}; const fB = {}
+  // kind por geometría (desnivel vertical y distancia entre caminos en u) y por tema; `pref`: el del obstáculo si encaja
+  const pickKind = (s, from, to, u, pref) => {
+    const a = laneFrame(s, from, u, fA).pos; const b = laneFrame(s, to, u, fB).pos
+    const dy = b.y - a.y; const dist = a.distanceTo(b)
+    let opts
+    if (dy < -0.45 * dist) opts = ['caida', 'caida', 'salto', ...(extra.abajo || [])]
+    else if (dy > 0.45 * dist) opts = ['elevador', 'elevador', 'rampa', ...(extra.arriba || [])]
+    else if (dist > 7 * TK) opts = ['portal']
+    else opts = ['salto', 'rampa', 'botado', 'laberinto', ...(extra.nivel || [])]
+    return pref && opts.includes(pref) ? pref : opts[Math.floor(rng() * opts.length)]
+  }
+  way.segments.forEach((s) => {
     const ids = Array.from({ length: laneCount }, (_, id) => id)
     s.lanes = ids.map((id) => ({ id, roll: id === 0 ? 'plano' : ROLL_KINDS[1 + ((id - 1 + way.idx) % (ROLL_KINDS.length - 1))], angle: 0, offset: 0, width, name: LANE_NAMES[id] || `camino ${id + 1}` }))
     buildBraid(s)
     s.switches = []
-    if (s.air) {
-      // el propio obstáculo aéreo catapulta: decide en qué pared aterriza
-      const dur = clamp((s.length / (14 * TK * (s.speedK ?? 1) + s.boost * 0.6)) * 0.8, 0.6, 3.5)
-      for (const id of ids) {
-      const to = id === 0 ? [laneCount - 1] : [id === laneCount - 1 ? 0 : id + 1]
-        for (const t of new Set(to)) if (t !== id) s.switches.push(mk(s, 0.12, id, t, s.kind, dur))
+    // tramo abierto de la trenza (los caminos separados): ahí van los eventos, uno por carril de cada camino
+    const [fa, fb] = s._braid.full
+    let a = fa + 0.02; let b = Math.min(fb - 0.02, 0.9)
+    if (b - a < 0.15) { a = 0.2; b = 0.8 }
+    const pref = CAMBIOS[s.kind] ? s.kind : CAMBIOS[s.event] ? s.event : null
+    for (const id of ids) {
+      const others = ids.filter((x) => x !== id); const shift = Math.floor(rng() * others.length)
+      for (let c = 0; c < CARRILES; c++) {
+        const u = a + ((c + 0.15 + rng() * 0.7) / CARRILES) * (b - a)
+        const to = others[(c + shift) % others.length]
+        s.switches.push(mk(s, u, id, to, pickKind(s, id, to, u, pref), (c * 2 + id) % CARRILES)) // carriles barajados entre caminos
       }
-      s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id)]))
-      return
     }
-    const primary = s.event && MECHANISMS[s.event] ? s.event : mechs[i % mechs.length]
-    let secondary = mechs[(i + 1) % mechs.length]
-    if (secondary === primary) secondary = mechs[(i + 2) % mechs.length]
-    const u1 = 0.22 + rng() * 0.12; const u2 = 0.62 + rng() * 0.14
-    // Eventos en anillo entre caminos vecinos; algunos incluyen un salto extra.
-    for (let id = 0; id < laneCount; id++) {
-      const to = (id + 1) % laneCount
-      s.switches.push(mk(s, u1, id, to, id % 2 ? secondary : primary))
-      if (rng() < 0.35) s.switches.push(mk(s, u2, id, (id + 2) % laneCount, primary))
-    }
-    if (s.kind === 'salida') for (let id = 2; id < laneCount; id++) s.switches.push(mk(s, u1, 0, id, id % 2 ? secondary : primary))
-    // Índice de estaciones por carril origen para que cada tick consulte sólo las
-    // opciones de ese carril, ya ordenadas por posición.
-    s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id).sort((a, b) => a.u - b.u)]))
+    // Índice de eventos por camino origen para que cada tick consulte sólo los de ese camino, ordenados por posición.
+    s.switchesByLane = new Map(ids.map((id) => [id, s.switches.filter((sw) => sw.from === id).sort((x, y) => x.u - y.u)]))
   })
   const srng = mulberry32(91000 + way.idx * 37)
   for (const s of way.segments) buildSurface(s, srng)

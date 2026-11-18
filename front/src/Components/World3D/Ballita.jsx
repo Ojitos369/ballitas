@@ -357,6 +357,7 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
         }
       }
     }
+    if (b.phase === 'travel' && b.flight) s *= b.vis ?? 1 // portal: desaparece y reaparece en el camino destino
     if (b.phase === 'toDest' && b.snap > 0) {
       const p = 1 - Math.min(1, b.snap / 0.3)
       s = 0.4 + 0.6 * p

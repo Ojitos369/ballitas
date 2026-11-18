@@ -20,7 +20,10 @@
 //   Carriles (ver world.js): lane (id del carril en seg.lanes), ang (ángulo actual alrededor del eje, continuo),
 //     off (distancia actual al eje; radius - BALL_R pegada a la pared, menor al volar por el interior),
 //     rail (distancia de reposo, se acerca a radius - BALL_R o a 0 en tramos `air`),
-//     sw: mecanismo en curso o null = { s (switch de seg.switches), t (0..1), dur, style, fail, failed },
+//     carril (0..CARRILES-1): carril lateral dentro del camino; se sortea al entrar a una ruta y al aterrizar de un evento;
+//       sólo toma los eventos (seg.switches) con sw.carril === carril. Su línea de carrera es carrilLat(carril).
+//     sw: evento en curso o null = { s (switch de seg.switches), t, dur, style, fail, failed };
+//     flight { sw, t (0..1), dur, from, to, failed }: recorre switchPath(seg, sw, t); vis (0..1) la oculta en un portal,
 //     mechs { [kind]: veces usado }. Posición = wallFrame(seg, ang, segT, off).pos;
 //   Contacto con la pista (para animar al chibi: aplastar al aterrizar, estirar en el aire...):
 //     hy: altura sobre su pared hacia el eje (= laneRelief si va apoyada; off = rail - hy); vy: su velocidad,
@@ -52,8 +55,8 @@
 import * as THREE from 'three'
 import {
   buildWorld, cityPath, slerpDir, NODE_R, BALL_R, TRACK_K, LANE_W, OBSTACLES, KINDS,
-  wallFrame, laneFrame, laneLength, switchArc, laneAngle, nearestLane, lowestLane, angDiff,
-  segmentTangent, laneRelief, reliefSlope, segmentCurvature,
+  laneFrame, laneLength, switchPath, laneAngle, nearestLane, angDiff,
+  segmentTangent, laneRelief, reliefSlope, segmentCurvature, CARRILES, carrilLat,
 } from './world.js'
 import { voice, moodOf, archetype } from './personality.js'
 
@@ -81,10 +84,7 @@ const BOUNCE = 0.35 // restitución al aterrizar (rebote amortiguado)
 const LAT_K = 30 // el carril es una canaleta: muelle que la devuelve al centro
 const LAT_C = 7 // amortiguación lateral
 const LAT_EDGE = 0.4 // restitución al chocar con el borde del carril
-const RACE_SLOTS = 5 // posiciones laterales de la calzada: cada ballita conserva la suya (raceLine)
 const RACE_GAP = 2.5 // (u de avance) vecinas a menos de esto en el mismo carril: la de atrás se abre para adelantar
-const TAU = Math.PI * 2
-const smooth = (x) => x * x * (3 - 2 * x)
 const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo', 'geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada'] // obstáculos que merecen comentario
 const FALLBACK_VOICES = {
   geiser: ['¡Al chorro del géiser!', '¡Arriba voy!'],
@@ -181,7 +181,7 @@ export class Sim {
       dir: new THREE.Vector3().crossVectors(up, Math.abs(up.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : Y).normalize(), up,
       // estado del balanceo en el tubo: `wall` va del eje a la ballita, `off` es su distancia al eje
       wall: up.clone().negate(), off: 0, rail: 0, roll: 0, snap: 0,
-      lane: 0, ang: 0, sw: null, mechs: {},
+      lane: 0, carril: 0, ang: 0, sw: null, mechs: {}, vis: 1,
       hy: 0, vy: 0, airborne: false, flight: null, impact: 0, slope: 0, lat: 0, latV: 0, edge: 0, onLane: true,
       thought: null, react: null, mood: 'feliz', speed: 0, cause: null,
     }
@@ -460,12 +460,14 @@ export class Sim {
       b.snap = Math.max(b.snap, 0.2)
     }
     const prevRoute = b.route
-    if (prev && b.sw) {
+    if (prev && (b.sw || b.flight)) {
       b.lane = seg.lanes?.some((l) => l.id === b.lane) ? b.lane : nearestLane(seg, b.ang)
-      b.sw = null
+      b.sw = null; b.flight = null; b.vis = 1
       b.rail = b.off
       this.resetSurface(b)
     }
+    // al entrar a una ruta (o al principio del viaje) toma un carril al azar: él marca el camino que seguirá
+    if (!prev || seg.route !== prev.route) b.carril = Math.floor(this.rng() * CARRILES)
     b.seg = seg; b.segT = 0
     if (!b.sw && !seg.lanes?.some((l) => l.id === b.lane)) b.lane = nearestLane(seg, b.ang)
     if (seg.route >= 0) {
@@ -511,6 +513,7 @@ export class Sim {
     let s = b.seg
     b.e -= TRAVEL_E_LEN * L.theme.ecost * b.speed * dt
     b.p += L.theme.pps * PPS_K * dt
+    if (b.flight) return this.flightStep(b, s, dt)
 
     let t0 = b.segT
     b.segT += (b.speed * dt) / laneLength(s, b.lane)
@@ -544,103 +547,49 @@ export class Sim {
     this.place(b, pos, F.tangent, F.up, dt)
   }
 
-  // Sigue su carril o ejecuta el mecanismo en curso. Mantiene ang/off continuos y off <= radio útil.
+  // Recorre la trayectoria del evento en curso (switchPath: arco, caída, elevador, portal o laberinto). El avance segT
+  // va de sw.u a sw.uLand con el vuelo; al terminar queda en el camino destino, en un carril al azar.
+  flightStep(b, s, dt) {
+    const f = b.flight; f.t = Math.min(1, f.t + dt / f.dur)
+    const F = switchPath(s, f.sw, f.t, b._flightFrame || (b._flightFrame = {}))
+    b.segT = f.sw.u + (f.sw.uLand - f.sw.u) * f.t
+    b.airborne = true; b.off = 0; b.wall.copy(F.up).negate(); b.roll = 0; b.vis = F.vis
+    this.place(b, F.pos, F.tangent, F.up, dt)
+    if (f.t < 1) return
+    b.lane = f.sw.to; b.segT = f.sw.uLand; b.flight = null; b.sw = null; b.impact = 1; b.vis = 1
+    b.carril = Math.floor(this.rng() * CARRILES) // cae en un carril al azar del camino destino
+    b.lastSwitch = { kind: f.sw.kind, name: f.sw.name, lane: b.seg.lanes?.find((l) => l.id === f.sw.to)?.name ?? 'carril', carril: b.carril, until: this.t + 8 }
+    if (f.failed) { b.speed *= 0.7; b.p -= 1 + f.sw.risk * 3; b.react = { mood: 'asustada', until: this.t + 1.2 }; this.say(b, 'falla', { m: f.sw.name }) }
+    else { b.p += f.sw.reward.p; b.e += f.sw.reward.e; b.score += Math.max(0, f.sw.reward.p) }
+    this.resetSurface(b)
+    b.ang = laneAngle(s, b.lane, b.segT); b.rail = b.off = s.air ? 0 : s.radius - BALL_R
+  }
+
+  // Sigue su carril. Mantiene ang/off continuos y off <= radio útil.
   laneStep(b, s, dt) {
-    if (b.flight) {
-      const f = b.flight; f.t = Math.min(1, f.t + dt / f.dur)
-      const F = switchArc(s, f.sw, f.t, b._flightFrame || (b._flightFrame = {}))
-      b.airborne = true; b.off = 0; b.wall.copy(F.up).negate(); b.roll = 0
-      this.place(b, F.pos, F.tangent, F.up, dt)
-      if (f.t >= 1) {
-        b.lane = f.sw.to; b.flight = null; b.sw = null; b.airborne = false; b.impact = 1
-        if (f.failed) { b.speed *= 0.7; b.p -= 1 + f.sw.risk * 3 }
-        else { b.p += f.sw.reward.p; b.e += f.sw.reward.e; b.score += Math.max(0, f.sw.reward.p) }
-        this.resetSurface(b)
-      }
-      return
-    }
     const R = s.air ? 0 : s.radius - BALL_R
     b.rail += (R - b.rail) * Math.min(1, dt * RAIL_EASE)
     b.impact = Math.max(0, b.impact - dt * 3)
-    const sw = b.sw
-    if (!sw) {
-      this.surfaceStep(b, s, dt)
-      const target = laneAngle(s, b.lane, b.segT) + (R > 0 ? b.lat / R : 0)
-      const d = angDiff(b.ang, target)
-      // en su carril lo sigue exacto (la canaleta la contiene); si viene de otro, se acerca suave
-      b.onLane = Math.abs(d) < 0.05
-      b.ang += b.onLane ? d : d * Math.min(1, dt * LANE_EASE)
-      b.off = Math.max(0, b.rail - b.hy)
-      return
-    }
-    sw.t += dt / sw.dur
-    if (sw.fail && !sw.failed && sw.t >= 0.5) {
-      // el mecanismo falla: cae al carril más bajo
-      const low = lowestLane(s, b.segT)
-      sw.failed = true; sw.style = 'caida'
-      sw.a0 = b.ang; sw.da = angDiff(b.ang, laneAngle(s, low, b.segT))
-      b.lane = low
-      sw.h0 = b.off / this.landBase(b, s); sw.h = 0; sw.t = 0; sw.dur = Math.max(0.35, sw.dur * 0.6)
-      b.speed *= 0.7
-      b.p -= 1 + sw.s.risk * 3
-      b.react = { mood: 'asustada', until: this.t + 1.2 }
-      this.say(b, 'falla', { m: sw.s.name })
-    }
-    const x = clamp(sw.t, 0, 1)
-    const e = sw.style === 'portal' ? smooth(clamp((x - 0.35) / 0.3, 0, 1)) : smooth(x)
-    b.ang = sw.a0 + sw.da * e
-    // h: cuánto se separa de la pared (arco por el interior); h0: separación heredada al fallar
-    const lift = sw.h * Math.sin(Math.PI * x) + (1 - (sw.h0 ?? 1)) * (1 - smooth(x))
-    // aterriza sobre el relieve del carril destino (no en la pared desnuda)
-    b.off = Math.min(b.rail, this.landBase(b, s) * Math.max(0, 1 - lift))
-    if (x >= 1) {
-      b.ang = ((b.ang % TAU) + TAU) % TAU
-      if (!sw.failed) {
-        b.p += sw.s.reward.p; b.e += sw.s.reward.e
-        b.score += Math.max(0, sw.s.reward.p)
-      }
-      b.lane = nearestLane(s, b.ang)
-      b.sw = null
-      // sigue desde donde quedó: si queda sobre el firme, cae a él con la gravedad del carril
-      this.resetSurface(b)
-      b.hy = Math.max(0, b.rail - b.off); b.airborne = b.hy > 1e-3; b.onLane = false
-    }
+    this.surfaceStep(b, s, dt)
+    const target = laneAngle(s, b.lane, b.segT) + (R > 0 ? b.lat / R : 0)
+    const d = angDiff(b.ang, target)
+    // en su carril lo sigue exacto (la canaleta la contiene); si viene de otro, se acerca suave
+    b.onLane = Math.abs(d) < 0.05
+    b.ang += b.onLane ? d : d * Math.min(1, dt * LANE_EASE)
+    b.off = Math.max(0, b.rail - b.hy)
   }
-
-  // Distancia al eje del firme del carril actual (pared menos relieve).
-  landBase(b, s) {
-    return Math.max(1e-3, b.rail - (s.air ? 0 : laneRelief(s, b.lane, b.segT)))
-  }
-
   resetSurface(b) {
     b.hy = 0; b.vy = 0; b.airborne = false; b.lat = 0; b.latV = 0; b.edge = 0
   }
 
-  // Línea de carrera en la calzada (u laterales, |x| <= edge): cada ballita conserva una de RACE_SLOTS posiciones (por id);
+  // Línea de carrera en la calzada (u laterales, |x| <= edge): va por su carril (b.carril, carrilLat);
   // en curva fuerte se va al interior (contra el empuje) y, si una vecina del mismo carril va a menos de RACE_GAP de avance
   // con solape lateral, se aparta por el lado libre (la que viene detrás y más rápida, con más decisión: adelanta).
   // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta línea.
   raceLine(b, s, push, edge) {
-    let x = ((b.id % RACE_SLOTS) / (RACE_SLOTS - 1) - 0.5) * 2 * edge
-    if (Math.abs(push) > 0.5 * TRACK_K) x = -Math.sign(push) * edge * clamp(Math.abs(push) / (6 * TRACK_K), 0, 0.7)
-    const L = laneLength(s, b.lane)
-    for (const o of this._near?.get(s) || []) {
-      if (o === b || o.lane !== b.lane || o.flight) continue
-      const ds = (o.segT - b.segT) * L; if (Math.abs(ds) > RACE_GAP) continue
-      const dl = b.lat - o.lat; const side = Math.abs(dl) > 0.05 ? Math.sign(dl) : (b.id > o.id ? 1 : -1)
-      const room = 2.2 * BALL_R - Math.abs(dl) // solape lateral con la vecina
-      if (room > 0) x += side * room * (ds > 0 && b.speed > o.speed ? 1.6 : 1)
-    }
-    return clamp(x, -edge, edge)
-  }
-
-  // Línea de carrera en la calzada (u laterales, |x| <= edge): cada ballita conserva una de RACE_SLOTS posiciones (por id);
-  // en curva fuerte se va al interior (contra el empuje) y, si una vecina del mismo carril va a menos de RACE_GAP de avance
-  // con solape lateral, se aparta por el lado libre (la que viene detrás y más rápida, con más decisión: adelanta).
-  // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta línea.
-  raceLine(b, s, push, edge) {
-    let x = ((b.id % RACE_SLOTS) / (RACE_SLOTS - 1) - 0.5) * 2 * edge
-    if (Math.abs(push) > 0.5 * TRACK_K) x = -Math.sign(push) * edge * clamp(Math.abs(push) / (6 * TRACK_K), 0, 0.7)
+    let x = carrilLat(b.carril ?? 2, edge)
+    // en curva fuerte se cierra un poco al interior, sin abandonar su carril (máx. ~medio carril)
+    if (Math.abs(push) > 0.5 * TRACK_K) x -= Math.sign(push) * (edge / CARRILES) * clamp(Math.abs(push) / (6 * TRACK_K), 0, 1)
     const L = laneLength(s, b.lane)
     for (const o of this._near?.get(s) || []) {
       if (o === b || o.lane !== b.lane || o.flight) continue
@@ -722,7 +671,7 @@ export class Sim {
     const cands = s.switchesByLane?.get(b.lane) || s.switches
     let first = null
     for (const sw of cands) {
-      if (sw.from !== b.lane || sw.u <= t0 || sw.u > t1) continue
+      if (sw.from !== b.lane || sw.carril !== b.carril || sw.u <= t0 || sw.u > t1) continue
       if (!first || sw.u < first.u) first = sw
     }
     if (!first) return
@@ -730,9 +679,9 @@ export class Sim {
     const t = b.genome.traits
     const peers = this.ballitas.filter((o) => o !== b && o.phase === 'travel' && o.seg === s)
     let best = null
-    let bs = 0.3 + (0.45 - t.valentia) * 0.5 + this.rng() * 0.3 // seguir por el mismo carril
+    let bs = 0.1 + (0.45 - t.valentia) * 0.5 + this.rng() * 0.3 // seguir por el mismo camino (un solo evento por carril: umbral más bajo)
     for (const sw of cands) {
-      if (sw.from !== b.lane || Math.abs(sw.u - u) > 1e-6) continue
+      if (sw.from !== b.lane || sw.carril !== b.carril || Math.abs(sw.u - u) > 1e-6) continue
       const sc = this.laneUtility(b, s, sw, peers)
       if (sc > bs) { bs = sc; best = sw }
     }
@@ -740,22 +689,18 @@ export class Sim {
   }
 
   startSwitch(b, s, sw) {
-    const a1 = laneAngle(s, sw.to, sw.uLand ?? sw.uEnd)
-    const d = angDiff(b.ang, a1)
-    let da = d
-    if (sw.kind === 'remolino') da += (d >= 0 ? 1 : -1) * TAU // el remolino da una vuelta entera pegada a la pared
-    const h = sw.style === 'salto' ? clamp(0.25 + (0.6 * Math.abs(d)) / Math.PI, 0, 0.88) : sw.style === 'portal' ? 0.55 : 0
     const fail = this.rng() < sw.fail * (1.25 - b.genome.traits.valentia * 0.5)
-    b.sw = { s: sw, t: 0, dur: sw.duration, style: sw.style, a0: b.ang, da, h, h0: 1, fail, failed: false }
-    b.flight = { sw, t: 0, dur: sw.duration, from: b.lane, to: sw.to, failed: fail }
-    b.sw.h0 = b.rail > 1e-3 ? b.off / this.landBase(b, s) : 1 // parte de donde está (sin saltos)
+    b.sw = { s: sw, t: 0, dur: sw.duration, style: sw.style, fail, failed: fail }
+    // el impulso lanza: el vuelo avanza ~1.8 veces más rápido que rodando (entre un tercio y toda la duración nominal); el laberinto va 1.5 veces más lento
+    const roll = ((sw.uLand - sw.u) * laneLength(s, sw.from)) / Math.max(1, b.speed * sw.boost)
+    const dur = sw.via === 'laberinto' ? clamp(roll * 1.5, 0.6 * sw.duration, sw.duration) : clamp(roll / 2.5, 0.35 * sw.duration, sw.duration)
+    b.flight = { sw, t: 0, dur, from: b.lane, to: sw.to, failed: fail }
     b.airborne = true; b.vy = 0; b.lat = 0; b.latV = 0
     b.speed *= sw.boost
     b.mechs[sw.kind] = (b.mechs[sw.kind] || 0) + 1
     if (b.plan) b.plan.carril = `${sw.emoji} ${sw.name}`
     if (!b.thought || b.thought.until < this.t) this.say(b, 'carril', { m: sw.name })
   }
-
   arrive(b) {
     const L = b.way; const node = this.world.nodes[L.to]
     b.node = L.to; b.vert = node.portTo[L.from].in
@@ -779,8 +724,10 @@ export class Sim {
     const w = this.world; const n = w.nodes[b.node].name
     if (b.phase === 'travel') {
       const lane = b.seg.lanes?.find((l) => l.id === b.lane)?.name
-      const via = b.sw ? ` · ${b.sw.s.emoji} ${b.sw.s.name}` : lane ? ` · carril: ${lane}` : ''
-      return `De ${n} a ${w.nodes[b.way.to].name} por el ${b.way.theme.emoji} ${b.way.theme.name}${b.route ? `, ruta ${b.route.name}` : ''}: ${b.seg.emoji} ${b.seg.name}${via}`
+      const camino = `Camino: ${b.way.theme.name} · carril ${b.carril + 1}/${CARRILES}`
+      const cambio = b.sw ? `⤴ ${b.sw.s.name} al camino ${lane ?? 'siguiente'}, carril aleatorio` : b.lastSwitch?.until > this.t ? `⤴ ${b.lastSwitch.name} al camino ${b.lastSwitch.lane}, carril ${b.lastSwitch.carril + 1}` : ''
+      const via = cambio ? ` · ${cambio}` : ''
+      return `De ${n} a ${w.nodes[b.way.to].name} por ${b.way.theme.emoji} ${b.way.theme.name}${b.route ? `, ruta ${b.route.name}` : ''}: ${b.seg.emoji} ${b.seg.name} · ${camino}${via}`
     }
     if (b.phase === 'toPort') return `En ${n}, hacia el puerto de ${w.nodes[b.way.to].name}`
     if (!b.dest) return `En ${n}`
