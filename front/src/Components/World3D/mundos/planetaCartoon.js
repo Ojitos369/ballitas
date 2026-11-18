@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { mulberry32 } from '../../../Core/world.js'
+import { NODE_R, GRID_LEN, FINISH_LEN, mulberry32 } from '../../../Core/world.js'
 
 export const PLANET_TYPES = [
   'gaseoso_bandas',
@@ -475,6 +475,13 @@ export function resolvePlanetConfig(node, biome, world) {
   const rotY0 = rng() * Math.PI * 2
   const spinSpeed = (0.015 + rng() * 0.035) * (rng() < 0.5 ? 1 : -1)
 
+  // Escala visual del planeta: 1.0 a 1.6 x NODE_R según semilla, acotada para que las
+  // terminales y las rectas radiales de los caminos sigan emergiendo sobre la superficie
+  const rawVisualScale = 1.0 + rng() * 0.6
+  const maxSafeR = NODE_R + Math.max(0, Math.min(GRID_LEN, FINISH_LEN) - 3.2)
+  const visualScale = Math.min(rawVisualScale, Math.max(1.0, maxSafeR / NODE_R))
+  const visualR = NODE_R * visualScale
+
   // Anillos inclinados en ~30% de los planetas
   const ringChance = (type === 'gaseoso_bandas' || type === 'hielo') ? 0.44
     : (type === 'desierto_dunas' || type === 'toxico') ? 0.28 : 0.18
@@ -547,6 +554,8 @@ export function resolvePlanetConfig(node, biome, world) {
     tilt: [tiltX, 0, tiltZ],
     rotY0,
     spinSpeed,
+    visualScale,
+    visualR,
     ring,
     moons,
     clouds,

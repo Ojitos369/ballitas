@@ -118,21 +118,21 @@ const BIOME_GLB = {
  * Elige un punto prominente y despejado en el hemisferio superior del planeta
  * para colocar el monumento único del mundo.
  */
-export function pickMonumentSpot(node, near) {
+export function pickMonumentSpot(node, near, surfaceR = NODE_R) {
   const rng = mulberry32(5150 + node.idx * 313)
   const rot = rng() * Math.PI * 2
   const samples = 64
   let bestDir = new THREE.Vector3(0, 1, 0)
   let bestScore = -Infinity
 
-  const scaleK = NODE_R / 7.5
+  const scaleK = surfaceR / 7.5
   const minClear = 2.2 * scaleK * scaleK
   for (let i = 0; i < samples; i++) {
     const yy = 0.96 - (i / samples) * 0.62 // hemisferio superior (y: 0.96 .. 0.34)
     const rr = Math.sqrt(Math.max(0, 1 - yy * yy))
     const ang = i * Math.PI * (3 - Math.sqrt(5)) + rot
     const dir = new THREE.Vector3(Math.cos(ang) * rr, yy, Math.sin(ang) * rr).normalize()
-    const worldPt = dir.clone().multiplyScalar(NODE_R).add(node.pos)
+    const worldPt = dir.clone().multiplyScalar(surfaceR).add(node.pos)
     let minD2 = Infinity
     for (const [p, rad] of near) {
       const d2 = p.distanceToSquared(worldPt) - rad * rad
@@ -150,12 +150,12 @@ export function pickMonumentSpot(node, near) {
 
   return {
     dir: bestDir,
-    pos: bestDir.clone().multiplyScalar(NODE_R - 0.06 * scaleK),
+    pos: bestDir.clone().multiplyScalar(surfaceR - 0.06 * scaleK),
     quat: new THREE.Quaternion().setFromUnitVectors(UP, bestDir),
   }
 }
 
-export function Monument({ node, biome, spot }) {
+export function Monument({ node, biome, spot, surfaceR = NODE_R }) {
   const glbName = BIOME_GLB[biome.id]
   const glbGeo = useMonumentGlb(glbName)
   const animRef = useRef()
@@ -195,7 +195,7 @@ export function Monument({ node, biome, spot }) {
     }
   })
 
-  const monScale = Math.pow(NODE_R / 7.5, 0.45)
+  const monScale = Math.pow(surfaceR / 7.5, 0.45)
 
   return (
     <group position={spot.pos} quaternion={spot.quat} scale={monScale}>

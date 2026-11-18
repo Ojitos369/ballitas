@@ -748,24 +748,17 @@ function planetGeo(color) {
 }
 
 // ───────────────────────── Calles continuas curvas sobre la esfera ─────────────────────────
-function buildRoadGeometries(node, centroDir = null) {
+function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
   const local = (p) => p.clone().sub(node.pos)
+  const surfScale = surfaceR / 7.5
+  const roadW = Math.max(U * 1.35, surfaceR * 0.088)
+  const roadH = Math.max(0.06, surfaceR * 0.008)
   const rPos = []
   const rUv = []
   const rIdx = []
   const lPos = []
   const lUv = []
   const lIdx = []
-  const lamps = []
-  const lampHalos = []
-
-  const nearExclude = []
-  const vExcl = Math.max(2.1, ROAD_W * 1.45)
-  const dExcl = Math.max(2.5, 2.5 * Math.pow(R_SCALE, 0.35))
-  const tExcl = Math.max(3.15, 3.15 * Math.pow(R_SCALE, 0.25))
-  node.verts.forEach((v) => nearExclude.push([v.pos, vExcl]))
-  node.destinos.forEach((d) => nearExclude.push([d.pos, dExcl]))
-  getTerminals(node).forEach((t) => nearExclude.push([t.pos || node.verts[t.vert].pos, tExcl]))
 
   const tmpDir = new THREE.Vector3()
   const tmpTan = new THREE.Vector3()
@@ -773,26 +766,20 @@ function buildRoadGeometries(node, centroDir = null) {
   const tmpPrev = new THREE.Vector3()
   const tmpNext = new THREE.Vector3()
   const tmpPt = new THREE.Vector3()
-  const m4 = (x, y, z, pos) => new THREE.Matrix4().makeBasis(x, y, z).setPosition(pos)
-  const lampScale = Math.pow(R_SCALE, 0.28)
-  const lampW = 0.32 * lampScale
-  const lampH = 0.58 * lampScale
-  const haloS = 0.24 * lampScale
 
-  const addRibbon = (samples, width, height, addLamps) => {
+  const addRibbon = (samples, width, height) => {
     const hw = width * 0.5
     const profile = [
-      [-hw * 1.15, -0.025, 0.0],
+      [-hw * 1.15, -0.02, 0.0],
       [-hw * 0.96, height * 0.72, 0.09],
       [-hw * 0.80, height, 0.18],
       [hw * 0.80, height, 0.82],
       [hw * 0.96, height * 0.72, 0.91],
-      [hw * 1.15, -0.025, 1.0],
+      [hw * 1.15, -0.02, 1.0],
     ]
     const rBase = rPos.length / 3
     const lBase = lPos.length / 3
     let arcLen = 0
-    let nextLampArc = 1.8 * lampScale
 
     for (let i = 0; i < samples.length; i++) {
       const p = samples[i]
@@ -806,44 +793,23 @@ function buildRoadGeometries(node, centroDir = null) {
       tmpTan.normalize()
       tmpSide.crossVectors(tmpDir, tmpTan).normalize()
 
-      const vCoord = arcLen * (0.42 / Math.pow(R_SCALE, 0.25))
+      const vCoord = arcLen * (0.42 / Math.pow(surfScale, 0.25))
       for (let k = 0; k < profile.length; k++) {
         const [offX, offY, uCoord] = profile[k]
-        tmpPt.copy(tmpDir).multiplyScalar(NODE_R + offY).addScaledVector(tmpSide, offX)
+        tmpPt.copy(tmpDir).multiplyScalar(surfaceR + offY).addScaledVector(tmpSide, offX)
         rPos.push(tmpPt.x, tmpPt.y, tmpPt.z)
         rUv.push(uCoord, vCoord)
       }
 
       // Cinta central emisiva
       const lh = height + 0.009
-      const lw = Math.max(0.042, width * 0.042)
-      tmpPt.copy(tmpDir).multiplyScalar(NODE_R + lh).addScaledVector(tmpSide, -lw)
+      const lw = Math.max(0.036, width * 0.048)
+      tmpPt.copy(tmpDir).multiplyScalar(surfaceR + lh).addScaledVector(tmpSide, -lw)
       lPos.push(tmpPt.x, tmpPt.y, tmpPt.z)
       lUv.push(0, vCoord)
-      tmpPt.copy(tmpDir).multiplyScalar(NODE_R + lh).addScaledVector(tmpSide, lw)
+      tmpPt.copy(tmpDir).multiplyScalar(surfaceR + lh).addScaledVector(tmpSide, lw)
       lPos.push(tmpPt.x, tmpPt.y, tmpPt.z)
       lUv.push(1, vCoord)
-
-      // Farolas espaciadas proporcionalmente a lo largo de la avenida
-      if (addLamps && i > 1 && i < samples.length - 1 && arcLen >= nextLampArc) {
-        nextLampArc = arcLen + Math.max(2.2, NODE_R * 0.26)
-        const sideSign = lamps.length % 2 === 0 ? 1 : -1
-        const lampPos = tmpDir.clone().multiplyScalar(NODE_R + height * 0.35).addScaledVector(tmpSide, sideSign * (hw + 0.16 * lampScale))
-        const worldLamp = lampPos.clone().add(node.pos)
-        if (!nearExclude.some(([ep, rad]) => ep.distanceToSquared(worldLamp) < rad * rad)) {
-          const lx = tmpSide.clone().multiplyScalar(lampW)
-          const ly = tmpDir.clone().multiplyScalar(lampH)
-          const lz = tmpTan.clone().multiplyScalar(lampW)
-          lamps.push(m4(lx, ly, lz, lampPos))
-          const haloPos = lampPos.clone().addScaledVector(tmpDir, lampH * 0.92)
-          lampHalos.push(m4(
-            tmpSide.clone().multiplyScalar(haloS),
-            tmpDir.clone().multiplyScalar(haloS),
-            tmpTan.clone().multiplyScalar(haloS),
-            haloPos,
-          ))
-        }
-      }
     }
 
     const stride = profile.length
@@ -865,14 +831,14 @@ function buildRoadGeometries(node, centroDir = null) {
     if (!r.points || r.points.length < 2) continue
     const pts = r.points.map(local)
     const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5)
-    const steps = Math.max(pts.length * 4, Math.round(18 * Math.pow(R_SCALE, 0.35)))
+    const steps = Math.max(pts.length * 4, Math.round(18 * Math.pow(surfScale, 0.35)))
     const samples = []
     for (let i = 0; i <= steps; i++) {
       const p = curve.getPoint(i / steps)
-      p.normalize().multiplyScalar(NODE_R)
+      p.normalize().multiplyScalar(surfaceR)
       samples.push(p)
     }
-    addRibbon(samples, ROAD_W, ROAD_H, true)
+    addRibbon(samples, roadW, roadH)
   }
 
   // Bulevar circular alrededor del distrito centro
@@ -881,20 +847,20 @@ function buildRoadGeometries(node, centroDir = null) {
     const ref = Math.abs(cDir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : UP
     const bu = new THREE.Vector3().crossVectors(ref, cDir).normalize()
     const bv = new THREE.Vector3().crossVectors(cDir, bu).normalize()
-    const ringAng = 0.33
+    const ringAng = 0.28
     const sinA = Math.sin(ringAng)
     const cosA = Math.cos(ringAng)
-    const segs = Math.max(36, Math.round(36 * Math.pow(R_SCALE, 0.4)))
+    const segs = Math.max(32, Math.round(32 * Math.pow(surfScale, 0.35)))
     const ringSamples = []
     for (let i = 0; i <= segs; i++) {
       const a = (i / segs) * Math.PI * 2
       const pt = cDir.clone().multiplyScalar(cosA)
         .addScaledVector(bu, Math.cos(a) * sinA)
         .addScaledVector(bv, Math.sin(a) * sinA)
-        .multiplyScalar(NODE_R)
+        .multiplyScalar(surfaceR)
       ringSamples.push(pt)
     }
-    addRibbon(ringSamples, ROAD_W * 0.72, ROAD_H * 0.78, true)
+    addRibbon(ringSamples, roadW * 0.72, roadH * 0.78)
   }
 
   const roadGeo = new THREE.BufferGeometry()
@@ -909,178 +875,100 @@ function buildRoadGeometries(node, centroDir = null) {
   lineGeo.setIndex(lIdx)
   lineGeo.computeVertexNormals()
 
-  return { roadGeo, lineGeo, lamps, lampHalos }
+  return { roadGeo, lineGeo }
 }
 
-// Matrices locales (respecto al centro del nodo) de la ciudad por distritos, escalada por NODE_R.
-function cityData(node, biome) {
+// Ciudad exterior reducida a luces y siluetas pequeñas alrededor de centro y puertos (la ciudad completa vive en vista de superficie).
+function cityData(node, biome, surfaceR = NODE_R) {
   const rng = mulberry32(1000 + node.idx)
+  const surfScale = surfaceR / 7.5
+  const cityU = U * Math.pow(surfScale, 0.25)
   const m4 = (x, y, z, pos) => new THREE.Matrix4().makeBasis(x, y, z).setPosition(pos)
 
-  // Zona prohibida: avenidas, vértices, destinos y terminales (escalada por NODE_R).
   const terminals = getTerminals(node)
-  const roadClear = ROAD_W * 0.56 + CITY_U * 0.25
-  const near = node.roads.flatMap((r) => r.points).map((p) => [p, roadClear])
-  const vClear = Math.max(1.65, ROAD_W * 1.1)
-  const dClear = Math.max(2.15, 2.15 * Math.pow(R_SCALE, 0.35))
-  const tClear = Math.max(2.65, 2.65 * Math.pow(R_SCALE, 0.25))
-  node.verts.forEach((v) => near.push([v.pos, vClear]))
-  node.destinos.forEach((d) => near.push([d.pos, dClear]))
-  terminals.forEach((t) => near.push([t.pos || node.verts[t.vert].pos, tClear]))
+  const roadClear = Math.max(1.2, surfaceR * 0.08)
+  const near = node.roads.flatMap((r) => r.points).map((p) => {
+    const dir = p.clone().sub(node.pos).normalize()
+    return [dir.multiplyScalar(surfaceR).add(node.pos), roadClear]
+  })
+  const vClear = Math.max(1.6, surfaceR * 0.14)
+  const dClear = Math.max(1.9, 1.9 * Math.pow(surfScale, 0.3))
+  const tClear = Math.max(2.6, 2.6 * Math.pow(surfScale, 0.25))
+  node.verts.forEach((v) => near.push([v.dir.clone().multiplyScalar(surfaceR).add(node.pos), vClear]))
+  node.destinos.forEach((d) => near.push([d.dir.clone().multiplyScalar(surfaceR).add(node.pos), dClear]))
+  terminals.forEach((t) => {
+    const dir = t.dir || node.verts[t.vert].dir
+    near.push([dir.clone().multiplyScalar(surfaceR).add(node.pos), tClear])
+  })
 
-  const monumentSpot = pickMonumentSpot(node, near)
-  near.push([monumentSpot.pos.clone().add(node.pos), Math.max(2.35, 2.35 * Math.pow(R_SCALE, 0.45))])
+  const monumentSpot = pickMonumentSpot(node, near, surfaceR)
+  near.push([monumentSpot.pos.clone().add(node.pos), Math.max(2.3, 2.3 * Math.pow(surfScale, 0.4))])
 
   const districts = buildCityDistricts(node, monumentSpot, terminals)
-  const { roadGeo, lineGeo, lamps, lampHalos } = buildRoadGeometries(node, districts.centroDir)
-
-  // Excluye también el bulevar circular del centro para no poner edificios encima
-  const cDir = districts.centroDir
-  const ref = Math.abs(cDir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : UP
-  const bu = new THREE.Vector3().crossVectors(ref, cDir).normalize()
-  const bv = new THREE.Vector3().crossVectors(cDir, bu).normalize()
-  const ringClear = ROAD_W * 0.45 + CITY_U * 0.3
-  const ringSteps = 28
-  for (let i = 0; i < ringSteps; i++) {
-    const a = (i / ringSteps) * Math.PI * 2
-    const rp = cDir.clone().multiplyScalar(Math.cos(0.33))
-      .addScaledVector(bu, Math.cos(a) * Math.sin(0.33))
-      .addScaledVector(bv, Math.sin(a) * Math.sin(0.33))
-      .multiplyScalar(NODE_R)
-      .add(node.pos)
-    near.push([rp, ringClear])
-  }
-
-  // Puntos guía de calles para alinear fachadas de los edificios con las avenidas
-  const roadAnchors = []
-  for (const r of node.roads) {
-    if (!r.points || r.points.length < 2) continue
-    for (let i = 0; i < r.points.length - 1; i++) {
-      const a = r.points[i]
-      const b = r.points[i + 1]
-      const mid = a.clone().add(b).multiplyScalar(0.5).sub(node.pos).normalize()
-      const tan = b.clone().sub(a)
-      roadAnchors.push({ dir: mid, tan })
-    }
-  }
+  const { roadGeo, lineGeo } = buildRoadGeometries(node, districts.centroDir, surfaceR)
 
   const palette = (biome?.buildingColors || [node.color]).map((hex) => new THREE.Color(hex))
-  const parkCol = new THREE.Color(biome?.parkColor || '#4ca662')
-  // Densidad proporcional al área del planeta (NODE_R^2)
-  const N = Math.min(4800, Math.round(920 * AREA_SCALE))
-  const rot = rng() * Math.PI * 2
   const col = new THREE.Color()
   const hsl = {}
-  const byType = Object.fromEntries(BUILDING_TYPES.map((t) => [t, []]))
   const skylineCandidates = []
+  const cityLights = []
 
   const vU = new THREE.Vector3()
   const vX = new THREE.Vector3()
   const vZ = new THREE.Vector3()
-  const tmpTan = new THREE.Vector3()
+  const rot = rng() * Math.PI * 2
+  const N = 260
 
   for (let i = 0; i < N; i++) {
     const yy = 1 - (2 * (i + 0.5)) / N
     const rr = Math.sqrt(1 - yy * yy)
     const ang = i * Math.PI * (3 - Math.sqrt(5)) + rot
     const dir = new THREE.Vector3(Math.cos(ang) * rr, yy, Math.sin(ang) * rr)
-    const pos = dir.clone().multiplyScalar(NODE_R)
+    const pos = dir.clone().multiplyScalar(surfaceR)
     const world = pos.clone().add(node.pos)
-    if (rng() < 0.08 || near.some(([p, m]) => p.distanceToSquared(world) < m * m)) continue
+    if (near.some(([p, m]) => p.distanceToSquared(world) < m * m)) continue
 
     const dist = districts.classify(dir)
-    const rPick = rng()
-    let type
-    if (dist.kind === 'centro') {
-      type = rPick < 0.46 ? 'rascacielos' : rPick < 0.78 ? 'torre' : rPick < 0.94 ? 'comercio' : 'parque'
-    } else if (dist.kind === 'puerto') {
-      type = rPick < 0.45 ? 'estacion' : rPick < 0.80 ? 'comercio' : 'torre'
-    } else if (dist.kind === 'parque') {
-      type = rPick < 0.80 ? 'parque' : 'casa'
-    } else {
-      type = rPick < 0.54 ? 'casa' : rPick < 0.78 ? 'comercio' : rPick < 0.92 ? 'torre' : 'parque'
-    }
+    if (dist.kind !== 'centro' && dist.kind !== 'puerto' && rng() > 0.22) continue
 
-    // Orientar fachada hacia la calle más cercana en pasos de 90° para formar manzanas
-    let bestAnchor = null
-    let bestDot = -2
-    for (let k = 0; k < roadAnchors.length; k++) {
-      const d = dir.dot(roadAnchors[k].dir)
-      if (d > bestDot) { bestDot = d; bestAnchor = roadAnchors[k] }
-    }
-    if (bestAnchor) {
-      tmpTan.copy(bestAnchor.tan).addScaledVector(dir, -bestAnchor.tan.dot(dir))
-      if (tmpTan.lengthSq() > 1e-6) {
-        vU.copy(tmpTan).normalize()
-      } else {
-        vU.crossVectors(Math.abs(dir.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : UP, dir).normalize()
-      }
-    } else {
-      vU.crossVectors(Math.abs(dir.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : UP, dir).normalize()
-    }
-    const quarterTurn = Math.floor(rng() * 4) * (Math.PI / 2) + (rng() - 0.5) * 0.14
-    vX.copy(vU).multiplyScalar(Math.cos(quarterTurn)).addScaledVector(vZ.crossVectors(dir, vU), Math.sin(quarterTurn))
+    vU.crossVectors(Math.abs(dir.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : UP, dir).normalize()
+    const yaw = rng() * Math.PI * 2
+    vX.copy(vU).multiplyScalar(Math.cos(yaw)).addScaledVector(vZ.crossVectors(dir, vU), Math.sin(yaw)).normalize()
     vZ.crossVectors(vX, dir).normalize()
-    vX.normalize()
 
-    let h
-    let wScale
-    let dScale
-    if (type === 'rascacielos') {
-      h = CITY_U * (2.6 + 2.6 * (0.4 + 0.6 * dist.k) * (0.4 + 0.6 * rng()))
-      wScale = CITY_U * (0.85 + 0.42 * rng())
-      dScale = CITY_U * (0.85 + 0.42 * rng())
-    } else if (type === 'torre') {
-      h = CITY_U * (1.7 + 1.85 * rng())
-      wScale = CITY_U * (0.72 + 0.36 * rng())
-      dScale = CITY_U * (0.72 + 0.36 * rng())
-    } else if (type === 'estacion') {
-      h = CITY_U * (1.05 + 0.75 * rng())
-      wScale = CITY_U * (1.1 + 0.45 * rng())
-      dScale = CITY_U * (1.0 + 0.4 * rng())
-    } else if (type === 'comercio') {
-      h = CITY_U * (0.85 + 0.75 * rng())
-      wScale = CITY_U * (0.95 + 0.45 * rng())
-      dScale = CITY_U * (0.88 + 0.4 * rng())
-    } else if (type === 'parque') {
-      h = CITY_U * (0.75 + 0.55 * rng())
-      wScale = CITY_U * (1.15 + 0.5 * rng())
-      dScale = CITY_U * (1.15 + 0.5 * rng())
-    } else {
-      h = CITY_U * (0.78 + 0.85 * rng())
-      wScale = CITY_U * (0.75 + 0.4 * rng())
-      dScale = CITY_U * (0.75 + 0.4 * rng())
-    }
-
-    const baseCol = type === 'parque' ? parkCol : palette[Math.floor(rng() * palette.length)]
-    baseCol.getHSL(hsl)
-    const minL = type === 'parque' ? 0.45 : 0.54
-    const c = col.setHSL(
-      hsl.h + (rng() - 0.5) * 0.04,
-      THREE.MathUtils.clamp(hsl.s + (rng() - 0.5) * 0.12, 0.08, 0.95),
-      THREE.MathUtils.clamp(hsl.l + (rng() - 0.5) * 0.12, minL, 0.94),
-    ).clone()
-
-    const sink = -0.04 * Math.pow(R_SCALE, 0.3)
-    const m = m4(
-      vX.clone().multiplyScalar(wScale),
-      dir.clone().multiplyScalar(h),
-      vZ.clone().multiplyScalar(dScale),
-      pos.clone().addScaledVector(dir, sink),
-    )
-    const item = { m, c, h, kind: dist.kind, type }
-    byType[type].push(item)
-
-    if (type === 'rascacielos' || (type === 'torre' && (dist.kind === 'centro' || dist.kind === 'puerto'))) {
-      skylineCandidates.push(item)
+    if (skylineCandidates.length < 72 && (dist.kind === 'centro' || dist.kind === 'puerto')) {
+      const h = cityU * (dist.kind === 'centro' ? (0.65 + rng() * 1.15) : (0.42 + rng() * 0.72))
+      const w = cityU * (0.48 + rng() * 0.34)
+      const baseCol = palette[Math.floor(rng() * palette.length)]
+      baseCol.getHSL(hsl)
+      const c = col.setHSL(
+        hsl.h + (rng() - 0.5) * 0.04,
+        THREE.MathUtils.clamp(hsl.s, 0.15, 0.9),
+        THREE.MathUtils.clamp(hsl.l + (rng() - 0.5) * 0.1, 0.45, 0.88),
+      ).clone()
+      const m = m4(
+        vX.clone().multiplyScalar(w),
+        dir.clone().multiplyScalar(h),
+        vZ.clone().multiplyScalar(w),
+        pos.clone().addScaledVector(dir, -0.02 * surfScale),
+      )
+      skylineCandidates.push({ m, c, h })
+    } else if (cityLights.length < 110) {
+      const ls = (0.11 + rng() * 0.11) * Math.pow(surfScale, 0.25)
+      const m = m4(
+        vX.clone().multiplyScalar(ls),
+        dir.clone().multiplyScalar(ls * 0.65),
+        vZ.clone().multiplyScalar(ls),
+        pos.clone().addScaledVector(dir, ls * 0.35),
+      )
+      cityLights.push(m)
     }
   }
 
-  // Silueta urbana ligera para LOD lejano (top ~56 torres/rascacielos)
   skylineCandidates.sort((a, b) => b.h - a.h)
-  const farSkylineGeo = buildFarSkylineGeo(skylineCandidates.slice(0, 56))
+  const farSkylineGeo = buildFarSkylineGeo(skylineCandidates.slice(0, 64))
 
-  return { roadGeo, lineGeo, lamps, lampHalos, byType, farSkylineGeo, districts, terminals, monumentSpot }
+  return { roadGeo, lineGeo, farSkylineGeo, cityLights, districts, terminals, monumentSpot }
 }
 
 function useCityKit(biome) {
@@ -1192,7 +1080,7 @@ function destinoStyle(name, kind) {
 const DEST_SCALE = Math.pow(R_SCALE, 0.35)
 const TERM_SCALE = Math.pow(R_SCALE, 0.22)
 
-function Destino({ d, base, tex, planetLodRef }) {
+function Destino({ d, base, tex, planetLodRef, surfaceR = NODE_R }) {
   const grp = useRef()
   const detailGrp = useRef()
   const icon = useRef()
@@ -1204,7 +1092,8 @@ function Destino({ d, base, tex, planetLodRef }) {
   const roofColor = gain ? '#b98924' : '#2e8864'
   const style = destinoStyle(d.name, d.kind)
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, d.dir), [d])
-  const relPos = useMemo(() => d.pos.clone().sub(base), [d, base])
+  const relPos = useMemo(() => d.dir.clone().multiplyScalar(surfaceR), [d, surfaceR])
+  const destScale = Math.pow(surfaceR / 7.5, 0.28) * 0.78
   const mats = useMemo(() => ({
     pad: getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })),
     icon: getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })),
@@ -1233,7 +1122,7 @@ function Destino({ d, base, tex, planetLodRef }) {
       ref={grp}
       position={relPos}
       quaternion={q}
-      scale={DEST_SCALE}
+      scale={destScale}
       onPointerOver={(e) => (e.stopPropagation(), setHover(true))}
       onPointerOut={() => setHover(false)}
     >
@@ -1309,13 +1198,13 @@ function Destino({ d, base, tex, planetLodRef }) {
 }
 
 // ───────────────────────── Estaciones Terminales (Salida / Entrada) ─────────────────────────
-function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }) {
+function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef, surfaceR = NODE_R }) {
   const dir = term.dir || node.verts[term.vert].dir
-  const pos = term.pos || node.verts[term.vert].pos
   const isOut = term.kind === 'out'
   const key = `${node.idx}:${term.vert}:${term.kind}`
   const q = useMemo(() => new THREE.Quaternion().setFromUnitVectors(UP, dir), [dir])
-  const relPos = useMemo(() => pos.clone().sub(node.pos), [pos, node.pos])
+  const relPos = useMemo(() => dir.clone().multiplyScalar(surfaceR), [dir, surfaceR])
+  const termScale = Math.pow(surfaceR / 7.5, 0.22)
   const tmats = useMemo(() => getSharedTerminalMats(tex), [tex])
   const portalMatObj = useMemo(() => new THREE.MeshStandardMaterial({
     color, emissive: color, emissiveIntensity: isOut ? 1.55 : 1.05, toneMapped: false,
@@ -1370,7 +1259,7 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }
   const podGeo = podFallbackGeo
 
   return (
-    <group ref={grp} position={relPos} quaternion={q} scale={TERM_SCALE}>
+    <group ref={grp} position={relPos} quaternion={q} scale={termScale}>
       {isOut ? (
         <group>
           <mesh geometry={stHullOut} material={tmats.hullOut} receiveShadow />
@@ -1420,10 +1309,11 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }
 }
 
 function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
-  const planetVisualR = NODE_R - 0.02
   const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
   const planetCfg = useMemo(() => resolvePlanetConfig(node, biome, world), [node, biome, world])
-  const city = useMemo(() => cityData(node, biome), [node, biome])
+  const surfaceR = planetCfg.visualR
+  const planetVisualR = surfaceR - 0.02
+  const city = useMemo(() => cityData(node, biome, surfaceR), [node, biome, surfaceR])
   const unitSphereGeo = useMemo(() => getPlanetUnitSphereGeo(), [])
   const unitSphereLowGeo = useMemo(() => getPlanetUnitSphereLowGeo(), [])
   const ringGeo = useMemo(() => getPlanetRingGeo(), [])
@@ -1441,40 +1331,13 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     [planetCfg],
   )
   const outlineMat = useMemo(() => getPlanetOutlineMaterial(planetCfg.outlineHex), [planetCfg.outlineHex])
-  const kitGeos = useCityKit(biome)
-  const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot, city), [node, biome, city])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity * 0.72 }), [biome])
-  const buildingMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      map: tex.buildingFacade,
-      normalMap: tex.buildingNormal,
-      roughness: Math.min(0.65, biome.buildingRoughness),
-      metalness: biome.buildingMetalness,
-      emissive: biome.emissiveColor,
-      emissiveMap: tex.buildingEmissive,
-      emissiveIntensity: biome.emissiveIntensity * 1.15,
-    })
-    applyCityFade(m)
-    return m
-  }, [biome, tex])
-  const parkMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.72,
-      metalness: 0.05,
-      emissive: biome.cityLight,
-      emissiveIntensity: 0.2,
-    })
-    applyCityFade(m)
-    return m
-  }, [biome])
   const farSkylineMat = useMemo(() => new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.5,
     metalness: 0.25,
     emissive: biome.emissiveColor,
-    emissiveIntensity: biome.emissiveIntensity * 1.1,
+    emissiveIntensity: biome.emissiveIntensity * 1.15,
   }), [biome])
 
   useEffect(() => () => {
@@ -1486,40 +1349,15 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     city.lineGeo.dispose()
     city.farSkylineGeo?.dispose()
     atmoOuterMat.dispose()
-    buildingMat.dispose()
-    parkMat.dispose()
     farSkylineMat.dispose()
-  }, [planetMat, cloudMat, ringMat, moonMats, city, atmoOuterMat, buildingMat, parkMat, farSkylineMat])
+  }, [planetMat, cloudMat, ringMat, moonMats, city, atmoOuterMat, farSkylineMat])
 
   const planetBodyRef = useRef()
   const cloudsRef = useRef()
   const ringRef = useRef()
   const moonsGroupRef = useRef()
   const moonPivotsRef = useRef([])
-  const lampsRef = useRef()
-  const farSkylineRef = useRef()
-  const detailRef = useRef()
-  const trafficRef = useRef()
-  const vehiclesRef = useRef()
-  const creaturesRef = useRef()
-  const vaporRef = useRef()
-  const windowsRef = useRef()
   const planetLodRef = useRef({ near: false })
-
-  useLayoutEffect(() => {
-    if (trafficRef.current) initTrafficColors(life, trafficRef.current)
-    const wm = windowsRef.current
-    if (wm && life.windowZones.length) {
-      const c = new THREE.Color(biome.emissiveColor || '#ffd98a')
-      for (let i = 0; i < life.windowZones.length; i++) {
-        wm.setMatrixAt(i, life.windowZones[i].m)
-        wm.setColorAt(i, c)
-      }
-      wm.instanceMatrix.needsUpdate = true
-      if (wm.instanceColor) wm.instanceColor.needsUpdate = true
-      wm.computeBoundingSphere?.()
-    }
-  }, [life, biome])
 
   useFrame(({ camera, clock }, dt) => {
     const t = clock.elapsedTime
@@ -1548,23 +1386,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         }
       }
     }
-    if (lampsRef.current) lampsRef.current.visible = dist < LOD_LAMPS
-    if (farSkylineRef.current) farSkylineRef.current.visible = !near
-    if (detailRef.current) detailRef.current.visible = near
-    if (near) {
-      updatePlanetLife(life, t, biome, {
-        trafficMesh: trafficRef.current,
-        vehiclesMesh: vehiclesRef.current,
-        creaturesMesh: creaturesRef.current,
-        vaporMesh: vaporRef.current,
-        windowsMesh: windowsRef.current,
-      })
-      const night = 0.65 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.28 + node.idx * 1.3))
-      buildingMat.emissiveIntensity = biome.emissiveIntensity * night
-    }
   })
-
-  const lampGeo = lampFallbackGeo
 
   return (
     <group position={node.pos}>
@@ -1645,13 +1467,18 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         </group>
       )}
 
-      {/* Silueta urbana ligera para LOD lejano (1 draw call por planeta) */}
+      {/* Ciudad exterior compacta: siluetas pequeñas y puntos de luz */}
       {city.farSkylineGeo && (
-        <mesh ref={farSkylineRef} geometry={city.farSkylineGeo} material={farSkylineMat} raycast={() => null} />
+        <mesh geometry={city.farSkylineGeo} material={farSkylineMat} raycast={() => null} />
+      )}
+      {city.cityLights.length > 0 && (
+        <Instanced geo={haloSphereGeo} items={city.cityLights} raycast={() => null}>
+          <meshBasicMaterial color={biome.cityLight} toneMapped={false} />
+        </Instanced>
       )}
 
-      {/* Atmósfera exterior con Fresnel y gradiente (no intercepta cursor) */}
-      <mesh geometry={atmoOuterGeo} material={atmoOuterMat} raycast={() => null} />
+      {/* Atmósfera exterior escalada al radio visual del planeta */}
+      <mesh geometry={unitSphereLowGeo} material={atmoOuterMat} scale={planetVisualR * 1.13} raycast={() => null} />
 
       {/* Calles curvas continuas y líneas guía */}
       <mesh geometry={city.roadGeo} receiveShadow>
@@ -1661,73 +1488,10 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         <meshStandardMaterial color="#2a3048" emissive={biome.cityLight} emissiveIntensity={0.58} roughness={0.4} />
       </mesh>
 
-      {/* Monumento único del bioma */}
-      <Monument node={node} biome={biome} spot={city.monumentSpot} />
+      {/* Monumento único del bioma como silueta reconocible */}
+      <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} />
 
-      {/* Detalles de ciudad con LOD (un InstancedMesh por tipo de edificio) */}
-      <group ref={detailRef} visible={false}>
-        {BUILDING_TYPES.map((type) => (
-          <Instanced
-            key={type}
-            geo={kitGeos[type]}
-            material={type === 'parque' ? parkMat : buildingMat}
-            items={city.byType[type]}
-          />
-        ))}
-
-        {/* Vida del mundo: tráfico por avenidas, vehículos urbanos, criaturas, vapor y ventanas por zonas */}
-        {life.traffic.length > 0 && (
-          <instancedMesh ref={trafficRef} args={[trafficGeo, null, life.traffic.length]} frustumCulled={false}>
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-        )}
-        {life.vehicles.length > 0 && (
-          <instancedMesh ref={vehiclesRef} args={[vehicleGeo, null, life.vehicles.length]} frustumCulled={false}>
-            <meshStandardMaterial color={biome.atmoRim} emissive={biome.cityLight} emissiveIntensity={0.8} roughness={0.28} metalness={0.55} />
-          </instancedMesh>
-        )}
-        {life.creatures.length > 0 && (
-          <instancedMesh ref={creaturesRef} args={[creatureGeo, null, life.creatures.length]} frustumCulled={false}>
-            <meshStandardMaterial color={biome.creatureColor} emissive={biome.creatureColor} emissiveIntensity={0.65} roughness={0.4} />
-          </instancedMesh>
-        )}
-        {life.vapor.length > 0 && (
-          <instancedMesh ref={vaporRef} args={[vaporGeo, null, life.vapor.length]} frustumCulled={false}>
-            <meshStandardMaterial color={biome.cloudColor} transparent opacity={0.42} depthWrite={false} roughness={1} />
-          </instancedMesh>
-        )}
-        {life.windowZones.length > 0 && (
-          <instancedMesh ref={windowsRef} args={[windowZoneGeo, null, life.windowZones.length]} frustumCulled={false}>
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-        )}
-      </group>
-
-      {/* Luces de pista con halos suaves (LOD cercano) */}
-      <group ref={lampsRef} visible={false}>
-        <Instanced geo={lampGeo} items={city.lamps}>
-          <meshStandardMaterial
-            ref={applyCityFade}
-            color="#a5b2d4"
-            roughness={0.35}
-            metalness={0.65}
-            emissive={biome.cityLight}
-            emissiveIntensity={0.35}
-          />
-        </Instanced>
-        <Instanced geo={haloSphereGeo} items={city.lampHalos}>
-          <meshBasicMaterial
-            color={biome.cityLight}
-            transparent
-            opacity={0.28}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-            toneMapped={false}
-          />
-        </Instanced>
-      </group>
-
-      {node.destinos.map((d) => <Destino key={d.idx} d={d} base={node.pos} tex={tex} planetLodRef={planetLodRef} />)}
+      {node.destinos.map((d) => <Destino key={d.idx} d={d} base={node.pos} tex={tex} planetLodRef={planetLodRef} surfaceR={surfaceR} />)}
       {city.terminals.map((t, i) => (
         <Terminal
           key={`${t.kind}-${t.to}-${t.vert}-${i}`}
@@ -1738,9 +1502,10 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
           podAsset={podAsset}
           pylonAsset={pylonAsset}
           planetLodRef={planetLodRef}
+          surfaceR={surfaceR}
         />
       ))}
-      <WorldHtml center position={[0, NODE_R + 3.5 * Math.pow(R_SCALE, 0.45), 0]} distanceFactor={20} zIndexRange={[5, 0]}>
+      <WorldHtml center position={[0, surfaceR + 3.4 * Math.pow(surfaceR / 7.5, 0.42), 0]} distanceFactor={20} zIndexRange={[5, 0]}>
         <div
           className="tag node"
           style={{
