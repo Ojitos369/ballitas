@@ -1225,6 +1225,7 @@ function placeWayAt(world, circuit, from, to, placed, pick) {
 // holgura que se busca primero: los primeros caminos no deben agotar el espacio de los demás
 const TARGET = 6 // holgura (u) sobre los 1.5 radios de pista
 const TARGET_LOW = 3 // holgura que se acepta al cerrar una pasada completa de la búsqueda
+const SPINE_MAX = 1.6 * SPHERE_R // radio máximo de la espina (sobre ella van rizos, saltos y arcos; la cáscara llega a 1.8 R)
 const LAYER_K = 0.42 // grosor de la cáscara de altitud de los caminos (fracción de SPHERE_R): los cruces se resuelven por altura
 function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
@@ -1355,7 +1356,8 @@ function waySpine(world, circuit, from, to, theta, bowExtra) {
     const f = Math.pow(Math.sin(Math.PI * s), 0.72)
     const r = radial(s)
     const lat = new THREE.Vector3().crossVectors(axis, r)
-    return r.clone().multiplyScalar(rS + (rE - rS) * s + SPHERE_R * LAYER_K * f * st + P.arch * f * 0.5).addScaledVector(lat, (from < to ? 1 : -1) * bow * f * ct * 0.7) // el sentido contrario ya trae el eje invertido: se compensa para que ida y vuelta queden en lados opuestos
+    const p = r.clone().multiplyScalar(rS + (rE - rS) * s + SPHERE_R * LAYER_K * f * st + P.arch * f * 0.5).addScaledVector(lat, (from < to ? 1 : -1) * bow * f * ct * 0.7) // el sentido contrario ya trae el eje invertido: se compensa para que ida y vuelta queden en lados opuestos
+    return p.lengthSq() > SPINE_MAX ** 2 ? p.setLength(SPINE_MAX) : p // panzas de reserva enormes: se quedan dentro de la cáscara
   }
   return { J, axis }
 }
