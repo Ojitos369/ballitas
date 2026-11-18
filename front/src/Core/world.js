@@ -1302,10 +1302,10 @@ function placeWay(world, circuit, from, to, placed) {
   }
   const tryCand = (theta, bowExtra, salt) => {
     if (hubBound(theta, bowExtra) <= bestScore) return false // ponytail: cota heurística (minNode puede sesgarla), basta para podar
-    const cand = buildWay(world, circuit, from, to, theta, bowExtra, false, salt)
-    const coarse = evalCand(cand, 14)
+    // criba gruesa sin búsqueda de fila de rutas (sólo cota para podar); la fina mide el camino exacto que se colocaría
+    const coarse = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt, false), 14)
     if (!coarse || scoreOf(coarse) <= bestScore) return false
-    const res = evalCand(cand, 28)
+    const res = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt), 28)
     if (!res) return false
     const score = scoreOf(res)
     if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt }; bestRes = res }
@@ -1363,7 +1363,7 @@ function waySpine(world, circuit, from, to, theta, bowExtra) {
 }
 
 // ───────────────────────── un sentido de un circuito ─────────────────────────
-function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = true, salt = 0) {
+function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = true, salt = 0, rowSearch = true) {
   const { nodes } = world
   const a = nodes[from]; const b = nodes[to]; const theme = circuit.theme; const P = PARAMS[theme.id]
   const rng = mulberry32(7000 + circuit.idx * 31 + (from < to ? 0 : 1))
@@ -1492,6 +1492,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   // Por mitad: la primera apertura/orientación de la fila sin roces entre rutas; si ninguna, la de mayor holgura (layout.test lo detecta).
   const perms = PERMS[P.n]
   for (let h = 0; h < 2; h++) {
+    if (!rowSearch) { buildHalf(h, SPREAD_STEPS[0], perms[0]); continue }
     let best = null; let last = null
     search: for (const mul of SPREAD_STEPS) for (const perm of perms) {
       buildHalf(h, mul, perm); sampleHalf(h); last = { mul, perm }
