@@ -193,9 +193,9 @@ test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiem
   }
   assert.ok(durations.length >= 10, `pocos viajes completados: ${durations.length}`)
   const avgDur = durations.reduce((s, d) => s + d, 0) / durations.length
-  // tope 117 -> 130: el mapa más grande (rutas más separadas) alarga ~5% los viajes. 130 -> 140: la trenza abierta desde
-  // cerca de las uniones alarga ~4% la media (6 semillas de sim: 120.9 s -> 125.4 s) y con ~13 viajes la media de una
-  // sola semilla varía ±12 s (main ya daba 136 s con la semilla 22)
+  // tope 117 -> 130: el mapa más grande (rutas más separadas) alarga ~5% los viajes. 130 -> 140: con ~13 viajes la media de
+  // una sola semilla varía ±12 s (main ya daba 136-144 s con las semillas 22 y 5); la trenza abierta desde las uniones
+  // no alarga los viajes (12 semillas, ~175 viajes: 127.3 s antes, 125.1 s después, ±4.8 s; carriles +0.3% de largo)
   assert.ok(avgDur >= 45 && avgDur <= 140, `duración media de viaje fuera de rango 2-3x: ${avgDur.toFixed(1)}s`)
 })
 
