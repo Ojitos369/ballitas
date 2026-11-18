@@ -366,7 +366,7 @@ const GEOS = {
   lavaPool: () => {
     const parts = [
       piece(sphere(0.5, 14, 6), { pos: [0, -0.02, 0], scl: [1.4, 0.12, 0.9], noise: 0.18, color: (c, x, y, z) => c.set('#2b2020').lerp(_c2.set('#4a3530'), hash3(x * 9, 0, z * 9)) }),
-      piece(sphere(0.42, 14, 5), { pos: [0, 0.035, 0], scl: [1.35, 0.06, 0.85], noise: 0.12, color: (c, x, y, z) => c.set('#ff4a10').lerp(_c2.set('#ffd23a'), THREE.MathUtils.clamp(1 - Math.hypot(x / 0.55, z / 0.36), 0, 1)) }),
+      piece(sphere(0.42, 14, 5), { pos: [0, 0.035, 0], scl: [1.35, 0.06, 0.85], noise: 0.12, color: (c, x, y, z) => c.set('#ff7418').lerp(_c2.set('#ffe25a'), THREE.MathUtils.clamp(1 - Math.hypot(x / 0.55, z / 0.36), 0, 1)) }),
     ]
     return merge(parts, 'lavaPool')
   },
@@ -375,7 +375,7 @@ const GEOS = {
     const parts = [piece(cyl(0.035, 0.07, 0.7, 7), { pos: [0, 0.35, 0], rot: [0.05, 0, 0.08], color: (c, x, y) => c.set('#1c1616').lerp(_c2.set('#3a2a26'), hash3(x * 30, y * 30, 1)), jitter: 0.2 })]
     for (const [x, y, rz, rx, h] of [[0.08, 0.55, -0.9, 0.2, 0.26], [-0.08, 0.62, 0.95, -0.3, 0.22], [0.02, 0.74, -0.3, 0.8, 0.2]]) {
       parts.push(piece(cyl(0.006, 0.02, h, 5), { pos: [x, y, 0], rot: [rx, 0, rz], color: '#241c1a' }))
-      parts.push(piece(sphere(0.018, 6, 4), { pos: [x * 2.1, y + h * 0.42, Math.sin(rx) * h * 0.45], color: '#ff6a1a' }))
+      parts.push(piece(sphere(0.018, 8, 6), { pos: [x * 2.1, y + h * 0.42, Math.sin(rx) * h * 0.45], color: '#ff6a1a' }))
     }
     parts.push(piece(sphere(0.02, 6, 4), { pos: [0.06, 0.73, 0.05], color: '#ffa030' }))
     return merge(parts, 'charTree')
@@ -701,7 +701,7 @@ const PAISAJE = {
     layers: [
       { geo: 'hedge', mat: 'solid', step: 7, ax: [0.3, 1.4], scale: [2.6, 4], foot: 0.4, both: 0.6, cap: 100, range: 65, tints: ['#ffffff', '#e8ffd8'], berm: true },
       { geo: 'flowerBush', mat: 'sway', step: 6, ax: [0.5, 2.4], scale: [2.6, 4.2], foot: 0.3, both: 0.6, cap: 100, range: 70, tints: ['#ffffff', '#fff0f4', '#f8ffe8'] },
-      { geo: 'tulips', mat: 'sway', step: 3.4, ax: [0.12, 0.9], scale: [2.4, 3.6], foot: 0.3, both: 0.6, cap: 140, range: 55, tints: ['#ffffff', '#fff4e0'], berm: true },
+      { geo: 'tulips', mat: 'sway', step: 3.4, ax: [0.12, 0.9], scale: [3.2, 4.6], foot: 0.3, both: 0.6, cap: 140, range: 55, tints: ['#ffffff', '#fff4e0'], berm: true },
       { geo: 'lantern', mat: 'glow', step: 13, ax: [0.1, 0.5], scale: [3.5, 4.5], foot: 0.1, both: 0.5, cap: 40, range: 70, berm: true },
       { geo: 'oak', mat: 'sway', step: 14, ax: [1.4, 3.4], scale: [6, 9], foot: 0.32, both: 0.6, cap: 50, range: 100, tints: ['#e8ffd0', '#ffffff', '#f0ffe0'], ground: true },
       { geo: 'flutter', mat: 'motes', step: 9, ax: [-0.4, 1.6], scale: [2, 3.5], y: [0.2, 1.8], foot: 0, both: 0.6, cap: 60, range: 60, tints: ['#ffb3d9', '#fff07a', '#b8e0ff', '#ffffff'], noClear: true },
