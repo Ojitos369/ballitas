@@ -1883,6 +1883,7 @@ const RELAX_K = 18
 // empuje de cada par en choque, sobre su déficit: más que el déficit porque el suavizado gaussiano lo reparte y lo diluye
 // (con la trenza abierta cerca de las uniones hay más pares; 3.5 converge en la mitad de pasadas que 1.5)
 const RELAX_PUSH = 3.5
+const RELAX_EPS = 0.03 * TK // (u) una muestra desplazada menos que esto desde su última búsqueda conserva sus pares
 function relaxRibbons(world) {
   const t0 = performance.now()
   const S = braidRibbons(world); const { ribs, X, Y: Yy, Z, R } = S; const N = X.length
@@ -1915,25 +1916,35 @@ function relaxRibbons(world) {
   // cada pasada busca los pares de las muestras de tramos que se mueven contra las demás que se mueven (posición actual)
   // y contra las quietas (rejilla fija de la posición inicial)
   const still = sampleGrid(S, hitD, (i) => !shadow[i])
-  // muestras ya desplazadas: sólo sus pares cambian; los de las quietas se toman de la búsqueda inicial
-  const moved = new Uint8Array(N); let base = null
+  // muestras ya desplazadas (moved) y, de ellas, las sucias (dirty): se movieron más de RELAX_EPS desde su última búsqueda
+  // de vecinos. Sólo las sucias buscan vecinos de nuevo; los pares de las demás se arrastran de la pasada anterior con la
+  // distancia recalculada (un par nuevo entre dos limpias se pierde a lo sumo por 2·RELAX_EPS, dentro de RELAX_MARGIN).
+  const moved = new Uint8Array(N); const dirty = new Uint8Array(N); let prev = null
+  const LX = Float64Array.from(X); const LY = Float64Array.from(Yy); const LZ = Float64Array.from(Z); const E2 = RELAX_EPS * RELAX_EPS
   let it = 0; let left = 0
   for (; it < RELAX_IT; it++) {
     let pairs
-    if (!it) pairs = base = gatherPairs(S, hitD)
+    if (!it) pairs = gatherPairs(S, hitD)
     else {
       pairs = new Map()
-      for (const [k, l] of base) {
+      for (const [k, l] of prev) {
         let a = null
-        for (let q = 0; q < l.length; q += 3) if (!moved[l[q]] && !moved[l[q + 1]]) (a ||= []).push(l[q], l[q + 1], l[q + 2])
+        for (let q = 0; q < l.length; q += 3) {
+          const i = l[q]; const j = l[q + 1]; if (dirty[i] || dirty[j]) continue
+          let d = l[q + 2]
+          if (moved[i] || moved[j]) { const d2 = (X[i] - X[j]) ** 2 + (Yy[i] - Yy[j]) ** 2 + (Z[i] - Z[j]) ** 2; if (d2 >= L2) continue; d = Math.sqrt(d2) }
+          (a ||= []).push(i, j, d)
+        }
         if (a) pairs.set(k, a)
       }
       const mov = sampleGrid(S, hitD, (i) => moved[i] && !shadow[i])
       for (const b of mov.values()) for (const i of b) {
-        nearCells(S, mov, hitD, i, (j) => { if (j > i) testPair(S, i, j, L2, pairs) })
+        if (!dirty[i]) continue
+        nearCells(S, mov, hitD, i, (j) => { if (j > i || !dirty[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
         nearCells(S, still, hitD, i, (j) => { if (!moved[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
       }
     }
+    prev = pairs
     const { hits } = judgePairs(S, pairs, hitD)
     left = hits.length / 3
     if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0, S })
@@ -1974,6 +1985,8 @@ function relaxRibbons(world) {
           if (shadow[s]) { const t = rep.start + i; D[s * 3] = D[t * 3]; D[s * 3 + 1] = D[t * 3 + 1]; D[s * 3 + 2] = D[t * 3 + 2] }
           X[s] = r.P[o] + r.O[o] + g.D[o] + D[s * 3]; Yy[s] = r.P[o + 1] + r.O[o + 1] + g.D[o + 1] + D[s * 3 + 1]; Z[s] = r.P[o + 2] + r.O[o + 2] + g.D[o + 2] + D[s * 3 + 2]
           if (!moved[s] && Math.abs(g.D[o]) + Math.abs(g.D[o + 1]) + Math.abs(g.D[o + 2]) + Math.abs(D[s * 3]) + Math.abs(D[s * 3 + 1]) + Math.abs(D[s * 3 + 2]) > 1e-3) moved[s] = 1
+          dirty[s] = 0
+          if (moved[s] && (X[s] - LX[s]) ** 2 + (Yy[s] - LY[s]) ** 2 + (Z[s] - LZ[s]) ** 2 > E2) { dirty[s] = 1; LX[s] = X[s]; LY[s] = Yy[s]; LZ[s] = Z[s] }
         }
       }
     }
