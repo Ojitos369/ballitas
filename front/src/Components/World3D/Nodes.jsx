@@ -625,8 +625,8 @@ function makeAtmoMaterial(color, { back = true, rimColor = '#d8f0ff', power, int
 function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
   const local = (p) => p.clone().sub(node.pos)
   const surfScale = surfaceR / 7.5
-  const roadW = Math.max(U * 1.35, surfaceR * 0.088)
-  const roadH = Math.max(0.06, surfaceR * 0.008)
+  const roadW = Math.max(U * 0.55, surfaceR * 0.036)
+  const roadH = Math.max(0.035, surfaceR * 0.0045)
   const rPos = []
   const rUv = []
   const rIdx = []
