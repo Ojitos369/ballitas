@@ -1648,6 +1648,10 @@ export const RIBBON_TERR = 0.55 * TK
 export const RIBBON_HALF = LANE_W / 2 + RIBBON_CURB + RIBBON_TERR
 export const RIBBON_GAP = 0.8 * TK // hueco entre cintas: una ballita con TRACK_K = 1 (escala con el trazado)
 export const RIBBON_CLEAR = 2 * RIBBON_HALF + RIBBON_GAP
+// Margen que sobresale de la berma para cubrir los anillos neón y la decoración lateral.
+// El anillo de anillos.jsx usa escala (H + CURB + TERR * 0.55) * 2.15; se toma su
+// envolvente completa respecto del centro del carril para medir el espacio que ve la cámara.
+export const VISUAL_PAD = Math.max(0, (LANE_W / 2 + RIBBON_CURB + RIBBON_TERR * 0.55) * 2.15 - RIBBON_HALF)
 const RIB_STEP = 1.5 * TK
 const RIB_SELF = 12 * TK
 // histéresis de la unión: dos cintas que nacen juntas quedan exentas hasta separarse esto (una ballita y un margen);
