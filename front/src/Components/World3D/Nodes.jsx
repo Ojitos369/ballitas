@@ -10,6 +10,7 @@ import { resolveNodeBiome, buildBiomePlanetGeo } from './mundos/biomas.js'
 import { getBiomeBuildingGeos } from './mundos/arquitectura.js'
 import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
 import { trafficGeo, creatureGeo, vaporGeo, buildPlanetLifeData, updatePlanetLife } from './mundos/vidaMundo.js'
+import { registerWorldForVistas, focusWorldNode } from './Vistas.jsx'
 
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
@@ -1216,8 +1217,15 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
 
   return (
     <group position={node.pos}>
-      {/* Esfera del planeta con relieve y normal map suave */}
-      <mesh geometry={geo} receiveShadow>
+      {/* Esfera del planeta con relieve y normal map suave (clic para enfocar) */}
+      <mesh
+        geometry={geo}
+        receiveShadow
+        onClick={(e) => {
+          e.stopPropagation()
+          focusWorldNode(node.idx)
+        }}
+      >
         <meshStandardMaterial
           vertexColors
           normalMap={tex.planetNormal}
@@ -1368,6 +1376,9 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
 
 export default function Nodes({ world }) {
   const tex = useMemo(getTextures, [])
+  useEffect(() => {
+    registerWorldForVistas(world)
+  }, [world])
   return world.nodes.map((n) => (
     <Planet
       key={n.idx}
