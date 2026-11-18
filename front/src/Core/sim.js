@@ -558,6 +558,7 @@ export class Sim {
     if (f.t < 1) return
     b.lane = f.sw.to; b.segT = f.sw.uLand; b.flight = null; b.sw = null; b.impact = 1; b.vis = 1
     b.carril = Math.floor(this.rng() * CARRILES) // cae en un carril al azar del camino destino
+    b.lastSwitch = { kind: f.sw.kind, name: f.sw.name, lane: b.seg.lanes?.find((l) => l.id === f.sw.to)?.name ?? 'carril', carril: b.carril, until: this.t + 8 }
     if (f.failed) { b.speed *= 0.7; b.p -= 1 + f.sw.risk * 3; b.react = { mood: 'asustada', until: this.t + 1.2 }; this.say(b, 'falla', { m: f.sw.name }) }
     else { b.p += f.sw.reward.p; b.e += f.sw.reward.e; b.score += Math.max(0, f.sw.reward.p) }
     this.resetSurface(b)
@@ -722,8 +723,10 @@ export class Sim {
     const w = this.world; const n = w.nodes[b.node].name
     if (b.phase === 'travel') {
       const lane = b.seg.lanes?.find((l) => l.id === b.lane)?.name
-      const via = b.sw ? ` · ${b.sw.s.emoji} ${b.sw.s.name}` : lane ? ` · carril: ${lane}` : ''
-      return `De ${n} a ${w.nodes[b.way.to].name} por el ${b.way.theme.emoji} ${b.way.theme.name}${b.route ? `, ruta ${b.route.name}` : ''}: ${b.seg.emoji} ${b.seg.name}${via}`
+      const camino = `Camino: ${b.way.theme.name} · carril ${b.carril + 1}/${CARRILES}`
+      const cambio = b.sw ? `⤴ ${b.sw.s.name} al camino ${lane ?? 'siguiente'}, carril aleatorio` : b.lastSwitch?.until > this.t ? `⤴ ${b.lastSwitch.name} al camino ${b.lastSwitch.lane}, carril ${b.lastSwitch.carril + 1}` : ''
+      const via = cambio ? ` · ${cambio}` : ''
+      return `De ${n} a ${w.nodes[b.way.to].name} por ${b.way.theme.emoji} ${b.way.theme.name}${b.route ? `, ruta ${b.route.name}` : ''}: ${b.seg.emoji} ${b.seg.name} · ${camino}${via}`
     }
     if (b.phase === 'toPort') return `En ${n}, hacia el puerto de ${w.nodes[b.way.to].name}`
     if (!b.dest) return `En ${n}`
