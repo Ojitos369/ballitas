@@ -9,6 +9,7 @@ import { withCameraFade } from './Paths.jsx'
 import { resolveNodeBiome, buildBiomePlanetGeo } from './mundos/biomas.js'
 import { getBiomeBuildingGeos } from './mundos/arquitectura.js'
 import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
+import { trafficGeo, creatureGeo, vaporGeo, buildPlanetLifeData, updatePlanetLife } from './mundos/vidaMundo.js'
 
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
@@ -1168,6 +1169,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const geo = useMemo(() => buildBiomePlanetGeo(node, biome), [node, biome])
   const city = useMemo(() => cityData(node, biome), [node, biome])
   const [bGeoHouse, bGeoTower, bGeoAccent] = useMemo(() => getBiomeBuildingGeos(biome.roofStyle), [biome.roofStyle])
+  const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot), [node, biome, city.monumentSpot])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   const atmoInnerMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: false, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   useEffect(() => () => {
@@ -1181,18 +1183,33 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const cloudsRef = useRef()
   const lampsRef = useRef()
   const detailRef = useRef()
+  const trafficRef = useRef()
+  const creaturesRef = useRef()
+  const vaporRef = useRef()
+  const houseMatRef = useRef()
+  const towerMatRef = useRef()
+  const accentMatRef = useRef()
   const planetLodRef = useRef({ near: false })
   const normalScale = useMemo(() => new THREE.Vector2(0.32, 0.32), [])
 
-  useFrame(({ camera }, dt) => {
+  useFrame(({ camera, clock }, dt) => {
     const dist = camera.position.distanceTo(node.pos)
-    planetLodRef.current.near = dist < 95
+    const near = dist < 95
+    planetLodRef.current.near = near
     if (cloudsRef.current) {
       cloudsRef.current.visible = dist < 90
       if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * biome.cloudSpeed
     }
     if (lampsRef.current) lampsRef.current.visible = dist < 68
-    if (detailRef.current) detailRef.current.visible = dist < 95
+    if (detailRef.current) detailRef.current.visible = near
+    if (near) {
+      const t = clock.elapsedTime
+      updatePlanetLife(life, t, trafficRef.current, creaturesRef.current, vaporRef.current)
+      const night = 0.65 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.28 + node.idx * 1.3))
+      if (houseMatRef.current) houseMatRef.current.emissiveIntensity = biome.emissiveIntensity * night
+      if (towerMatRef.current) towerMatRef.current.emissiveIntensity = biome.emissiveIntensity * 1.08 * night
+      if (accentMatRef.current) accentMatRef.current.emissiveIntensity = biome.emissiveIntensity * 0.95 * night
+    }
   })
 
   const lampGeo = lampFallbackGeo
@@ -1242,7 +1259,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
       <group ref={detailRef} visible={false}>
         <Instanced geo={bGeoHouse} items={city.housesRounded}>
           <meshStandardMaterial
-            ref={applyCityFade}
+            ref={(m) => { houseMatRef.current = m; applyCityFade(m) }}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
             roughness={biome.buildingRoughness}
@@ -1254,7 +1271,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         </Instanced>
         <Instanced geo={bGeoTower} items={city.housesTower}>
           <meshStandardMaterial
-            ref={applyCityFade}
+            ref={(m) => { towerMatRef.current = m; applyCityFade(m) }}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
             roughness={Math.max(0.15, biome.buildingRoughness - 0.08)}
@@ -1266,7 +1283,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         </Instanced>
         <Instanced geo={bGeoAccent} items={city.housesCapsule}>
           <meshStandardMaterial
-            ref={applyCityFade}
+            ref={(m) => { accentMatRef.current = m; applyCityFade(m) }}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
             roughness={Math.max(0.15, biome.buildingRoughness - 0.12)}
@@ -1276,6 +1293,23 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
             emissiveIntensity={biome.emissiveIntensity * 0.95}
           />
         </Instanced>
+
+        {/* Vida del mundo: tráfico en calles, criaturas en órbita baja y vapor/humo */}
+        {life.traffic.length > 0 && (
+          <instancedMesh ref={trafficRef} args={[trafficGeo, null, life.traffic.length]} frustumCulled={false}>
+            <meshBasicMaterial color={biome.cityLight} toneMapped={false} />
+          </instancedMesh>
+        )}
+        {life.creatures.length > 0 && (
+          <instancedMesh ref={creaturesRef} args={[creatureGeo, null, life.creatures.length]} frustumCulled={false}>
+            <meshStandardMaterial color={biome.creatureColor} emissive={biome.creatureColor} emissiveIntensity={0.65} roughness={0.4} />
+          </instancedMesh>
+        )}
+        {life.vapor.length > 0 && (
+          <instancedMesh ref={vaporRef} args={[vaporGeo, null, life.vapor.length]} frustumCulled={false}>
+            <meshStandardMaterial color={biome.cloudColor} transparent opacity={0.42} depthWrite={false} roughness={1} />
+          </instancedMesh>
+        )}
       </group>
 
       {/* Luces de pista con halos suaves (LOD cercano) */}
@@ -1316,7 +1350,17 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         />
       ))}
       <WorldHtml center position={[0, NODE_R + 3.5, 0]} distanceFactor={20} zIndexRange={[5, 0]}>
-        <div className="tag node" style={{ borderColor: node.color }}>{node.name}</div>
+        <div
+          className="tag node"
+          style={{
+            borderColor: biome.atmoRim,
+            background: `linear-gradient(135deg, ${biome.groundLow}e8, ${biome.groundMid}d8)`,
+            boxShadow: `0 0 12px ${biome.atmoBase}66`,
+          }}
+        >
+          <span>{biome.emoji} {node.name}</span>
+          <span style={{ display: 'block', fontSize: '0.72em', opacity: 0.85, color: biome.atmoRim }}>{biome.title}</span>
+        </div>
       </WorldHtml>
     </group>
   )
