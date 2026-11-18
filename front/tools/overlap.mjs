@@ -15,7 +15,7 @@ import { resolve } from 'node:path'
 
 const modPath = process.argv[4] && process.argv[4] !== '-' ? pathToFileURL(resolve(process.argv[4])).href : '../src/Core/world.js'
 const W = await import(modPath)
-const { buildWorld, braidRadius, routeExtent, NODE_R, GRID_LEN, ribbonHits, RIBBON_CLEAR } = W
+const { buildWorld, braidRadius, routeExtent, NODE_R, GRID_LEN, ribbonHits, RIBBON_CLEAR, VISUAL_PAD, LANE_W } = W
 const inPort = W.inPort ?? ((p, q) => p.zn >= 0 && p.zn === q.zn)
 export const MIN_GAP_K = W.MIN_GAP_K ?? 1.5 // huelgo mínimo, en radios de pista (seg.radius mayor del par)
 const PORT_ZONE = W.PORT_ZONE ?? NODE_R + GRID_LEN + 20
@@ -67,7 +67,7 @@ export function measure(world) {
     let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(q)
   }
   const mk = () => ({ gap: Infinity, slack: Infinity, a: -1, b: -1, info: '' })
-  const cross = mk(); const same = mk(); const route = mk()
+  const cross = mk(); const same = mk(); const route = mk(); const visual = mk()
   for (const pts of all) for (const q of pts) {
     const x = Math.floor(q.p.x / CELL); const y = Math.floor(q.p.y / CELL); const z = Math.floor(q.p.z / CELL)
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
@@ -83,6 +83,9 @@ export function measure(world) {
           if (inPort(q, o)) continue // puerto común: uno de los dos puntos está en la zona de puerto de un nodo de ambos
           tgt = q.c === o.c ? same : cross
         }
+        const visualGap = q.p.distanceTo(o.p) - (tgt === route ? q.ext + o.ext : q.r + o.r) - 2 * (VISUAL_PAD ?? 0)
+        const visualSlack = visualGap - 2 * (LANE_W ?? 0)
+        if (visualSlack < visual.slack) Object.assign(visual, { gap: visualGap, slack: visualSlack, a: q.way, b: o.way, info: `${q.kind}/r${q.route}@${q.u.toFixed(2)} vs ${o.kind}/r${o.route}@${o.u.toFixed(2)}` })
         const gap = q.p.distanceTo(o.p) - (tgt === route ? q.ext + o.ext : q.r + o.r)
         const slack = gap - MIN_GAP_K * Math.max(q.tube, o.tube)
         if (slack < tgt.slack) Object.assign(tgt, { gap, slack, a: q.way, b: o.way, info: `${q.kind}/r${q.route}@${q.u.toFixed(2)} vs ${o.kind}/r${o.route}@${o.u.toFixed(2)}` })
@@ -95,12 +98,12 @@ export function measure(world) {
     const w = world.ways[q.way]
     for (const n of world.nodes) if (n.idx !== w.from && n.idx !== w.to) node = Math.min(node, q.p.distanceTo(n.pos) - PORT_ZONE - q.r)
   }
-  return { cross, same, route, ...measureRibbons(world), node }
+  return { cross, same, route, visual, ...measureRibbons(world), node }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const n = +(process.argv[2] ?? 20); const s0 = +(process.argv[3] ?? 1)
-  const KEYS = ['cross', 'same', 'route', 'lane', 'cintas']
+  const KEYS = ['cross', 'same', 'route', 'visual', 'lane', 'cintas']
   const worst = {}; const worstS = {}; for (const k of KEYS) { worst[k] = Infinity; worstS[k] = Infinity }
   let maxJoint = 0
   let bad = 0; let tot = 0; let minNode = Infinity; let maxMs = 0
@@ -113,7 +116,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     for (const k of Object.keys(worst)) { worst[k] = Math.min(worst[k], m[k].gap); worstS[k] = Math.min(worstS[k], m[k].slack) }
     minNode = Math.min(minNode, m.node)
     if (process.argv[5] === 'malas' && ok) continue // 5º arg: sólo semillas que incumplen
-    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
+    console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | visual ${fmt(m.visual)} [${m.visual.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
   }
-  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
+  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; visual ${worst.visual.toFixed(2)}/${worstS.visual.toFixed(2)} (umbral ${2 * LANE_W}u, pad ${VISUAL_PAD}); carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
 }
