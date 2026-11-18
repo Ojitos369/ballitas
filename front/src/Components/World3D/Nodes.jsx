@@ -6,6 +6,7 @@ import { NODE_R, BALL_R, mulberry32 } from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { withCameraFade } from './Paths.jsx'
+import { resolveNodeBiome, buildBiomePlanetGeo } from './mundos/biomas.js'
 
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
@@ -576,15 +577,17 @@ const podFallbackGeo = makeLatheGeo([
 ], 12)
 
 // ───────────────────────── Shader de Atmósfera con Fresnel y Gradiente ─────────────────────────
-function makeAtmoMaterial(color, { back = true } = {}) {
+function makeAtmoMaterial(color, { back = true, rimColor = '#d8f0ff', power, intensity } = {}) {
   const base = new THREE.Color(color)
-  const rim = base.clone().lerp(new THREE.Color('#d8f0ff'), 0.45)
+  const rim = base.clone().lerp(new THREE.Color(rimColor), 0.55)
+  const defaultPower = back ? 3.2 : 2.6
+  const defaultIntensity = back ? 0.55 : 0.28
   return new THREE.ShaderMaterial({
     uniforms: {
       uColor: { value: base },
       uRimColor: { value: rim },
-      uPower: { value: back ? 3.2 : 2.6 },
-      uIntensity: { value: back ? 0.55 : 0.28 },
+      uPower: { value: power ?? defaultPower },
+      uIntensity: { value: back ? (intensity ?? defaultIntensity) : Math.min(0.42, (intensity ?? defaultIntensity) * 0.55) },
       uBack: { value: back ? 1.0 : 0.0 },
     },
     vertexShader: `
@@ -793,7 +796,7 @@ function buildRoadGeometries(node) {
 }
 
 // Matrices locales (respecto al centro del nodo) de edificios variados y suaves.
-function cityData(node) {
+function cityData(node, biome) {
   const rng = mulberry32(1000 + node.idx)
   const m4 = (x, y, z, pos) => new THREE.Matrix4().makeBasis(x, y, z).setPosition(pos)
 
@@ -806,11 +809,11 @@ function cityData(node) {
   node.destinos.forEach((d) => near.push([d.pos, 2.45]))
   terminals.forEach((t) => near.push([t.pos || node.verts[t.vert].pos, 3.05]))
 
-  const hsl = {}
-  new THREE.Color(node.color).getHSL(hsl)
+  const palette = (biome?.buildingColors || [node.color]).map((hex) => new THREE.Color(hex))
   const N = 420
   const rot = rng() * Math.PI * 2
   const col = new THREE.Color()
+  const hsl = {}
   const housesRounded = []
   const housesTower = []
   const housesCapsule = []
@@ -830,9 +833,11 @@ function cityData(node) {
     const z = new THREE.Vector3().crossVectors(x, dir)
     const wScale = U * (0.52 + 0.48 * rng())
     const dScale = U * (0.52 + 0.48 * rng())
+    const baseCol = palette[Math.floor(rng() * palette.length)]
+    baseCol.getHSL(hsl)
     const item = {
       m: m4(x.multiplyScalar(wScale), dir.clone().multiplyScalar(h), z.multiplyScalar(dScale), pos.addScaledVector(dir, -0.03)),
-      c: col.setHSL(hsl.h + (rng() - 0.5) * 0.08, 0.22 + rng() * 0.2, 0.2 + rng() * 0.26).clone(),
+      c: col.setHSL(hsl.h + (rng() - 0.5) * 0.04, THREE.MathUtils.clamp(hsl.s + (rng() - 0.5) * 0.1, 0, 1), THREE.MathUtils.clamp(hsl.l + (rng() - 0.5) * 0.1, 0.08, 0.92)).clone(),
     }
     const kindPick = rng()
     if (kindPick < 0.52) housesRounded.push(item)
@@ -1154,10 +1159,11 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }
 }
 
 function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
-  const geo = useMemo(() => planetGeo(node.color), [node])
-  const city = useMemo(() => cityData(node), [node])
-  const atmoOuterMat = useMemo(() => makeAtmoMaterial(node.color, { back: true }), [node.color])
-  const atmoInnerMat = useMemo(() => makeAtmoMaterial(node.color, { back: false }), [node.color])
+  const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
+  const geo = useMemo(() => buildBiomePlanetGeo(node, biome), [node, biome])
+  const city = useMemo(() => cityData(node, biome), [node, biome])
+  const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
+  const atmoInnerMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: false, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   useEffect(() => () => {
     geo.dispose()
     city.roadGeo.dispose()
@@ -1177,7 +1183,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     planetLodRef.current.near = dist < 95
     if (cloudsRef.current) {
       cloudsRef.current.visible = dist < 90
-      if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * 0.032
+      if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * biome.cloudSpeed
     }
     if (lampsRef.current) lampsRef.current.visible = dist < 68
     if (detailRef.current) detailRef.current.visible = dist < 95
@@ -1193,17 +1199,18 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
           vertexColors
           normalMap={tex.planetNormal}
           normalScale={normalScale}
-          roughness={0.82}
-          metalness={0.08}
+          roughness={biome.planetRoughness}
+          metalness={biome.planetMetalness}
         />
       </mesh>
 
       {/* Nubes finas opcionales */}
       <mesh ref={cloudsRef} geometry={cloudsGeo} raycast={() => null}>
         <meshStandardMaterial
+          color={biome.cloudColor}
           map={tex.planetClouds}
           transparent
-          opacity={0.24}
+          opacity={biome.cloudOpacity}
           depthWrite={false}
           roughness={1}
           metalness={0}
@@ -1216,10 +1223,10 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
 
       {/* Calles curvas continuas y líneas guía */}
       <mesh geometry={city.roadGeo} receiveShadow>
-        <meshStandardMaterial map={tex.asphalt} normalMap={tex.asphaltNormal} roughness={0.72} metalness={0.14} />
+        <meshStandardMaterial color={biome.roadColor} map={tex.asphalt} normalMap={tex.asphaltNormal} roughness={0.72} metalness={0.14} />
       </mesh>
       <mesh geometry={city.lineGeo}>
-        <meshStandardMaterial color="#2a3048" emissive={node.color} emissiveIntensity={0.42} roughness={0.4} />
+        <meshStandardMaterial color="#2a3048" emissive={biome.cityLight} emissiveIntensity={0.48} roughness={0.4} />
       </mesh>
 
       {/* Detalles de ciudad con LOD */}
@@ -1270,15 +1277,15 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
             color="#a5b2d4"
             roughness={0.35}
             metalness={0.65}
-            emissive={node.color}
-            emissiveIntensity={0.25}
+            emissive={biome.cityLight}
+            emissiveIntensity={0.35}
           />
         </Instanced>
         <Instanced geo={haloSphereGeo} items={city.lampHalos}>
           <meshBasicMaterial
-            color={node.color}
+            color={biome.cityLight}
             transparent
-            opacity={0.24}
+            opacity={0.28}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
             toneMapped={false}
