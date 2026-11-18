@@ -43,6 +43,13 @@ const G = {
     new THREE.TorusGeometry(0.42, 0.035, 4, 16, Math.PI * 1.2),
     new THREE.TorusGeometry(0.26, 0.03, 4, 12, Math.PI * 1.2).rotateZ(Math.PI),
   ], 'eventos:swirl'),
+  icon: {
+    salto: markShared(new THREE.ConeGeometry(0.28, 0.62, 5)), rampa: markShared(new THREE.ConeGeometry(0.34, 0.52, 4).rotateZ(-Math.PI / 3)),
+    botado: markShared(new THREE.SphereGeometry(0.28, 8, 6)), caida: markShared(new THREE.TorusGeometry(0.27, 0.07, 5, 12)),
+    portal: markShared(new THREE.TorusGeometry(0.28, 0.07, 5, 12)), elevador: markShared(new THREE.CylinderGeometry(0.2, 0.2, 0.58, 6)),
+    laberinto: markShared(new THREE.BoxGeometry(0.5, 0.5, 0.16)), geiser: markShared(new THREE.ConeGeometry(0.24, 0.58, 5)),
+    erupcion: markShared(new THREE.ConeGeometry(0.3, 0.62, 5)), tirolina: markShared(new THREE.TorusGeometry(0.25, 0.06, 5, 10)),
+  },
 }
 for (const k in G) if (G[k] && !G[k].name) G[k].name = 'eventos:' + k // rastreo en ?stats=1
 const { decal: EMISSIVE_INST_MAT, glow: GLOW_MAT, body: BODY_INST_MAT } = vidaSharedMats()
@@ -57,27 +64,55 @@ const wayCache = new WeakMap()
 function buildWayData(way) {
   if (wayCache.has(way)) return wayCache.get(way)
   const theme = way.theme.id
-  const items = []; const kits = new Map(); const holes = []; const chevrons = []; const dashes = []
+  const items = []; const kits = new Map(); const icons = new Map(); const holes = []; const chevrons = []; const dashes = []; const laneDashes = []; const laneStarts = []
   const originRings = []; const landRings = []; const beams = []; const swirls = []; const eventBoxes = []; const turboPads = []
   const addKit = (name, it) => { if (!name) return; let l = kits.get(name); if (!l) kits.set(name, l = []); l.push(it) }
   const F = {}; const Fp = {}; const Fl = {}
-  const markCol = new THREE.Color(pal(theme).chev).multiplyScalar(0.9)
+  const markCol = new THREE.Color(pal(theme).linea).multiplyScalar(1.6)
 
   way.segments?.forEach((seg, si) => {
     const L = Math.max(seg.length ?? 1, 1)
+    // Las cuatro divisorias recorren toda la superficie y continúan a través de sus tramos.
+    // Cada dash queda elevado sobre el firme para evitar z-fighting y se agrupa en una malla instanciada.
+    if (!seg.air) {
+      const edge = WORLD.CARRIL_EDGE
+      const marks = Math.max(2, Math.ceil(L / (5.2 * TRACK_K)))
+      for (const lane of seg.lanes ?? []) {
+        for (let j = 0; j < marks; j++) {
+          const u = (j + 0.5) / marks
+          surfFrame(seg, lane.id, u, Fp)
+          for (let boundary = 1; boundary < WORLD.CARRILES; boundary++) {
+            const lat = -edge + (2 * edge * boundary) / WORLD.CARRILES
+            const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, -0.055)
+            laneDashes.push({ pos: p, quat: basisQuat(Fp.up, Fp.tangent), scale: [0.75, 1, Math.min(1.25 * TRACK_K, L / marks * 0.62)], color: markCol })
+          }
+        }
+      }
+    }
+    if (si === 0 && !seg.air) {
+      const lane = seg.lanes?.[0]
+      if (lane) for (let c = 0; c < WORLD.CARRILES; c++) {
+        surfFrame(seg, lane.id, 0.035, Fp)
+        const lat = WORLD.carrilLat(c)
+        laneStarts.push({ pos: Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, -0.12), quat: basisQuat(Fp.up, Fp.tangent), scale: [0.22, 0.1, 0.22], color: new THREE.Color(['#7df9ff','#ffd84a','#ff5fd2','#6dff8a','#a78bff'][c]) })
+      }
+    }
     for (const sw of seg.switches ?? []) {
       const lane = seg.lanes?.find((l) => l.id === sw.from)
       if (!lane) continue
       const kind = sw.kind; const via = sw.via ?? 'arco'; const col = kindColor(kind)
       const lat = WORLD.carrilLat(sw.carril ?? 2); const step = (2 * WORLD.CARRIL_EDGE) / (WORLD.CARRILES - 1)
-      const scale = Math.min(0.85, step * 0.85)
+      const scale = Math.min(1.35, step * 1.15)
       surfFrame(seg, lane.id, sw.u, F)
       const quat = basisQuat(F.up, F.tangent)
-      const pos = F.pos.clone().addScaledVector(F.side, lat).addScaledVector(F.up, 0.02)
+      const pos = F.pos.clone().addScaledVector(F.side, lat).addScaledVector(F.up, -0.06)
       const seed = Math.floor(sw.u * 1e6) + lane.id * 139 + way.idx * 733
+      const iconGeo = G.icon[kind] ?? G.icon.salto
+      let iconItems = icons.get(iconGeo); if (!iconItems) icons.set(iconGeo, iconItems = [])
+      iconItems.push({ pos: pos.clone().addScaledVector(F.up, -1.05), quat, scale: 2.1, color: col })
 
       // pieza del tipo, sobre su carril
-      if (kind === 'caida') { holes.push({ pos, quat, scale: [scale, 1, scale * 1.4], color: HOLE_COL }); originRings.push({ pos: pos.clone().addScaledVector(F.up, 0.02), quat, scale: [scale * 1.15, 1, scale * 1.6], color: col }) }
+      if (kind === 'caida') { holes.push({ pos, quat, scale: [scale, 1, scale * 1.4], color: HOLE_COL }); originRings.push({ pos: pos.clone().addScaledVector(F.up, -0.05), quat, scale: [scale * 1.15, 1, scale * 1.6], color: col }) }
       else if (kind === 'laberinto') {
         // entrada del laberinto: dos barreras que forman la puerta del carril
         const qb = quat.clone().multiply(_q.setFromAxisAngle(Y_AXIS, Math.PI / 2))
@@ -90,13 +125,13 @@ function buildWayData(way) {
       }
 
       // marcas del carril: chevrones hacia el evento y líneas de carril a sus dos lados
-      for (const d of [9, 5]) {
-        const um = sw.u - (d * TRACK_K * 0.5) / L
+      for (const d of [20, 12]) {
+        const um = sw.u - (d * TRACK_K) / L
         if (um < 0.01) continue
         surfFrame(seg, lane.id, um, Fp)
-        const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, 0.03)
+        const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, -0.05)
         chevrons.push({ pos: p, quat: basisQuat(Fp.up, Fp.tangent), scale: scale * 1.2, color: col })
-        for (const sgn of [-1, 1]) dashes.push({ pos: Fp.pos.clone().addScaledVector(Fp.side, lat + (sgn * step) / 2).addScaledVector(Fp.up, 0.03), quat: basisQuat(Fp.up, Fp.tangent), scale: [1, 1, 1.3 * TRACK_K * 0.4], color: markCol })
+        for (const sgn of [-1, 1]) dashes.push({ pos: Fp.pos.clone().addScaledVector(Fp.side, lat + (sgn * step) / 2).addScaledVector(Fp.up, -0.05), quat: basisQuat(Fp.up, Fp.tangent), scale: [1, 1, 1.3 * TRACK_K * 0.4], color: markCol })
       }
 
       // trayectoria: puntos (arco, caída, laberinto), haz (elevador), par de portales enlazados
@@ -116,10 +151,10 @@ function buildWayData(way) {
       surfFrame(seg, sw.to, sw.uLand, Fl)
       const qLand = basisQuat(Fl.up, Fl.tangent)
       if (via === 'portal') {
-        addKit('anillo_neon_lod', { pos: Fl.pos.clone().addScaledVector(Fl.up, 0.02), quat: qLand, scale: scale * 0.75 })
-        swirls.push({ pos: pos.clone().addScaledVector(F.up, 0.5), quat, col })
-        swirls.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, 0.52), quat: qLand, col })
-      } else landRings.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, 0.03), quat: qLand, scale: 1.4, color: col })
+        addKit('anillo_neon_lod', { pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: scale * 0.75 })
+        swirls.push({ pos: pos.clone().addScaledVector(F.up, -0.5), quat, col })
+        swirls.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.52), quat: qLand, col })
+      } else landRings.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: 1.4, color: col })
 
       items.push({ seg, si, sw, kind, col, seed, dots, A, B })
     }
@@ -133,17 +168,17 @@ function buildWayData(way) {
       const H = halfWidth(lane)
       if (seg.event && eventBoxes.length < 18) {
         surfFrame(seg, lane.id, 0.5, Fp)
-        eventBoxes.push({ pos: Fp.pos.clone().addScaledVector(Fp.up, 0.46), quat: basisQuat(Fp.up, Fp.tangent), scale: THREE.MathUtils.clamp(H * 0.92, 0.5, 0.78), seed: si * 311 + lane.id * 73 })
+        eventBoxes.push({ pos: Fp.pos.clone().addScaledVector(Fp.up, -0.46), quat: basisQuat(Fp.up, Fp.tangent), scale: THREE.MathUtils.clamp(H * 0.92, 0.5, 0.78), seed: si * 311 + lane.id * 73 })
       }
       if ((seg.boost ?? 0) > 0 && turboPads.length < 12) {
         surfFrame(seg, lane.id, seg.kind === 'salida' ? Math.min(0.45, 9 / L) : 0.45, Fp)
-        turboPads.push({ pos: Fp.pos.clone().addScaledVector(Fp.up, 0.01), quat: basisQuat(Fp.up, Fp.tangent).multiply(_q.setFromAxisAngle(Y_AXIS, Math.PI)), scale: [Math.min(1.6, H * 1.4), 0.75, 1.5] })
+        turboPads.push({ pos: Fp.pos.clone().addScaledVector(Fp.up, -0.05), quat: basisQuat(Fp.up, Fp.tangent).multiply(_q.setFromAxisAngle(Y_AXIS, Math.PI)), scale: [Math.min(1.6, H * 1.4), 0.75, 1.5] })
       }
     }
   })
 
   const bySw = new Map(items.map((it, i) => [it.sw, i]))
-  const out = { items, bySw, kits: [...kits.entries()], holes, chevrons, dashes, originRings, landRings, beams, swirls, eventBoxes, turboPads }
+  const out = { items, bySw, kits: [...kits.entries()], icons: [...icons.entries()], holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads }
   wayCache.set(way, out)
   return out
 }
@@ -170,10 +205,11 @@ const T_C = new THREE.Color(); const HOT = new THREE.Color('#ffffff').multiplySc
 export default function Eventos({ way }) {
   useEffect(() => { precargarKit(['caja_evento_lod', 'turbo_placa', 'anillo_neon_lod', 'barrera_lod', 'pilar', `rebote_${way.theme.id}`]) }, [way])
   const data = useMemo(() => buildWayData(way), [way])
-  const { items, bySw, kits, holes, chevrons, dashes, originRings, landRings, beams, swirls, eventBoxes, turboPads } = data
+  const { items, bySw, kits, icons, holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads } = data
   const detail = getWayDetail(way)
   const camera = useThree((s) => s.camera)
   const solidRef = useRef()
+  const laneMarksRef = useRef()
   const cajaKit = useKit('caja_evento_lod')
 
   // puntos de trayectoria, estela de vuelo y remolinos de portal: tres InstancedMesh vivos
@@ -201,6 +237,7 @@ export default function Eventos({ way }) {
   useFrame(({ clock }, dt) => {
     const low = detail ? detail.value < 0.3 : false
     if (solidRef.current) solidRef.current.visible = !low
+    if (laneMarksRef.current) laneMarksRef.current.visible = !low
     if (low || !items.length) { live.trail.count = 0; return }
     const h = Math.min(dt, 0.1)
     const { dots, trail, glow, flightT, lit, base } = live
@@ -261,9 +298,14 @@ export default function Eventos({ way }) {
       {/* Capa emisiva: siempre visible (también a detalle bajo) para leer de lejos dónde hay eventos */}
       <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={originRings} />
       <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={landRings} />
+      <group ref={laneMarksRef}>
+        <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={laneDashes} />
+        <Instanced geo={G.sphere} mat={EMISSIVE_INST_MAT} items={laneStarts} />
+      </group>
       {/* Capa de detalle: piezas del kit, marcas del carril y trayectorias */}
       <group ref={solidRef}>
         {kits.map(([nombre, its]) => <KitPieza key={nombre} nombre={nombre} items={its} />)}
+        {icons.map(([geo, its]) => <Instanced key={geo.uuid} geo={geo} mat={EMISSIVE_INST_MAT} items={its} />)}
         <Instanced geo={G.hole} mat={BODY_INST_MAT} items={holes} />
         <Instanced geo={G.chevron} mat={EMISSIVE_INST_MAT} items={chevrons} />
         <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={dashes} />
