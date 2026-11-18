@@ -24,7 +24,7 @@ const KITS = {
 }
 const GLOW = { neon: 0.5, cristal: 0.2, sombrio: 0.12 }
 const SPACING = 2.6
-const MAX_ITEMS = 40
+const MAX_ITEMS = 32
 
 // altura de la berma en |x| (mismo perfil que pista.jsx)
 function bermY(ax, E) {
