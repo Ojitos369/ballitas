@@ -43,6 +43,13 @@ const G = {
     new THREE.TorusGeometry(0.42, 0.035, 4, 16, Math.PI * 1.2),
     new THREE.TorusGeometry(0.26, 0.03, 4, 12, Math.PI * 1.2).rotateZ(Math.PI),
   ], 'eventos:swirl'),
+  icon: {
+    salto: markShared(new THREE.ConeGeometry(0.28, 0.62, 5)), rampa: markShared(new THREE.ConeGeometry(0.34, 0.52, 4).rotateZ(-Math.PI / 3)),
+    botado: markShared(new THREE.SphereGeometry(0.28, 8, 6)), caida: markShared(new THREE.TorusGeometry(0.27, 0.07, 5, 12)),
+    portal: markShared(new THREE.TorusGeometry(0.28, 0.07, 5, 12)), elevador: markShared(new THREE.CylinderGeometry(0.2, 0.2, 0.58, 6)),
+    laberinto: markShared(new THREE.BoxGeometry(0.5, 0.5, 0.16)), geiser: markShared(new THREE.ConeGeometry(0.24, 0.58, 5)),
+    erupcion: markShared(new THREE.ConeGeometry(0.3, 0.62, 5)), tirolina: markShared(new THREE.TorusGeometry(0.25, 0.06, 5, 10)),
+  },
 }
 for (const k in G) if (G[k] && !G[k].name) G[k].name = 'eventos:' + k // rastreo en ?stats=1
 const { decal: EMISSIVE_INST_MAT, glow: GLOW_MAT, body: BODY_INST_MAT } = vidaSharedMats()
@@ -57,7 +64,7 @@ const wayCache = new WeakMap()
 function buildWayData(way) {
   if (wayCache.has(way)) return wayCache.get(way)
   const theme = way.theme.id
-  const items = []; const kits = new Map(); const holes = []; const chevrons = []; const dashes = []; const laneDashes = []; const laneStarts = []
+  const items = []; const kits = new Map(); const icons = new Map(); const holes = []; const chevrons = []; const dashes = []; const laneDashes = []; const laneStarts = []
   const originRings = []; const landRings = []; const beams = []; const swirls = []; const eventBoxes = []; const turboPads = []
   const addKit = (name, it) => { if (!name) return; let l = kits.get(name); if (!l) kits.set(name, l = []); l.push(it) }
   const F = {}; const Fp = {}; const Fl = {}
@@ -100,6 +107,9 @@ function buildWayData(way) {
       const quat = basisQuat(F.up, F.tangent)
       const pos = F.pos.clone().addScaledVector(F.side, lat).addScaledVector(F.up, 0.02)
       const seed = Math.floor(sw.u * 1e6) + lane.id * 139 + way.idx * 733
+      const iconGeo = G.icon[kind] ?? G.icon.salto
+      let iconItems = icons.get(iconGeo); if (!iconItems) icons.set(iconGeo, iconItems = [])
+      iconItems.push({ pos: pos.clone().addScaledVector(F.up, 1.05), quat, scale: 1.35, color: col })
 
       // pieza del tipo, sobre su carril
       if (kind === 'caida') { holes.push({ pos, quat, scale: [scale, 1, scale * 1.4], color: HOLE_COL }); originRings.push({ pos: pos.clone().addScaledVector(F.up, 0.02), quat, scale: [scale * 1.15, 1, scale * 1.6], color: col }) }
@@ -168,7 +178,7 @@ function buildWayData(way) {
   })
 
   const bySw = new Map(items.map((it, i) => [it.sw, i]))
-  const out = { items, bySw, kits: [...kits.entries()], holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads }
+  const out = { items, bySw, kits: [...kits.entries()], icons: [...icons.entries()], holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads }
   wayCache.set(way, out)
   return out
 }
@@ -195,7 +205,7 @@ const T_C = new THREE.Color(); const HOT = new THREE.Color('#ffffff').multiplySc
 export default function Eventos({ way }) {
   useEffect(() => { precargarKit(['caja_evento_lod', 'turbo_placa', 'anillo_neon_lod', 'barrera_lod', 'pilar', `rebote_${way.theme.id}`]) }, [way])
   const data = useMemo(() => buildWayData(way), [way])
-  const { items, bySw, kits, holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads } = data
+  const { items, bySw, kits, icons, holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads } = data
   const detail = getWayDetail(way)
   const camera = useThree((s) => s.camera)
   const solidRef = useRef()
@@ -291,6 +301,7 @@ export default function Eventos({ way }) {
       {/* Capa de detalle: piezas del kit, marcas del carril y trayectorias */}
       <group ref={solidRef}>
         {kits.map(([nombre, its]) => <KitPieza key={nombre} nombre={nombre} items={its} />)}
+        {icons.map(([geo, its]) => <Instanced key={geo.uuid} geo={geo} mat={EMISSIVE_INST_MAT} items={its} />)}
         <Instanced geo={G.hole} mat={BODY_INST_MAT} items={holes} />
         <Instanced geo={G.chevron} mat={EMISSIVE_INST_MAT} items={chevrons} />
         <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={dashes} />
