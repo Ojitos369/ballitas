@@ -51,7 +51,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three'
 import {
-  buildWorld, cityPath, slerpDir, NODE_R, BALL_R, OBSTACLES, KINDS,
+  buildWorld, cityPath, slerpDir, NODE_R, BALL_R, TRACK_K, LANE_W, OBSTACLES, KINDS,
   wallFrame, laneFrame, laneLength, switchArc, laneAngle, nearestLane, lowestLane, angDiff,
   segmentTangent, laneRelief, reliefSlope, segmentCurvature,
 } from './world.js'
@@ -67,20 +67,22 @@ const GENES = ['prefs', 'ways', 'routes', 'kinds']
 // Equilibrio: un ciclo destino + viaje dura ~60-65 s (el viaje ~2.5x más largo) y sólo rinde un destino.
 const DRAIN_E = 0.22 // energía/s siempre
 const DRAIN_P = 0.25 // puntos/s siempre
-const TRAVEL_E_LEN = 0.0055 // energía por unidad de distancia recorrida en tubo (× ecost del tema)
+const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
 const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
-// Física del tubo
+// Física del tubo. Distancias, velocidades y aceleraciones escalan con el trazado (TRACK_K): mismos tiempos de carrera.
 const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
-const GRAV = 24
+const GRAV = 24 * TRACK_K
 const FRIC = 0.14
-const VMAX = 48
+const VMAX = 48 * TRACK_K
 const LANE_EASE = 3.5 // rapidez con la que la ballita sigue el vaivén de su carril
 const RAIL_EASE = 6 // rapidez con la que se pega a la pared (o se separa en el aire)
-const G_WALL = 24 // gravedad hacia la pared del carril: tras una cresta la ballita vuela y cae a su pista
+const G_WALL = 24 * TRACK_K // gravedad hacia la pared del carril: tras una cresta la ballita vuela y cae a su pista
 const BOUNCE = 0.35 // restitución al aterrizar (rebote amortiguado)
 const LAT_K = 30 // el carril es una canaleta: muelle que la devuelve al centro
 const LAT_C = 7 // amortiguación lateral
 const LAT_EDGE = 0.4 // restitución al chocar con el borde del carril
+const RACE_SLOTS = 5 // posiciones laterales de la calzada: cada ballita conserva la suya (raceLine)
+const RACE_GAP = 2.5 // (u de avance) vecinas a menos de esto en el mismo carril: la de atrás se abre para adelantar
 const TAU = Math.PI * 2
 const smooth = (x) => x * x * (3 - 2 * x)
 const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo', 'geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada'] // obstáculos que merecen comentario
@@ -207,6 +209,9 @@ export class Sim {
 
   tick(dt) {
     this.t += dt
+    // ballitas por tramo (para su línea de carrera: adelantar y separarse de las vecinas)
+    const near = this._near || (this._near = new Map()); near.clear()
+    for (const b of this.ballitas) if (b.phase === 'travel' && b.seg) { let l = near.get(b.seg); if (!l) near.set(b.seg, l = []); l.push(b) }
     for (const b of this.ballitas) this.step(b, dt)
     for (let i = this.ballitas.length - 1; i >= 0; i--) {
       if (this.ballitas[i].phase === 'gone') this.ballitas.splice(i, 1)
@@ -282,7 +287,7 @@ export class Sim {
   }
 
   // ───────────── ciudad: caminar por las carreteras de la esfera ─────────────
-  cruise(b) { return 4 + b.genome.traits.velocidad * 3 }
+  cruise(b) { return (4 + b.genome.traits.velocidad * 3) * TRACK_K }
 
   walkTo(b, vert, phase) {
     const node = this.world.nodes[b.node]
@@ -375,7 +380,7 @@ export class Sim {
     const obs = route.segments.slice(1, -1)
     const avgSpeedK = obs.reduce((s, o) => s + (o.speedK ?? 1), 0) / Math.max(1, obs.length)
     const len = route.length * halfFactor
-    const eta = len / (this.cruise(b) * TUBE_SPEED_K * avgSpeedK + 8)
+    const eta = len / (this.cruise(b) * TUBE_SPEED_K * avgSpeedK + 8 * TRACK_K)
     const costE = eta * DRAIN_E + len * TRAVEL_E_LEN * way.theme.ecost
     const circuitP = (eta * way.theme.pps * PPS_K) / 10
 
@@ -442,7 +447,7 @@ export class Sim {
   }
 
   // ───────────── circuito: rodar por los tubos ─────────────
-  eta(b, way) { return way.length / (this.cruise(b) * TUBE_SPEED_K + 8) }
+  eta(b, way) { return way.length / (this.cruise(b) * TUBE_SPEED_K + 8 * TRACK_K) }
 
   enterSeg(b, seg) {
     const prev = b.phase === 'travel' ? b.seg : null
@@ -450,7 +455,7 @@ export class Sim {
       b.phase = 'travel'; b.dur = b.timer = this.eta(b, b.way) / TRAVEL_SLOW; b.snap = 0.3
       b.lane = 0; b.ang = laneAngle(seg, 0, 0); b.sw = null; b.off = b.rail = 0
       this.resetSurface(b)
-    } else if (segmentTangent(prev, 1, tmp).angleTo(segmentTangent(seg, 0, tmp2)) > 0.35 && b.rail > 0.3) {
+    } else if (segmentTangent(prev, 1, tmp).angleTo(segmentTangent(seg, 0, tmp2)) > 0.35 && b.rail > 0.3 * TRACK_K) {
       // quiebro de tangente (entrada a un embudo, etc.): se funde la posición en vez de saltar
       b.snap = Math.max(b.snap, 0.2)
     }
@@ -611,6 +616,42 @@ export class Sim {
     b.hy = 0; b.vy = 0; b.airborne = false; b.lat = 0; b.latV = 0; b.edge = 0
   }
 
+  // Línea de carrera en la calzada (u laterales, |x| <= edge): cada ballita conserva una de RACE_SLOTS posiciones (por id);
+  // en curva fuerte se va al interior (contra el empuje) y, si una vecina del mismo carril va a menos de RACE_GAP de avance
+  // con solape lateral, se aparta por el lado libre (la que viene detrás y más rápida, con más decisión: adelanta).
+  // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta línea.
+  raceLine(b, s, push, edge) {
+    let x = ((b.id % RACE_SLOTS) / (RACE_SLOTS - 1) - 0.5) * 2 * edge
+    if (Math.abs(push) > 0.5 * TRACK_K) x = -Math.sign(push) * edge * clamp(Math.abs(push) / (6 * TRACK_K), 0, 0.7)
+    const L = laneLength(s, b.lane)
+    for (const o of this._near?.get(s) || []) {
+      if (o === b || o.lane !== b.lane || o.flight) continue
+      const ds = (o.segT - b.segT) * L; if (Math.abs(ds) > RACE_GAP) continue
+      const dl = b.lat - o.lat; const side = Math.abs(dl) > 0.05 ? Math.sign(dl) : (b.id > o.id ? 1 : -1)
+      const room = 2.2 * BALL_R - Math.abs(dl) // solape lateral con la vecina
+      if (room > 0) x += side * room * (ds > 0 && b.speed > o.speed ? 1.6 : 1)
+    }
+    return clamp(x, -edge, edge)
+  }
+
+  // Línea de carrera en la calzada (u laterales, |x| <= edge): cada ballita conserva una de RACE_SLOTS posiciones (por id);
+  // en curva fuerte se va al interior (contra el empuje) y, si una vecina del mismo carril va a menos de RACE_GAP de avance
+  // con solape lateral, se aparta por el lado libre (la que viene detrás y más rápida, con más decisión: adelanta).
+  // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta línea.
+  raceLine(b, s, push, edge) {
+    let x = ((b.id % RACE_SLOTS) / (RACE_SLOTS - 1) - 0.5) * 2 * edge
+    if (Math.abs(push) > 0.5 * TRACK_K) x = -Math.sign(push) * edge * clamp(Math.abs(push) / (6 * TRACK_K), 0, 0.7)
+    const L = laneLength(s, b.lane)
+    for (const o of this._near?.get(s) || []) {
+      if (o === b || o.lane !== b.lane || o.flight) continue
+      const ds = (o.segT - b.segT) * L; if (Math.abs(ds) > RACE_GAP) continue
+      const dl = b.lat - o.lat; const side = Math.abs(dl) > 0.05 ? Math.sign(dl) : (b.id > o.id ? 1 : -1)
+      const room = 2.2 * BALL_R - Math.abs(dl) // solape lateral con la vecina
+      if (room > 0) x += side * room * (ds > 0 && b.speed > o.speed ? 1.6 : 1)
+    }
+    return clamp(x, -edge, edge)
+  }
+
   // Contacto con la pista: relieve (sube/baja, despega en crestas, cae y rebota) y bordes del carril.
   // b.hy: altura sobre la pared (hacia el eje); b.vy su velocidad; b.lat: desvío lateral (u) dentro del carril.
   surfaceStep(b, s, dt) {
@@ -628,12 +669,12 @@ export class Sim {
       if (b.hy <= h) {
         const hit = vs - b.vy // > 0: velocidad de choque contra el firme
         b.hy = h
-        b.impact = Math.max(b.impact, clamp(hit / 6, 0, 1))
-        b.speed *= 1 - 0.05 * clamp(hit / 6, 0, 1)
-        if (hit > 2.5) b.vy = vs + hit * BOUNCE // rebote amortiguado
+        b.impact = Math.max(b.impact, clamp(hit / (6 * TRACK_K), 0, 1))
+        b.speed *= 1 - 0.05 * clamp(hit / (6 * TRACK_K), 0, 1)
+        if (hit > 2.5 * TRACK_K) b.vy = vs + hit * BOUNCE // rebote amortiguado
         else { b.airborne = false; b.vy = vs }
       }
-    } else if (vs - b.vy < -G_WALL * dt * 1.5 && b.speed > 3) {
+    } else if (vs - b.vy < -G_WALL * dt * 1.5 && b.speed > 3 * TRACK_K) {
       // el firme cae más rápido de lo que la gravedad la baja: despega en la cresta
       b.airborne = true; b.vy -= G_WALL * dt; b.hy = Math.max(h, b.hy + b.vy * dt)
     } else {
@@ -642,16 +683,16 @@ export class Sim {
     // lateral: la curva la empuja hacia fuera; la canaleta la recoge y los bordes la contienen
     const { k, out } = segmentCurvature(s, b.segT)
     const push = 0.5 * b.speed * b.speed * k * Math.sin(angDiff(b.ang, out))
-    b.latV += (push - LAT_K * b.lat - LAT_C * b.latV) * dt
-    b.lat += b.latV * dt
     const lane = s.lanes?.find((l) => l.id === b.lane)
-    const edge = Math.max(0.05, (lane?.width ?? 1.3) / 2 - BALL_R * 0.4)
+    const edge = Math.max(0.05, (lane?.width ?? LANE_W) / 2 - BALL_R * 0.85)
+    b.latV += (push - LAT_K * (b.lat - this.raceLine(b, s, push, edge)) - LAT_C * b.latV) * dt
+    b.lat += b.latV * dt
     b.edge = 0
     if (Math.abs(b.lat) > edge) {
       const sg = Math.sign(b.lat)
       b.lat = sg * edge; b.edge = sg
       if (b.latV * sg > 0) {
-        b.impact = Math.max(b.impact, clamp(Math.abs(b.latV) / 8, 0, 0.6))
+        b.impact = Math.max(b.impact, clamp(Math.abs(b.latV) / (8 * TRACK_K), 0, 0.6))
         b.latV *= -LAT_EDGE; b.speed *= 0.995
       }
     }

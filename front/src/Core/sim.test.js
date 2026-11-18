@@ -4,7 +4,7 @@ import { Sim, POP, TIME_SCALE, TRAVEL_SLOW } from './sim.js'
 import { voice } from './personality.js'
 import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
-  mulberry32, cityPath, NODE_R, BALL_R, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
+  mulberry32, cityPath, NODE_R, BALL_R, TRACK_K, OBSTACLES, WORLD_SCALE, TUBE_SCALE,
   MECHANISMS, THEME_MECHS, wallFrame, laneFrame, laneAngle, nearestLane, angDiff, segmentTangent,
   laneRelief, reliefSlope, OUT_GATES, IN_GATES, SPHERE_R, buildWorld, setWorldPicks,
   laneLength, laneCurve, switchArc, braidEnv,
@@ -320,7 +320,7 @@ test('ballita recorre el camino asignado y aterriza tras los vuelos de intercamb
       if(b.flight&&!p?.flight) flights++
       if(p?.flight&&!b.flight) impacts++
       if(p&&p.seg===b.seg&&p.lane!==b.lane){changes++;assert.ok(b.impact>0.9||b.flight||p.flight,'todo cambio debe aterrizar desde un vuelo')}
-      if(!b.flight&&b.snap<=0){const f=laneFrame(b.seg,b.lane,b.segT);assert.ok(b.pos.distanceTo(f.pos)<4.5,`fuera del camino ${b.seg.kind}`)}
+      if(!b.flight&&b.snap<=0){const f=laneFrame(b.seg,b.lane,b.segT);assert.ok(b.pos.distanceTo(f.pos)<4.5*TRACK_K,`fuera del camino ${b.seg.kind}`)}
       prev.set(b.id,{seg:b.seg,lane:b.lane,flight:b.flight,snap:b.snap})
     }
   }
