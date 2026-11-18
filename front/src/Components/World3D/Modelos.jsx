@@ -1,7 +1,7 @@
 // Catálogo de modelos GLB nuevos (public/models). Todos: un mesh, color por vértice (COLOR_0),
 // base en y=0, centrados en XZ. Dimensiones = ancho(X) × alto(Y) × fondo(Z), la mayor mide ~1.
 // Se escalan desde la escena con las constantes del mundo (WORLD_SCALE, NODE_R...), nunca con tamaños fijos.
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -10,6 +10,7 @@ import { geoDeGltf, modeloListo, registrarModelo } from './ecosistema.js'
 import { categoriaModelo, triplanarMaterial } from './triplanar.js'
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
+const BASE_KIT = BASE + 'kit/'
 const u = (n) => BASE + n + '.glb'
 
 export const MODELOS = {
@@ -91,4 +92,115 @@ function temaModelo(name) {
   if (/jardin|fuente|hongo/i.test(name)) return 'jardin'
   if (/lapida|sombrio/i.test(name)) return 'sombrio'
   return 'bosque'
+}
+
+// ─────────────────────────── Cargador del kit kart (public/models/kit/) ───────────────────────────
+// Conserva materiales y texturas embebidas (sin triplanar ni colores por vértice) para instanciar con InstancedMesh.
+const KIT_TEX_KEYS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap', 'bumpMap']
+const kitCache = new Map() // nombre -> { geometry, material } | null
+const kitPending = new Map() // nombre -> Promise
+
+function markKitShared(obj) {
+  if (!obj) return obj
+  obj.userData = obj.userData || {}
+  obj.userData.shared = true
+  if (obj.isMaterial) {
+    for (const k of KIT_TEX_KEYS) {
+      const t = obj[k]
+      if (t && t.isTexture) {
+        t.userData = t.userData || {}
+        t.userData.shared = true
+      }
+    }
+  }
+  return obj
+}
+
+function normalizeKitPartGeo(raw) {
+  const g = raw.clone()
+  if (!g.attributes.normal) g.computeVertexNormals()
+  if (!g.attributes.uv) {
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2))
+  }
+  for (const k of Object.keys(g.attributes)) {
+    if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k)
+  }
+  return g
+}
+
+function extraerKit(gltf, nombre) {
+  gltf.scene.updateMatrixWorld(true)
+  const parts = []
+  gltf.scene.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material
+    if (!mat) return
+    const g = normalizeKitPartGeo(o.geometry)
+    g.applyMatrix4(o.matrixWorld)
+    parts.push({ geo: g, mat: markKitShared(mat) })
+  })
+  if (!parts.length) return null
+
+  let geometry
+  let material
+  if (parts.length === 1) {
+    geometry = parts[0].geo
+    material = parts[0].mat
+  } else {
+    const anyIndexed = parts.some((p) => !!p.geo.index)
+    const allIndexed = parts.every((p) => !!p.geo.index)
+    const geos = parts.map((p) => {
+      if (anyIndexed && !allIndexed && p.geo.index) {
+        const ni = p.geo.toNonIndexed()
+        p.geo.dispose()
+        return ni
+      }
+      return p.geo
+    })
+    geometry = mergeGeometries(geos, true)
+    for (const g of geos) g.dispose()
+    material = parts.map((p) => p.mat)
+  }
+  if (!geometry) return null
+  geometry.computeBoundingBox()
+  geometry.computeBoundingSphere()
+  geometry.name = 'kit:' + nombre
+  markKitShared(geometry)
+  return { geometry, material }
+}
+
+/** Carga asíncrona (sin Suspense) de una pieza de `public/models/kit/<nombre>.glb` con caché de módulo. */
+export function cargarKit(nombre) {
+  if (!nombre) return Promise.resolve(null)
+  if (kitCache.has(nombre)) return Promise.resolve(kitCache.get(nombre))
+  if (kitPending.has(nombre)) return kitPending.get(nombre)
+  const p = loader.loadAsync(BASE_KIT + nombre + '.glb')
+    .then((gltf) => {
+      const res = extraerKit(gltf, nombre)
+      kitCache.set(nombre, res)
+      kitPending.delete(nombre)
+      return res
+    })
+    .catch((e) => {
+      console.warn('kit', nombre, e)
+      kitPending.delete(nombre)
+      return null
+    })
+  kitPending.set(nombre, p)
+  return p
+}
+
+export const precargarKit = (nombres = []) => nombres.forEach((n) => cargarKit(n))
+
+/** Hook sin Suspense: devuelve `{ geometry, material }` del kit en caché (o `null` mientras carga). */
+export function useKit(nombre) {
+  const [kit, setKit] = useState(() => (nombre ? kitCache.get(nombre) ?? null : null))
+  useEffect(() => {
+    if (!nombre) { setKit(null); return undefined }
+    if (kitCache.has(nombre)) { setKit(kitCache.get(nombre)); return undefined }
+    let alive = true
+    cargarKit(nombre).then((res) => { if (alive && res) setKit(res) })
+    return () => { alive = false }
+  }, [nombre])
+  return kit
 }
