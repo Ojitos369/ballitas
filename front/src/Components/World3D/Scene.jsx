@@ -22,13 +22,18 @@ import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
 import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
 import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
-import { clampYaw, decayOffset } from './povLook.js'
+import { clampYaw, decayOffset, povZoomView, povView, POV_ZOOM_EYE } from './povLook.js'
 
 const STEP = 0.05
 const FOV = 50
-const POV_FOV = 75
-const POV_FOV_MIN = 45
-const POV_FOV_MAX = 100
+const POV_WHEEL_ZOOM = 0.0009 // z por unidad de deltaY de la rueda
+const POV_PINCH_ZOOM = 0.004 // z por píxel de pellizco
+const POV_KEY_ZOOM = 0.06
+const FOLLOW_UYAW_MAX = 2.2 // rad que se puede orbitar a cada lado al arrastrar
+const FOLLOW_UPITCH_MIN = -0.35 // el cabeceo total (0.42 + este) nunca baja del asfalto
+const FOLLOW_UPITCH_MAX = 0.9
+const FOLLOW_ARM_IN = 14 // rapidez con que la cámara se acerca si algo la tapa
+const FOLLOW_ARM_OUT = 1.8 // y con que vuelve a alejarse
 const POV_PITCH_MAX = THREE.MathUtils.degToRad(20) // POV: giro libre a los lados, solo un poco arriba/abajo
 const POV_SENS = 0.0026
 const POV_LOCK_SENS = 0.0014
@@ -204,7 +209,8 @@ function createPovState() {
     yaw: 0,
     pitch: 0,
     roll: 0,
-    fov: POV_FOV,
+    zoom: POV_ZOOM_EYE, // objetivo 0..1 (ver povZoomView)
+    zs: POV_ZOOM_EYE, // valor suavizado
     joyX: 0,
     joyY: 0,
     gyroYaw: 0,
@@ -513,7 +519,7 @@ function NebulaDome({ r }) {
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
-  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false })
+  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1 })
   const controls = useRef()
   const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
@@ -521,6 +527,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
   const scene = useThree((s) => s.scene)
   const collisionRay = useMemo(() => new THREE.Raycaster(), [])
   const collisionHits = useMemo(() => [], [])
+  const delta = useMemo(() => new THREE.Vector3(), [])
   const collisionMeshes = useRef([])
   const collisionFrame = useRef(0)
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
@@ -577,6 +584,10 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     let lastX = 0
     let lastY = 0
     let totalDist2 = 0
+    const ptrs = new Map() // punteros activos (táctil): con dos se pellizca para el zoom
+    let pinchD = 0
+    const pinchDist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y) }
+    const zoomBy = (d) => { const st = povControlRef.current; st.zoom = THREE.MathUtils.clamp(st.zoom + d, 0, 1) }
 
     const centerLook = () => {
       const st = povControlRef.current
@@ -589,6 +600,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     const onPointerDown = (e) => {
       if (document.pointerLockElement === dom) return
       if (e.pointerType === 'mouse' && e.button !== 0) return
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (ptrs.size === 2) { pinchD = pinchDist(); povDragging.current = false; return }
       if (pointerId !== null) return
       pointerId = e.pointerId
       lastX = e.clientX
@@ -599,6 +612,13 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 
     const onPointerMove = (e) => {
       if (document.pointerLockElement === dom) { pointerId = null; povDragging.current = false; return }
+      if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (ptrs.size >= 2) {
+        const d = pinchDist()
+        zoomBy((d - pinchD) * POV_PINCH_ZOOM)
+        pinchD = d
+        return
+      }
       if (e.pointerId !== pointerId) return
       const dx = e.clientX - lastX
       const dy = e.clientY - lastY
@@ -619,6 +639,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     }
 
     const endDrag = (e) => {
+      ptrs.delete(e.pointerId)
       if (e.pointerId !== pointerId) return
       pointerId = null
       try {
@@ -644,8 +665,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 
     const onWheel = (e) => {
       e.preventDefault()
-      const st = povControlRef.current
-      st.fov = THREE.MathUtils.clamp(st.fov + e.deltaY * 0.03, POV_FOV_MIN, POV_FOV_MAX)
+      zoomBy(-e.deltaY * POV_WHEEL_ZOOM) // rueda hacia delante = acercar
     }
 
     const onKeyDown = (e) => {
@@ -657,6 +677,8 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         centerLook()
         return
       }
+      if (k === '+' || k === '=') { zoomBy(POV_KEY_ZOOM); return }
+      if (k === '-' || k === '_') { zoomBy(-POV_KEY_ZOOM); return }
       const action = KEY_TO_ACTION[k]
       if (action) {
         if (e.key.startsWith('Arrow')) e.preventDefault()
@@ -671,6 +693,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
 
     const onBlur = () => {
       pointerId = null
+      ptrs.clear()
       povDragging.current = false
       keysRef.current.clear()
       dom.style.cursor = 'grab'
@@ -703,6 +726,82 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       resetState()
     }
   }, [povActive, gl, povControlRef])
+
+  // Gestos de Seguir (OrbitControls apagado): arrastrar orbita acotado y vuelve solo, rueda/pellizco/+/- zoom con límites,
+  // doble clic o R recentran.
+  const followActive = Boolean(follow && !pov && selected && selected.phase !== 'gone' && !suspend)
+  useEffect(() => {
+    if (!followActive) return undefined
+    const dom = gl.domElement
+    const fs = followRef.current
+    const prevCursor = dom.style.cursor
+    const prevTouchAction = dom.style.touchAction
+    dom.style.cursor = 'grab'
+    dom.style.touchAction = 'none'
+    const ptrs = new Map()
+    let pinchD = 0
+    const pinchDist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y) }
+    const zoomBy = (f) => { fs.rel.dist = THREE.MathUtils.clamp(fs.rel.dist * f, SEGUIR_DIST_MIN, SEGUIR_DIST_MAX) }
+    const down = (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, id: e.pointerId })
+      if (ptrs.size === 2) pinchD = pinchDist()
+      try { dom.setPointerCapture(e.pointerId) } catch {}
+    }
+    const move = (e) => {
+      const p = ptrs.get(e.pointerId)
+      if (!p) return
+      const dx = e.clientX - p.x
+      const dy = e.clientY - p.y
+      p.x = e.clientX; p.y = e.clientY
+      if (ptrs.size >= 2) {
+        const d = pinchDist()
+        if (pinchD > 0 && d > 0) zoomBy(pinchD / d)
+        pinchD = d
+        return
+      }
+      fs.drag = true; fs.idle = 0
+      dom.style.cursor = 'grabbing'
+      fs.uYaw = THREE.MathUtils.clamp(fs.uYaw - dx * 0.006, -FOLLOW_UYAW_MAX, FOLLOW_UYAW_MAX)
+      fs.uPitch = THREE.MathUtils.clamp(fs.uPitch + dy * 0.005, FOLLOW_UPITCH_MIN, FOLLOW_UPITCH_MAX)
+    }
+    const up = (e) => {
+      ptrs.delete(e.pointerId)
+      try { if (dom.hasPointerCapture?.(e.pointerId)) dom.releasePointerCapture(e.pointerId) } catch {}
+      if (ptrs.size === 0) { fs.drag = false; dom.style.cursor = 'grab' }
+    }
+    const wheel = (e) => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * 0.0012)) }
+    const recentrar = () => { fs.uYaw = 0; fs.uPitch = 0; fs.idle = 9 }
+    const key = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === '+' || e.key === '=') zoomBy(0.88)
+      else if (e.key === '-' || e.key === '_') zoomBy(1 / 0.88)
+    }
+    const blur = () => { ptrs.clear(); fs.drag = false }
+    dom.addEventListener('pointerdown', down)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    window.addEventListener('blur', blur)
+    dom.addEventListener('wheel', wheel, { passive: false })
+    dom.addEventListener('dblclick', recentrar)
+    window.addEventListener('keydown', key)
+    return () => {
+      dom.removeEventListener('pointerdown', down)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      window.removeEventListener('blur', blur)
+      dom.removeEventListener('wheel', wheel)
+      dom.removeEventListener('dblclick', recentrar)
+      window.removeEventListener('keydown', key)
+      dom.style.cursor = prevCursor
+      dom.style.touchAction = prevTouchAction
+      fs.drag = false
+    }
+  }, [followActive, gl])
 
   // Posición de la vista general: encaja el mundo también en pantallas verticales.
   const casa = () => {
@@ -776,7 +875,10 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       st.roll = decayOffset(st.roll, h, st.idle, st.centering)
       if (st.centering && st.yaw === 0 && st.pitch === 0 && st.roll === 0) st.centering = false
 
-      targetFov = st.fov
+      st.zs += (st.zoom - st.zs) * (1 - Math.exp(-9 * h))
+      const zv = povZoomView(st.zs)
+      povView.body = zv.body
+      targetFov = zv.fov
       targetNear = NEAR_POV
 
       // rumbo filtrado: la mirada no tiembla con el vaivén del carril ni con los mecanismos.
@@ -833,8 +935,10 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         POV_PITCH_MAX,
       )
       const totalRoll = st.roll
-      if (totalYaw !== 0 || totalPitch !== 0 || totalRoll !== 0) {
-        povLookEuler.set(totalPitch, totalYaw, totalRoll, 'YXZ')
+      // tercera persona: la cámara además mira un poco hacia abajo, a la ballita que queda delante
+      const tilt = zv.back > 0 ? -Math.atan2(zv.up, zv.back + 3) : 0
+      if (totalYaw !== 0 || totalPitch !== 0 || totalRoll !== 0 || tilt !== 0) {
+        povLookEuler.set(totalPitch + tilt, totalYaw, totalRoll, 'YXZ')
         povLookQuat.setFromEuler(povLookEuler)
         povTargetQuat.multiply(povLookQuat)
       }
@@ -845,13 +949,20 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         || st.joyY !== 0
         || pointerLockedRef.current
         || gyroActiveRef.current
-      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : 8) * h))
+      // cámara semifija a la espalda (más lenta) → rígida en los ojos
+      const fija = zv.back / 2.2
+      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : 8 - 4.5 * fija) * h))
       camera.quaternion.copy(povQuat.current)
 
       const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
       povEye.copy(selected.pos).addScaledVector(povFwd, 0.14)
       if (selected.up) povEye.addScaledVector(selected.up, upShift)
-      camera.position.lerp(povEye, 1 - Math.exp(-18 * h))
+      if (zv.back > 0) { // sale hacia atrás por donde mira la cámara y sube un poco
+        camera.getWorldDirection(povLookDirTmp)
+        povEye.addScaledVector(povLookDirTmp, -zv.back).addScaledVector(povUp.current, zv.up)
+      }
+      // en tercera persona la cámara va rígida a la ballita (con retraso se quedaba a metros a alta velocidad); sólo la mirada es lenta
+      camera.position.lerp(povEye, Math.max(1 - Math.exp(-18 * h), Math.min(1, fija * 6)))
       c.target.copy(povEye).addScaledVector(povFwd, 2)
       hasPrevPos.current = false
 
@@ -863,6 +974,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         t.pitch = totalPitch
         t.roll = totalRoll
         t.fov = camera.fov
+        t.zoom = st.zs
         t.pointerLocked = Boolean(document.pointerLockElement === gl.domElement)
         t.gyroActive = Boolean(gyroActiveRef.current)
         t.camDir = [povLookDirTmp.x, povLookDirTmp.y, povLookDirTmp.z]
@@ -891,10 +1003,11 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         fs.startPos.copy(camera.position)
         fs.quat.copy(camera.quaternion)
         fs.userRel = false
+        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1
         if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.copy(selected.dir).normalize()
       }
       ultima.current = selected
-      if (fs.recenter) { fs.recenter = false; fs.userRel = false; Object.assign(fs.rel, REL_DEFAULT) }
+      if (fs.recenter) { fs.recenter = false; fs.userRel = false; fs.uYaw = fs.uPitch = 0; Object.assign(fs.rel, REL_DEFAULT) }
       const entrando = modo.current === 'entrando'
       const vel = selected.speed ?? 0
       const distK = selected.phase === 'travel' ? 1 : 1.15
@@ -948,22 +1061,10 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       posSide.normalize()
       posUpO.crossVectors(posSide, fs.fwd).normalize()
 
-      // ¿El usuario movió la cámara (arrastre, inercia o zoom de OrbitControls)? Se adopta su ángulo.
-      // Sólo con interacción real: los recortes propios de OrbitControls (min/maxDistance) no cuentan,
-      // si no la cámara adoptaba sola posiciones raras y se quedaba ahí.
-      off.copy(camera.position).sub(c.target)
-      const tocando = userActive.current || performance.now() - lastTouch.current < 1500
-      if (tocando && fs.hasLast && off.distanceToSquared(fs.lastOff) > 1e-6 * Math.max(1, off.lengthSq())) {
-        const len = Math.max(off.length(), 1e-4)
-        const x = off.dot(posSide); const y = off.dot(posUpO); const z = -off.dot(fs.fwd)
-        fs.rel.yaw = Math.atan2(x, z)
-        fs.rel.pitch = Math.asin(THREE.MathUtils.clamp(y / len, -1, 1))
-        fs.rel.dist = THREE.MathUtils.clamp(len / distK, SEGUIR_DIST_MIN, SEGUIR_DIST_MAX) // zoom de rueda acotado
-        fs.off.copy(off)
-        fs.offV.set(0, 0, 0)
-        fs.userRel = true
-        if (entrando) modo.current = 'siguiendo'
-      }
+      // El arrastre (ver efecto de gestos) deja un desvío uYaw/uPitch; sin tocar ~1.5 s vuelve suave detrás.
+      fs.idle = fs.drag ? 0 : fs.idle + h
+      fs.uYaw = decayOffset(fs.uYaw, h, fs.idle)
+      fs.uPitch = decayOffset(fs.uPitch, h, fs.idle)
 
       // objetivo: la ballita misma (rígido, sin retraso: no se sale del cuadro en curvas ni a 8×)
       // El anclaje sigue rígido adelante/arriba pero amortigua el vaivén lateral (cambios de carril): la cámara no tiembla.
@@ -972,14 +1073,14 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         const lat = sideVec.copy(selected.pos).sub(fs.anchor).dot(posSide)
         fs.anchor.copy(selected.pos).addScaledVector(posSide, -lat * Math.exp(-FOLLOW_LAT_W * h))
       }
-      if (cine && selected.dir) lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, THREE.MathUtils.clamp(vel * 0.045, 0, 1.0))
-      else lookAhead.copy(fs.anchor)
+      // la cámara mira un poco por delante de la ballita (hacia donde va el camino), no a ella
+      lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, fs.rel.dist * (selected.phase === 'travel' ? 0.5 : 0.25))
       // más campo de visión a más velocidad (sensación de carrera)
       targetFov = FOV + THREE.MathUtils.clamp(vel * (cine ? 0.6 : 0.45), 0, cine ? 14 : 9)
 
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
-      const yaw = fs.rel.yaw + sway
-      const pitch = fs.rel.pitch + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0)
+      const yaw = fs.rel.yaw + fs.uYaw + sway
+      const pitch = fs.rel.pitch + fs.uPitch + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0)
       const dist = fs.rel.dist * distK
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal
@@ -998,39 +1099,40 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         const s = fs.enterT * fs.enterT * fs.enterT * (fs.enterT * (fs.enterT * 6 - 15) + 10)
         c.target.copy(fs.startTarget).lerp(lookAhead, s)
         fs.off.copy(desiredOff); fs.offV.set(0, 0, 0)
-        camera.position.copy(fs.startPos).lerp(midVec.copy(lookAhead).add(desiredOff), s)
+        camera.position.copy(fs.startPos).lerp(midVec.copy(fs.anchor).add(desiredOff), s)
         if (fs.enterT >= 1) modo.current = 'siguiendo'
       } else {
         c.target.copy(lookAhead)
         if (corte) { fs.off.copy(desiredOff); fs.offV.set(0, 0, 0) }
         else springCD(fs.off, fs.offV, desiredOff, enTubo ? FOLLOW_TUBE_W : FOLLOW_OFF_W, h)
-        camera.position.copy(c.target).add(fs.off)
-        if (enTubo) {
-          limitarATubo(camera.position, selected, fs.prevSeg, selected.seg.radius * 0.8)
-          fs.off.copy(camera.position).sub(c.target)
-        }
+        camera.position.copy(fs.anchor).add(fs.off)
       }
 
       // Colisión de cámara contra la escena: recorta el brazo antes de atravesar una pista, berma u objeto.
-      if (!entrando && ++collisionFrame.current % 6 === 0) {
-        const delta = sideVec.copy(camera.position).sub(selected.pos)
-        const distance = delta.length()
-        if (distance > 0.7) {
-          if (!collisionMeshes.current.length) {
-            scene.traverse((o) => { if (o.isMesh && o.geometry?.name?.startsWith('pista:')) collisionMeshes.current.push(o) })
-          }
-          collisionOrigin.copy(selected.pos).addScaledVector(selected.up ?? Y_AXIS, 0.55)
-          delta.copy(camera.position).sub(collisionOrigin)
-          const rayLength = delta.length()
+      // Si algo se interpone entre la ballita y la cámara, el brazo se acorta (rápido) y luego vuelve a crecer (lento): sin saltos.
+      if (!entrando && ++collisionFrame.current % 3 === 0) {
+        if (!collisionMeshes.current.length) {
+          scene.traverse((o) => { if (o.isMesh && o.geometry?.name?.startsWith('pista:')) collisionMeshes.current.push(o) })
+        }
+        collisionOrigin.copy(selected.pos).addScaledVector(selected.up ?? Y_AXIS, 0.45)
+        delta.copy(camera.position).sub(collisionOrigin)
+        const rayLength = delta.length()
+        fs.clearGoal = 1
+        if (rayLength > 0.8 && collisionMeshes.current.length) {
           collisionRay.set(collisionOrigin, delta.normalize())
           collisionRay.camera = camera
-          collisionRay.near = 0.55
-          collisionRay.far = rayLength
+          collisionRay.near = 0.3
+          collisionRay.far = rayLength + 0.5
           collisionHits.length = 0
           collisionRay.intersectObjects(collisionMeshes.current, false, collisionHits)
           const hit = collisionHits.find((x) => x.object.visible && !x.object.userData?.noCameraCollision)
-          if (hit) camera.position.addScaledVector(selected.up ?? Y_AXIS, Math.min(2.2, Math.max(0.65, 2.1 - hit.distance)))
+          if (hit) fs.clearGoal = THREE.MathUtils.clamp((hit.distance - 0.4) / rayLength, 0.3, 1)
         }
+      }
+      fs.clear += (fs.clearGoal - fs.clear) * (1 - Math.exp(-(fs.clearGoal < fs.clear ? FOLLOW_ARM_IN : FOLLOW_ARM_OUT) * h))
+      if (!entrando && fs.clear < 0.999) {
+        collisionOrigin.copy(selected.pos).addScaledVector(selected.up ?? Y_AXIS, 0.45)
+        camera.position.sub(collisionOrigin).multiplyScalar(fs.clear).add(collisionOrigin)
       }
       // Evita que la cámara se meta dentro de la esfera de un planeta.
       const minPlanetR = NODE_R + 1.25
@@ -1141,7 +1243,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
   return (
     <OrbitControls
       ref={controls}
-      enabled={!povActive && !suspend}
+      enabled={!povActive && !suspend && !followActive}
       makeDefault
       enableDamping
       dampingFactor={0.08}
@@ -1518,6 +1620,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   return (
     <>
       <Canvas
+      frameloop={supOn ? 'never' : 'always'}
+      style={supOn ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}
       shadows="soft"
       // De cerca el coste es de relleno (postFX y tubo a pantalla completa): DPR 1,5 -> 1,0 pasa de ~20-30 a ~48-57 FPS.
       dpr={Math.min(dpr, DPR_CERCA)}
@@ -1582,7 +1686,6 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       </Environment>
 
       <SimDriver sim={sim} speed={speed} />
-      {supOn && <Superficie world={sim.world} nodeIdx={supIdx} ballitas={ballitas} onSalir={cerrarSuperficie} />}
       <group visible={!supOn}>
       <Nodes world={sim.world} />
       <Paths world={sim.world} sim={sim} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
@@ -1622,6 +1725,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <StatsProbe active={showStats} onSample={onStatsSample} />
       <VistaCamino way={cameraWay} routeIndex={routeIndex} seek={seek} speed={caminoSpeed} paused={caminoPaused} active={caminoOn} progressRef={progressRef} />
     </Canvas>
+    {supOn && <Superficie world={sim.world} nodeIdx={supIdx} ballitas={ballitas} onSalir={cerrarSuperficie} showStats={showStats} onStatsSample={onStatsSample} />}
     <PovPanel
       active={povActive}
       povControlRef={povControlRef}

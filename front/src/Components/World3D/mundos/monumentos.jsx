@@ -154,21 +154,33 @@ export function pickMonumentSpot(node, near, surfaceR = NODE_R) {
   }
 }
 
-export function Monument({ node, biome, spot, surfaceR = NODE_R, animRegRef = null }) {
+function liftColor(hex, minL, minSat = 0.25) {
+  if (!minL) return hex
+  const c = new THREE.Color(hex)
+  const hsl = {}
+  c.getHSL(hsl)
+  c.setHSL(hsl.h, hsl.s > 0.02 ? Math.max(hsl.s, minSat) : hsl.s, Math.max(hsl.l, minL))
+  return c
+}
+
+export function Monument({ node, biome, spot, surfaceR = NODE_R, animRegRef = null, scale = null, minLight = 0, emissiveMap = null }) {
   const glbName = BIOME_GLB[biome.id]
   const glbGeo = useMonumentGlb(glbName)
   const animRef = useRef()
   const animRef2 = useRef()
 
-  const mats = useMemo(() => ({
-    stone: new THREE.MeshStandardMaterial({ color: biome.groundHigh, roughness: 0.78, metalness: 0.14 }),
-    accent: new THREE.MeshStandardMaterial({ color: biome.cityLight, emissive: biome.cityLight, emissiveIntensity: 1.15, roughness: 0.25, metalness: 0.35, toneMapped: false }),
-    dark: new THREE.MeshStandardMaterial({ color: biome.groundLow, roughness: 0.85, metalness: 0.2 }),
-    mid: new THREE.MeshStandardMaterial({ color: biome.groundMid, roughness: 0.68, metalness: 0.18 }),
-    glass: new THREE.MeshStandardMaterial({ color: biome.atmoRim, emissive: biome.atmoBase, emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.55, transparent: true, opacity: 0.88 }),
-    beam: new THREE.MeshBasicMaterial({ color: biome.cityLight, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
-    glb: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.12 }),
-  }), [biome])
+  const mats = useMemo(() => {
+    const texProps = emissiveMap ? { emissive: biome.cityLight, emissiveMap, emissiveIntensity: 0.75 } : {}
+    return {
+      stone: new THREE.MeshStandardMaterial({ color: liftColor(biome.groundHigh, minLight * 1.45), roughness: 0.78, metalness: 0.14, ...texProps }),
+      accent: new THREE.MeshStandardMaterial({ color: biome.cityLight, emissive: biome.cityLight, emissiveIntensity: 1.15, roughness: 0.25, metalness: 0.35, toneMapped: false }),
+      dark: new THREE.MeshStandardMaterial({ color: liftColor(biome.groundLow, minLight * 0.9), roughness: 0.85, metalness: 0.2 }),
+      mid: new THREE.MeshStandardMaterial({ color: liftColor(biome.groundMid, minLight * 1.15), roughness: 0.68, metalness: 0.18, ...texProps }),
+      glass: new THREE.MeshStandardMaterial({ color: biome.atmoRim, emissive: biome.atmoBase, emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.55, transparent: true, opacity: 0.88 }),
+      beam: new THREE.MeshBasicMaterial({ color: biome.cityLight, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
+      glb: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.12 }),
+    }
+  }, [biome, minLight, emissiveMap])
 
   useEffect(() => () => {
     Object.values(mats).forEach((m) => m.dispose())
@@ -184,7 +196,7 @@ export function Monument({ node, biome, spot, surfaceR = NODE_R, animRegRef = nu
     }
   }, [animRegRef, biome.id, node.idx])
 
-  const monScale = useMemo(() => surfaceR / 7.5, [surfaceR])
+  const monScale = useMemo(() => (scale != null ? scale : surfaceR / 7.5), [scale, surfaceR])
 
   return (
     <group position={spot.pos} quaternion={spot.quat} scale={monScale}>
