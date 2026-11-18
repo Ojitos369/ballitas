@@ -7,7 +7,7 @@ import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
-import { pistaWarmup } from './vida/pista.jsx'
+import { pistaWarmup, trackGeoPaso } from './vida/pista.jsx'
 import Precompilado from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 import Neon from './Neon.jsx'
@@ -1334,7 +1334,10 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
   return (
     <group>
       {/* El tubo solo informa el recorrido en el mapa lejano; los circuitos son abiertos en Camino. */}
-      {d.tube && focused === false && !nearActive && <mesh geometry={d.tube} material={mats.tube} onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(way) } : undefined} />}
+      {/* Siempre montado (oculto en el mapa): el precompilado del mapa enlaza sus dos programas (cristal de doble
+          cara) y la primera Ballita/Camino, que lo muestra en los caminos no enfocados, no los espera (0,2-0,8 s). */}
+      {d.tube && <mesh geometry={d.tube} material={mats.tube} visible={focused === false && !nearActive}
+        onClick={onPickWay && focused === false && !nearActive ? (e) => { e.stopPropagation(); onPickWay(way) } : undefined} />}
 
       {/* Capa EXTERIOR: tira de neón de lejos; pilones y flora (modelos) bajo demanda, siempre fuera del tubo */}
       <group ref={extGroupRef}>
@@ -1423,6 +1426,36 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     }
     return { idx: w.idx, radius: w.params.radius, flat, sphere }
   }), [world])
+
+  // Pistas precalculadas en huecos libres del mapa (primero los caminos con ballitas): su construcción
+  // (cientos de ms) era el congelón de la primera entrada a Ballita/Camino.
+  useEffect(() => {
+    let vivo = true
+    let id = 0
+    // con plazo: si los cuadros del mapa no dejan hueco libre, sin timeout no avanzaría nunca
+    const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 1000 }) : (f) => setTimeout(() => f({ didTimeout: true }), 50)
+    const cancel = (i) => (window.cancelIdleCallback ? window.cancelIdleCallback(i) : clearTimeout(i))
+    const hechos = new Set()
+    // Prioridad al momento: el camino de cada ballita viva (en orden: la primera es la que abre la tecla 3) y luego el resto.
+    const siguiente = () => {
+      for (const b of sim?.ballitas ?? []) {
+        const w = b.phase === 'dying' || b.phase === 'gone' ? null : (b.seg?.way ?? b.way)
+        if (w && !hechos.has(w)) return w
+      }
+      return world.ways.find((w) => !hechos.has(w))
+    }
+    const paso = (dl) => {
+      if (!vivo) return
+      const t0 = performance.now()
+      const lim = dl.didTimeout ? 4 : Math.min(8, dl.timeRemaining())
+      const agotado = () => performance.now() - t0 > lim
+      let w = siguiente()
+      while (w && !agotado()) { if (trackGeoPaso(w, agotado)) { hechos.add(w); w = siguiente() } }
+      if (w) id = idle(paso)
+    }
+    const t = setTimeout(() => { id = idle(paso) }, 3000)
+    return () => { vivo = false; clearTimeout(t); cancel(id) }
+  }, [world, sim])
 
   const wayDistRef = useRef([])
   const controllersRef = useRef(new Map())

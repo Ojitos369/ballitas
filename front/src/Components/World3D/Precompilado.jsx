@@ -35,6 +35,21 @@ export function precompilar(gl, obj, camera, scene) {
   })
 }
 
+/**
+ * Programa de la pasada de sombra de las ballitas (las únicas que proyectan): en el mapa la sombra no se
+ * renderiza, así que la primera Ballita lo enlazaba dentro del cuadro. Variante exacta: material de
+ * profundidad RGBA, cara trasera (shadowSide de FrontSide), con mapa y sin niebla (la pasada no usa escena).
+ */
+let SOMBRA = null
+export function precompilarSombra(gl, camera, scene) {
+  SOMBRA ??= new THREE.Mesh(new THREE.PlaneGeometry(0.01, 0.01), new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking, side: THREE.BackSide, map: new THREE.DataTexture(new Uint8Array(4), 1, 1),
+  }))
+  const fog = scene.fog
+  scene.fog = null
+  try { return precompilar(gl, SOMBRA, camera, scene) } finally { scene.fog = fog }
+}
+
 // Una capa revelada por cuadro: el primer dibujo de un programa aún paga su resolución en el driver
 // (ANGLE/D3D), y revelar túnel, interior, vida y ciudad a la vez lo sumaba todo en un solo cuadro.
 const cola = []

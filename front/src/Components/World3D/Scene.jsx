@@ -20,7 +20,7 @@ import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino } from './Vistas.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
-import Precompilado, { precompilar } from './Precompilado.jsx'
+import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
 import { clampYaw, decayOffset } from './povLook.js'
 
 const STEP = 0.05
@@ -46,7 +46,9 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const TONE_MAPPING_AGX = 8 // ToneMappingMode.AGX en postprocessing 6.39
 const BlendFunction = { DST: 9, NORMAL: 23 } // postprocessing 6.39 (no es dependencia directa)
 const NOOP_UPDATE = () => {}
-const DPR_CERCA = 1.0 // tope de DPR en Camino/Ballita
+// Tope de DPR en TODAS las vistas: si el mapa usaba más, entrar a Camino/Ballita redimensionaba el lienzo y
+// Chromium espera a vaciar la cola de la GPU (75-250 ms medidos con la GPU ocupada) dentro de ese cuadro.
+const DPR_CERCA = 1.0
 const mov = new THREE.Vector3()
 const off = new THREE.Vector3()
 const lookAhead = new THREE.Vector3()
@@ -1198,9 +1200,10 @@ function PostFX({ dofOn, selected, highQuality }) {
     // cercanas): sin esto, acercarse por primera vez (Camino/Ballita) esperaba su enlace dentro del cuadro.
     const t = setTimeout(() => idle(() => {
       if (warm.current === 0) warm.current = 1
+      gl.capabilities.getMaxAnisotropy() // consulta síncrona a la GPU (>100 ms con la cola llena); se cachea aquí
       // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
       // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
-      precompilar(gl, scene, camera, scene).then(() => {
+      Promise.all([precompilar(gl, scene, camera, scene), precompilarSombra(gl, camera, scene)]).then(() => {
         const pend = (gl.info.programs ?? []).slice()
         const next = () => { pend.shift()?.getUniforms(); if (pend.length) idle(next) }
         idle(next)
@@ -1503,7 +1506,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <Canvas
       shadows="soft"
       // De cerca el coste es de relleno (postFX y tubo a pantalla completa): DPR 1,5 -> 1,0 pasa de ~20-30 a ~48-57 FPS.
-      dpr={vista === 'mapa' ? dpr : Math.min(dpr, DPR_CERCA)}
+      dpr={Math.min(dpr, DPR_CERCA)}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ fov: FOV, near: NEAR_DEFAULT, far: r * 20 }}
       // En producción no se lee el log de cada programa: getProgramInfoLog espera la compilación en el primer

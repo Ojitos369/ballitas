@@ -3,7 +3,7 @@
 // construida solo desde laneFrame(segment, laneId, u): así cada camino sigue su propia orientación y
 // gravedad (de cabeza, de lado, tirabuzón) sin depender de cómo el núcleo lo calcule. Una malla fusionada
 // por camino; la decoración (decor.jsx) y los eventos de cambio (eventos.jsx) se apoyan en el mismo perfil.
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { applyLoadedImage } from '../texUtils.js'
@@ -190,32 +190,70 @@ function pushLaneStrip(seg, lane, out) {
     }
     for (let j = 0; j < RING; j++) out.chev.push(c)
   }
+  const i0 = out.idx.length
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < RING; j++) {
       const a = base + i * RING + j; const b = base + i * RING + ((j + 1) % RING)
       out.idx.push(a, a + RING, b, b, a + RING, b + RING)
     }
   }
+  // Normales por tira (las tiras no comparten vértices): igual que computeVertexNormals, sin pagarlo de golpe al final.
+  const P = out.pos; const N = out.nrm; const I = out.idx
+  for (let v = N.length; v < P.length; v++) N.push(0)
+  for (let t = i0; t < I.length; t += 3) {
+    const a = I[t] * 3; const b = I[t + 1] * 3; const c = I[t + 2] * 3
+    const e1x = P[c] - P[b]; const e1y = P[c + 1] - P[b + 1]; const e1z = P[c + 2] - P[b + 2]
+    const e2x = P[a] - P[b]; const e2y = P[a + 1] - P[b + 1]; const e2z = P[a + 2] - P[b + 2]
+    const nx = e1y * e2z - e1z * e2y; const ny = e1z * e2x - e1x * e2z; const nz = e1x * e2y - e1y * e2x
+    for (const o of [a, b, c]) { N[o] += nx; N[o + 1] += ny; N[o + 2] += nz }
+  }
+  for (let o = base * 3; o < N.length; o += 3) {
+    const l = Math.hypot(N[o], N[o + 1], N[o + 2]) || 1
+    N[o] /= l; N[o + 1] /= l; N[o + 2] /= l
+  }
 }
 
 const geoCache = new WeakMap()
+const pendiente = new WeakMap() // way -> { out, strips, k }: construcción a medias, repartida en huecos libres
+
+/** Avanza la pista de `way` tira a tira hasta que `agotado()` diga basta; true cuando quedó en caché.
+ *  Así el mapa la precalcula en huecos libres y montar la vista Ballita/Camino no la construye en un cuadro. */
+export function trackGeoPaso(way, agotado) {
+  if (geoCache.has(way)) return true
+  let st = pendiente.get(way)
+  if (!st) {
+    st = { out: { pos: [], nrm: [], uv: [], chev: [], under: [], idx: [] }, strips: [], k: 0 }
+    for (const seg of way.segments) for (const lane of lanesOf(seg)) st.strips.push([seg, lane])
+    pendiente.set(way, st)
+  }
+  while (st.k < st.strips.length) {
+    const [seg, lane] = st.strips[st.k++]
+    pushLaneStrip(seg, lane, st.out)
+    if (agotado()) return false
+  }
+  pendiente.delete(way)
+  cerrarGeo(way, st.out)
+  return true
+}
+
+const NUNCA = () => false
 export function trackGeo(way) {
-  let g = geoCache.get(way)
-  if (g) return g
-  const out = { pos: [], uv: [], chev: [], under: [], idx: [] }
-  for (const seg of way.segments) for (const lane of lanesOf(seg)) pushLaneStrip(seg, lane, out)
-  g = new THREE.BufferGeometry()
+  if (!geoCache.has(way)) trackGeoPaso(way, NUNCA)
+  return geoCache.get(way)
+}
+
+function cerrarGeo(way, out) {
+  const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3))
   g.setAttribute('uv', new THREE.Float32BufferAttribute(out.uv, 2))
   g.setAttribute('aChev', new THREE.Float32BufferAttribute(out.chev, 1))
   g.setAttribute('aUnder', new THREE.Float32BufferAttribute(out.under, 1))
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(out.nrm, 3))
   g.setIndex(out.idx)
-  g.computeVertexNormals()
   g.computeBoundingSphere()
   g.name = 'pista:' + way.idx
   markShared(g) // en caché por camino: se reutiliza al volver a entrar
   geoCache.set(way, g)
-  return g
 }
 
 /** Mallas mínimas con los materiales de la pista, para compilar y enlazar sus programas antes de la
@@ -235,11 +273,24 @@ export function pistaWarmup(extra = []) {
 }
 
 export default function Pista({ way }) {
-  const geo = useMemo(() => trackGeo(way), [way])
+  const geo = geoCache.get(way)
+  const [, listo] = useState(0)
+  // Sin precalcular aún: se termina en porciones de ~6 ms por cuadro y aparece al estar lista (entra volando).
+  useEffect(() => {
+    if (geoCache.has(way)) return undefined
+    let raf = 0
+    const paso = () => {
+      const t0 = performance.now()
+      if (trackGeoPaso(way, () => performance.now() - t0 > 6)) listo((n) => n + 1)
+      else raf = requestAnimationFrame(paso)
+    }
+    raf = requestAnimationFrame(paso)
+    return () => cancelAnimationFrame(raf)
+  }, [way])
   const mat = useMemo(() => trackMat(way.theme.id), [way])
   return (
     <>
-      <mesh geometry={geo} material={mat} receiveShadow />
+      {geo && <mesh geometry={geo} material={mat} receiveShadow />}
       <Decor way={way} />
       <Eventos way={way} />
     </>
