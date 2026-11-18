@@ -32,18 +32,16 @@ const MOVE_RECOMPACT_SQ = 20 // recompila instancias visibles solo al moverse >=
 // ═══════════════════════════ CATÁLOGO POR TEMA (4 piezas clave + arco + ribera) ═══════════════════════════
 const THEME_STRUCTS = {
   bosque: {
-    ribbon: { mode: 'hedge', c1: '#235926', c2: '#4aa142', h: 1.05, w: 6.0, glow: 0.04 },
+    ribbon: { mode: 'hedge', c1: '#2c4a26', c2: '#6f9a45', c3: '#7a6a3e', h: 2.3, w: 9.0, glow: 0.0 },
     arch: { kind: 'bosque', step: 38, sx: 1.08, sy: 8.2 },
     props: [
-      { model: 'tree', step: 13, ax: [0.55, 1.45], scale: [9.2, 15.2], foot: 0.5, rad: 1.85, tints: ['#2f7d32', '#3f9642', '#25662a', '#4ea344'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'pine', step: 15, ax: [0.55, 1.5], scale: [9.8, 16.2], foot: 0.36, rad: 1.6, tints: ['#1f5e2c', '#2c7838', '#358742'], cat: 'terreno', tall: true, bothSides: true },
       { model: 'tronco_hueco', step: 32, ax: [0.45, 0.95], scale: [2.8, 4.0], foot: 0.45, rad: 1.05, rotX: Math.PI / 2, yOff: 0.45, cat: 'terreno' },
       { model: 'hongo_gigante', step: 24, ax: [0.4, 0.95], scale: [2.6, 4.2], foot: 0.48, rad: 1.0, cat: 'terreno' },
       { model: 'bosque_casita', step: 44, ax: [0.7, 1.35], scale: [4.2, 5.8], foot: 0.5, rad: 1.45, cat: 'fachada', faceRoad: true },
     ],
   },
   mar: {
-    ribbon: { mode: 'reef', c1: '#1a6e96', c2: '#4de0cf', h: 1.55, w: 7.8, glow: 0.14 },
+    ribbon: { mode: 'reef', c1: '#5a4a6e', c2: '#d9c08a', c3: '#c95f86', h: 1.2, w: 7.8, glow: 0.06 },
     arch: { kind: 'mar', step: 42, sx: 1.08, sy: 8.0 },
     props: [
       { model: 'ciudad/mar_torre', step: 40, ax: [0.75, 1.5], scale: [8.8, 13.5], foot: 0.44, rad: 1.75, tints: ['#e8f8ff', '#b8ecff'], cat: 'fachada', faceRoad: true, tall: true },
@@ -336,6 +334,8 @@ function outerClear(col, wayIdx, seg, lane, u, pos, rad, local) {
 }
 
 const F_RIB = {}
+const RIB_N = 9
+const _c3 = new THREE.Color()
 const _ribCheck = new THREE.Vector3()
 function buildSegRibbonGeo(way, seg, si, world, spec) {
   if (!spec) return null
@@ -351,7 +351,7 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
 
   const L = Math.max(seg.length ?? 1, 1)
   const lanes = lanesOf(seg)
-  const stepDist = 2.6 * TRACK_K // ~12 u para seguir curvas suavemente
+  const stepDist = 1.3 * TRACK_K // ~6 u: sigue curvas y deja ver el relieve
   const n = Math.max(6, Math.ceil(L / stepDist))
   const isLava = spec.mode === 'lava'
   const isIce = spec.mode === 'ice'
@@ -385,14 +385,25 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
         if (isIce || isCanyon) hCrest = H * (0.62 + 0.72 * Math.abs(wave))
         else if (isDune) hCrest = H * (0.8 + 0.45 * wave)
 
-        const pts = isLava
-          ? [[edge0, -0.08, 0, 0], [edge0 + W * 0.16, -0.34, 0.35, 0.18], [edge0 + W * 0.72, -0.34, 0.65, 0.82], [edge0 + W, 0.28 * H, 1, 1]]
-          : isCyber
-            ? [[edge0, -0.08, 0, 0], [edge0 + W * 0.14, 0.22, 0.75, 0.2], [edge0 + W * 0.86, 0.26, 1, 0.85], [edge0 + W, -0.45, 0.2, 1]]
-            : [[edge0, -0.08, 0, 0], [edge0 + W * 0.42, hCrest * 0.76, 0.65, 0.35], [edge0 + W * 0.76, hCrest, 1, 0.7], [edge0 + W, -0.7, 0.25, 1]]
+        let pts
+        if (isLava) pts = [[edge0, -0.08, 0, 0], [edge0 + W * 0.16, -0.34, 0.35, 0.18], [edge0 + W * 0.72, -0.34, 0.65, 0.82], [edge0 + W, 0.28 * H, 1, 1]]
+        else if (isCyber) pts = [[edge0, -0.08, 0, 0], [edge0 + W * 0.14, 0.22, 0.75, 0.2], [edge0 + W * 0.86, 0.26, 1, 0.85], [edge0 + W, -0.45, 0.2, 1]]
+        else {
+          // Relieve real: 9 puntos con ondulación de varias frecuencias (lomas, hondonadas y crestas
+          // irregulares) y color por altura con manchas, para que la ribera no sea un manto liso.
+          pts = []
+          for (let j = 0; j < RIB_N; j++) {
+            const t = j / (RIB_N - 1)
+            const bump = Math.sin(Math.PI * Math.min(1, t * 1.12)) ** 0.8
+            const nz = 0.5 * Math.sin(s * 0.41 + t * 7.3 + si) + 0.3 * Math.sin(s * 0.93 - t * 11.1 + lane.id) + 0.2 * Math.sin(s * 1.9 + t * 17.0)
+            const py = j === 0 ? -0.08 : j === RIB_N - 1 ? -0.7 : hCrest * bump * (0.78 + 0.32 * nz)
+            pts.push([edge0 + W * t, py, Math.max(0, Math.min(1, 0.15 + (py / Math.max(0.4, H)) * 0.75 + nz * 0.18)), t])
+          }
+        }
+        const NP = pts.length
 
         const vBase = pos.length / 3
-        for (let j = 0; j < 4; j++) {
+        for (let j = 0; j < NP; j++) {
           const [lat, py, tCol, ux] = pts[j]
           const lx = sideSign * lat
           pos.push(
@@ -402,12 +413,17 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
           )
           nrm.push(f.up.x, f.up.y, f.up.z)
           cc.copy(c1).lerp(c2, tCol)
+          if (spec.c3 && NP > 4) {
+            const patch = 0.5 + 0.5 * Math.sin(s * 0.27 + ux * 9.0 + si * 1.3) * Math.cos(s * 0.19 - ux * 5.0)
+            cc.lerp(_c3.set(spec.c3), Math.max(0, patch - 0.45) * 1.2)
+          }
+          if (NP > 4) cc.multiplyScalar(0.8 + 0.35 * tCol)
           colArr.push(cc.r, cc.g, cc.b)
           uv.push(ux, s * 0.18)
         }
         if (stripCount > 0) {
-          const p0 = vBase - 4
-          for (let j = 0; j < 3; j++) {
+          const p0 = vBase - NP
+          for (let j = 0; j < NP - 1; j++) {
             const a = p0 + j
             const b = vBase + j
             if (sideSign > 0) idx.push(a, a + 1, b, b, a + 1, b + 1)

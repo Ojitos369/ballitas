@@ -10,9 +10,10 @@ export const TRI_TIME = { value: 0 }
 
 export const THEME_FX = {
   bosque: {
-    mode: 0, c1: '#8cff66', c2: '#38c958', fog: '#0b2214',
-    hemi: ['#a8f5b2', '#1a3820', 0.55], point: ['#b8ff78', 2.4, 55],
-    rim: 0.22, lift: 0.18,
+    // Luz de sotobosque: manchas de sol cálidas y contraluz verde suave (antes todo verde saturado).
+    mode: 0, c1: '#d6e88a', c2: '#5f9a55', fog: '#10261a',
+    hemi: ['#f2f0c8', '#1c3320', 0.55], point: ['#ffe6a0', 2.4, 55],
+    rim: 0.16, lift: 0.1,
   },
   mar: {
     mode: 1, c1: '#5cf2ff', c2: '#2498e8', fog: '#072236',
