@@ -57,7 +57,7 @@ const wayCache = new WeakMap()
 function buildWayData(way) {
   if (wayCache.has(way)) return wayCache.get(way)
   const theme = way.theme.id
-  const items = []; const kits = new Map(); const holes = []; const chevrons = []; const dashes = []
+  const items = []; const kits = new Map(); const holes = []; const chevrons = []; const dashes = []; const laneDashes = []; const laneStarts = []
   const originRings = []; const landRings = []; const beams = []; const swirls = []; const eventBoxes = []; const turboPads = []
   const addKit = (name, it) => { if (!name) return; let l = kits.get(name); if (!l) kits.set(name, l = []); l.push(it) }
   const F = {}; const Fp = {}; const Fl = {}
@@ -65,12 +65,37 @@ function buildWayData(way) {
 
   way.segments?.forEach((seg, si) => {
     const L = Math.max(seg.length ?? 1, 1)
+    // Las cuatro divisorias recorren toda la superficie y continúan a través de sus tramos.
+    // Cada dash queda elevado sobre el firme para evitar z-fighting y se agrupa en una malla instanciada.
+    if (!seg.air) {
+      const edge = WORLD.CARRIL_EDGE
+      const marks = Math.max(2, Math.ceil(L / (7 * TRACK_K)))
+      for (const lane of seg.lanes ?? []) {
+        for (let j = 0; j < marks; j++) {
+          const u = (j + 0.5) / marks
+          surfFrame(seg, lane.id, u, Fp)
+          for (let boundary = 1; boundary < WORLD.CARRILES; boundary++) {
+            const lat = -edge + (2 * edge * boundary) / WORLD.CARRILES
+            const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, 0.055)
+            laneDashes.push({ pos: p, quat: basisQuat(Fp.up, Fp.tangent), scale: [0.045, 0.025, Math.min(2.7 * TRACK_K, L / marks * 0.62)], color: markCol })
+          }
+        }
+      }
+    }
+    if (si === 0 && !seg.air) {
+      const lane = seg.lanes?.[0]
+      if (lane) for (let c = 0; c < WORLD.CARRILES; c++) {
+        surfFrame(seg, lane.id, 0.035, Fp)
+        const lat = WORLD.carrilLat(c)
+        laneStarts.push({ pos: Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, 0.12), quat: basisQuat(Fp.up, Fp.tangent), scale: [0.22, 0.1, 0.22], color: new THREE.Color(['#7df9ff','#ffd84a','#ff5fd2','#6dff8a','#a78bff'][c]) })
+      }
+    }
     for (const sw of seg.switches ?? []) {
       const lane = seg.lanes?.find((l) => l.id === sw.from)
       if (!lane) continue
       const kind = sw.kind; const via = sw.via ?? 'arco'; const col = kindColor(kind)
       const lat = WORLD.carrilLat(sw.carril ?? 2); const step = (2 * WORLD.CARRIL_EDGE) / (WORLD.CARRILES - 1)
-      const scale = Math.min(0.85, step * 0.85)
+      const scale = Math.min(1.35, step * 1.15)
       surfFrame(seg, lane.id, sw.u, F)
       const quat = basisQuat(F.up, F.tangent)
       const pos = F.pos.clone().addScaledVector(F.side, lat).addScaledVector(F.up, 0.02)
@@ -90,8 +115,8 @@ function buildWayData(way) {
       }
 
       // marcas del carril: chevrones hacia el evento y líneas de carril a sus dos lados
-      for (const d of [9, 5]) {
-        const um = sw.u - (d * TRACK_K * 0.5) / L
+      for (const d of [20, 12]) {
+        const um = sw.u - (d * TRACK_K) / L
         if (um < 0.01) continue
         surfFrame(seg, lane.id, um, Fp)
         const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, 0.03)
@@ -143,7 +168,7 @@ function buildWayData(way) {
   })
 
   const bySw = new Map(items.map((it, i) => [it.sw, i]))
-  const out = { items, bySw, kits: [...kits.entries()], holes, chevrons, dashes, originRings, landRings, beams, swirls, eventBoxes, turboPads }
+  const out = { items, bySw, kits: [...kits.entries()], holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads }
   wayCache.set(way, out)
   return out
 }
@@ -170,7 +195,7 @@ const T_C = new THREE.Color(); const HOT = new THREE.Color('#ffffff').multiplySc
 export default function Eventos({ way }) {
   useEffect(() => { precargarKit(['caja_evento_lod', 'turbo_placa', 'anillo_neon_lod', 'barrera_lod', 'pilar', `rebote_${way.theme.id}`]) }, [way])
   const data = useMemo(() => buildWayData(way), [way])
-  const { items, bySw, kits, holes, chevrons, dashes, originRings, landRings, beams, swirls, eventBoxes, turboPads } = data
+  const { items, bySw, kits, holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads } = data
   const detail = getWayDetail(way)
   const camera = useThree((s) => s.camera)
   const solidRef = useRef()
@@ -261,6 +286,8 @@ export default function Eventos({ way }) {
       {/* Capa emisiva: siempre visible (también a detalle bajo) para leer de lejos dónde hay eventos */}
       <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={originRings} />
       <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={landRings} />
+      <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={laneDashes} />
+      <Instanced geo={G.sphere} mat={EMISSIVE_INST_MAT} items={laneStarts} />
       {/* Capa de detalle: piezas del kit, marcas del carril y trayectorias */}
       <group ref={solidRef}>
         {kits.map(([nombre, its]) => <KitPieza key={nombre} nombre={nombre} items={its} />)}
