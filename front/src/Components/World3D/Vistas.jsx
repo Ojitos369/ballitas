@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../Core/world.js'
@@ -15,6 +15,26 @@ export function registerWorldForVistas(world) {
 
 export function focusWorldNode(nodeIdx) {
   window.dispatchEvent(new CustomEvent('ballitas:focus-node', { detail: { nodeIdx } }))
+}
+
+// ── Vista de superficie: nodo abierto (índice) o null. Tienda mínima con fundido de entrada/salida. ──
+let _sup = null
+const _supListeners = new Set()
+let _fadeEl = null
+function fundido(fn) {
+  if (!_fadeEl) {
+    _fadeEl = document.createElement('div')
+    _fadeEl.style.cssText = 'position:fixed;inset:0;z-index:25;pointer-events:none;opacity:0;transition:opacity .38s ease;background:radial-gradient(circle,#0a0d22,#02030a);'
+    document.body.appendChild(_fadeEl)
+  }
+  _fadeEl.style.opacity = '1'
+  setTimeout(() => { fn(); setTimeout(() => { if (_fadeEl) _fadeEl.style.opacity = '0' }, 500) }, 400)
+}
+function fijarSuperficie(idx) { _sup = idx; _supListeners.forEach((f) => f()) }
+export function abrirSuperficie(nodeIdx) { if (_sup == null) fundido(() => fijarSuperficie(nodeIdx)) }
+export function cerrarSuperficie() { if (_sup != null) fundido(() => fijarSuperficie(null)) }
+export function useSuperficie() {
+  return useSyncExternalStore((f) => { _supListeners.add(f); return () => _supListeners.delete(f) }, () => _sup)
 }
 
 const Y = new THREE.Vector3(0, 1, 0)
@@ -172,6 +192,28 @@ function VistaMundos({ enabled }) {
   const [world, setWorld] = useState(() => _worldRef)
   const [focusedIdx, setFocusedIdx] = useState(null)
   const nav = useRef({ fly: 1, dragging: false, p0: new THREE.Vector3(), goal: new THREE.Vector3() })
+  const gl = useThree((s) => s.gl)
+  const sup = useSuperficie()
+  const supRef = useRef(sup)
+  supRef.current = sup
+  const guardada = useRef(null)
+  const focRef = useRef(null)
+  focRef.current = focusedIdx
+
+  // Al abrir la superficie se guarda la pose de la cámara general; al salir se restaura (mismo planeta enfocado).
+  useEffect(() => {
+    if (sup != null) {
+      guardada.current = { p: camera.position.clone(), t: controls?.target?.clone(), fov: camera.fov, near: camera.near, far: camera.far }
+      return
+    }
+    const g = guardada.current
+    if (!g) return
+    guardada.current = null
+    camera.position.copy(g.p); camera.fov = g.fov; camera.near = g.near; camera.far = g.far
+    camera.updateProjectionMatrix()
+    if (g.t && controls?.target) { controls.target.copy(g.t); controls.update?.() }
+    nav.current.fly = 1
+  }, [sup, camera, controls])
 
   useEffect(() => {
     const onWorld = (w) => {
@@ -210,7 +252,14 @@ function VistaMundos({ enabled }) {
       if (e.metaKey || e.ctrlKey || e.altKey || !nodes.length) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      if (e.key === '[' || e.key === 'PageUp') {
+      if (supRef.current != null) { // superficie abierta: Esc sale; el resto de teclas de la vista general se ignoran
+        if (e.key === 'Escape') { e.preventDefault(); cerrarSuperficie() }
+        return
+      }
+      if (e.key === 'Enter' && focRef.current != null) {
+        e.preventDefault()
+        abrirSuperficie(focRef.current)
+      } else if (e.key === '[' || e.key === 'PageUp') {
         e.preventDefault()
         setFocusedIdx((cur) => {
           const next = cur == null ? nodes.length - 1 : (cur - 1 + nodes.length) % nodes.length
@@ -228,13 +277,30 @@ function VistaMundos({ enabled }) {
         setFocusedIdx(null)
       }
     }
+    // doble clic sobre un planeta: entra a su superficie
+    const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); const sph = new THREE.Sphere(); const hit = new THREE.Vector3()
+    const onDbl = (e) => {
+      if (supRef.current != null) return
+      const r = gl.domElement.getBoundingClientRect()
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+      ray.setFromCamera(ndc, camera)
+      let best = -1; let bd = Infinity
+      nodes.forEach((n, i) => {
+        sph.set(n.pos, WORLD.NODE_R)
+        if (ray.ray.intersectSphere(sph, hit)) { const d = hit.distanceTo(camera.position); if (d < bd) { bd = d; best = i } }
+      })
+      if (best >= 0) { nav.current.fly = 1; setFocusedIdx(best); abrirSuperficie(best) }
+    }
+    const dom = gl.domElement
+    dom.addEventListener('dblclick', onDbl)
     window.addEventListener('ballitas:focus-node', onFocusEvent)
     window.addEventListener('keydown', onKey)
     return () => {
+      dom.removeEventListener('dblclick', onDbl)
       window.removeEventListener('ballitas:focus-node', onFocusEvent)
       window.removeEventListener('keydown', onKey)
     }
-  }, [enabled, world, camera])
+  }, [enabled, world, camera, gl])
 
   useEffect(() => {
     if (!controls) return undefined
@@ -252,7 +318,7 @@ function VistaMundos({ enabled }) {
   }, [controls])
 
   useFrame((_, dt) => {
-    if (!enabled || focusedIdx == null) return
+    if (!enabled || focusedIdx == null || supRef.current != null) return
     const node = world?.nodes?.[focusedIdx]
     if (!node) return
     const h = Math.min(dt, 0.05)
@@ -278,7 +344,7 @@ function VistaMundos({ enabled }) {
   const focusedNode = enabled && focusedIdx != null ? world?.nodes?.[focusedIdx] : null
   const biome = useMemo(() => (focusedNode ? resolveNodeBiome(focusedNode, world) : null), [focusedNode, world])
 
-  if (!focusedNode || !biome) return null
+  if (!focusedNode || !biome || sup != null) return null
   return (
     <WorldHtml
       center
@@ -300,6 +366,13 @@ function VistaMundos({ enabled }) {
           {biome.emoji} {focusedNode.name}
         </div>
         <div style={{ fontSize: '0.8em', color: biome.atmoRim }}>{biome.title}</div>
+        <button
+          type="button"
+          onClick={() => abrirSuperficie(focusedIdx)}
+          style={{ pointerEvents: 'auto', cursor: 'pointer', marginTop: 4, padding: '3px 12px', borderRadius: 8, border: `1px solid ${biome.atmoRim}`, background: `${biome.atmoBase}66`, color: '#fff', font: 'inherit', fontWeight: 600 }}
+        >
+          Entrar (Enter)
+        </button>
         <div style={{ fontSize: '0.68em', opacity: 0.72, marginTop: 2 }}>
           [ / ] o PgUp / PgDn · Esc para salir
         </div>

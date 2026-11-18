@@ -18,7 +18,8 @@ import Paths from './Paths.jsx'
 import Ballita from './Ballita.jsx'
 import PovPanel from '../Panels/PovPanel.jsx'
 import { StatsProbe } from './StatsOverlay.jsx'
-import { VistaCamino } from './Vistas.jsx'
+import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
+import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
 import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
 import { clampYaw, decayOffset } from './povLook.js'
@@ -1248,6 +1249,8 @@ function PostFX({ dofOn, selected, highQuality }) {
 }
 
 export default function Scene({ sim, ballitas, speed, selected, follow, pov = false, cine = false, showStats = false, onStatsSample, onSelect, onExitPov, vista = 'mapa', activeWay = null, routeIndex = 0, seek = null, caminoSpeed = 0.05, caminoPaused = false, progressRef, onSelectWay }) {
+  const supIdx = useSuperficie()
+  const supOn = supIdx != null && Boolean(sim.world.nodes[supIdx])
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
   const povActive = Boolean(pov && selected && selected.phase !== 'gone')
@@ -1524,8 +1527,10 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         onIncline={handlePerfIncline}
         onChange={handlePerfChange}
       />
-      <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />
+      {!supOn && <fogExp2 attach="fog" args={['#050711', 0.32 / r]} />}
 
+      {/* Con la superficie abierta la escena general no se dibuja (visible=false) y no se paga doble. */}
+      <group visible={!supOn}>
       {/* fondo: cúpula oscura + nebulosa FBM + estrellas, centradas en el mundo */}
       {/* fondo en capas con parallax: cuanto más lejana la capa, más sigue a la cámara (se desplaza menos).
           Radios + desplazamiento máximo (zoom 6r) quedan bajo far 20r: nada se recorta. */}
@@ -1554,6 +1559,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <Sol r={r} shadowsOn={cameraOnBall} selected={selected} />
       <hemisphereLight args={['#9bb6f0', '#161124', 0.22]} />
       <directionalLight position={[-1, 0.25, -1]} intensity={0.25} color="#6d92e8" />
+      </group>
 
       {/* entorno generado en local (sin HDR de red): reflejos sutiles en cristal y esferas */}
       <Environment resolution={128} frames={1} environmentIntensity={0.45}>
@@ -1565,6 +1571,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       </Environment>
 
       <SimDriver sim={sim} speed={speed} />
+      {supOn && <Superficie world={sim.world} nodeIdx={supIdx} ballitas={ballitas} onSalir={cerrarSuperficie} />}
+      <group visible={!supOn}>
       <Nodes world={sim.world} />
       <Paths world={sim.world} sim={sim} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
       {/* Precompilado: las ballitas nacen con pieles nuevas tras el precompilado inicial; sin esto la primera
@@ -1583,6 +1591,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
           />
         </Precompilado>
       ))}
+      </group>
       <CameraRig
         mundo={mundo}
         nodes={sim.world.nodes}
@@ -1590,7 +1599,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         follow={follow}
         pov={pov}
         cine={cine}
-        suspend={caminoOn}
+        suspend={caminoOn || supOn}
         povControlRef={povControlRef}
         pointerLockedRef={pointerLockedRef}
         gyroActiveRef={gyroActiveRef}
