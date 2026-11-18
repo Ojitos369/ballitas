@@ -11,16 +11,16 @@ const R_CELDAS = 35.4
 // Perfil de decoración por bioma: densidades por parcela libre (suman < 1) y modelos GLB de public/models.
 // copa: forma de la copa de los árboles procedurales.
 export const PERFIL = {
-  sombrio: { copa: 'cono', arbol: 0.1, roca: 0.12, luz: 0.1, modelo: 0.14, modelos: ['lapida', 'sombrio_farol', 'sombrio_altar', 'tomb'] },
-  bosque: { copa: 'esfera', arbol: 0.34, roca: 0.06, luz: 0.05, modelo: 0.12, modelos: ['pine', 'hongo_gigante', 'bosque_casita', 'tronco_hueco'] },
-  mar: { copa: 'esfera', arbol: 0.05, roca: 0.1, luz: 0.08, modelo: 0.3, modelos: ['coral', 'alga_larga', 'mar_concha', 'mar_boya', 'concha_gigante'] },
-  desierto: { copa: 'esfera', arbol: 0.04, roca: 0.14, luz: 0.04, modelo: 0.26, modelos: ['cactus', 'saguaro_grande', 'desierto_molino', 'palm'] },
-  hielo: { copa: 'cono', arbol: 0.16, roca: 0.1, luz: 0.07, modelo: 0.2, modelos: ['estalagmita_hielo', 'hielo_iglu', 'hielo_farol', 'ice_spire'] },
-  volcan: { copa: 'cono', arbol: 0.05, roca: 0.22, luz: 0.08, modelo: 0.18, modelos: ['volcan_erupcion', 'volcan_farol', 'geiser', 'volcan_altar'] },
-  cristal: { copa: 'diamante', arbol: 0.14, roca: 0.06, luz: 0.1, modelo: 0.24, modelos: ['crystal', 'geoda', 'cristal_prisma', 'cristal_arco'] },
-  nubes: { copa: 'esfera', arbol: 0.12, roca: 0.02, luz: 0.12, modelo: 0.22, modelos: ['cloud', 'nubes_globo', 'nubes_casita', 'isla_nube'] },
-  neon: { copa: 'diamante', arbol: 0.08, roca: 0.04, luz: 0.2, modelo: 0.2, modelos: ['neon_kiosco', 'neon_molino', 'luciernaga_farol', 'pylon'] },
-  jardin: { copa: 'esfera', arbol: 0.3, roca: 0.04, luz: 0.14, modelo: 0.14, modelos: ['jardin_flor', 'fuente_jardin', 'jardin_gazebo', 'flower'] },
+  sombrio: { copa: 'cono', arbol: 0.11, roca: 0.11, luz: 0.14, modelo: 0.14, modelos: ['lapida', 'sombrio_farol', 'sombrio_altar', 'tomb'] },
+  bosque: { copa: 'esfera', arbol: 0.34, roca: 0.06, luz: 0.1, modelo: 0.12, modelos: ['pine', 'hongo_gigante', 'bosque_casita', 'tronco_hueco'] },
+  mar: { copa: 'esfera', arbol: 0.06, roca: 0.1, luz: 0.11, modelo: 0.28, modelos: ['coral', 'alga_larga', 'mar_concha', 'mar_boya', 'concha_gigante'] },
+  desierto: { copa: 'esfera', arbol: 0.05, roca: 0.14, luz: 0.08, modelo: 0.25, modelos: ['cactus', 'saguaro_grande', 'desierto_molino', 'palm'] },
+  hielo: { copa: 'cono', arbol: 0.16, roca: 0.1, luz: 0.11, modelo: 0.2, modelos: ['estalagmita_hielo', 'hielo_iglu', 'hielo_farol', 'ice_spire'] },
+  volcan: { copa: 'cono', arbol: 0.06, roca: 0.21, luz: 0.11, modelo: 0.18, modelos: ['volcan_erupcion', 'volcan_farol', 'geiser', 'volcan_altar'] },
+  cristal: { copa: 'diamante', arbol: 0.14, roca: 0.06, luz: 0.14, modelo: 0.24, modelos: ['crystal', 'geoda', 'cristal_prisma', 'cristal_arco'] },
+  nubes: { copa: 'esfera', arbol: 0.13, roca: 0.03, luz: 0.15, modelo: 0.22, modelos: ['cloud', 'nubes_globo', 'nubes_casita', 'isla_nube'] },
+  neon: { copa: 'diamante', arbol: 0.08, roca: 0.04, luz: 0.22, modelo: 0.2, modelos: ['neon_kiosco', 'neon_molino', 'luciernaga_farol', 'pylon'] },
+  jardin: { copa: 'esfera', arbol: 0.29, roca: 0.04, luz: 0.18, modelo: 0.14, modelos: ['jardin_flor', 'fuente_jardin', 'jardin_gazebo', 'flower'] },
 }
 
 const h2 = (x, z, s) => {
@@ -67,8 +67,8 @@ export function repartirAngulos(angs, gap) {
 
 const sampleAt = (seed) => (x, z) => {
   const r = Math.hypot(x, z)
-  const plano = Math.min(1, Math.max(0, (r - 6) / 10)) // plaza plana
-  return (vnoise(x * 0.07, z * 0.07, seed) - 0.5) * 1.5 * plano
+  const plano = Math.min(1, Math.max(0, (r - 7) / 10)) // plaza plana
+  return (vnoise(x * 0.07, z * 0.07, seed) - 0.5) * 1.4 * plano
 }
 
 export function generarSuperficie(node, biome, world = null) {
@@ -82,7 +82,7 @@ export function generarSuperficie(node, biome, world = null) {
     const ci = Math.round(x / CELDA + (NC - 1) / 2); const cj = Math.round(z / CELDA + (NC - 1) / 2)
     return elev(centro(ci), centro(cj)) + 0.3
   }
-  const plazaR = 5.2 + rng() * 1.8
+  const plazaR = 6.2 + rng() * 1.4
   const varianteRot = rng() * Math.PI * 2
 
   // ── puertos: uno por terminal, en el ángulo real de su dirección ──
@@ -155,8 +155,8 @@ export function generarSuperficie(node, biome, world = null) {
         if (rn < 0.4) tipo = roll < 0.35 ? 'rascacielos' : roll < 0.65 ? 'torre' : roll < 0.85 ? 'comercio' : roll < 0.95 ? 'estacion' : 'casa'
         else if (rn < 0.72) tipo = roll < 0.3 ? 'comercio' : roll < 0.6 ? 'casa' : roll < 0.75 ? 'torre' : roll < 0.85 ? 'rascacielos' : roll < 0.95 ? 'estacion' : 'parque'
         else tipo = roll < 0.5 ? 'casa' : roll < 0.75 ? 'parque' : roll < 0.9 ? 'comercio' : 'torre'
-        const hb = { casa: 2.2, torre: 5.4, rascacielos: 8, comercio: 2.8, estacion: 2.6, parque: 1.1 }[tipo]
-        const w = (tipo === 'torre' || tipo === 'rascacielos' ? 2 : 2.3) * (0.9 + rng() * 0.25)
+        const hb = { casa: 2.6, torre: 5.2, rascacielos: 7.4, comercio: 2.9, estacion: 2.8, parque: 1.3 }[tipo]
+        const w = (tipo === 'torre' || tipo === 'rascacielos' ? 2.15 : 2.45) * (0.9 + rng() * 0.22)
         edificios.push({
           tipo, x: x + (rng() - 0.5) * 0.5, z: z + (rng() - 0.5) * 0.5, y: top - 0.1, w,
           h: hb * altura * (0.8 + rng() * 0.6), rot: Math.round(Math.atan2(-z, -x) / (Math.PI / 2)) * (Math.PI / 2),
