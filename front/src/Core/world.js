@@ -1223,7 +1223,8 @@ function placeWayAt(world, circuit, from, to, placed, pick) {
 
 // holgura que se busca primero: los primeros caminos no deben agotar el espacio de los demás
 const TARGET = 6 // holgura (u) sobre los 1.5 radios de pista
-const TARGET_LOW = 3 // holgura que se acepta al cerrar una pasada completa de la búsquedaconst LAYER_K = 0.42 // grosor de la cáscara de altitud de los caminos (fracción de SPHERE_R): los cruces se resuelven por altura
+const TARGET_LOW = 3 // holgura que se acepta al cerrar una pasada completa de la búsqueda
+const LAYER_K = 0.42 // grosor de la cáscara de altitud de los caminos (fracción de SPHERE_R): los cruces se resuelven por altura
 function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
