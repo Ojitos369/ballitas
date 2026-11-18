@@ -446,5 +446,7 @@ test('elecciones precalculadas (worker/caché): mismo mundo sin repetir la búsq
   const sum = (w) => w.segments.reduce((a, s) => a + s.length, 0)
   assert.equal(w2.segments.length, world.segments.length)
   assert.ok(Math.abs(sum(w2) - sum(world)) < 1e-6)
-  assert.ok(ms < 1500, `reconstrucción lenta: ${ms.toFixed(0)} ms`)
+  // tope holgado: con la suite en paralelo y la máquina ocupada pasaba de 1500 ms sin regresión real
+  // (sin caché la búsqueda tarda ~5 s, así que 3000 ms sigue detectando que no se reutilizó)
+  assert.ok(ms < 3000, `reconstrucción lenta: ${ms.toFixed(0)} ms`)
 })
