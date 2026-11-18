@@ -1,57 +1,57 @@
-// SimulaciÃ³n de ballitas: genoma, decisiones, vida/muerte y evoluciÃ³n genÃ©tica.
-// Sin React ni render: la UI sÃ³lo lee `sim.ballitas` y llama `sim.tick(dt)`.
+// Simulación de ballitas: genoma, decisiones, vida/muerte y evolución genética.
+// Sin React ni render: la UI sólo lee `sim.ballitas` y llama `sim.tick(dt)`.
 //
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CONTRATO: BALLITA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// (la forma del mundo y WORLD_SCALE/TUBE_SCALE estÃ¡n al inicio de world.js)
+// ═══════════════════════════ CONTRATO: BALLITA ═══════════════════════════
+// (la forma del mundo y WORLD_SCALE/TUBE_SCALE están al inicio de world.js)
 // Escala temporal:
-//   TIME_SCALE (4.5): factor objetivo de duraciÃ³n real de viaje (antes 2.5; ver TRAVEL_SLOW). Factor de duraciÃ³n de viaje por circuito (~2-3x mÃ¡s tiempo para
+//   TIME_SCALE (4.5): factor objetivo de duración real de viaje (antes 2.5; ver TRAVEL_SLOW). Factor de duración de viaje por circuito (~2-3x más tiempo para
 //                     disfrutar cada tramo). Los costos por segundo (DRAIN_E, DRAIN_P, PPS_K) y por
-//                     unidad de longitud (TRAVEL_E_LEN), asÃ­ como FRIC/VMAX, estÃ¡n calibrados para
-//                     caminos largos sin agotar energÃ­a ni romper la selecciÃ³n natural.
+//                     unidad de longitud (TRAVEL_E_LEN), así como FRIC/VMAX, están calibrados para
+//                     caminos largos sin agotar energía ni romper la selección natural.
 // b = {
 //   id, name, gen, arch { key, hi, title }, genome, p, e (0..100), age, visits, score, cause, bornAt,
 //   genome: { traits { valentia, curiosidad, apetito, sociabilidad, animo, velocidad }, hue,
-//             prefs[destino.idx], ways[way.idx], routes[route.idx], kinds[Ã­ndice en OBSTACLES] }  (todo 0..1)
-//   pos, dir, up: THREE.Vector3 siempre vÃ¡lidos. En la ciudad `up` es la normal de la esfera; en un tubo
+//             prefs[destino.idx], ways[way.idx], routes[route.idx], kinds[índice en OBSTACLES] }  (todo 0..1)
+//   pos, dir, up: THREE.Vector3 siempre válidos. En la ciudad `up` es la normal de la esfera; en un tubo
 //                 apunta de la pared al eje (la ballita rueda PEGADA a la pared por su carril: su gravedad
 //                 es hacia esa pared, sea suelo, pared o techo).
-//   phase, timer (segundos restantes estimados), dur (duraciÃ³n estimada de la fase)
-//   speed: velocidad actual (unidades/s); roll: Ã¡ngulo (rad) entre su pared y el suelo del mundo, 0 = abajo;
-//   Carriles (ver world.js): lane (id del carril en seg.lanes), ang (Ã¡ngulo actual alrededor del eje, continuo),
+//   phase, timer (segundos restantes estimados), dur (duración estimada de la fase)
+//   speed: velocidad actual (unidades/s); roll: ángulo (rad) entre su pared y el suelo del mundo, 0 = abajo;
+//   Carriles (ver world.js): lane (id del carril en seg.lanes), ang (ángulo actual alrededor del eje, continuo),
 //     off (distancia actual al eje; radius - BALL_R pegada a la pared, menor al volar por el interior),
 //     rail (distancia de reposo, se acerca a radius - BALL_R o a 0 en tramos `air`),
 //     carril (0..CARRILES-1): carril lateral dentro del camino; se sortea al entrar a una ruta y al aterrizar de un evento;
-//       sÃ³lo toma los eventos (seg.switches) con sw.carril === carril. Su lÃ­nea de carrera es carrilLat(carril).
+//       sólo toma los eventos (seg.switches) con sw.carril === carril. Su línea de carrera es carrilLat(carril).
 //     sw: evento en curso o null = { s (switch de seg.switches), t, dur, style, fail, failed };
 //     flight { sw, t (0..1), dur, from, to, failed }: recorre switchPath(seg, sw, t); vis (0..1) la oculta en un portal,
-//     mechs { [kind]: veces usado }. PosiciÃ³n = wallFrame(seg, ang, segT, off).pos;
+//     mechs { [kind]: veces usado }. Posición = wallFrame(seg, ang, segT, off).pos;
 //   Contacto con la pista (para animar al chibi: aplastar al aterrizar, estirar en el aire...):
 //     hy: altura sobre su pared hacia el eje (= laneRelief si va apoyada; off = rail - hy); vy: su velocidad,
 //     airborne: true si vuela (tras una cresta/rampa, o por un tramo `air`); cae hacia su pared con G_WALL
 //       y al aterrizar rebota amortiguado (BOUNCE) si el golpe es fuerte,
-//     impact (0..1): fuerza del Ãºltimo golpe (aterrizaje o borde del carril); decae ~3/s,
+//     impact (0..1): fuerza del último golpe (aterrizaje o borde del carril); decae ~3/s,
 //     slope: componente vertical (mundo) de la tangente real de la pista (>0 sube: frena; <0 baja: acelera),
-//     lat (u): desvÃ­o lateral dentro del carril (la curva la empuja hacia fuera; nunca pasa de width/2),
+//     lat (u): desvío lateral dentro del carril (la curva la empuja hacia fuera; nunca pasa de width/2),
 //     latV su velocidad, edge (-1|0|1): roza un borde del carril, onLane: sigue su carril (no transita a otro).
 //
 //   mood, thought { text, emoji, until }, react, log[], flags
 //   visitedRoutes { [route.idx]: count }, plannedRoute, plan { destino, ruta, razon }
-//   DÃ³nde estÃ¡ / a dÃ³nde va (lo que no aplica vale null):
-//     node:  nodo en el que estÃ¡ (durante el viaje, el de origen)   vert: vÃ©rtice de la ciudad
+//   Dónde está / a dónde va (lo que no aplica vale null):
+//     node:  nodo en el que está (durante el viaje, el de origen)   vert: vértice de la ciudad
 //     dest:  destino elegido en el nodo
 //     way:   sentido de circuito elegido (way.to = nodo al que va; way.circuit, way.theme)
-//     route: Ãºltima ruta elegida dentro del way      seg: tramo/obstÃ¡culo actual      segT: avance 0..1
+//     route: última ruta elegida dentro del way      seg: tramo/obstáculo actual      segT: avance 0..1
 // }
 // Fases:
-//   born    reciÃ©n nacida, quieta en un cruce de la ciudad
+//   born    recién nacida, quieta en un cruce de la ciudad
 //   toDest  va por carretera hasta `dest`
-//   at      usando el destino (ya aplicÃ³ dp/de)
+//   at      usando el destino (ya aplicó dp/de)
 //   toPort  va por carretera al puerto de salida hacia `way.to`
 //   travel  dentro del circuito `way`, en el tramo `seg`
-//   dying   animaciÃ³n de muerte          gone  se elimina de `sim.ballitas` en este mismo tick
+//   dying   animación de muerte          gone  se elimina de `sim.ballitas` en este mismo tick
 // sim = { world, ballitas[], t, stats { nacidas, muertas, mejorEdad, genMax }, feed[] { t, text }, pool[] }
 // sim.tick(dt), sim.favorites(b) -> { destino, way, route, kind }, sim.where(b) -> texto para el panel.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three'
 import {
   buildWorld, cityPath, slerpDir, NODE_R, BALL_R, TRACK_K, SIZE_K, LANE_W, OBSTACLES, KINDS,
@@ -62,41 +62,41 @@ import { voice, moodOf, archetype } from './personality.js'
 
 export const POP = 10
 export const TIME_SCALE = 4.5
-// El viaje por tubos corre en cÃ¡mara lenta: fÃ­sica, drenajes y mecanismos avanzan TRAVEL_SLOW s por segundo real,
-// asÃ­ el equilibrio (energÃ­a/puntos por tramo) queda igual que con la escala 2.5 calibrada.
+// El viaje por tubos corre en cámara lenta: física, drenajes y mecanismos avanzan TRAVEL_SLOW s por segundo real,
+// así el equilibrio (energía/puntos por tramo) queda igual que con la escala 2.5 calibrada.
 export const TRAVEL_SLOW = 2.5 / TIME_SCALE
 const TRAITS = ['valentia', 'curiosidad', 'apetito', 'sociabilidad', 'animo', 'velocidad']
 const GENES = ['prefs', 'ways', 'routes', 'kinds']
-// Equilibrio: un ciclo destino + viaje dura ~60-65 s (el viaje ~2.5x mÃ¡s largo) y sÃ³lo rinde un destino.
-const DRAIN_E = 0.22 // energÃ­a/s siempre
+// Equilibrio: un ciclo destino + viaje dura ~60-65 s (el viaje ~2.5x más largo) y sólo rinde un destino.
+const DRAIN_E = 0.22 // energía/s siempre
 const DRAIN_P = 0.25 // puntos/s siempre
-const TRAVEL_E_LEN = 0.0055 / TRACK_K // energÃ­a por unidad de distancia recorrida en tubo (Ã— ecost del tema); el trazado mide TRACK_K veces mÃ¡s
+const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
 const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
-const MAP_SPEED_K = (SIZE_K / 2.5) * 1.35 // compensa la ampliaciÃ³n de arcos, alturas y desvÃ­os de rutas
-// FÃ­sica del tubo. Distancias, velocidades y aceleraciones escalan con el trazado (TRACK_K): mismos tiempos de carrera.
+const MAP_SPEED_K = (SIZE_K / 2.5) * 1.35 // compensa la ampliación de arcos, alturas y desvíos de rutas
+// Física del tubo. Distancias, velocidades y aceleraciones escalan con el trazado (TRACK_K): mismos tiempos de carrera.
 const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
 const GRAV = 24 * TRACK_K
 const FRIC = 0.14
 const VMAX = 48 * TRACK_K * MAP_SPEED_K
-const LANE_EASE = 3.5 // rapidez con la que la ballita sigue el vaivÃ©n de su carril
+const LANE_EASE = 3.5 // rapidez con la que la ballita sigue el vaivén de su carril
 const RAIL_EASE = 6 // rapidez con la que se pega a la pared (o se separa en el aire)
 const G_WALL = 24 * TRACK_K // gravedad hacia la pared del carril: tras una cresta la ballita vuela y cae a su pista
-const BOUNCE = 0.35 // restituciÃ³n al aterrizar (rebote amortiguado)
+const BOUNCE = 0.35 // restitución al aterrizar (rebote amortiguado)
 const LAT_K = 30 // el carril es una canaleta: muelle que la devuelve al centro
-const LAT_C = 7 // amortiguaciÃ³n lateral
-const LAT_EDGE = 0.4 // restituciÃ³n al chocar con el borde del carril
-const RACE_GAP = 2.5 // (u de avance) vecinas a menos de esto en el mismo carril: la de atrÃ¡s se abre para adelantar
-const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo', 'geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada'] // obstÃ¡culos que merecen comentario
+const LAT_C = 7 // amortiguación lateral
+const LAT_EDGE = 0.4 // restitución al chocar con el borde del carril
+const RACE_GAP = 2.5 // (u de avance) vecinas a menos de esto en el mismo carril: la de atrás se abre para adelantar
+const WOW = ['canon', 'trampolin', 'rizo', 'caida', 'embudo', 'geiser', 'erupcion', 'turbina', 'hielo_resbaloso', 'pantano', 'portal', 'cascada'] // obstáculos que merecen comentario
 const FALLBACK_VOICES = {
-  geiser: ['Â¡Al chorro del gÃ©iser!', 'Â¡Arriba voy!'],
-  erupcion: ['Â¡ErupciÃ³n! Â¡A volar!', 'Â¡El crÃ¡ter me lanza!'],
-  turbina: ['Â¡Viento de lado!', 'Â¡QuÃ© impulso!'],
-  hielo_resbaloso: ['Â¡QuÃ© rÃ¡pido patina!', 'Â¡A toda velocidad!'],
-  pantano: ['Uy, quÃ© pegajosoâ€¦', 'Me frena el pantanoâ€¦'],
-  portal: ['Â¡Salto espacial!', 'Â¡Teletransporte!'],
-  cascada: ['Â¡Por la cascada!', 'Â¡Agua va!'],
-  carril: ['Â¡Cambio de carril!', 'Â¡Por la pared!', 'Â¡A la otra pared!', 'Â¡Al techo!'],
-  falla: ['Â¡Uy, me caÃ­!', 'Â¡FallÃ© el salto!', 'Â¡Al suelo otra vez!'],
+  geiser: ['¡Al chorro del géiser!', '¡Arriba voy!'],
+  erupcion: ['¡Erupción! ¡A volar!', '¡El cráter me lanza!'],
+  turbina: ['¡Viento de lado!', '¡Qué impulso!'],
+  hielo_resbaloso: ['¡Qué rápido patina!', '¡A toda velocidad!'],
+  pantano: ['Uy, qué pegajoso…', 'Me frena el pantano…'],
+  portal: ['¡Salto espacial!', '¡Teletransporte!'],
+  cascada: ['¡Por la cascada!', '¡Agua va!'],
+  carril: ['¡Cambio de carril!', '¡Por la pared!', '¡A la otra pared!', '¡Al techo!'],
+  falla: ['¡Uy, me caí!', '¡Fallé el salto!', '¡Al suelo otra vez!'],
 }
 const Y = new THREE.Vector3(0, 1, 0)
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x))
@@ -120,7 +120,7 @@ export function randomGenome(world, rng) {
   }
 }
 
-// Cruce uniforme gen a gen + mutaciÃ³n gaussiana aproximada.
+// Cruce uniforme gen a gen + mutación gaussiana aproximada.
 export function breed(a, b, rng, rate = 0.15) {
   const pick = (x, y) => (rng() < 0.5 ? x : y)
   const mut = (v) => (rng() < rate ? clamp(v + (rng() + rng() + rng() - 1.5) * 0.5, 0, 1) : v)
@@ -131,7 +131,7 @@ export function breed(a, b, rng, rate = 0.15) {
 }
 
 const NAMES = ['Pelusa', 'Moti', 'Canica', 'Tapioca', 'Chispa', 'Nube', 'Gotita', 'Burbuja', 'Pixel', 'Mochi',
-  'Fresita', 'Oliva', 'Trufa', 'Cometa', 'BombÃ³n', 'Churro', 'Kiwi', 'Lentejuela', 'Migajita', 'Ã‘oÃ±o',
+  'Fresita', 'Oliva', 'Trufa', 'Cometa', 'Bombón', 'Churro', 'Kiwi', 'Lentejuela', 'Migajita', 'Ñoño',
   'Pepita', 'Zumo', 'Tuerca', 'Brillo', 'Galleta', 'Lunita', 'Rulo', 'Bizcocho', 'Canela', 'Peque']
 
 export class Sim {
@@ -144,7 +144,7 @@ export class Sim {
     this.t = 0
     this.nextId = 1
     this.ballitas = []
-    this.pool = [] // muertas con su genoma: base de la selecciÃ³n
+    this.pool = [] // muertas con su genoma: base de la selección
     this.spawnQueue = []
     this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }
     this.feed = [] // eventos globales recientes
@@ -200,8 +200,8 @@ export class Sim {
     try {
       v = voice(b, event, ctx, this.rng)
     } catch {
-      const fb = FALLBACK_VOICES[event] || ['Â¡Guau!']
-      v = { text: fb[Math.floor(this.rng() * fb.length)], emoji: KINDS[event]?.emoji || 'âœ¨' }
+      const fb = FALLBACK_VOICES[event] || ['¡Guau!']
+      v = { text: fb[Math.floor(this.rng() * fb.length)], emoji: KINDS[event]?.emoji || '✨' }
     }
     b.thought = { ...v, until: this.t + 3.5 }
     b.log.unshift({ t: Math.round(b.age), ...v })
@@ -210,7 +210,7 @@ export class Sim {
 
   tick(dt) {
     this.t += dt
-    // ballitas por tramo (para su lÃ­nea de carrera: adelantar y separarse de las vecinas)
+    // ballitas por tramo (para su línea de carrera: adelantar y separarse de las vecinas)
     const near = this._near || (this._near = new Map()); near.clear()
     for (const b of this.ballitas) if (b.phase === 'travel' && b.seg) { let l = near.get(b.seg); if (!l) near.set(b.seg, l = []); l.push(b) }
     for (const b of this.ballitas) this.step(b, dt)
@@ -229,7 +229,7 @@ export class Sim {
       return
     }
     b.age += dt
-    const sd = b.phase === 'travel' ? dt * TRAVEL_SLOW : dt // tiempo de simulaciÃ³n del viaje
+    const sd = b.phase === 'travel' ? dt * TRAVEL_SLOW : dt // tiempo de simulación del viaje
     b.e -= DRAIN_E * sd
     b.p -= DRAIN_P * sd
     b.timer = Math.max(0, b.timer - dt)
@@ -258,7 +258,7 @@ export class Sim {
 
   watch(b) {
     if (b.e <= 0 || b.p <= 0) {
-      b.cause = b.e <= 0 ? 'energÃ­a' : 'puntos'
+      b.cause = b.e <= 0 ? 'energía' : 'puntos'
       this.say(b, 'muere')
       b.phase = 'dying'; b.timer = 1.4; b.speed = 0
       b.mood = 'asustada'
@@ -268,7 +268,7 @@ export class Sim {
       this.stats.muertas++
       this.hooks.muere?.(b)
       this.stats.mejorEdad = Math.max(this.stats.mejorEdad, b.age)
-      this.feed.unshift({ t: this.t, text: `${b.name} muriÃ³ por falta de ${b.cause} (${Math.round(b.age)}s)` })
+      this.feed.unshift({ t: this.t, text: `${b.name} murió por falta de ${b.cause} (${Math.round(b.age)}s)` })
       this.feed.length = Math.min(this.feed.length, 8)
       return
     }
@@ -279,7 +279,7 @@ export class Sim {
     b.mood = b.react ? b.react.mood : moodOf(b)
   }
 
-  // Coloca la ballita. Tras un cambio de fase (`snap`) la posiciÃ³n se funde en vez de saltar.
+  // Coloca la ballita. Tras un cambio de fase (`snap`) la posición se funde en vez de saltar.
   place(b, P, T, U, dt) {
     if (b.snap > 0) b.snap -= dt
     if (b.snap > 0) b.pos.lerp(P, Math.min(1, dt * 12)); else b.pos.copy(P)
@@ -287,7 +287,7 @@ export class Sim {
     ease(b.dir, T, k); ease(b.up, U, k)
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ciudad: caminar por las carreteras de la esfera â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ───────────── ciudad: caminar por las carreteras de la esfera ─────────────
   cruise(b) { return (4 + b.genome.traits.velocidad * 3) * TRACK_K * MAP_SPEED_K }
 
   walkTo(b, vert, phase) {
@@ -300,7 +300,7 @@ export class Sim {
     b.dur = b.timer = len / b.speed
   }
 
-  // Avanza por el camino; devuelve true al llegar al Ãºltimo vÃ©rtice.
+  // Avanza por el camino; devuelve true al llegar al último vértice.
   walkStep(b, dt) {
     const node = this.world.nodes[b.node]; const w = b.walk; const last = w.path.length - 1
     let d = b.speed * dt
@@ -346,7 +346,7 @@ export class Sim {
     b.plan = {
       destino: best.name,
       ruta: this.world.nodes[b.node].name,
-      razon: best.kind === 'energia' && b.e < 55 ? 'busco energÃ­a' : 'quiero puntos',
+      razon: best.kind === 'energia' && b.e < 55 ? 'busco energía' : 'quiero puntos',
     }
     this.walkTo(b, best.vert, 'toDest')
   }
@@ -362,7 +362,7 @@ export class Sim {
     b.phase = 'at'; b.dur = b.timer = 1.5 + (1 - b.genome.traits.apetito) * 1.5
   }
 
-  // Conteo de compaÃ±eras por way, ruta y nodo para evaluar sociabilidad.
+  // Conteo de compañeras por way, ruta y nodo para evaluar sociabilidad.
   peerCounts(self) {
     const byWay = new Map(); const byRoute = new Map(); const byNode = new Map()
     for (const o of this.ballitas) {
@@ -410,7 +410,7 @@ export class Sim {
     const total = circuitP + destE + destP + survival + riskScore + curiosityScore + socialScore + moodScore + geneScore + noise
 
     let razon = 'explorar circuito'
-    if (destE >= 0.75 && hunger > 0.35) razon = 'busco energÃ­a'
+    if (destE >= 0.75 && hunger > 0.35) razon = 'busco energía'
     else if (curiosityScore >= 0.7 && seenRoute === 0) razon = 'ruta inexplorada'
     else if (socialScore >= 0.4) razon = 'seguir al grupo'
     else if (socialScore <= -0.35 && peerCount === 0) razon = 'evitar multitudes'
@@ -439,15 +439,15 @@ export class Sim {
     b.nextDest = best.nextDest
     const destNode = this.world.nodes[best.way.to]
     b.plan = {
-      destino: `${destNode.name} Â· ${best.nextDest.name}`,
-      ruta: `${best.way.theme.name} Â· Ruta ${best.route.name}`,
+      destino: `${destNode.name} · ${best.nextDest.name}`,
+      ruta: `${best.way.theme.name} · Ruta ${best.route.name}`,
       razon: best.razon,
     }
     this.walkTo(b, this.world.nodes[b.node].portTo[best.way.to].out, 'toPort')
     this.say(b, 'camino', { c: best.way.theme.name, n: destNode.name })
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ circuito: rodar por los tubos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ───────────── circuito: rodar por los tubos ─────────────
   eta(b, way) { return way.length / (this.cruise(b) * TUBE_SPEED_K + 8 * TRACK_K) }
 
   enterSeg(b, seg) {
@@ -457,7 +457,7 @@ export class Sim {
       b.lane = 0; b.ang = laneAngle(seg, 0, 0); b.sw = null; b.off = b.rail = 0
       this.resetSurface(b)
     } else if (segmentTangent(prev, 1, tmp).angleTo(segmentTangent(seg, 0, tmp2)) > 0.35 && b.rail > 0.3 * TRACK_K) {
-      // quiebro de tangente (entrada a un embudo, etc.): se funde la posiciÃ³n en vez de saltar
+      // quiebro de tangente (entrada a un embudo, etc.): se funde la posición en vez de saltar
       b.snap = Math.max(b.snap, 0.2)
     }
     const prevRoute = b.route
@@ -467,7 +467,7 @@ export class Sim {
       b.rail = b.off
       this.resetSurface(b)
     }
-    // al entrar a una ruta (o al principio del viaje) toma un carril al azar: Ã©l marca el camino que seguirÃ¡
+    // al entrar a una ruta (o al principio del viaje) toma un carril al azar: él marca el camino que seguirá
     if (!prev || seg.route !== prev.route) b.carril = Math.floor(this.rng() * CARRILES)
     b.seg = seg; b.segT = 0
     if (!b.sw && !seg.lanes?.some((l) => l.id === b.lane)) b.lane = nearestLane(seg, b.ang)
@@ -479,7 +479,7 @@ export class Sim {
     if (WOW.includes(seg.kind)) this.say(b, seg.kind)
   }
 
-  // En cada bifurcaciÃ³n (fork/cross): evalÃºa la utilidad del tramo restante hasta llegar al destino planeado.
+  // En cada bifurcación (fork/cross): evalúa la utilidad del tramo restante hasta llegar al destino planeado.
   pickNext(b) {
     if (b.seg.next.length === 1) return b.way.segments[b.seg.next[0]]
     const g = b.genome; const way = b.way
@@ -502,7 +502,7 @@ export class Sim {
     if (bestRoute && bestRoute !== b.plannedRoute) {
       b.plannedRoute = bestRoute
       if (b.plan) {
-        b.plan.ruta = `${way.theme.name} Â· Ruta ${bestRoute.name}`
+        b.plan.ruta = `${way.theme.name} · Ruta ${bestRoute.name}`
         b.plan.razon = bestRazon
       }
     }
@@ -519,7 +519,7 @@ export class Sim {
     let t0 = b.segT
     b.segT += (b.speed * dt) / laneLength(s, b.lane)
     while (b.segT >= 1) {
-      if (!b.sw) this.checkSwitches(b, s, t0, 1) // los mecanismos del final del tramo tambiÃ©n cuentan
+      if (!b.sw) this.checkSwitches(b, s, t0, 1) // los mecanismos del final del tramo también cuentan
       if (!s.next.length) return this.arrive(b)
       const over = (b.segT - 1) * laneLength(s, b.lane)
       this.enterSeg(b, this.pickNext(b))
@@ -528,12 +528,12 @@ export class Sim {
     if (!b.sw) this.checkSwitches(b, s, t0, b.segT)
     const T = laneFrame(s, b.lane, b.segT, b._frame || (b._frame = {})).tangent
 
-    // pendiente real: el relieve inclina la pista hacia el eje (b.wall = direcciÃ³n eje->pared)
+    // pendiente real: el relieve inclina la pista hacia el eje (b.wall = dirección eje->pared)
     const rs = s.air || b.sw || b.airborne ? 0 : reliefSlope(s, b.lane, b.segT)
     b.slope = (T.y - b.wall.y * rs) / Math.hypot(1, rs)
     // velocidad: la gravedad acelera al bajar y frena al subir; el tubo roza, el aire no
     b.speed += (-GRAV * b.slope - FRIC * s.drag * b.speed) * dt
-    // cuesta arriba puede ir mÃ¡s lenta que su crucero (se nota la subida)
+    // cuesta arriba puede ir más lenta que su crucero (se nota la subida)
     const climb = 1 - 0.45 * clamp(b.slope * 4, 0, 1)
     const minV = climb * this.cruise(b) * TUBE_SPEED_K * clamp(s.kind === 'embudo' ? 0.6 : (s.speedK ?? 1), 0.45, 1.8)
     let maxV = VMAX * (s.kind === 'portal' ? 1.35 : s.kind === 'hielo_resbaloso' ? 1.2 : 1)
@@ -548,7 +548,7 @@ export class Sim {
     this.place(b, pos, F.tangent, F.up, dt)
   }
 
-  // Recorre la trayectoria del evento en curso (switchPath: arco, caÃ­da, elevador, portal o laberinto). El avance segT
+  // Recorre la trayectoria del evento en curso (switchPath: arco, caída, elevador, portal o laberinto). El avance segT
   // va de sw.u a sw.uLand con el vuelo; al terminar queda en el camino destino, en un carril al azar.
   flightStep(b, s, dt) {
     const f = b.flight; f.t = Math.min(1, f.t + dt / f.dur)
@@ -565,7 +565,7 @@ export class Sim {
     b.ang = laneAngle(s, b.lane, b.segT); b.rail = b.off = s.air ? 0 : s.radius - BALL_R
   }
 
-  // Sigue su carril. Mantiene ang/off continuos y off <= radio Ãºtil.
+  // Sigue su carril. Mantiene ang/off continuos y off <= radio útil.
   laneStep(b, s, dt) {
     const R = s.air ? 0 : s.radius - BALL_R
     b.rail += (R - b.rail) * Math.min(1, dt * RAIL_EASE)
@@ -582,10 +582,10 @@ export class Sim {
     b.hy = 0; b.vy = 0; b.airborne = false; b.lat = 0; b.latV = 0; b.edge = 0
   }
 
-  // LÃ­nea de carrera en la calzada (u laterales, |x| <= edge): va por su carril (b.carril, carrilLat);
+  // Línea de carrera en la calzada (u laterales, |x| <= edge): va por su carril (b.carril, carrilLat);
   // en curva fuerte se va al interior (contra el empuje) y, si una vecina del mismo carril va a menos de RACE_GAP de avance
-  // con solape lateral, se aparta por el lado libre (la que viene detrÃ¡s y mÃ¡s rÃ¡pida, con mÃ¡s decisiÃ³n: adelanta).
-  // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta lÃ­nea.
+  // con solape lateral, se aparta por el lado libre (la que viene detrás y más rápida, con más decisión: adelanta).
+  // El muelle lateral (LAT_K, LAT_C) la lleva suave hacia esta línea.
   raceLine(b, s, push, edge) {
     let x = carrilLat(b.carril ?? 2, edge)
     if (Math.abs(push) > 0.5 * TRACK_K) x = -Math.sign(push) * edge * clamp(Math.abs(push) / (6 * TRACK_K), 0, 0.7)
@@ -601,16 +601,16 @@ export class Sim {
   }
 
   // Contacto con la pista: relieve (sube/baja, despega en crestas, cae y rebota) y bordes del carril.
-  // b.hy: altura sobre la pared (hacia el eje); b.vy su velocidad; b.lat: desvÃ­o lateral (u) dentro del carril.
+  // b.hy: altura sobre la pared (hacia el eje); b.vy su velocidad; b.lat: desvío lateral (u) dentro del carril.
   surfaceStep(b, s, dt) {
     if (s.air || b.rail < 1e-3) {
-      // tramo aÃ©reo: vuela por el eje; sin pista que tocar
+      // tramo aéreo: vuela por el eje; sin pista que tocar
       b.hy = 0; b.vy = 0; b.airborne = !!s.air; b.lat *= 0.9; b.latV = 0; b.edge = 0
       return
     }
     const h = laneRelief(s, b.lane, b.segT)
     const vs = b.speed * reliefSlope(s, b.lane, b.segT) // velocidad con la que sube el firme bajo ella
-    const ceil = 0.85 * b.rail // no cruza el eje: ahÃ­ rebota
+    const ceil = 0.85 * b.rail // no cruza el eje: ahí rebota
     if (b.airborne) {
       b.vy -= G_WALL * dt; b.hy += b.vy * dt
       if (b.hy > ceil) { b.hy = ceil; if (b.vy > 0) { b.vy *= -BOUNCE; b.impact = Math.max(b.impact, 0.3) } }
@@ -623,7 +623,7 @@ export class Sim {
         else { b.airborne = false; b.vy = vs }
       }
     } else if (vs - b.vy < -G_WALL * dt * 1.5 && b.speed > 3 * TRACK_K) {
-      // el firme cae mÃ¡s rÃ¡pido de lo que la gravedad la baja: despega en la cresta
+      // el firme cae más rápido de lo que la gravedad la baja: despega en la cresta
       b.airborne = true; b.vy -= G_WALL * dt; b.hy = Math.max(h, b.hy + b.vy * dt)
     } else {
       b.hy = h; b.vy = vs
@@ -646,7 +646,7 @@ export class Sim {
     }
   }
 
-  // Utilidad de usar un mecanismo (misma lÃ³gica que planUtility: riesgo, curiosidad, hambre, grupo, genes).
+  // Utilidad de usar un mecanismo (misma lógica que planUtility: riesgo, curiosidad, hambre, grupo, genes).
   laneUtility(b, s, sw, peers) {
     const g = b.genome; const t = g.traits
     const hunger = clamp((55 - b.e) / 55, 0, 1)
@@ -664,7 +664,7 @@ export class Sim {
     return riskScore + curiosity + food + pts + social + gene + failCost + noise
   }
 
-  // Â¿CruzÃ³ una estaciÃ³n de mecanismos en (t0, t1] estando en el carril de origen? Decide si la usa.
+  // ¿Cruzó una estación de mecanismos en (t0, t1] estando en el carril de origen? Decide si la usa.
   checkSwitches(b, s, t0, t1) {
     if (!s.switches?.length) return
     const cands = s.switchesByLane?.get(b.lane) || s.switches
@@ -678,7 +678,7 @@ export class Sim {
     const t = b.genome.traits
     const peers = this.ballitas.filter((o) => o !== b && o.phase === 'travel' && o.seg === s)
     let best = null
-    let bs = 0.1 + (0.45 - t.valentia) * 0.5 + this.rng() * 0.3 // seguir por el mismo camino (un solo evento por carril: umbral mÃ¡s bajo)
+    let bs = 0.1 + (0.45 - t.valentia) * 0.5 + this.rng() * 0.3 // seguir por el mismo camino (un solo evento por carril: umbral más bajo)
     for (const sw of cands) {
       if (sw.from !== b.lane || sw.carril !== b.carril || Math.abs(sw.u - u) > 1e-6) continue
       const sc = this.laneUtility(b, s, sw, peers)
@@ -690,7 +690,7 @@ export class Sim {
   startSwitch(b, s, sw) {
     const fail = this.rng() < sw.fail * (1.25 - b.genome.traits.valentia * 0.5)
     b.sw = { s: sw, t: 0, dur: sw.duration, style: sw.style, fail, failed: fail }
-    // el impulso lanza: el vuelo avanza ~1.8 veces mÃ¡s rÃ¡pido que rodando (entre un tercio y toda la duraciÃ³n nominal); el laberinto va 1.5 veces mÃ¡s lento
+    // el impulso lanza: el vuelo avanza ~1.8 veces más rápido que rodando (entre un tercio y toda la duración nominal); el laberinto va 1.5 veces más lento
     const roll = ((sw.uLand - sw.u) * laneLength(s, sw.from)) / Math.max(1, b.speed * sw.boost)
     const dur = sw.via === 'laberinto' ? clamp(roll * 1.5, 0.6 * sw.duration, sw.duration) : clamp(roll / 2.5, 0.35 * sw.duration, sw.duration)
     b.flight = { sw, t: 0, dur, from: b.lane, to: sw.to, failed: fail }
@@ -711,19 +711,19 @@ export class Sim {
     this.goDest(b)
   }
 
-  // Para el panel: lo que mÃ¡s le gusta (genes mÃ¡s altos).
+  // Para el panel: lo que más le gusta (genes más altos).
   favorites(b) {
     const top = (arr) => arr.reduce((bi, v, i) => (v > arr[bi] ? i : bi), 0)
     const g = b.genome; const w = this.world
     return { destino: w.destinos[top(g.prefs)], way: w.ways[top(g.ways)], route: w.routes[top(g.routes)], kind: KINDS[OBSTACLES[top(g.kinds)]] }
   }
 
-  // Para el panel: dÃ³nde estÃ¡ y a dÃ³nde va, en una frase.
+  // Para el panel: dónde está y a dónde va, en una frase.
   where(b) {
     const w = this.world; const n = w.nodes[b.node].name
     if (b.phase === 'travel') {
       const lane = b.seg.lanes?.find((l) => l.id === b.lane)?.name
-      const via = b.sw ? ` Â· ${b.sw.s.emoji} ${b.sw.s.name}` : lane ? ` Â· carril: ${lane}` : ''
+      const via = b.sw ? ` · ${b.sw.s.emoji} ${b.sw.s.name}` : lane ? ` · carril: ${lane}` : ''
       return `De ${n} a ${w.nodes[b.way.to].name} por el ${b.way.theme.emoji} ${b.way.theme.name}${b.route ? `, ruta ${b.route.name}` : ''}: ${b.seg.emoji} ${b.seg.name}${via}`
     }
     if (b.phase === 'toPort') return `En ${n}, hacia el puerto de ${w.nodes[b.way.to].name}`
