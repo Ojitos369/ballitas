@@ -888,7 +888,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 6
+export const WORLD_GEN = 7
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1299,11 +1299,11 @@ const pointCell = (p) => cellKey(Math.floor(p.x / SPATIAL_CELL), Math.floor(p.y 
 function indexPlacedWay(placed, entry) {
   placed.push(entry)
   const grid = placed.grid || (placed.grid = new Map())
-  for (const q of entry.pts) {
-    const key = pointCell(q.p); let bucket = grid.get(key)
-    if (!bucket) grid.set(key, bucket = [])
-    bucket.push(q)
-  }
+  const gridC = placed.gridC || (placed.gridC = new Map()) // rejilla rala (1 de cada 4 puntos): sólo la usa la criba gruesa, que únicamente poda
+  entry.pts.forEach((q, i) => {
+    const key = pointCell(q.p)
+    for (const g of i % 4 === 0 ? [grid, gridC] : [grid]) { let bucket = g.get(key); if (!bucket) g.set(key, bucket = []); bucket.push(q) }
+  })
 }
 
 function placeWayAt(world, circuit, from, to, placed, pick) {
@@ -1324,7 +1324,7 @@ function placeWay(world, circuit, from, to, placed) {
   const a = world.nodes[from]; const b = world.nodes[to]
   const others = world.nodes.filter((o) => o !== a && o !== b)
   const baseTheta = ((circuit.idx * 0.6180339887 + (from < to ? 0 : 0.5) + (world.attempt || 0) * 0.137) % 1) * TAU
-  const N_ANG = 16
+  const N_ANG = 12
   let best = null; let bestScore = -Infinity
 
   // floor: puntaje a superar. Se corta en cuanto el resultado ya no puede superarlo NI cumplir okRes (mismo desenlace en tryCand).
@@ -1349,7 +1349,7 @@ function placeWay(world, circuit, from, to, placed) {
       for (const h1 of cand.junctions) for (const h2 of prev.hubs) minHub = Math.min(minHub, h1.pos.distanceTo(h2.pos))
     }
     if ((minNode < 1.5 * TK || minHub < 24 * TK) && Math.min(TARGET, minNode + TK, minHub * 0.2) <= floor) return { minTube: -Infinity, minNode, minHub, minAt: null }
-    const grid = placed.grid
+    const grid = steps === 14 ? placed.gridC : placed.grid
     let lastKey = NaN; let near = null // puntos consecutivos comparten celda: se reúnen sus 27 cubetas una sola vez
     if (grid) for (const pt of pts) {
       const x = Math.floor(pt.p.x / SPATIAL_CELL); const y = Math.floor(pt.p.y / SPATIAL_CELL); const z = Math.floor(pt.p.z / SPATIAL_CELL)
@@ -1430,7 +1430,7 @@ function placeWay(world, circuit, from, to, placed) {
   }
   if (!search() && !(bestRes && okRes(bestRes, CLEAR))) {
     // fases intermedias y más apertura de panza
-    extra: for (const salt of [3, 4, 5]) for (const bow of [-30, 0, 40, 120, 200, 300]) for (let k = 0; k < N_ANG; k += 2) {
+    extra: for (const salt of [3, 4]) for (const bow of [-30, 0, 40, 120, 200, 300]) for (let k = 0; k < N_ANG; k += 2) {
       if (tryCand((baseTheta + ((k + 0.375) / N_ANG) * TAU) % TAU, bow * WS * SIZE_K, salt) || (bestRes && okRes(bestRes, CLEAR))) break extra
     }
   }
