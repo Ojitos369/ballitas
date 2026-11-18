@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as THREE from 'three'
-import { buildWorld, ribbonHits, ribbonSamples, RIBBON_CLEAR, LANE_W } from './world.js'
+import { buildWorld, ribbonHits, ribbonSamples, RIBBON_CLEAR, LANE_W, JOINT_MAX } from './world.js'
 import { measure, MIN_GAP_K } from '../../tools/overlap.mjs'
 
 const SEEDS = [1, 2, 3, 27, 369, 7, 11, 40] // 27: semilla que antes dejaba un camino sin hueco
@@ -34,6 +34,16 @@ for (const seed of [1, 369]) {
     const { hits, S } = ribbonHits(mundo(seed))
     const tag = (i) => { const r = S.ribs[S.R[i]]; return `w${r.way.idx} ${r.seg.kind} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
     assert.equal(hits.length, 0, `semilla ${seed}: ${hits.length / 3} choques, p. ej. ${hits.length ? `${tag(hits[0])} vs ${tag(hits[1])} a ${hits[2].toFixed(2)} < ${RIBBON_CLEAR.toFixed(2)}` : ''}`)
+  })
+}
+
+// Zona de unión: el arco exento de la medida junto a cada nodo, unión o carril no pasa de JOINT_MAX (el abanico separa antes).
+for (const seed of [1, 369]) {
+  test(`zona de unión exenta <= JOINT_MAX (semilla ${seed})`, () => {
+    const { joint, jointBy } = ribbonHits(mundo(seed))
+    const por = Object.entries(jointBy).map(([k, v]) => `${k} ${v.toFixed(1)}u`).join(', ')
+    assert.ok(joint > 0 && joint <= JOINT_MAX + 1e-6, `semilla ${seed}: unión ${joint.toFixed(1)}u > JOINT_MAX ${JOINT_MAX.toFixed(1)}u (${por})`)
+    for (const [k, v] of Object.entries(jointBy)) assert.ok(v <= JOINT_MAX + 1e-6, `semilla ${seed}: punta ${k} ${v.toFixed(1)}u > JOINT_MAX`)
   })
 }
 
