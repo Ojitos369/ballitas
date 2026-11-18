@@ -7,7 +7,7 @@
 //                      amplitudes y caídas (`drop`) de obstáculos.
 //   TUBE_SCALE  (1.8): factor del radio de los tubos (`P.radius`); `BALL_R` queda fijo (0.5)
 //                      para dejar espacio interior a pórticos, gradas y decoración.
-//   SIZE_K      (3.0): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
+//   SIZE_K      (2.8): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
 //   TRACK_K     (4.7): escala uniforme de todo lo espacial del trazado (incluidos NODE_R, LANE_W y el efecto de
 //                      WORLD_SCALE/TUBE_SCALE); BALL_R no escala: calzada LANE_W = 4.89 u (~6 ballitas de ancho).
 //   PORT_ZONE: radio desde el centro de un nodo donde los caminos que llegan a él se unen (inPort); fuera de él y de
@@ -99,7 +99,7 @@ import * as THREE from 'three'
 export const WORLD_SCALE = 2.8
 export const TUBE_SCALE = 1.8
 // Ampliación del mapa (esfera de nodos, panza y arco de los caminos) sin agrandar las pistas: más espacio entre caminos.
-export const SIZE_K = 3.0
+export const SIZE_K = 2.8
 // Escala uniforme del trazado: TODO lo espacial (nodos, radios, separaciones, anchos, trenzas, rectas, márgenes, alturas y
 // pasos de muestreo) se multiplica por TRACK_K; la ballita no (BALL_R fijo). Las holguras en radios de pista quedan como con
 // TRACK_K = 1 y la calzada (LANE_W) queda TRACK_K veces más ancha respecto a la ballita: ~6 ballitas de ancho.
@@ -818,7 +818,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 5
+export const WORLD_GEN = 6
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1554,7 +1554,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       const kinds = halves[h]
       const [Q0, Q1] = Qs[r]
       // las paradas intermedias tampoco se hunden por dentro de la esfera
-      for (const Q of [Q0, Q1]) if (Q.length() < SPHERE_R * 0.5) Q.setLength(SPHERE_R * 0.5)
+      for (const Q of [Q0, Q1]) if (Q.length() < SPHERE_R * 0.53) Q.setLength(SPHERE_R * 0.53)
       const Tbase = [Q1.clone().sub(A).normalize(), B.clone().sub(Q0).normalize()]
       const pts = [A, Q0, Q1, B]
       const cs = [null, null, null]

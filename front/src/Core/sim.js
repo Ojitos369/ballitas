@@ -69,7 +69,7 @@ const DRAIN_E = 0.22 // energía/s siempre
 const DRAIN_P = 0.25 // puntos/s siempre
 const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
 const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
-const MAP_SPEED_K = SIZE_K / 2.5 // conserva tiempos de viaje al ampliar arcos y altura del mapa
+const MAP_SPEED_K = (SIZE_K / 2.5) * 1.25 // compensa la ampliación de arcos, alturas y desvíos de rutas
 // Física del tubo. Distancias, velocidades y aceleraciones escalan con el trazado (TRACK_K): mismos tiempos de carrera.
 const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
 const GRAV = 24 * TRACK_K
