@@ -78,6 +78,7 @@ const povOrthoUp = new THREE.Vector3()
 const collisionOrigin = new THREE.Vector3()
 const nodeRadial = new THREE.Vector3()
 const bpVec = new THREE.Vector3()
+const nodeRotQ = new THREE.Quaternion()
 // Elevación visual de cada ballita en su planeta: la sim camina a NODE_R, pero el planeta se dibuja a 1.0-1.6 x NODE_R.
 const liftOf = new WeakMap()
 const visualRCache = new WeakMap()
@@ -97,15 +98,16 @@ function NodeLift({ b, world, children }) {
     if (n) {
       liftRad.copy(b.pos).sub(n.pos)
       const len = liftRad.length()
-      if (len > 1e-3) { st.dir.copy(liftRad).divideScalar(len); goal = Math.max(0, nodeVisualR(n, world) - len) }
+      if (len > 1e-3) { st.dir.copy(liftRad).divideScalar(len); goal = Math.max(0, nodeVisualR(n, world) - len) + NODE_LIFT_EXTRA }
     }
-    st.v += (goal - st.v) * (1 - Math.exp(-6 * Math.min(dt, 0.1)))
-    if (Math.abs(goal - st.v) < 1e-3) st.v = goal
+    st.v = goal // sin suavizado: la elevación sigue la superficie y se anula al salir al camino
     if (g.current) g.current.position.copy(st.dir).multiplyScalar(st.v)
   })
   return <group ref={g}>{children}</group>
 }
 const nodeEnvC = new THREE.Vector3()
+const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
+const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
 const NODE_ARM_MIN = 1.3 // brazo mínimo en un planeta cuando una estructura se interpone
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
@@ -553,7 +555,7 @@ function NebulaDome({ r }) {
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
-  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1 })
+  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1, glide: new THREE.Vector3(), glideApplied: new THREE.Vector3(), cambioT: 0, prevEn: false, prevRad: new THREE.Vector3(), hasRad: false, nodeBlend: 0, nodeEnv: null, nodeEnvIdx: null })
   const controls = useRef()
   const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
@@ -1041,7 +1043,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         fs.startPos.copy(camera.position)
         fs.quat.copy(camera.quaternion)
         fs.userRel = false
-        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1; fs.nodeBlend = 0; fs.nodeEnv = null; fs.nodeEnvIdx = null
+        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1; fs.nodeBlend = 0; fs.nodeEnv = null; fs.nodeEnvIdx = null; fs.hasRad = false; fs.glide.set(0, 0, 0); fs.glideApplied.set(0, 0, 0); fs.cambioT = 0; fs.prevEn = false
         if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.copy(selected.dir).normalize()
       }
       ultima.current = selected
@@ -1051,13 +1053,24 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       // en un planeta: "arriba" = normal radial, brazo corto y bajo (tercera persona cercana), transición suave con el camino
       const nodoSel = selected.phase !== 'travel' && Number.isInteger(selected.node) ? nodes[selected.node] : null
       const enNodo = Boolean(nodoSel)
+      if (fs.prevEn !== enNodo) fs.cambioT = 1
+      fs.prevEn = enNodo; fs.cambioT = Math.max(0, fs.cambioT - h)
       fs.nodeBlend = (fs.nodeBlend ?? 0) + ((enNodo ? 1 : 0) - (fs.nodeBlend ?? 0)) * (1 - Math.exp(-2 * h))
       if (enNodo) {
         nodeRadial.copy(bp).sub(nodoSel.pos)
         if (nodeRadial.lengthSq() < 1e-6) nodeRadial.copy(selected.up ?? Y_AXIS)
         nodeRadial.normalize()
-        if (fs.nodeEnvIdx !== selected.node) { fs.nodeEnv = getNodeCameraEnvelopes(nodoSel, world); fs.nodeEnvIdx = selected.node }
-      }
+        if (fs.nodeEnvIdx !== selected.node) { fs.nodeEnv = getNodeCameraEnvelopes(nodoSel, world); fs.nodeEnvIdx = selected.node; fs.hasRad = false }
+        // marco rodante: al caminar por la esfera el marco de la cámara gira con la normal radial (sin retraso del filtro)
+        if (fs.hasRad) {
+          nodeRotQ.setFromUnitVectors(fs.prevRad, nodeRadial)
+          fs.fwd.applyQuaternion(nodeRotQ); fs.side.applyQuaternion(nodeRotQ)
+          fs.off.applyQuaternion(nodeRotQ); fs.offV.applyQuaternion(nodeRotQ)
+          followUp.current.applyQuaternion(nodeRotQ); fs.posUp.applyQuaternion(nodeRotQ)
+          fs.quat.premultiply(nodeRotQ)
+        }
+        fs.prevRad.copy(nodeRadial); fs.hasRad = true
+      } else fs.hasRad = false
       const distK = selected.phase === 'travel' ? 1 : 1.15 - 0.2 * (fs.nodeBlend ?? 0)
 
       // marco suavizado: adelante filtrado; "arriba" = Y del mundo en el tubo (horizonte estable), normal del planeta en la ciudad, pared con H
@@ -1066,6 +1079,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.lerp(selected.dir, 1 - Math.exp(-fwdRate * h))
       if (fs.fwd.lengthSq() < 1e-6) fs.fwd.copy(selected.dir ?? Y_AXIS)
       fs.fwd.normalize()
+      if (enNodo) { fs.fwd.addScaledVector(nodeRadial, -fs.fwd.dot(nodeRadial)); if (fs.fwd.lengthSq() > 1e-6) fs.fwd.normalize(); else fs.fwd.copy(selected.dir ?? Y_AXIS) } // rumbo sobre el plano tangente del planeta
       const wallFollow = selected.phase === 'travel' && Boolean(selected.up)
       if (wallFollow) {
         followUp.current.lerp(selected.up, 1 - Math.exp(-WALL_UP_RATE * h))
@@ -1082,11 +1096,14 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       upRefVec.crossVectors(fs.side, fs.fwd).normalize()
 
       let corte = false
+      let corteRaw = false
       if (hasPrevPos.current) {
         const paso = mov.copy(bp).sub(prevPos.current).length()
         // teletransporte / llegada a nodo: corte de cámara en vez de cruzar el mundo interpolando
         corte = !entrando && paso > Math.max(2.5, fs.stepAvg * 5)
         fs.stepAvg += (Math.min(paso, 2.5) - fs.stepAvg) * 0.1
+        // camino <-> planeta: en vez de cortar, la cámara se desliza desde donde estaba hasta la ballita
+        if (corte && fs.cambioT > 0 && fs.hasAnchor) { corteRaw = true; corte = false; fs.glide.copy(fs.anchor).sub(bp) }
       }
       prevPos.current.copy(bp)
       hasPrevPos.current = true
@@ -1116,19 +1133,24 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
 
       // objetivo: la ballita misma (rígido, sin retraso: no se sale del cuadro en curvas ni a 8×)
       // El anclaje sigue rígido adelante/arriba pero amortigua el vaivén lateral (cambios de carril): la cámara no tiembla.
-      if (entrando || corte || !fs.hasAnchor) { fs.anchor.copy(bp); fs.hasAnchor = true }
+      fs.anchor.sub(fs.glideApplied)
+      if (entrando || corte || corteRaw || !fs.hasAnchor) { fs.anchor.copy(bp); fs.hasAnchor = true }
       else {
         const lat = sideVec.copy(bp).sub(fs.anchor).dot(posSide)
         fs.anchor.copy(bp).addScaledVector(posSide, -lat * Math.exp(-FOLLOW_LAT_W * h))
       }
+      fs.glide.multiplyScalar(Math.exp(-4 * h))
+      if (fs.glide.lengthSq() < 1e-4) fs.glide.set(0, 0, 0)
+      fs.glideApplied.copy(fs.glide); fs.anchor.add(fs.glideApplied)
       // la cámara mira un poco por delante de la ballita (hacia donde va el camino), no a ella
       lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, fs.rel.dist * (selected.phase === 'travel' ? 0.5 : 0.25))
+      if (enNodo) lookAhead.addScaledVector(nodeRadial, 0.5 * fs.nodeBlend)
       // más campo de visión a más velocidad (sensación de carrera)
       targetFov = FOV + THREE.MathUtils.clamp(vel * (cine ? 0.6 : 0.45), 0, cine ? 14 : 9)
 
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
       const yaw = fs.rel.yaw + fs.uYaw + sway
-      const pitch = fs.rel.pitch + fs.uPitch + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0)
+      const pitch = fs.rel.pitch + NODE_PITCH_PLUS * (fs.nodeBlend ?? 0) + fs.uPitch + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0)
       const dist = fs.rel.dist * distK
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal
@@ -1152,7 +1174,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       } else {
         c.target.copy(lookAhead)
         if (corte) { fs.off.copy(desiredOff); fs.offV.set(0, 0, 0) }
-        else springCD(fs.off, fs.offV, desiredOff, enTubo ? FOLLOW_TUBE_W : FOLLOW_OFF_W, h)
+        else springCD(fs.off, fs.offV, desiredOff, enTubo ? FOLLOW_TUBE_W : FOLLOW_OFF_W + 3 * fs.nodeBlend, h)
         camera.position.copy(fs.anchor).add(fs.off)
       }
 
@@ -1290,7 +1312,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
     }
     if (projDirty) camera.updateProjectionMatrix()
     const dbg = typeof window !== 'undefined' && window.__ballitasDebug // sólo con ?stats=1: sondeo de la cámara
-    if (dbg) dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, info: followRef.current.info }
+    if (dbg) dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: followRef.current.info }
   })
 
   // Si el usuario toma el control en plena transición, la transición se corta (no se le pelea la cámara).
