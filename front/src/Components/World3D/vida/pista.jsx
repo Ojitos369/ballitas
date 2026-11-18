@@ -10,6 +10,7 @@ import { applyLoadedImage } from '../texUtils.js'
 import { BALL_R, markShared } from './base.jsx'
 import Anillos, { anillosWarmup } from './anillos.jsx'
 import Decor from './decor.jsx'
+import Estructuras, { estructurasWarmup } from './estructuras.jsx'
 import Eventos, { eventosWarmup } from './eventos.jsx'
 import KartPista from './kartPista.jsx'
 
@@ -45,6 +46,26 @@ export function surfFrame(seg, laneId, u, out = {}) {
 }
 export const lanesOf = (seg) => (seg.air ? [] : seg.lanes ?? [])
 export const halfWidth = (lane) => (lane?.width ?? BALL_R * 2.6) / 2
+
+const F_SIDE_CHK = {}
+/** True si `pos` guarda al menos `minClear` desde el bordillo de cualquier otro carril del tramo en `u`. */
+export function laneSideClear(seg, lane, u, pos, minClear) {
+  const lanes = lanesOf(seg)
+  for (let i = 0; i < lanes.length; i++) {
+    const other = lanes[i]
+    if (other.id === lane.id) continue
+    const fo = surfFrame(seg, other.id, u, F_SIDE_CHK)
+    const need = halfWidth(other) + CURB + minClear
+    if (pos.distanceToSquared(fo.pos) < need * need) return false
+  }
+  return true
+}
+
+/** Altura relativa de la berma respecto a `pos` del carril según distancia lateral `ax` y borde `E`. */
+export function bermY(ax, E) {
+  const t = Math.max(0, Math.min(1, (ax - E) / TERR))
+  return t < 0.5 ? 0.025 + (0.06 - 0.025) * (t / 0.5) : 0.06 - 0.22 * ((t - 0.5) / 0.5)
+}
 
 // ─────────────────────────── texturas (generate_textures.py --pista) ───────────────────────────
 const BASE_TEX = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'tex/'
@@ -301,8 +322,9 @@ export function pistaWarmup(extra = []) {
   tiny.setAttribute('aUnder', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
   tiny.setAttribute('aPhase', new THREE.Float32BufferAttribute([0, 0, 0, 0], 1))
   tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
+  tiny.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
-  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...extra]) {
+  for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...estructurasWarmup(), ...extra]) {
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
@@ -310,7 +332,7 @@ export function pistaWarmup(extra = []) {
   return g
 }
 
-export default function Pista({ way }) {
+export default function Pista({ way, detail, time }) {
   const geo = geoCache.get(way)
   const [, listo] = useState(0)
   // Sin precalcular aún: se termina en porciones de ~6 ms por cuadro y aparece al estar lista (entra volando).
@@ -332,6 +354,7 @@ export default function Pista({ way }) {
       <KartPista way={way} />
       <Anillos way={way} />
       <Decor way={way} />
+      <Estructuras way={way} detail={detail} time={time} />
       <Eventos way={way} />
     </>
   )

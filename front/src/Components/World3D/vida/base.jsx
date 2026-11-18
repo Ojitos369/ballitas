@@ -997,24 +997,48 @@ export function cityStyle(themeId) {
   return CIUDAD[themeId] ?? CIUDAD.nubes
 }
 
+const segSamplesCache = new WeakMap()
+
+/** Puntos de muestreo cacheados sobre la curva de un tramo. */
+export function getSegSamples(seg) {
+  let arr = segSamplesCache.get(seg)
+  if (!arr) {
+    arr = seg.curve
+      ? [0, 0.25, 0.5, 0.75, 1].map((u) => seg.curve.getPointAt(u))
+      : [seg.start, seg.end].filter(Boolean)
+    segSamplesCache.set(seg, arr)
+  }
+  return arr
+}
+
+/** Distancia mínima al cuadrado entre la cámara y los puntos muestreados del tramo. */
+export function minSegDistSq(seg, cam) {
+  const pts = getSegSamples(seg)
+  let best = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    const d2 = pts[i].distanceToSquared(cam)
+    if (d2 < best) best = d2
+  }
+  return best
+}
+
 const waySphereCache = new WeakMap()
 
 /** Esfera envolvente en mundo que cubre todos los tramos del way para frustum culling sin popping. */
-export function getWayBoundingSphere(way, margin = 5) {
+export function getWayBoundingSphere(way, margin = 30) {
   if (!way) return null
   let sphere = waySphereCache.get(way)
   if (!sphere) {
     const box = new THREE.Box3()
     const segs = way.segments ?? []
     for (let i = 0; i < segs.length; i++) {
-      const s = segs[i]
-      if (s.start) box.expandByPoint(s.start)
-      if (s.end) box.expandByPoint(s.end)
+      const pts = getSegSamples(segs[i])
+      for (let j = 0; j < pts.length; j++) box.expandByPoint(pts[j])
     }
     sphere = new THREE.Sphere()
     if (!box.isEmpty()) {
       box.getBoundingSphere(sphere)
-      sphere.radius += margin
+      sphere.radius += Math.max(margin, 25)
     } else {
       sphere.radius = 60
     }
