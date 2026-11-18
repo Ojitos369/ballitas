@@ -47,3 +47,22 @@ export function povZoomView(z) {
 
 // La escena escribe aquí cada cuadro si la ballita debe dibujarse en POV (tercera persona); Ballita.jsx lo lee.
 export const povView = { body: false }
+
+// Distancia minima entre una linea de camara y una envolvente esferica. Devuelve 0 si no bloquea.
+export function raySpherePenetration(origin, end, center, radius) {
+  const dx = end.x - origin.x
+  const dy = end.y - origin.y
+  const dz = end.z - origin.z
+  const lenSq = dx * dx + dy * dy + dz * dz
+  if (lenSq < 1e-8) return 0
+  const cx = center.x - origin.x
+  const cy = center.y - origin.y
+  const cz = center.z - origin.z
+  const t = (cx * dx + cy * dy + cz * dz) / lenSq
+  if (t <= 0 || t >= 1) return 0
+  const ex = cx - dx * t
+  const ey = cy - dy * t
+  const ez = cz - dz * t
+  const penetration = radius - Math.sqrt(ex * ex + ey * ey + ez * ez)
+  return penetration > 0 ? penetration : 0
+}

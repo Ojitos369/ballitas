@@ -753,7 +753,7 @@ function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
 }
 
 // Ciudad exterior reducida a luces y siluetas pequeñas alrededor de centro y puertos (la ciudad completa vive en vista de superficie).
-function cityData(node, biome, surfaceR = NODE_R) {
+function cityData(node, biome, surfaceR = NODE_R, createGeometry = true) {
   const rng = mulberry32(1000 + node.idx)
   const surfScale = surfaceR / 7.5
   const cityU = U * surfScale
@@ -779,7 +779,7 @@ function cityData(node, biome, surfaceR = NODE_R) {
   near.push([monumentSpot.pos.clone().add(node.pos), 2.3 * surfScale])
 
   const districts = buildCityDistricts(node, monumentSpot, terminals)
-  const { roadGeo, lineGeo } = buildRoadGeometries(node, districts.centroDir, surfaceR)
+  const { roadGeo, lineGeo } = createGeometry ? buildRoadGeometries(node, districts.centroDir, surfaceR) : { roadGeo: null, lineGeo: null }
 
   const palette = (biome?.buildingColors || [node.color]).map((hex) => new THREE.Color(hex))
   const col = new THREE.Color()
@@ -826,7 +826,7 @@ function cityData(node, biome, surfaceR = NODE_R) {
         vZ.clone().multiplyScalar(w),
         pos.clone().addScaledVector(dir, -0.02 * surfScale),
       )
-      skylineCandidates.push({ m, c, h })
+      skylineCandidates.push({ m, c, h, w })
     } else if (cityLights.length < 110) {
       const ls = (0.11 + rng() * 0.11) * surfScale
       const m = m4(
@@ -840,9 +840,40 @@ function cityData(node, biome, surfaceR = NODE_R) {
   }
 
   skylineCandidates.sort((a, b) => b.h - a.h)
-  const farSkylineGeo = buildFarSkylineGeo(skylineCandidates.slice(0, 64))
+  const farSkylineGeo = createGeometry ? buildFarSkylineGeo(skylineCandidates.slice(0, 64)) : null
+  const collisionEnvelopes = skylineCandidates.slice(0, 64).map(({ m, h, w }) => {
+    const center = new THREE.Vector3().setFromMatrixPosition(m)
+    center.addScaledVector(center.clone().normalize(), h * 0.5)
+    return { center, radius: Math.hypot(w * 1.1, h * 0.55) }
+  })
+  const termScale = surfaceR / 7.5
+  for (const term of terminals) {
+    const dir = term.dir || node.verts[term.vert].dir
+    collisionEnvelopes.push({ center: dir.clone().multiplyScalar(surfaceR + termScale), radius: termScale * 2.25 })
+  }
+  const destScale = termScale * 0.78
+  for (const d of node.destinos) {
+    collisionEnvelopes.push({ center: d.dir.clone().multiplyScalar(surfaceR + destScale), radius: destScale * 2.1 })
+  }
+  const monDir = monumentSpot.pos.clone().normalize()
+  collisionEnvelopes.push({ center: monumentSpot.pos.clone().addScaledVector(monDir, termScale * 1.25), radius: termScale * 3.2 })
 
-  return { roadGeo, lineGeo, farSkylineGeo, cityLights, districts, terminals, monumentSpot }
+  return { roadGeo, lineGeo, farSkylineGeo, cityLights, districts, terminals, monumentSpot, collisionEnvelopes }
+}
+
+const cameraEnvelopeCache = new WeakMap()
+export function getNodeCameraEnvelopes(node, world) {
+  let byNode = cameraEnvelopeCache.get(world)
+  if (!byNode) { byNode = new WeakMap(); cameraEnvelopeCache.set(world, byNode) }
+  let cached = byNode.get(node)
+  if (!cached) {
+    const biome = resolveNodeBiome(node, world)
+    const config = resolvePlanetConfig(node, biome, world)
+    const city = cityData(node, biome, config.visualR, false)
+    cached = { visualRadius: config.visualR, envelopes: city.collisionEnvelopes }
+    byNode.set(node, cached)
+  }
+  return cached
 }
 
 function Instanced({ geo, material, items, children, ...rest }) {

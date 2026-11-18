@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { angleDiff, clampYaw, decayOffset, POV_YAW_MAX, povZoomView, POV_ZOOM_EYE } from './povLook.js'
+import { angleDiff, clampYaw, decayOffset, POV_YAW_MAX, povZoomView, POV_ZOOM_EYE, raySpherePenetration } from './povLook.js'
 
 test('angleDiff cruza ±180° sin salto', () => {
   const d = angleDiff(-Math.PI + 0.1, Math.PI - 0.1)
@@ -23,6 +23,14 @@ test('decayOffset espera 1.5 s y luego vuelve a 0', () => {
   let c = 1
   for (let i = 0; i < 200; i++) c = decayOffset(c, 0.016, 0, true)
   assert.equal(c, 0)
+})
+
+test('raySpherePenetration detecta una envolvente sobre el brazo de camara', () => {
+  const origin = { x: 0, y: 0, z: 0 }
+  const end = { x: 0, y: 0, z: 10 }
+  assert.equal(raySpherePenetration(origin, end, { x: 0, y: 0, z: 5 }, 2), 2)
+  assert.equal(raySpherePenetration(origin, end, { x: 3, y: 0, z: 5 }, 2), 0)
+  assert.equal(raySpherePenetration(origin, end, { x: 0, y: 0, z: 12 }, 3), 0)
 })
 
 test('povZoomView: continuo, espalda a ojos a zoom óptico', () => {

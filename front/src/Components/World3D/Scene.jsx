@@ -22,7 +22,8 @@ import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
 import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
 import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
-import { clampYaw, decayOffset, povZoomView, povView, POV_ZOOM_EYE } from './povLook.js'
+import { clampYaw, decayOffset, povZoomView, povView, POV_ZOOM_EYE, raySpherePenetration } from './povLook.js'
+import { getNodeCameraEnvelopes } from './Nodes.jsx'
 
 const STEP = 0.05
 const FOV = 50
@@ -73,6 +74,10 @@ const POV_LEAD_S = 0.4 // anticipación de la curva
 const povRight = new THREE.Vector3()
 const povOrthoUp = new THREE.Vector3()
 const collisionOrigin = new THREE.Vector3()
+const nodeRadial = new THREE.Vector3()
+const nodeCamOffset = new THREE.Vector3()
+const nodeEnvelopeCenter = new THREE.Vector3()
+const nodeProtectDir = new THREE.Vector3()
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -519,7 +524,7 @@ function NebulaDome({ r }) {
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
 function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
-  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1 })
+  const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1, nodeBlend: 0, nodeLift: 0, nodeLiftGoal: 0, nodeClearTimer: 0, nodeEnvelopeIdx: null, nodeEnvelope: null })
   const controls = useRef()
   const vuelta = useRef(false)
   const camera = useThree((s) => s.camera)
@@ -770,7 +775,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       try { if (dom.hasPointerCapture?.(e.pointerId)) dom.releasePointerCapture(e.pointerId) } catch {}
       if (ptrs.size === 0) { fs.drag = false; dom.style.cursor = 'grab' }
     }
-    const wheel = (e) => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * 0.0012)) }
+    const wheel = (e) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation?.(); zoomBy(Math.exp(e.deltaY * 0.0012)) }
     const recentrar = () => { fs.uYaw = 0; fs.uPitch = 0; fs.idle = 9 }
     const key = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -785,7 +790,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
     window.addEventListener('blur', blur)
-    dom.addEventListener('wheel', wheel, { passive: false })
+    dom.addEventListener('wheel', wheel, { passive: false, capture: true })
     dom.addEventListener('dblclick', recentrar)
     window.addEventListener('keydown', key)
     return () => {
@@ -794,7 +799,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
       window.removeEventListener('blur', blur)
-      dom.removeEventListener('wheel', wheel)
+      dom.removeEventListener('wheel', wheel, true)
       dom.removeEventListener('dblclick', recentrar)
       window.removeEventListener('keydown', key)
       dom.style.cursor = prevCursor
@@ -835,7 +840,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
     }
     if (povActive && selected?.phase !== 'gone') {
       const st = povControlRef.current
-      if (modo.current !== 'pov' || ultima.current !== selected) {
+      if (modo.current !== 'pov' || ultima.current?.id !== selected?.id) {
         modo.current = 'pov'
         ultima.current = selected
         povInit.current = false
@@ -988,7 +993,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       // Seguir: la cámara vive en coordenadas relativas a la ballita (rel: yaw/pitch/dist en su marco suavizado).
       // Si el usuario orbita o hace zoom, se adopta ese ángulo y se conserva; sólo R (o el botón) lo recentra.
       const fs = followRef.current
-      if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current !== selected) {
+      if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current?.id !== selected?.id) {
         modo.current = 'entrando'
         hasPrevPos.current = false
         fs.hasLast = false
@@ -1003,13 +1008,28 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         fs.startPos.copy(camera.position)
         fs.quat.copy(camera.quaternion)
         fs.userRel = false
-        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1
+        fs.uYaw = fs.uPitch = 0; fs.clear = fs.clearGoal = 1; fs.nodeBlend = 0; fs.nodeLift = fs.nodeLiftGoal = fs.nodeClearTimer = 0; fs.nodeEnvelopeIdx = null; fs.nodeEnvelope = null
         if (selected.dir && selected.dir.lengthSq() > 1e-6) fs.fwd.copy(selected.dir).normalize()
       }
       ultima.current = selected
       if (fs.recenter) { fs.recenter = false; fs.userRel = false; fs.uYaw = fs.uPitch = 0; Object.assign(fs.rel, REL_DEFAULT) }
       const entrando = modo.current === 'entrando'
       const vel = selected.speed ?? 0
+      const enNodo = selected.phase !== 'travel' && Number.isInteger(selected.node) && nodes[selected.node]
+      const nodoSeleccionado = enNodo ? nodes[selected.node] : null
+      if (enNodo) {
+        nodeRadial.copy(selected.pos).sub(nodoSeleccionado.pos)
+        if (nodeRadial.lengthSq() < 1e-6) nodeRadial.copy(selected.up ?? Y_AXIS)
+        nodeRadial.normalize()
+        fs.nodeBlend += (1 - fs.nodeBlend) * (1 - Math.exp(-1.8 * h))
+        if (fs.nodeEnvelopeIdx !== selected.node) {
+          fs.nodeEnvelope = getNodeCameraEnvelopes(nodoSeleccionado, mundo)
+          fs.nodeEnvelopeIdx = selected.node
+          fs.nodeLift = fs.nodeLiftGoal = fs.nodeClearTimer = 0
+        }
+      } else {
+        fs.nodeBlend += (0 - fs.nodeBlend) * (1 - Math.exp(-1.8 * h))
+      }
       const distK = selected.phase === 'travel' ? 1 : 1.15
 
       // marco suavizado: adelante filtrado; "arriba" = Y del mundo en el tubo (horizonte estable), normal del planeta en la ciudad, pared con H
@@ -1024,7 +1044,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(selected.up)
         followUp.current.normalize()
       } else {
-        const upGoal = selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4 ? selected.up : Y_AXIS
+        const upGoal = enNodo ? nodeRadial : selected.phase !== 'travel' && selected.up && selected.up.lengthSq() > 1e-4 ? selected.up : Y_AXIS
         followUp.current.lerp(upGoal, 1 - Math.exp(-WALL_UP_RATE * h))
         if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(upGoal)
         followUp.current.normalize()
@@ -1076,7 +1096,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       // la cámara mira un poco por delante de la ballita (hacia donde va el camino), no a ella
       lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, fs.rel.dist * (selected.phase === 'travel' ? 0.5 : 0.25))
       // más campo de visión a más velocidad (sensación de carrera)
-      targetFov = FOV + THREE.MathUtils.clamp(vel * (cine ? 0.6 : 0.45), 0, cine ? 14 : 9)
+      targetFov = enNodo ? THREE.MathUtils.clamp(FOV * fs.rel.dist / SEGUIR_DIST, 22, 76) : FOV + THREE.MathUtils.clamp(vel * (cine ? 0.6 : 0.45), 0, cine ? 14 : 9)
 
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
       const yaw = fs.rel.yaw + fs.uYaw + sway
@@ -1107,18 +1127,58 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         else springCD(fs.off, fs.offV, desiredOff, enTubo ? FOLLOW_TUBE_W : FOLLOW_OFF_W, h)
         camera.position.copy(fs.anchor).add(fs.off)
       }
+      if (enNodo && !entrando) {
+        nodeCamOffset.copy(camera.position).sub(selected.pos)
+        const maxNodeArm = fs.rel.dist * 1.5 + 1.2
+        if (nodeCamOffset.length() > maxNodeArm) nodeCamOffset.setLength(maxNodeArm)
+        camera.position.copy(selected.pos).add(nodeCamOffset)
+      }
+
+      // Colision
 
       // Colisión de cámara contra la escena: recorta el brazo antes de atravesar una pista, berma u objeto.
       // Si algo se interpone entre la ballita y la cámara, el brazo se acorta (rápido) y luego vuelve a crecer (lento): sin saltos.
       if (!entrando && ++collisionFrame.current % 3 === 0) {
         if (!collisionMeshes.current.length) {
-          scene.traverse((o) => { if (o.isMesh && o.geometry?.name?.startsWith('pista:')) collisionMeshes.current.push(o) })
+          scene.traverse((o) => {
+            if (o.isMesh && o.geometry?.name?.startsWith('pista:')) collisionMeshes.current.push(o)
+            const materials = Array.isArray(o.material) ? o.material : [o.material]
+            for (const material of materials) {
+              if (!material?.uniforms?.uPlanetType || material.uniforms.uOccBall) continue
+              material.uniforms.uOccBall = { value: OCC }
+              material.fragmentShader = material.fragmentShader.replace('void main() {', `uniform vec4 uOccBall;
+void main() {
+  if (uOccBall.w > 0.0 && gl_FragCoord.z < uOccBall.z) {
+    float _od = length(gl_FragCoord.xy - uOccBall.xy) / uOccBall.w;
+    if (_od < 1.7) {
+      float _ok = mix(0.1, 1.0, smoothstep(1.0, 1.7, _od));
+      if (_ok < fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
+    }
+  }`)
+              material.needsUpdate = true
+            }
+          })
         }
-        collisionOrigin.copy(selected.pos).addScaledVector(selected.up ?? Y_AXIS, 0.45)
+        collisionOrigin.copy(selected.pos).addScaledVector(enNodo ? nodeRadial : selected.up ?? Y_AXIS, 0.45)
         delta.copy(camera.position).sub(collisionOrigin)
         const rayLength = delta.length()
         fs.clearGoal = 1
-        if (rayLength > 0.8 && collisionMeshes.current.length) {
+        if (enNodo && fs.nodeEnvelope) {
+          let lift = 0
+          for (const envelope of fs.nodeEnvelope.envelopes) {
+            nodeEnvelopeCenter.copy(nodoSeleccionado.pos).add(envelope.center)
+            const penetration = raySpherePenetration(collisionOrigin, camera.position, nodeEnvelopeCenter, envelope.radius)
+            if (penetration > 0) lift = Math.max(lift, envelope.radius + penetration + 0.7)
+          }
+          if (lift > 0) {
+            fs.nodeLiftGoal = Math.min(14, Math.max(fs.nodeLiftGoal, lift))
+            fs.nodeClearTimer = 0
+          } else {
+            fs.nodeClearTimer += h * 3
+            if (fs.nodeClearTimer > 1.4) fs.nodeLiftGoal = 0
+          }
+        }
+        if (!enNodo && rayLength > 0.8 && collisionMeshes.current.length) {
           collisionRay.set(collisionOrigin, delta.normalize())
           collisionRay.camera = camera
           collisionRay.near = 0.3
@@ -1135,16 +1195,45 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         camera.position.sub(collisionOrigin).multiplyScalar(fs.clear).add(collisionOrigin)
       }
       // Evita que la cámara se meta dentro de la esfera de un planeta.
-      const minPlanetR = NODE_R + 1.25
+      // En los nodos la camara transporta el marco radial y queda fuera del radio visual real.
+      fs.nodeLift += (fs.nodeLiftGoal - fs.nodeLift) * (1 - Math.exp(-(fs.nodeLiftGoal > fs.nodeLift ? 5 : 1.1) * h))
+      if (enNodo) camera.position.addScaledVector(nodeRadial, fs.nodeLift)
+      const baseMinR = NODE_R + 1.25
       for (let i = 0; !enTubo && i < nodes.length; i++) {
         const np = nodes[i].pos
+        if (enNodo && i === selected.node) {
+          const minR = baseMinR + (fs.nodeEnvelope.visualRadius + 1.75 - baseMinR) * fs.nodeBlend
+          sideVec.copy(camera.position).sub(np)
+          const radial = sideVec.dot(nodeRadial)
+          if (radial < minR) camera.position.addScaledVector(nodeRadial, minR - radial)
+          continue
+        }
         sideVec.copy(camera.position).sub(np)
         const d2 = sideVec.lengthSq()
-        if (d2 < minPlanetR * minPlanetR) {
+        if (follow && d2 < (NODE_R * 2.2 + 40) ** 2) {
+          nodeProtectDir.copy(selected.pos).sub(np)
+          if (nodeProtectDir.lengthSq() > 1e-6) {
+            nodeProtectDir.normalize()
+            const visualMin = getNodeCameraEnvelopes(nodes[i], mundo).visualRadius + 1.75
+            const radial = sideVec.dot(nodeProtectDir)
+            if (radial < visualMin) camera.position.addScaledVector(nodeProtectDir, visualMin - radial)
+          }
+        } else if (d2 < baseMinR * baseMinR) {
           if (d2 > 1e-6) sideVec.normalize()
           else sideVec.copy(upRefVec)
-          camera.position.copy(np).addScaledVector(sideVec, minPlanetR)
+          camera.position.copy(np).addScaledVector(sideVec, baseMinR)
         }
+      }
+      if (enNodo) {
+        nodeCamOffset.copy(camera.position).sub(selected.pos)
+        const radial = nodeCamOffset.dot(nodeRadial)
+        nodeCamOffset.addScaledVector(nodeRadial, -radial)
+        const maxNodeArm = fs.rel.dist * 1.5 + 1.2
+        if (nodeCamOffset.length() > maxNodeArm) nodeCamOffset.setLength(maxNodeArm)
+        const minRadial = fs.nodeEnvelope.visualRadius + 1.75 - selected.pos.distanceTo(nodoSeleccionado.pos)
+        nodeEnvelopeCenter.copy(selected.pos).addScaledVector(nodeRadial, Math.max(radial, minRadial)).add(nodeCamOffset)
+        if (entrando) camera.position.lerp(nodeEnvelopeCenter, 1 - Math.exp(-4 * h))
+        else camera.position.copy(nodeEnvelopeCenter)
       }
 
       // Orientación: mira exacto a la ballita (siempre centrada). El "arriba" de la cámara se transporta del cuadro
@@ -1190,7 +1279,7 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
         occNdc.copy(selected.pos).project(camera)
         OCC.x = (occNdc.x * 0.5 + 0.5) * occSize.x
         OCC.y = (occNdc.y * 0.5 + 0.5) * occSize.y
-        OCC.w = (0.62 / (dCam * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))) * occSize.y * 0.5
+        OCC.w = ((enNodo ? 0.9 : 0.62) / (dCam * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))) * occSize.y * 0.5
       }
       fs.lastOff.copy(camera.position).sub(c.target)
       fs.hasLast = true
@@ -1225,8 +1314,26 @@ function CameraRig({ mundo, nodes, selected, follow, pov, cine, suspend = false,
       projDirty = true
     }
     if (projDirty) camera.updateProjectionMatrix()
+    const dbgNode = follow && selected?.phase !== 'travel' && Number.isInteger(selected?.node) ? nodes[selected.node] : null
+    if (dbgNode && followRef.current.nodeEnvelope) {
+      const radial = nodeRadial.copy(selected.pos).sub(dbgNode.pos).normalize()
+      nodeCamOffset.copy(camera.position).sub(selected.pos)
+      const radialOff = nodeCamOffset.dot(radial)
+      nodeCamOffset.addScaledVector(radial, -radialOff)
+      const maxArm = followRef.current.rel.dist * 1.5 + 1.2
+      if (nodeCamOffset.length() > maxArm) nodeCamOffset.setLength(maxArm)
+      const minRadial = followRef.current.nodeEnvelope.visualRadius + 1.75 - selected.pos.distanceTo(dbgNode.pos)
+      nodeEnvelopeCenter.copy(selected.pos).addScaledVector(radial, Math.max(radialOff, minRadial)).add(nodeCamOffset)
+      if (modo.current === 'entrando') camera.position.lerp(nodeEnvelopeCenter, 1 - Math.exp(-4 * h))
+      else camera.position.copy(nodeEnvelopeCenter)
+    }
     const dbg = typeof window !== 'undefined' && window.__ballitasDebug // sólo con ?stats=1: sondeo de la cámara
-    if (dbg) dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE }
+    if (dbg) {
+      const dbgRadial = dbgNode ? nodeRadial.copy(selected.pos).sub(dbgNode.pos).normalize() : null
+      const nodeCameraRadius = dbgNode ? sideVec.copy(camera.position).sub(dbgNode.pos).dot(dbgRadial) : null
+      const nodeRadius = dbgNode ? getNodeCameraEnvelopes(dbgNode, mundo).visualRadius : null
+      dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodeRadius, nodeCameraRadius, nodeLift: followRef.current.nodeLift, nodeBlend: followRef.current.nodeBlend, followDist: followRef.current.rel.dist }
+    }
   })
 
   // Si el usuario toma el control en plena transición, la transición se corta (no se le pelea la cámara).
