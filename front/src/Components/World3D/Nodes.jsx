@@ -984,10 +984,9 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
       onPointerOver={(e) => (e.stopPropagation(), setHover(true))}
       onPointerOut={() => setHover(false)}
     >
-      {/* Basamento circular biselado (siempre visible) */}
-      <mesh geometry={padGeo} material={mats.pad} receiveShadow />
-
       <group ref={detailGrp}>
+        {/* Basamento circular: solo de cerca; de lejos parecía una losa plana pegada al planeta */}
+        <mesh geometry={padGeo} material={mats.pad} receiveShadow />
         {style === 'carpa' && (
           <group position={[0, 0.1, 0]}>
             {[-0.45, 0.45].map((px) => [-0.45, 0.45].map((pz) => (
@@ -1248,6 +1247,7 @@ function Planet({ node, world, tex }) {
 
     const dist = camera.position.distanceTo(node.pos)
     const near = dist < LOD_NEAR
+    planetMat.uniforms.uDistBoost.value = Math.min(1, Math.max(0, (dist - 120) / 260))
     const showOrbitals = dist < LOD_ORBITALS
     const sphereGeo = showOrbitals ? unitSphereGeo : unitSphereLowGeo
 
@@ -1418,9 +1418,7 @@ function Planet({ node, world, tex }) {
       {/* Atmósfera exterior escalada al radio visual del planeta */}
       <mesh geometry={unitSphereLowGeo} material={atmoOuterMat} scale={planetVisualR * 1.13} raycast={() => null} />
 
-      {/* Calles curvas continuas y líneas guía */}
-      <mesh geometry={city.roadGeo} material={roadMat} receiveShadow />
-      <mesh geometry={city.lineGeo} material={lineMat} />
+      {/* Las calles envolventes (cinta de asfalto + línea) se quitaron del exterior: formaban una jaula sobre la esfera */}
 
       {/* Monumento único del bioma como silueta reconocible */}
       <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />

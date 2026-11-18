@@ -41,6 +41,10 @@ const TYPE_PALETTES = {
     ['#0e3b7a', '#1f85d4', '#46bd59', '#cfb869', '#f7fbff'], // Tierra clásica
     ['#0d4a5e', '#20a4b5', '#52c44d', '#e6c153', '#f0f8ff'], // Archipiélago turquesa
     ['#1c2a6b', '#3b6cd4', '#d66840', '#f0b64a', '#fff5e6'], // Continentes ocre
+    ['#4a1470', '#a73fd1', '#2fd1a0', '#ffd23f', '#fff0fb'], // Mar violeta, tierra menta
+    ['#0a5a3e', '#17b08a', '#e8e04a', '#e07a2e', '#ffffff'], // Mar esmeralda, tierra solar
+    ['#7a1740', '#e0457a', '#7ed957', '#f7e27a', '#fff7e0'], // Mar rosa, tierra lima
+    ['#0b1f5c', '#2a4fd8', '#a4e04a', '#c46b3a', '#eaf4ff'], // Cobalto con praderas
   ],
   luna_crateres: [
     ['#3a4159', '#687391', '#9ea8c4', '#dae2f5', '#212638'], // Luna gris azulada
@@ -188,6 +192,8 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
   uniform float uBandFreq;
   uniform vec3 uSeedVec;
   uniform vec3 uStormPos;
+  uniform float uSeaBias;
+  uniform float uDistBoost;
 
   varying vec3 vLocalDir;
   varying vec3 vWorldNormal;
@@ -263,7 +269,7 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
       baseCol = mix(baseCol, uCol4, stormCore * 0.92);
     } else if (pType == 1) {
       // 1: tierra_continentes — océanos, costas, continentes, montañas y casquetes polares
-      float h = fbm(p * 0.95) + 0.36 * fbm(p * 2.3);
+      float h = fbm(p * 0.95) + 0.36 * fbm(p * 2.3) + uSeaBias;
       float shallow = smoothstep(-0.14, -0.04, h);
       float land = smoothstep(-0.02, 0.04, h);
       float mountain = smoothstep(0.26, 0.34, h);
@@ -382,11 +388,15 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
     // Zonas emisivas (lava, ácido) mantienen su luz propia en sombra
     vec3 col = mix(litCol, baseCol * 1.25, emissiveBoost);
 
+    // Lejos del mapa: piso de brillo propio y borde más marcado para leer esferas de color
+    col = max(col, baseCol * 0.62 * uDistBoost);
+
     // Brillo de borde (Fresnel) del color de la atmósfera
     float ndotv = clamp(dot(N, V), 0.0, 1.0);
-    float rim = smoothstep(0.44, 0.84, 1.0 - ndotv);
+    float rim = smoothstep(0.44 - 0.14 * uDistBoost, 0.84, 1.0 - ndotv);
     float rimSun = 0.52 + 0.48 * clamp(ndotl * 0.5 + 0.5, 0.0, 1.0);
-    col = mix(col, uAtmoColor * 1.18, rim * rimSun * 0.72);
+    rimSun = mix(rimSun, 1.0, uDistBoost);
+    col = mix(col, uAtmoColor * 1.18, rim * rimSun * (0.72 + 0.2 * uDistBoost));
 
     // Refuerzo sutil del contorno oscuro en el borde extremo (complementa el casco invertido)
     float edgeInk = smoothstep(0.15, 0.04, ndotv);
@@ -452,7 +462,16 @@ export function resolvePlanetConfig(node, biome, world) {
 
   const subPalettes = TYPE_PALETTES[type]
   const rawPalette = subPalettes[Math.floor(rng() * subPalettes.length)]
-  const palette = rawPalette.map((hex) => shiftColor(hex, rng))
+  // Tierra: giro de tono amplio y colores más saturados para distinguirlos de lejos
+  const hueR = type === 'tierra_continentes' ? 0.16 : 0.045
+  const palette = rawPalette.map((hex) => {
+    const c = shiftColor(hex, rng, hueR)
+    const hsl = { h: 0, s: 0, l: 0 }
+    c.getHSL(hsl)
+    return c.setHSL(hsl.h, Math.min(1, hsl.s * 1.12 + 0.04), hsl.l)
+  })
+  // Proporción de océano/continente: sube o baja el nivel del mar por semilla
+  const seaBias = type === 'tierra_continentes' ? (rng() - 0.5) * 0.5 : 0
 
   const atmoColor = shiftColor(biome?.atmoRim || rawPalette[3], rng, 0.03, 0.06, 0.04)
   const outlineColor = new THREE.Color('#080a14').lerp(palette[0], 0.14)
@@ -520,13 +539,13 @@ export function resolvePlanetConfig(node, biome, world) {
   }
 
   // Nubes toon en capa propia (ausentes o muy tenues en lunas áridas)
-  const cloudChance = type === 'luna_crateres' ? 0.15 : type === 'desierto_dunas' ? 0.45 : 0.92
-  const cloudsEnabled = rng() < cloudChance
+  const cloudTypes = ['tierra_continentes', 'oceano_espiral', 'hielo', 'gaseoso_bandas']
+  const cloudsEnabled = cloudTypes.includes(type) && rng() < 0.8
   const clouds = {
     enabled: cloudsEnabled,
-    coverage: type === 'gaseoso_bandas' || type === 'oceano_espiral' ? 0.06 + rng() * 0.12 : 0.14 + rng() * 0.14,
-    scale: 2.3 + rng() * 1.4,
-    opacity: type === 'lava' ? 0.65 : 0.88,
+    coverage: 0.3 + rng() * 0.14, // alto = pocas manchas pequeñas
+    scale: 3.6 + rng() * 1.6,
+    opacity: 0.4 + rng() * 0.2,
     speed: biome?.cloudSpeed ?? (0.02 + rng() * 0.025),
     colorLit: type === 'lava'
       ? new THREE.Color('#ffd0b3')
@@ -549,6 +568,7 @@ export function resolvePlanetConfig(node, biome, world) {
     outlineHex: `#${outlineColor.getHexString()}`,
     noiseScale,
     bandFreq,
+    seaBias,
     seedVec,
     stormPos,
     tilt: [tiltX, 0, tiltZ],
@@ -583,11 +603,13 @@ export function createPlanetCartoonMaterial(config) {
       uBandFreq: { value: config.bandFreq },
       uSeedVec: { value: config.seedVec.clone() },
       uStormPos: { value: config.stormPos.clone() },
+      uSeaBias: { value: config.seaBias },
+      uDistBoost: { value: 0 },
     },
     vertexShader: PLANET_VERTEX_SHADER,
     fragmentShader: PLANET_FRAGMENT_SHADER,
   })
-  mat.customProgramCacheKey = () => 'planet-cartoon-v1'
+  mat.customProgramCacheKey = () => 'planet-cartoon-v2'
   return mat
 }
 
@@ -613,9 +635,9 @@ const CLOUD_FRAGMENT_SHADER = /* glsl */ `
   void main() {
     vec3 p = normalize(vLocalDir) * uScale + uSeedVec + vec3(uTime * 0.015, 0.0, -uTime * 0.01);
     float n = fbm(p) + 0.3 * fbm(p * 2.2);
-    float latFade = 1.0 - smoothstep(0.78, 0.96, abs(vLocalDir.y));
+    float latFade = 1.0 - smoothstep(0.7, 0.92, abs(vLocalDir.y));
     float puff = n * latFade - uCoverage;
-    if (puff < 0.015) discard;
+    if (puff < 0.0) discard;
 
     vec3 N = normalize(vWorldNormal);
     vec3 L = normalize(uLightDir);
@@ -625,11 +647,8 @@ const CLOUD_FRAGMENT_SHADER = /* glsl */ `
     vec3 col = mix(uColorShade, uColorLit, mix(0.32, 1.0, bShadow));
     col = mix(col, vec3(1.0), bLit * 0.16);
 
-    // Contorno toon sutil en el borde de cada nube
-    float edge = 1.0 - smoothstep(0.015, 0.075, puff);
-    col = mix(col, uOutlineColor, edge * 0.65);
-
-    float alpha = smoothstep(0.015, 0.06, puff) * uOpacity;
+    // Borde suave: el alfa sube gradualmente desde el borde de la mancha
+    float alpha = smoothstep(0.0, 0.16, puff) * uOpacity;
     gl_FragColor = vec4(col, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
