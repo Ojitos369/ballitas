@@ -270,9 +270,9 @@ function ribbonMat(themeId, spec) {
           float crust = smoothstep(0.28, 0.85, flow);
           float vein = pow(sin(vLavaUv.x * 9.42 + uLavaTime * 1.2 + vLavaUv.y * 1.6) * 0.5 + 0.5, 3.0);
           vec3 darkCrust = vec3(0.14, 0.06, 0.05);
-          vec3 magma = mix(vec3(1.15, 0.26, 0.04), vec3(1.85, 0.95, 0.22), clamp(crust * 0.7 + vein * 0.5, 0.0, 1.0));
-          float bank = smoothstep(0.05, 0.28, vLavaUv.x) * smoothstep(0.95, 0.72, vLavaUv.x);
-          diffuseColor.rgb = mix(darkCrust, magma, bank * (0.45 + 0.55 * crust));`)
+          vec3 magma = mix(vec3(0.85, 0.16, 0.02), vec3(1.25, 0.48, 0.07), clamp(crust * 0.65 + vein * 0.45, 0.0, 1.0));
+          float bank = smoothstep(0.06, 0.30, vLavaUv.x) * smoothstep(0.94, 0.70, vLavaUv.x);
+          diffuseColor.rgb = mix(darkCrust, magma, bank * (0.35 + 0.65 * crust));`)
     }
     m.customProgramCacheKey = () => 'struct-lava-v1'
     markShared(m)
@@ -457,7 +457,10 @@ function getSegStructData(way, seg, si) {
             const span = maxLat - minLat
             _pL.copy(f.pos).addScaledVector(f.side, minLat)
             _pR.copy(f.pos).addScaledVector(f.side, maxLat)
-            if ((!col || (col.libre(_pL, 0.75, { way: way.idx }) && col.libre(_pR, 0.75, { way: way.idx })))) {
+            const aSeed = way.idx * 1009 + si * 131 + Math.round(s)
+            const okL = colocar(world, { pos: _pL, seed: aSeed + 1 }, 0.75, { way: way.idx }, 0, local)
+            const okR = okL && colocar(world, { pos: _pR, seed: aSeed + 2 }, 0.75, { way: way.idx }, 0, local)
+            if (okL && okR) {
               arches.push({
                 pos: f.pos.clone().addScaledVector(f.side, midLat).addScaledVector(f.up, -0.14),
                 quat: basisQuat(f.up, f.tangent),
@@ -474,8 +477,11 @@ function getSegStructData(way, seg, si) {
         const spanHalf = E + TERR * 0.72
         _pL.copy(f.pos).addScaledVector(f.side, -spanHalf)
         _pR.copy(f.pos).addScaledVector(f.side, spanHalf)
-        if (!outerClear(col, way.idx, seg, lane, u, _pL, 0.75, null) ||
-            !outerClear(col, way.idx, seg, lane, u, _pR, 0.75, null)) continue
+        if (!outerClear(col, way.idx, seg, lane, u, _pL, 0.75, local) ||
+            !outerClear(col, way.idx, seg, lane, u, _pR, 0.75, local)) continue
+        const aSeed = way.idx * 1009 + si * 131 + lane.id * 29 + Math.round(s)
+        if (!colocar(world, { pos: _pL, seed: aSeed + 1 }, 0.75, { way: way.idx }, 0, local)) continue
+        if (!colocar(world, { pos: _pR, seed: aSeed + 2 }, 0.75, { way: way.idx }, 0, local)) continue
 
         arches.push({
           pos: f.pos.clone().addScaledVector(f.up, -0.12),
@@ -629,6 +635,7 @@ export default function Estructuras({ way, detail, time }) {
 
     const cam = camera.position
     // 1) Detectar tramos cercanos (curva <= SEG_ACTIVE_DIST + seg.length * 0.25)
+    let segChanged = false
     if (cam.distanceToSquared(lastSegCheckRef.current) >= 100) {
       lastSegCheckRef.current.copy(cam)
       const near = []
@@ -639,25 +646,32 @@ export default function Estructuras({ way, detail, time }) {
       }
       nearSegsRef.current = near
       dirtyPoolRef.current = true
+      segChanged = true
     }
 
     // 2) Construir como máximo 1 tramo cercano aún no cacheado en este frame (sin picos de CPU)
     let builtOne = false
-    const nextRibs = []
     for (let i = 0; i < nearSegsRef.current.length; i++) {
       const { seg, si } = nearSegsRef.current[i]
       if (!segDataCache.has(seg)) {
         if (builtOne) continue
         builtOne = true
+        getSegStructData(way, seg, si)
       }
-      const sd = getSegStructData(way, seg, si)
-      if (sd.ribbonGeo) nextRibs.push({ si, geo: sd.ribbonGeo })
     }
     if (builtOne) dirtyPoolRef.current = true
-    const ribKey = nextRibs.map((r) => r.si).join(',')
-    if (ribKey !== ribKeyRef.current) {
-      ribKeyRef.current = ribKey
-      setRibList(nextRibs)
+    if (segChanged || builtOne) {
+      const nextRibs = []
+      for (let i = 0; i < nearSegsRef.current.length; i++) {
+        const { seg, si } = nearSegsRef.current[i]
+        const sd = segDataCache.get(seg)
+        if (sd?.ribbonGeo) nextRibs.push({ si, geo: sd.ribbonGeo })
+      }
+      const ribKey = nextRibs.map((r) => r.si).join(',')
+      if (ribKey !== ribKeyRef.current) {
+        ribKeyRef.current = ribKey
+        setRibList(nextRibs)
+      }
     }
 
     // 3) Compactar instancias cercanas solo cuando la cámara se mueve >= 4 u o llegó un pool/tramo nuevo
