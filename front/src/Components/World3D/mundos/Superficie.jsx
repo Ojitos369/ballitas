@@ -31,7 +31,11 @@ function cargarModelo(nombre) {
       g.applyMatrix4(o.matrixWorld)
       if (g.attributes.color_1) {
         const s = g.attributes.color_1; const a = new Float32Array(s.count * 3)
-        for (let i = 0; i < s.count; i++) { a[i * 3] = s.getX(i); a[i * 3 + 1] = s.getY(i); a[i * 3 + 2] = s.getZ(i) }
+        for (let i = 0; i < s.count; i++) {
+          a[i * 3] = 0.14 + s.getX(i) * 0.86
+          a[i * 3 + 1] = 0.14 + s.getY(i) * 0.86
+          a[i * 3 + 2] = 0.14 + s.getZ(i) * 0.86
+        }
         g.setAttribute('color', new THREE.BufferAttribute(a, 3))
       }
       for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k)
@@ -76,7 +80,7 @@ function makeRoundedBoxGeo(w = 1, h = 1, d = 1, r = 0.14, segs = 2, centerY = tr
     bevelThickness: rr,
     bevelSize: rr,
     bevelSegments: segs,
-    curveSegments: segs * 2,
+    curveSegments: segs,
   })
   geo.rotateX(-Math.PI / 2)
   geo.computeBoundingBox()
@@ -158,39 +162,39 @@ function getToyCityKit(roofStyle) {
   const casa = (() => {
     if (roofStyle === 'dome') {
       return mergeBuilding([
-        prepPart(new THREE.CylinderGeometry(0.46, 0.49, 0.1, 14).translate(0, 0.05, 0), baseCol),
-        prepPart(new THREE.CylinderGeometry(0.42, 0.44, 0.48, 14).translate(0, 0.34, 0), wallCol, true),
-        prepPart(new THREE.TorusGeometry(0.43, 0.045, 8, 16).rotateX(Math.PI / 2).translate(0, 0.58, 0), trimCol),
-        prepPart(new THREE.SphereGeometry(0.43, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.95, 1).translate(0, 0.58, 0), roofTint),
+        prepPart(new THREE.CylinderGeometry(0.46, 0.49, 0.1, 10).translate(0, 0.05, 0), baseCol),
+        prepPart(new THREE.CylinderGeometry(0.42, 0.44, 0.48, 10).translate(0, 0.34, 0), wallCol, true),
+        prepPart(new THREE.TorusGeometry(0.43, 0.045, 6, 12).rotateX(Math.PI / 2).translate(0, 0.58, 0), trimCol),
+        prepPart(new THREE.SphereGeometry(0.43, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.95, 1).translate(0, 0.58, 0), roofTint),
       ])
     }
     if (roofStyle === 'stepped' || roofStyle === 'flat') {
       return mergeBuilding([
-        prepPart(makeRoundedBoxGeo(0.92, 0.56, 0.88, 0.12, 2).translate(0, 0.28, 0), wallCol, true),
-        prepPart(makeRoundedBoxGeo(0.66, 0.28, 0.64, 0.1, 2).translate(0, 0.7, 0), roofTint, true),
-        prepPart(new THREE.CylinderGeometry(0.06, 0.08, 0.16, 8).translate(0, 0.92, 0), trimCol),
+        prepPart(makeRoundedBoxGeo(0.92, 0.56, 0.88, 0.12, 1).translate(0, 0.28, 0), wallCol, true),
+        prepPart(makeRoundedBoxGeo(0.66, 0.28, 0.64, 0.1, 1).translate(0, 0.7, 0), roofTint, true),
+        prepPart(new THREE.CylinderGeometry(0.06, 0.08, 0.16, 6).translate(0, 0.92, 0), trimCol),
       ])
     }
     return mergeBuilding([
-      prepPart(makeRoundedBoxGeo(0.88, 0.54, 0.84, 0.13, 2).translate(0, 0.27, 0), wallCol, true),
+      prepPart(makeRoundedBoxGeo(0.88, 0.54, 0.84, 0.13, 1).translate(0, 0.27, 0), wallCol, true),
       prepPart(new THREE.CylinderGeometry(0.03, 0.64, 0.45, 4).rotateY(Math.PI / 4).translate(0, 0.75, 0), roofTint),
-      prepPart(new THREE.SphereGeometry(0.08, 8, 6).translate(0, 0.96, 0), trimCol),
+      prepPart(new THREE.SphereGeometry(0.08, 6, 5).translate(0, 0.96, 0), trimCol),
     ])
   })()
 
   // Torre-castillo redondeada con galería y techo cónico/cúpula/prisma
   const torre = (() => {
     const cap = roofStyle === 'dome'
-      ? prepPart(new THREE.SphereGeometry(0.36, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.15, 1).translate(0, 0.64, 0), roofTint)
+      ? prepPart(new THREE.SphereGeometry(0.36, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.15, 1).translate(0, 0.64, 0), roofTint)
       : roofStyle === 'flat'
-        ? prepPart(new THREE.CylinderGeometry(0.38, 0.34, 0.2, 12).translate(0, 0.76, 0), roofTint)
+        ? prepPart(new THREE.CylinderGeometry(0.38, 0.34, 0.2, 10).translate(0, 0.76, 0), roofTint)
         : roofStyle === 'prism'
           ? prepPart(new THREE.ConeGeometry(0.4, 0.4, 6).translate(0, 0.8, 0), roofTint)
-          : prepPart(new THREE.ConeGeometry(0.42, 0.42, 14).translate(0, 0.8, 0), roofTint)
+          : prepPart(new THREE.ConeGeometry(0.42, 0.42, 10).translate(0, 0.8, 0), roofTint)
     return mergeBuilding([
-      prepPart(new THREE.CylinderGeometry(0.42, 0.46, 0.14, 14).translate(0, 0.07, 0), baseCol),
-      prepPart(new THREE.CylinderGeometry(0.33, 0.39, 0.54, 14).translate(0, 0.4, 0), wallCol, true),
-      prepPart(new THREE.TorusGeometry(0.35, 0.05, 8, 16).rotateX(Math.PI / 2).translate(0, 0.64, 0), trimCol),
+      prepPart(new THREE.CylinderGeometry(0.42, 0.46, 0.14, 10).translate(0, 0.07, 0), baseCol),
+      prepPart(new THREE.CylinderGeometry(0.33, 0.39, 0.54, 10).translate(0, 0.4, 0), wallCol, true),
+      prepPart(new THREE.TorusGeometry(0.35, 0.05, 6, 12).rotateX(Math.PI / 2).translate(0, 0.64, 0), trimCol),
       cap,
     ])
   })()
@@ -198,13 +202,13 @@ function getToyCityKit(roofStyle) {
   // Torreón / ciudadela alta de dos cuerpos redondeados
   const rascacielos = (() => {
     const spire = roofStyle === 'dome'
-      ? prepPart(new THREE.SphereGeometry(0.28, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 1.2, 1).translate(0, 0.76, 0), roofTint)
-      : prepPart(new THREE.ConeGeometry(0.32, 0.3, 12).translate(0, 0.86, 0), roofTint)
+      ? prepPart(new THREE.SphereGeometry(0.28, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 1.2, 1).translate(0, 0.76, 0), roofTint)
+      : prepPart(new THREE.ConeGeometry(0.32, 0.3, 10).translate(0, 0.86, 0), roofTint)
     return mergeBuilding([
-      prepPart(new THREE.CylinderGeometry(0.43, 0.48, 0.12, 14).translate(0, 0.06, 0), baseCol),
-      prepPart(new THREE.CylinderGeometry(0.36, 0.41, 0.42, 14).translate(0, 0.32, 0), wallCol, true),
-      prepPart(new THREE.TorusGeometry(0.36, 0.045, 8, 16).rotateX(Math.PI / 2).translate(0, 0.53, 0), trimCol),
-      prepPart(new THREE.CylinderGeometry(0.26, 0.31, 0.28, 14).translate(0, 0.66, 0), wallCol, true),
+      prepPart(new THREE.CylinderGeometry(0.43, 0.48, 0.12, 10).translate(0, 0.06, 0), baseCol),
+      prepPart(new THREE.CylinderGeometry(0.36, 0.41, 0.42, 10).translate(0, 0.32, 0), wallCol, true),
+      prepPart(new THREE.TorusGeometry(0.36, 0.045, 6, 12).rotateX(Math.PI / 2).translate(0, 0.53, 0), trimCol),
+      prepPart(new THREE.CylinderGeometry(0.26, 0.31, 0.28, 10).translate(0, 0.66, 0), wallCol, true),
       spire,
       prepPart(new THREE.CylinderGeometry(0.02, 0.035, 0.14, 6).translate(0, 0.94, 0), trimCol),
     ])
@@ -212,27 +216,27 @@ function getToyCityKit(roofStyle) {
 
   // Comercio / taller con marquesina redondeada
   const comercio = mergeBuilding([
-    prepPart(makeRoundedBoxGeo(0.95, 0.54, 0.86, 0.12, 2).translate(0, 0.27, 0), wallCol, true),
-    prepPart(makeRoundedBoxGeo(1.02, 0.12, 0.94, 0.05, 2).translate(0, 0.56, 0), trimCol),
-    prepPart(new THREE.SphereGeometry(0.34, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1.1, 0.78, 1).translate(0, 0.62, 0), roofTint),
+    prepPart(makeRoundedBoxGeo(0.95, 0.54, 0.86, 0.12, 1).translate(0, 0.27, 0), wallCol, true),
+    prepPart(makeRoundedBoxGeo(1.02, 0.12, 0.94, 0.05, 1).translate(0, 0.56, 0), trimCol),
+    prepPart(new THREE.SphereGeometry(0.34, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1.1, 0.78, 1).translate(0, 0.62, 0), roofTint),
   ])
 
   // Estación / rotonda arqueada
   const estacion = mergeBuilding([
-    prepPart(new THREE.CylinderGeometry(0.48, 0.5, 0.12, 16).translate(0, 0.06, 0), baseCol),
-    prepPart(new THREE.CylinderGeometry(0.4, 0.43, 0.46, 16).translate(0, 0.35, 0), wallCol, true),
-    prepPart(new THREE.SphereGeometry(0.41, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.85, 1).translate(0, 0.58, 0), roofTint),
-    prepPart(new THREE.TorusGeometry(0.42, 0.04, 8, 18).rotateX(Math.PI / 2).translate(0, 0.58, 0), trimCol),
+    prepPart(new THREE.CylinderGeometry(0.48, 0.5, 0.12, 12).translate(0, 0.06, 0), baseCol),
+    prepPart(new THREE.CylinderGeometry(0.4, 0.43, 0.46, 12).translate(0, 0.35, 0), wallCol, true),
+    prepPart(new THREE.SphereGeometry(0.41, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.85, 1).translate(0, 0.58, 0), roofTint),
+    prepPart(new THREE.TorusGeometry(0.42, 0.04, 6, 12).rotateX(Math.PI / 2).translate(0, 0.58, 0), trimCol),
   ])
 
   // Mini parque urbano redondeado con fuente/árboles
   const parque = mergeBuilding([
-    prepPart(new THREE.CylinderGeometry(0.48, 0.5, 0.14, 16).translate(0, 0.07, 0), '#90d494'),
-    prepPart(new THREE.SphereGeometry(0.22, 10, 8).translate(-0.2, 0.44, -0.1), '#7de087'),
-    prepPart(new THREE.CylinderGeometry(0.05, 0.07, 0.24, 7).translate(-0.2, 0.24, -0.1), '#8c6244'),
-    prepPart(new THREE.SphereGeometry(0.18, 10, 8).translate(0.2, 0.38, 0.14), '#a3eb94'),
-    prepPart(new THREE.CylinderGeometry(0.04, 0.06, 0.2, 7).translate(0.2, 0.2, 0.14), '#8c6244'),
-    prepPart(new THREE.CylinderGeometry(0.14, 0.17, 0.16, 10).translate(0.04, 0.2, -0.18), '#bfe8ff'),
+    prepPart(new THREE.CylinderGeometry(0.48, 0.5, 0.14, 12).translate(0, 0.07, 0), '#90d494'),
+    prepPart(new THREE.SphereGeometry(0.22, 8, 6).translate(-0.2, 0.44, -0.1), '#7de087'),
+    prepPart(new THREE.CylinderGeometry(0.05, 0.07, 0.24, 6).translate(-0.2, 0.24, -0.1), '#8c6244'),
+    prepPart(new THREE.SphereGeometry(0.18, 8, 6).translate(0.2, 0.38, 0.14), '#a3eb94'),
+    prepPart(new THREE.CylinderGeometry(0.04, 0.06, 0.2, 6).translate(0.2, 0.2, 0.14), '#8c6244'),
+    prepPart(new THREE.CylinderGeometry(0.14, 0.17, 0.16, 8).translate(0.04, 0.2, -0.18), '#bfe8ff'),
   ])
 
   const kit = { casa, torre, rascacielos, comercio, estacion, parque }
@@ -341,6 +345,26 @@ function buildCallesGeo(calles, topAt) {
   return g
 }
 
+const PORT_STONE_GEO = (() => {
+  const mk = (parts) => {
+    const g = mergeGeometries(parts.map((p) => { const n = p.toNonIndexed(); p.dispose(); return n }), false)
+    g.computeVertexNormals()
+    return g
+  }
+  return {
+    out: mk([
+      new THREE.CapsuleGeometry(0.3, 2.5, 4, 8).translate(-1.65, 1.55, 0),
+      new THREE.CapsuleGeometry(0.3, 2.5, 4, 8).translate(1.65, 1.55, 0),
+      new THREE.CapsuleGeometry(0.32, 3.4, 4, 8).rotateZ(Math.PI / 2).translate(0, 3.15, 0),
+    ]),
+    in: mk([
+      new THREE.TorusGeometry(1.65, 0.3, 8, 18, Math.PI).translate(0, 0.25, 0),
+      new THREE.CylinderGeometry(0.36, 0.42, 0.9, 10).translate(-1.65, 0.45, 0),
+      new THREE.CylinderGeometry(0.36, 0.42, 0.9, 10).translate(1.65, 0.45, 0),
+    ]),
+  }
+})()
+
 function Puerto({ p, color, y, onHover, arrows }) {
   const col = useMemo(() => new THREE.Color(color), [color])
   const glow = useMemo(() => new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(1.8), toneMapped: false }), [col])
@@ -357,20 +381,11 @@ function Puerto({ p, color, y, onHover, arrows }) {
       onPointerOver={(e) => { e.stopPropagation(); onHover(p) }}
       onPointerOut={() => onHover(null)}
     >
+      <mesh geometry={salida ? PORT_STONE_GEO.out : PORT_STONE_GEO.in} material={stone} />
       {salida ? (
-        <>
-          <mesh position={[-1.65, 1.55, 0]} material={stone} castShadow><capsuleGeometry args={[0.3, 2.5, 6, 10]} /></mesh>
-          <mesh position={[1.65, 1.55, 0]} material={stone} castShadow><capsuleGeometry args={[0.3, 2.5, 6, 10]} /></mesh>
-          <mesh position={[0, 3.15, 0]} rotation={[0, 0, Math.PI / 2]} material={stone} castShadow><capsuleGeometry args={[0.32, 3.4, 6, 10]} /></mesh>
-          <mesh position={[0, 3.15, 0.34]} material={glow}><boxGeometry args={[2.9, 0.16, 0.08]} /></mesh>
-        </>
+        <mesh position={[0, 3.15, 0.34]} material={glow}><boxGeometry args={[2.9, 0.16, 0.08]} /></mesh>
       ) : (
-        <>
-          <mesh position={[0, 0.25, 0]} material={stone} castShadow><torusGeometry args={[1.65, 0.3, 10, 24, Math.PI]} /></mesh>
-          <mesh position={[0, 0.25, 0]} material={glow}><torusGeometry args={[1.32, 0.09, 8, 24, Math.PI]} /></mesh>
-          <mesh position={[-1.65, 0.45, 0]} material={stone}><cylinderGeometry args={[0.36, 0.42, 0.9, 12]} /></mesh>
-          <mesh position={[1.65, 0.45, 0]} material={stone}><cylinderGeometry args={[0.36, 0.42, 0.9, 12]} /></mesh>
-        </>
+        <mesh position={[0, 0.25, 0]} material={glow}><torusGeometry args={[1.32, 0.09, 6, 18, Math.PI]} /></mesh>
       )}
       <group ref={flecha} position={[0, salida ? 4.45 : 3.15, 0]}>
         <mesh rotation={[salida ? Math.PI / 2 : -Math.PI / 2, 0, 0]} material={glow}><coneGeometry args={[0.52, 1.3, 8]} /></mesh>
@@ -459,8 +474,8 @@ function Cielo({ biome }) {
   useEffect(() => () => mat.dispose(), [mat])
   return (
     <>
-      <mesh material={mat} renderOrder={-10}><sphereGeometry args={[420, 28, 16]} /></mesh>
-      <Stars radius={280} depth={80} count={2000} factor={11} saturation={0.55} fade speed={0.35} />
+      <mesh material={mat} renderOrder={-10}><sphereGeometry args={[420, 24, 14]} /></mesh>
+      <Stars radius={280} depth={80} count={1100} factor={11} saturation={0.55} fade speed={0.35} />
     </>
   )
 }
@@ -659,42 +674,32 @@ function SuperficieEscena({ node, biome, gen, nodeIdx, ballitas, onHoverPort }) 
       <Cielo biome={biome} />
       <ambientLight intensity={0.42} color="#c2ceff" />
       <hemisphereLight args={[biome.atmoRim, biome.groundMid, 0.95]} />
-      <directionalLight
-        castShadow
-        position={[-28, 48, 28]}
-        intensity={1.55}
-        color={rimLightCol}
-        shadow-mapSize={[512, 512]}
-        shadow-bias={-0.0005}
-        shadow-normalBias={0.04}
-      >
-        <orthographicCamera attach="shadow-camera" args={[-42, 42, 42, -42, 1, 140]} />
-      </directionalLight>
-      <directionalLight position={[32, 24, -28]} intensity={0.52} color={biome.atmoRim} />
+      <directionalLight position={[-28, 48, 28]} intensity={1.6} color={rimLightCol} />
+      <directionalLight position={[32, 24, -28]} intensity={0.55} color={biome.atmoRim} />
 
-      <mesh geometry={G.peana} material={M.peana} position={[0, -4.5, 0]} receiveShadow />
-      <mesh geometry={G.plaza} material={M.plaza} position={[0, gen.topAt(0, 0) - 0.02, 0]} receiveShadow />
+      <mesh geometry={G.peana} material={M.peana} position={[0, -4.5, 0]} />
+      <mesh geometry={G.plaza} material={M.plaza} position={[0, gen.topAt(0, 0) - 0.02, 0]} />
       <mesh geometry={G.borde} material={M.borde} position={[0, -2.28, 0]} />
       <mesh geometry={G.anillo} material={M.borde} position={[0, gen.topAt(0, 0) + 0.14, 0]} />
-      <Inst geo={G.celda} mat={M.suelo} items={gen.celdas} place={celdaPlace} color={celdaColor} receive />
-      <mesh geometry={G.calles} material={M.calle} receiveShadow />
+      <Inst geo={G.celda} mat={M.suelo} items={gen.celdas} place={celdaPlace} color={celdaColor} />
+      <mesh geometry={G.calles} material={M.calle} />
 
       {BUILDING_TYPES.map((t) => (
-        <Inst key={t} geo={kit[t]} mat={M.edif} items={porTipo[t]} place={edifPlace} color={edifColor} cast receive />
+        <Inst key={t} geo={kit[t]} mat={M.edif} items={porTipo[t]} place={edifPlace} color={edifColor} />
       ))}
 
-      <Inst geo={G.tronco} mat={M.tronco} items={arboles} place={troncoPlace} cast />
-      <Inst geo={G.copa} mat={M.copa} items={arboles} place={troncoPlace} color={copaColor} cast />
-      <Inst geo={G.roca} mat={M.roca} items={rocas} place={rocaPlace} color={rocaColor} cast />
+      <Inst geo={G.tronco} mat={M.tronco} items={arboles} place={troncoPlace} />
+      <Inst geo={G.copa} mat={M.copa} items={arboles} place={troncoPlace} color={copaColor} />
+      <Inst geo={G.roca} mat={M.roca} items={rocas} place={rocaPlace} color={rocaColor} />
       <Inst geo={G.tallo} mat={M.tallo} items={luces} place={luzPlace} />
       <Inst geo={G.flor} mat={M.flor} items={luces} place={luzPlace} color={luzColor} />
-      {gen.perfil.modelos.map((n, i) => (modelos[n] ? <Inst key={n} geo={modelos[n]} mat={M.modelo} items={porModelo[i]} place={modeloPlace} cast /> : null))}
+      {gen.perfil.modelos.map((n, i) => (modelos[n] ? <Inst key={n} geo={modelos[n]} mat={M.modelo} items={porModelo[i]} place={modeloPlace} /> : null))}
       <Inst geo={G.poste} mat={M.poste} items={gen.farolas} place={faroPlace} />
       <Inst geo={G.bulbo} mat={M.lampA} items={faroA} place={faroPlace} />
       <Inst geo={G.bulbo} mat={M.lampB} items={faroB} place={faroPlace} />
 
       {walkers.length > 0 && <instancedMesh ref={(m) => { walkRef.current = m; if (m) { m.frustumCulled = false; walkers.forEach((w, i) => m.setColorAt(i, walkColor(w, i))) } }} args={[G.vida, M.vida, walkers.length]} frustumCulled={false} />}
-      <instancedMesh ref={ballRef} args={[G.bola, M.bola, MAXB]} frustumCulled={false} count={0} castShadow />
+      <instancedMesh ref={ballRef} args={[G.bola, M.bola, MAXB]} frustumCulled={false} count={0} />
 
       <Suspense fallback={null}>
         <group position={[0, gen.topAt(0, 0) + 0.08, 0]}>
@@ -729,7 +734,7 @@ function SuperficieEscena({ node, biome, gen, nodeIdx, ballitas, onHoverPort }) 
       />
 
       <EffectComposer multisampling={0}>
-        <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.25} radius={0.68} intensity={0.48} />
+        <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.28} radius={0.6} intensity={0.48} levels={4} />
         <ToneMapping mode={TONE_MAPPING_AGX} middleGrey={0.58} />
       </EffectComposer>
     </group>
@@ -753,7 +758,6 @@ export default function Superficie({ world, nodeIdx, ballitas, onSalir, showStat
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 20, background: '#040614' }}>
       <Canvas
-        shadows="soft"
         dpr={1}
         gl={{ antialias: false, powerPreference: 'high-performance' }}
         camera={{ fov: 40, near: 0.5, far: 1200, position: [0, 44, 62] }}
