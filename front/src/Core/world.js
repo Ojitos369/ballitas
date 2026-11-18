@@ -7,7 +7,7 @@
 //                      amplitudes y caídas (`drop`) de obstáculos.
 //   TUBE_SCALE  (1.8): factor del radio de los tubos (`P.radius`); `BALL_R` queda fijo (0.5)
 //                      para dejar espacio interior a pórticos, gradas y decoración.
-//   SIZE_K      (2.5): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
+//   SIZE_K      (3.0): ampliación del mapa (SPHERE_R, panza y arco de los caminos) sin agrandar las pistas.
 //   TRACK_K     (4.7): escala uniforme de todo lo espacial del trazado (incluidos NODE_R, LANE_W y el efecto de
 //                      WORLD_SCALE/TUBE_SCALE); BALL_R no escala: calzada LANE_W = 4.89 u (~6 ballitas de ancho).
 //   PORT_ZONE: radio desde el centro de un nodo donde los caminos que llegan a él se unen (inPort); fuera de él y de
@@ -99,14 +99,14 @@ import * as THREE from 'three'
 export const WORLD_SCALE = 2.8
 export const TUBE_SCALE = 1.8
 // Ampliación del mapa (esfera de nodos, panza y arco de los caminos) sin agrandar las pistas: más espacio entre caminos.
-export const SIZE_K = 2.5
+export const SIZE_K = 3.0
 // Escala uniforme del trazado: TODO lo espacial (nodos, radios, separaciones, anchos, trenzas, rectas, márgenes, alturas y
 // pasos de muestreo) se multiplica por TRACK_K; la ballita no (BALL_R fijo). Las holguras en radios de pista quedan como con
 // TRACK_K = 1 y la calzada (LANE_W) queda TRACK_K veces más ancha respecto a la ballita: ~6 ballitas de ancho.
 export const TRACK_K = 4.7
 const TK = TRACK_K
 const WS = WORLD_SCALE * TK
-export const NODE_R = 7.5 * TK
+export const NODE_R = 8.5 * TK
 export const BALL_R = 0.4
 export const MIN_GAP_K = 1.5 // huelgo mínimo, en radios de pista, entre caminos de cualquier ruta (fuera de uniones)
 const Y = new THREE.Vector3(0, 1, 0)
@@ -417,8 +417,8 @@ const lerpArr = (arr, u) => {
 // ───────────────────────── caminos trenzados ─────────────────────────
 // ancho de calzada de cada camino: 1.04 u con TRACK_K = 1 (1.3 ballitas); escala con el trazado, no con la ballita
 export const LANE_W = +(0.4 * 2.6).toFixed(2) * TK
-export const BRAID_A = 4.6 * TK // separación nominal (u) de cada camino respecto al central en el tramo abierto
-const BRAID_PAD = 4 * TK // holgura del envolvente para ancho de pista, ballita y arcos
+export const BRAID_A = 5.2 * TK // separación nominal (u) de cada camino respecto al central en el tramo abierto
+const BRAID_PAD = 4.5 * TK // holgura del envolvente para ancho de pista, ballita y arcos
 const BRAID_OPEN = 16 * TK // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
 const BRAID_RAMP = 18 * TK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
 export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon', 'tirabuzon_inv']
@@ -812,7 +812,7 @@ function buildLanes(way) {
   for (const s of way.segments) for (const sw of s.switches) delete sw._arc
 }
 
-const TERM_MIN_ANG = 0.45 // separación angular mínima entre terminales de un nodo
+const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si la distribución no admite 0.82
 
 // Elecciones de la búsqueda de huecos ({theta, bowExtra, salt} por camino), calculadas aparte (worker/caché):
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
@@ -874,7 +874,7 @@ function buildCity(world, node, def, rng) {
     pool.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r))
   }
   const pickTerminal = (biasDir) => {
-    for (const minAng of [0.68, TERM_MIN_ANG]) {
+    for (const minAng of [0.82, TERM_MIN_ANG]) {
       const minDot = Math.cos(minAng)
       const cands = pool.filter((d) => dirs.every((u) => u.dot(d) < minDot))
       if (!cands.length) continue
@@ -1165,7 +1165,7 @@ function wrapMid(node, dir, target) {
 // Extensión real de la ruta en `u` (carriles abiertos de la trenza + ancho de pista), para medir rutas de un mismo sentido.
 export const routeExtent = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + LANE_W / 2 + 0.5 * TK)
 export const ROUTE_JOIN = 56 * TK // radio (u, euclidiano) alrededor de fork/cross/merge donde las rutas aún se abren en abanico por diseño
-export const SPREAD_K = 1.2 // separación lateral entre rutas de un mismo sentido, sobre P.spread
+export const SPREAD_K = 1.3 // separación lateral entre rutas de un mismo sentido, sobre P.spread
 // Si dos rutas de una mitad se tocan (routeSlack < ROUTE_MARGIN) se prueba otra fila: otro orden de las rutas (PERMS) y luego más apertura.
 const SPREAD_STEPS = [1, 1.4, 1.9]
 const PERMS = { 2: [[0, 1], [1, 0]], 3: [[0, 1, 2], [2, 1, 0], [1, 0, 2], [0, 2, 1], [1, 2, 0], [2, 0, 1]] }
