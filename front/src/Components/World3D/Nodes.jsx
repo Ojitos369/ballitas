@@ -588,11 +588,10 @@ const lampFallbackGeo = makeLatheGeo([
 ], 10)
 const haloSphereGeo = new THREE.SphereGeometry(1, 10, 8)
 
-// Atmósfera y nubes suaves (alta resolución en dos velos para evitar facetas)
-const atmoOuterGeo = new THREE.SphereGeometry(NODE_R * 1.12, 64, 44)
-const atmoInnerGeo = new THREE.SphereGeometry(NODE_R * 1.018, 64, 44)
-const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.030, 80, 56)
-const cloudsOuterGeo = new THREE.SphereGeometry(NODE_R * 1.046, 80, 56)
+// Atmósfera y nubes suaves (segmentación alta sin sobrepasar presupuesto)
+const atmoOuterGeo = new THREE.SphereGeometry(NODE_R * 1.12, 48, 32)
+const atmoInnerGeo = new THREE.SphereGeometry(NODE_R * 1.018, 48, 32)
+const cloudsGeo = new THREE.SphereGeometry(NODE_R * 1.032, 56, 38)
 
 // Geometrías suaves de estaciones terminales
 const stBaseOut = makeLatheGeo([
@@ -956,7 +955,7 @@ function cityData(node, biome) {
   const palette = (biome?.buildingColors || [node.color]).map((hex) => new THREE.Color(hex))
   const parkCol = new THREE.Color(biome?.parkColor || '#4ca662')
   // Densidad proporcional al área del planeta (NODE_R^2)
-  const N = Math.min(5400, Math.round(1150 * AREA_SCALE))
+  const N = Math.min(4800, Math.round(920 * AREA_SCALE))
   const rot = rng() * Math.PI * 2
   const col = new THREE.Color()
   const hsl = {}
@@ -1462,7 +1461,6 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   }, [geo, city, atmoOuterMat, atmoInnerMat, buildingMat, parkMat, farSkylineMat])
 
   const cloudsRef = useRef()
-  const cloudsOuterRef = useRef()
   const lampsRef = useRef()
   const farSkylineRef = useRef()
   const detailRef = useRef()
@@ -1496,13 +1494,6 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     if (cloudsRef.current) {
       cloudsRef.current.visible = dist < LOD_CLOUDS
       if (cloudsRef.current.visible) cloudsRef.current.rotation.y += dt * biome.cloudSpeed
-    }
-    if (cloudsOuterRef.current) {
-      cloudsOuterRef.current.visible = dist < LOD_CLOUDS
-      if (cloudsOuterRef.current.visible) {
-        cloudsOuterRef.current.rotation.y -= dt * biome.cloudSpeed * 0.55
-        cloudsOuterRef.current.rotation.z += dt * biome.cloudSpeed * 0.18
-      }
     }
     if (lampsRef.current) lampsRef.current.visible = dist < LOD_LAMPS
     if (farSkylineRef.current) farSkylineRef.current.visible = !near
@@ -1551,24 +1542,13 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         <mesh ref={farSkylineRef} geometry={city.farSkylineGeo} material={farSkylineMat} raycast={() => null} />
       )}
 
-      {/* Nubes finas suaves en dos velos sin facetas */}
+      {/* Nubes finas suaves sin facetas */}
       <mesh ref={cloudsRef} geometry={cloudsGeo} raycast={() => null}>
         <meshStandardMaterial
           color={biome.cloudColor}
           map={tex.planetClouds}
           transparent
           opacity={biome.cloudOpacity}
-          depthWrite={false}
-          roughness={1}
-          metalness={0}
-        />
-      </mesh>
-      <mesh ref={cloudsOuterRef} geometry={cloudsOuterGeo} rotation={[0.45, 1.2, 0.2]} raycast={() => null}>
-        <meshStandardMaterial
-          color={biome.cloudColor}
-          map={tex.planetClouds}
-          transparent
-          opacity={biome.cloudOpacity * 0.55}
           depthWrite={false}
           roughness={1}
           metalness={0}
