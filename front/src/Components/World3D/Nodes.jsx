@@ -6,9 +6,15 @@ import { NODE_R, BALL_R, mulberry32 } from '../../Core/world.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { withCameraFade } from './Paths.jsx'
-import { resolveNodeBiome, buildBiomePlanetGeo, buildCityDistricts } from './mundos/biomas.js'
+import { resolveNodeBiome, buildCityDistricts } from './mundos/biomas.js'
 import { BUILDING_TYPES, getCityKitProcedural, getCachedBiomeCityKit, loadBiomeCityKit, buildFarSkylineGeo } from './mundos/arquitectura.js'
 import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
+import {
+  resolvePlanetConfig,
+  createPlanetCartoonMaterial,
+  getPlanetUnitSphereGeo,
+  getPlanetOutlineMaterial,
+} from './mundos/planetaCartoon.js'
 import {
   trafficGeo,
   vehicleGeo,
@@ -1409,12 +1415,14 @@ function Terminal({ node, term, color, tex, podAsset, pylonAsset, planetLodRef }
 
 function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
+  const planetCfg = useMemo(() => resolvePlanetConfig(node, biome, world), [node, biome, world])
   const city = useMemo(() => cityData(node, biome), [node, biome])
-  const geo = useMemo(() => buildBiomePlanetGeo(node, biome, city.districts), [node, biome, city.districts])
+  const unitSphereGeo = useMemo(() => getPlanetUnitSphereGeo(), [])
+  const planetMat = useMemo(() => createPlanetCartoonMaterial(planetCfg), [planetCfg])
+  const outlineMat = useMemo(() => getPlanetOutlineMaterial(planetCfg.outlineHex), [planetCfg.outlineHex])
   const kitGeos = useCityKit(biome)
   const life = useMemo(() => buildPlanetLifeData(node, biome, city.monumentSpot, city), [node, biome, city])
-  const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
-  const atmoInnerMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: false, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
+  const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity * 0.72 }), [biome])
   const buildingMat = useMemo(() => {
     const m = new THREE.MeshStandardMaterial({
       vertexColors: true,
@@ -1449,17 +1457,17 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   }), [biome])
 
   useEffect(() => () => {
-    geo.dispose()
+    planetMat.dispose()
     city.roadGeo.dispose()
     city.lineGeo.dispose()
     city.farSkylineGeo?.dispose()
     atmoOuterMat.dispose()
-    atmoInnerMat.dispose()
     buildingMat.dispose()
     parkMat.dispose()
     farSkylineMat.dispose()
-  }, [geo, city, atmoOuterMat, atmoInnerMat, buildingMat, parkMat, farSkylineMat])
+  }, [planetMat, city, atmoOuterMat, buildingMat, parkMat, farSkylineMat])
 
+  const planetBodyRef = useRef()
   const cloudsRef = useRef()
   const lampsRef = useRef()
   const farSkylineRef = useRef()
@@ -1470,7 +1478,6 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const vaporRef = useRef()
   const windowsRef = useRef()
   const planetLodRef = useRef({ near: false })
-  const normalScale = useMemo(() => new THREE.Vector2(0.32, 0.32), [])
 
   useLayoutEffect(() => {
     if (trafficRef.current) initTrafficColors(life, trafficRef.current)
@@ -1488,6 +1495,11 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   }, [life, biome])
 
   useFrame(({ camera, clock }, dt) => {
+    const t = clock.elapsedTime
+    planetMat.uniforms.uTime.value = t
+    if (planetBodyRef.current) {
+      planetBodyRef.current.rotation.y += dt * planetCfg.spinSpeed
+    }
     const dist = camera.position.distanceTo(node.pos)
     const near = dist < LOD_NEAR
     planetLodRef.current.near = near
@@ -1499,7 +1511,6 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
     if (farSkylineRef.current) farSkylineRef.current.visible = !near
     if (detailRef.current) detailRef.current.visible = near
     if (near) {
-      const t = clock.elapsedTime
       updatePlanetLife(life, t, biome, {
         trafficMesh: trafficRef.current,
         vehiclesMesh: vehiclesRef.current,
@@ -1513,29 +1524,30 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   })
 
   const lampGeo = lampFallbackGeo
+  const planetVisualR = NODE_R - 0.02
 
   return (
     <group position={node.pos}>
-      {/* Esfera del planeta con relieve, distritos y luces urbanas (clic para enfocar) */}
-      <mesh
-        geometry={geo}
-        receiveShadow
-        onClick={(e) => {
-          e.stopPropagation()
-          focusWorldNode(node.idx)
-        }}
-      >
-        <meshStandardMaterial
-          vertexColors
-          normalMap={tex.planetNormal}
-          normalScale={normalScale}
-          emissive={biome.cityLight}
-          emissiveMap={tex.cityGridEmissive}
-          emissiveIntensity={0.62}
-          roughness={biome.planetRoughness}
-          metalness={biome.planetMetalness}
-        />
-      </mesh>
+      {/* Esfera cartoon procedural con inclinación, giro, sombreado toon y contorno oscuro */}
+      <group rotation={planetCfg.tilt}>
+        <group ref={planetBodyRef} rotation-y={planetCfg.rotY0}>
+          <mesh
+            geometry={unitSphereGeo}
+            material={planetMat}
+            scale={planetVisualR}
+            onClick={(e) => {
+              e.stopPropagation()
+              focusWorldNode(node.idx)
+            }}
+          />
+          <mesh
+            geometry={unitSphereGeo}
+            material={outlineMat}
+            scale={planetVisualR * 1.045}
+            raycast={() => null}
+          />
+        </group>
+      </group>
 
       {/* Silueta urbana ligera para LOD lejano (1 draw call por planeta) */}
       {city.farSkylineGeo && (
@@ -1555,9 +1567,8 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         />
       </mesh>
 
-      {/* Atmósfera con Fresnel y gradiente (no intercepta cursor) */}
+      {/* Atmósfera exterior con Fresnel y gradiente (no intercepta cursor) */}
       <mesh geometry={atmoOuterGeo} material={atmoOuterMat} raycast={() => null} />
-      <mesh geometry={atmoInnerGeo} material={atmoInnerMat} raycast={() => null} />
 
       {/* Calles curvas continuas y líneas guía */}
       <mesh geometry={city.roadGeo} receiveShadow>
