@@ -7,6 +7,8 @@ import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { withCameraFade } from './Paths.jsx'
 import { resolveNodeBiome, buildBiomePlanetGeo } from './mundos/biomas.js'
+import { getBiomeBuildingGeos } from './mundos/arquitectura.js'
+import { pickMonumentSpot, Monument } from './mundos/monumentos.jsx'
 
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
@@ -809,6 +811,9 @@ function cityData(node, biome) {
   node.destinos.forEach((d) => near.push([d.pos, 2.45]))
   terminals.forEach((t) => near.push([t.pos || node.verts[t.vert].pos, 3.05]))
 
+  const monumentSpot = pickMonumentSpot(node, near)
+  near.push([monumentSpot.pos.clone().add(node.pos), 2.35])
+
   const palette = (biome?.buildingColors || [node.color]).map((hex) => new THREE.Color(hex))
   const N = 420
   const rot = rng() * Math.PI * 2
@@ -845,7 +850,7 @@ function cityData(node, biome) {
     else housesCapsule.push(item)
   }
 
-  return { roadGeo, lineGeo, lamps, lampHalos, housesRounded, housesTower, housesCapsule, terminals }
+  return { roadGeo, lineGeo, lamps, lampHalos, housesRounded, housesTower, housesCapsule, terminals, monumentSpot }
 }
 
 function Instanced({ geo, material, items, children, ...rest }) {
@@ -1162,6 +1167,7 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
   const biome = useMemo(() => resolveNodeBiome(node, world), [node, world])
   const geo = useMemo(() => buildBiomePlanetGeo(node, biome), [node, biome])
   const city = useMemo(() => cityData(node, biome), [node, biome])
+  const [bGeoHouse, bGeoTower, bGeoAccent] = useMemo(() => getBiomeBuildingGeos(biome.roofStyle), [biome.roofStyle])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   const atmoInnerMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: false, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity }), [biome])
   useEffect(() => () => {
@@ -1229,42 +1235,45 @@ function Planet({ node, world, tex, lampAsset, podAsset, pylonAsset }) {
         <meshStandardMaterial color="#2a3048" emissive={biome.cityLight} emissiveIntensity={0.48} roughness={0.4} />
       </mesh>
 
+      {/* Monumento único del bioma */}
+      <Monument node={node} biome={biome} spot={city.monumentSpot} />
+
       {/* Detalles de ciudad con LOD */}
       <group ref={detailRef} visible={false}>
-        <Instanced geo={houseRoundedGeo} items={city.housesRounded}>
+        <Instanced geo={bGeoHouse} items={city.housesRounded}>
           <meshStandardMaterial
             ref={applyCityFade}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
-            roughness={0.58}
-            metalness={0.28}
-            emissive="#ffffff"
+            roughness={biome.buildingRoughness}
+            metalness={biome.buildingMetalness}
+            emissive={biome.emissiveColor}
             emissiveMap={tex.buildingEmissive}
-            emissiveIntensity={0.54}
+            emissiveIntensity={biome.emissiveIntensity}
           />
         </Instanced>
-        <Instanced geo={houseTowerGeo} items={city.housesTower}>
+        <Instanced geo={bGeoTower} items={city.housesTower}>
           <meshStandardMaterial
             ref={applyCityFade}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
-            roughness={0.48}
-            metalness={0.38}
-            emissive="#ffffff"
+            roughness={Math.max(0.15, biome.buildingRoughness - 0.08)}
+            metalness={Math.min(0.85, biome.buildingMetalness + 0.1)}
+            emissive={biome.emissiveColor}
             emissiveMap={tex.buildingEmissive}
-            emissiveIntensity={0.58}
+            emissiveIntensity={biome.emissiveIntensity * 1.08}
           />
         </Instanced>
-        <Instanced geo={houseCapsuleGeo} items={city.housesCapsule}>
+        <Instanced geo={bGeoAccent} items={city.housesCapsule}>
           <meshStandardMaterial
             ref={applyCityFade}
             map={tex.buildingAlbedo}
             normalMap={tex.buildingNormal}
-            roughness={0.42}
-            metalness={0.42}
-            emissive="#ffffff"
+            roughness={Math.max(0.15, biome.buildingRoughness - 0.12)}
+            metalness={Math.min(0.85, biome.buildingMetalness + 0.14)}
+            emissive={biome.emissiveColor}
             emissiveMap={tex.buildingEmissive}
-            emissiveIntensity={0.5}
+            emissiveIntensity={biome.emissiveIntensity * 0.95}
           />
         </Instanced>
       </group>
