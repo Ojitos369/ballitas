@@ -18,6 +18,7 @@ const TAU = Math.PI * 2
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const SEG_ACTIVE_DIST = 96
 const MOVE_RECOMPACT_SQ = 20
+const OVERVIEW_DIST_SQ = 36 * 36 // como estructuras.jsx: > 36 u del tramo más cercano = vista general
 
 // ═══════════════════════════ GEOMETRÍAS PROCEDURALES ═══════════════════════════
 const _m4 = new THREE.Matrix4()
@@ -451,16 +452,32 @@ function buildWater(way, seg, spec, col) {
   return markShared(g)
 }
 
-function buildSeg(way, seg, si, spec) {
-  if (segCache.has(seg)) return segCache.get(seg)
-  const rng = mulberry32(5303 + way.idx * 419 + si * 61)
-  const world = mundoDe(way)
-  const col = world ? colisionDe(world) : null
-  const local = nuevoLocal()
+/** Construye el tramo por pasos (una capa o el agua por llamada) para no cargar un cuadro entero.
+ *  Devuelve true cuando el tramo quedó completo. */
+function buildSegStep(way, seg, si, spec) {
+  let st = segCache.get(seg)
+  if (!st) {
+    const world = mundoDe(way)
+    st = {
+      layers: spec.layers.map(() => []), next: 0, done: false, water: null,
+      rng: mulberry32(5303 + way.idx * 419 + si * 61), col: world ? colisionDe(world) : null, local: nuevoLocal(),
+    }
+    segCache.set(seg, st)
+  }
+  if (st.done) return true
+  const li = st.next++
+  if (li < spec.layers.length) buildLayer(way, seg, spec.layers[li], st.layers[li], st)
+  else {
+    if (spec.water) st.water = buildWater(way, seg, spec.water, st.col)
+    st.done = true
+  }
+  return st.done
+}
+
+function buildLayer(way, seg, ly, out, { rng, col, local }) {
   const L = Math.max(seg.length ?? 1, 1)
   const lanes = lanesOf(seg)
-  const layers = spec.layers.map(() => [])
-  spec.layers.forEach((ly, li) => {
+  {
     const tints = (ly.tints ?? ['#ffffff']).map((h) => new THREE.Color(h))
     for (const lane of lanes) {
       const E = halfWidth(lane) + CURB
@@ -495,15 +512,12 @@ function buildSeg(way, seg, si, spec) {
           const quat = basisQuat(f.up, f.tangent)
           quat.multiply(Q_YAW.setFromAxisAngle(Y_AXIS, ly.geo === 'school' ? 0 : rng() * TAU))
           if (ly.tilt) quat.multiply(Q_TILT.setFromAxisAngle(X_AXIS, ly.tilt * sg))
-          layers[li].push({ pos: _cand.clone(), quat, scale: sc, color: tints[Math.floor(rng() * tints.length)] })
+          out.push({ pos: _cand.clone(), quat, scale: sc, color: tints[Math.floor(rng() * tints.length)] })
           if (rng() > (ly.both ?? 0.5)) break
         }
       }
     }
-  })
-  const out = { layers, water: spec.water ? buildWater(way, seg, spec.water, col) : null }
-  segCache.set(seg, out)
-  return out
+  }
 }
 
 // ═══════════════════════════ COMPONENTE ═══════════════════════════
@@ -534,6 +548,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
   const waterKey = useRef('')
   const groupRef = useRef()
   const nearRef = useRef([])
+  const overviewRef = useRef(false)
   const lastSeg = useRef(new THREE.Vector3(Infinity, 0, 0))
   const lastCam = useRef(new THREE.Vector3(Infinity, 0, 0))
   const lastFwd = useRef(new THREE.Vector3())
@@ -552,17 +567,25 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     if (cam.distanceToSquared(lastSeg.current) >= 100) {
       lastSeg.current.copy(cam)
       const near = []
+      let best = Infinity
       for (const x of nonAirSegs) {
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
-        if (minSegDistSq(x.seg, cam) <= lim * lim) near.push(x)
+        const d2 = minSegDistSq(x.seg, cam)
+        if (d2 < best) best = d2
+        if (d2 <= lim * lim) near.push(x)
       }
       nearRef.current = near
+      overviewRef.current = best > OVERVIEW_DIST_SQ
       segChanged = true
       dirty.current = true
     }
+    // Vista general (Camino): sin construir ni mostrar el detalle fino; solo lo grande y lejano.
+    const overview = overviewRef.current
     let built = false
-    for (const { seg, si } of nearRef.current) {
-      if (!segCache.has(seg)) { buildSeg(way, seg, si, spec); built = true; break }
+    if (!overview) {
+      for (const { seg, si } of nearRef.current) {
+        if (!segCache.get(seg)?.done) { if (buildSegStep(way, seg, si, spec)) segChanged = true; built = true; break }
+      }
     }
     if (built) dirty.current = true
     if ((segChanged || built) && spec.water) {
@@ -579,7 +602,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       const mesh = meshes[li]
       const r2 = ly.range * ly.range
       let n = 0
-      for (const { seg } of nearRef.current) {
+      for (const { seg } of overview ? [] : nearRef.current) {
         const sd = segCache.get(seg)
         if (!sd) continue
         const list = sd.layers[li]
