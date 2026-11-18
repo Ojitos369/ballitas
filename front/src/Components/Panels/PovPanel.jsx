@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePanelMin } from './Detail.jsx'
 
 const JOY_MAX_R = 32
@@ -42,6 +42,14 @@ export default function PovPanel({
   const knobRef = useRef(null)
   const joyPointerId = useRef(null)
   const [min, toggleMin] = usePanelMin('pov')
+  const [zoom, setZoom] = useState(0.5)
+  const zoomBy = (d) => { const st = povControlRef?.current; if (st) st.zoom = Math.min(1, Math.max(0, st.zoom + d)) }
+
+  useEffect(() => {
+    if (!active) return undefined
+    const t = setInterval(() => { const z = povControlRef?.current?.zoom; if (typeof z === 'number') setZoom((p) => (p === z ? p : z)) }, 150)
+    return () => clearInterval(t)
+  }, [active, povControlRef])
 
   const setKnob = (dx, dy, nx, ny) => {
     if (knobRef.current) {
@@ -155,6 +163,9 @@ export default function PovPanel({
           >
             🧭 {gyroActive ? 'Giro ON' : 'Giroscopio'}
           </button>
+          <button type="button" className="pov-action" aria-label="Alejar (−)" title="Alejar (−)" onClick={() => zoomBy(-0.1)}>−</button>
+          <span className="pov-status" role="status" aria-label="Nivel de zoom" title="Zoom: espalda → ojos → lente" style={{ alignSelf: 'center', minWidth: 34, textAlign: 'center' }}>🔍 {Math.round(zoom * 100)}%</span>
+          <button type="button" className="pov-action" aria-label="Acercar (+)" title="Acercar (+)" onClick={() => zoomBy(0.1)}>+</button>
           <button type="button" className="pov-action" aria-label="Salir de POV (Esc)" title="Salir de POV (Esc)" onClick={onExitPov}>✕</button>
           </>}
         </div>
