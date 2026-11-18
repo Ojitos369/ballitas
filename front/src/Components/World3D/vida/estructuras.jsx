@@ -312,15 +312,13 @@ function ribbonMat(themeId, spec) {
   return m
 }
 
-let _archMat = null
-function archMat() {
-  if (!_archMat) _archMat = markShared(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))
-  return _archMat
+function archMat(themeId) {
+  return triplanarMaterial(themeId, 'fachada', { glow: 0.08, texStrength: 0.22 })
 }
 
 export function estructurasWarmup() {
   return [
-    archMat(),
+    archMat('bosque'),
     ribbonMat('volcan', THEME_STRUCTS.volcan.ribbon),
     triplanarMaterial('bosque', 'terreno', { standard: false }),
     triplanarMaterial('neon', 'fachada', { standard: false }),
@@ -627,7 +625,7 @@ export default function Estructuras({ way, detail, time }) {
   const waySphere = useMemo(() => getWayBoundingSphere(way, 18 * TRACK_K), [way])
   const archGeo = useMemo(() => (spec.arch ? getArchGeo(spec.arch.kind) : null), [spec.arch])
   const ribMat = useMemo(() => ribbonMat(themeId, spec.ribbon), [themeId, spec.ribbon])
-  const aMat = useMemo(() => archMat(), [])
+  const aMat = useMemo(() => archMat(themeId), [themeId])
 
   const archMesh = useMemo(() => {
     if (!archGeo) return null
