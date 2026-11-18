@@ -748,6 +748,7 @@ def main():
     print('OK kit assets', len(data), 'max_tris:', max(d['tris'] for d in data))
     if over:
         raise Exception(f'Exceden 900 tris: {over}')
+    generate_lod_variants()
 
 
 def generate_lod_variants():

@@ -2,14 +2,15 @@
 // teñidos con el color base del camino/ruta y con un pulso suave de brillo que viaja por la pista
 // actualizando un único uniform global en un solo useFrame. A detalle bajo (< 0.3) usa aro ligero sin textura.
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { getWayDetail, markShared, routeInfo } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
 import { CURB, TERR, halfWidth, lanesOf, pal, surfFrame } from './pista.jsx'
 
-const RING_STEP = 33
+const RING_STEP = 55
+const RING_RANGE = 250
 const ROUTE_COLS = ['#38e8ff', '#ff5c8a', '#ffd24a']
 const RING_TIME = { value: 0 }
 
@@ -150,10 +151,11 @@ function attachRingAttrs(baseGeo, phases, tints) {
 }
 
 export default function Anillos({ way }) {
-  useEffect(() => { precargarKit(['anillo_neon']) }, [])
-  const kit = useKit('anillo_neon')
+  useEffect(() => { precargarKit(['anillo_neon_lod']) }, [])
+  const kit = useKit('anillo_neon_lod')
   const data = useMemo(() => buildAnillosData(way), [way])
   const detail = getWayDetail(way)
+  const camera = useThree((s) => s.camera)
   const hiRef = useRef()
   const loRef = useRef()
 
@@ -189,11 +191,31 @@ export default function Anillos({ way }) {
     if (loBundle) { loBundle.mesh.dispose(); loBundle.geo.dispose() }
   }, [loBundle])
 
+  const frameMatrix = useMemo(() => new THREE.Matrix4(), [])
+  const frameScale = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ clock }) => {
     RING_TIME.value = clock.elapsedTime
     const isLow = detail ? detail.value < 0.3 : false
     if (hiRef.current) hiRef.current.visible = !isLow
     if (loRef.current) loRef.current.visible = isLow
+    const mesh = isLow ? loRef.current : hiRef.current
+    if (!mesh) return
+    const phaseAttr = mesh.geometry.getAttribute('aPhase')
+    const tintAttr = mesh.geometry.getAttribute('aTint')
+    let count = 0
+    for (let i = 0; i < data.rings.length; i++) {
+      const ring = data.rings[i]
+      if (camera.position.distanceToSquared(ring.pos) > RING_RANGE * RING_RANGE) continue
+      frameScale.setScalar(ring.scale)
+      mesh.setMatrixAt(count, frameMatrix.compose(ring.pos, ring.quat, frameScale))
+      phaseAttr.setX(count, ring.phase)
+      tintAttr.setXYZ(count, ring.color.r, ring.color.g, ring.color.b)
+      count++
+    }
+    mesh.count = count
+    if (count) mesh.instanceMatrix.needsUpdate = true
+    phaseAttr.needsUpdate = true
+    tintAttr.needsUpdate = true
   })
 
   if (!data.rings.length) return null
