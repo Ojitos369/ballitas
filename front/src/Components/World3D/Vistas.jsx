@@ -204,15 +204,7 @@ function VistaMundos({ enabled }) {
   useEffect(() => {
     if (sup != null) {
       guardada.current = { p: camera.position.clone(), t: controls?.target?.clone(), fov: camera.fov, near: camera.near, far: camera.far }
-      return
     }
-    const g = guardada.current
-    if (!g) return
-    guardada.current = null
-    camera.position.copy(g.p); camera.fov = g.fov; camera.near = g.near; camera.far = g.far
-    camera.updateProjectionMatrix()
-    if (g.t && controls?.target) { controls.target.copy(g.t); controls.update?.() }
-    nav.current.fly = 1
   }, [sup, camera, controls])
 
   useEffect(() => {
@@ -318,6 +310,19 @@ function VistaMundos({ enabled }) {
   }, [controls])
 
   useFrame((_, dt) => {
+    const g = guardada.current
+    if (g && supRef.current == null) {
+      // Salida de la superficie: se restaura la pose guardada y se corta el «volviendo a casa» de CameraRig
+      // (que arranca al dejar de estar suspendido) simulando un toque del usuario sobre los controles.
+      guardada.current = null
+      camera.position.copy(g.p); camera.fov = g.fov; camera.near = g.near; camera.far = g.far
+      camera.updateProjectionMatrix()
+      if (g.t && controls?.target) controls.target.copy(g.t)
+      controls?.dispatchEvent?.({ type: 'start' }); controls?.dispatchEvent?.({ type: 'end' })
+      controls?.update?.()
+      nav.current.fly = 1
+      return
+    }
     if (!enabled || focusedIdx == null || supRef.current != null) return
     const node = world?.nodes?.[focusedIdx]
     if (!node) return

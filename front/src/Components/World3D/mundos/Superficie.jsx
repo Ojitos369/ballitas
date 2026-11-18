@@ -147,7 +147,7 @@ function Cielo({ biome }) {
   const mat = useMemo(() => new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: {
-      hor: { value: new THREE.Color(biome.atmoBase).multiplyScalar(0.5) },
+      hor: { value: new THREE.Color(biome.atmoBase).multiplyScalar(0.045) },
       zen: { value: new THREE.Color('#03040c') },
     },
     vertexShader: 'varying float vY; void main(){ vY = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
@@ -205,7 +205,7 @@ export default function Superficie({ world, nodeIdx, ballitas, onSalir }) {
       peana: new THREE.MeshStandardMaterial({ color: biome.groundLow, roughness: 0.9 }),
       borde: new THREE.MeshBasicMaterial({ color: new THREE.Color(biome.atmoRim).multiplyScalar(1.8), toneMapped: false }),
       calle: new THREE.MeshStandardMaterial({ color: colorSat(biome.roadColor, 0.15, 0.58, 0.72), roughness: 0.7 }),
-      edif: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: biome.buildingRoughness, metalness: Math.min(0.2, biome.buildingMetalness), emissive: calido, emissiveMap: win, emissiveIntensity: 1.5 }),
+      edif: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: biome.buildingRoughness, metalness: Math.min(0.2, biome.buildingMetalness), emissive: calido, emissiveMap: win, emissiveIntensity: 1.1 }),
       tronco: new THREE.MeshStandardMaterial({ color: '#6b4a35', roughness: 0.9 }),
       copa: new THREE.MeshStandardMaterial({ roughness: 0.7 }),
       roca: new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }),
@@ -283,7 +283,7 @@ export default function Superficie({ world, nodeIdx, ballitas, onSalir }) {
   const MAXB = 48
 
   useEffect(() => {
-    scene.fog = new THREE.FogExp2(new THREE.Color(biome.atmoBase).multiplyScalar(0.18), 0.0035)
+    scene.fog = new THREE.FogExp2(new THREE.Color(biome.atmoBase).multiplyScalar(0.07), 0.0028)
     return () => { scene.fog = null }
   }, [scene, biome])
 
