@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 SHEETS = ROOT / "tools" / "tex" / "hojas"
@@ -46,18 +46,30 @@ def seamless(image: Image.Image, band: int = 36) -> Image.Image:
     """Desplaza juntas al centro y las funde; el borde resultante se repite sin salto."""
     image = image.convert("RGB")
     w, h = image.size
+    band = max(2, min(band, w // 8, h // 8))
     shifted = Image.new("RGB", (w, h))
     shifted.paste(image.crop((w // 2, h // 2, w, h)), (0, 0))
     shifted.paste(image.crop((0, h // 2, w // 2, h)), (w // 2, 0))
     shifted.paste(image.crop((w // 2, 0, w, h // 2)), (0, h // 2))
     shifted.paste(image.crop((0, 0, w // 2, h // 2)), (w // 2, h // 2))
-    mask = Image.new("L", (w, h), 0)
-    from PIL import ImageDraw
-    draw = ImageDraw.Draw(mask)
-    draw.rectangle((w // 2 - band, 0, w // 2 + band, h), fill=255)
-    draw.rectangle((0, h // 2 - band, w, h // 2 + band), fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(max(1, band // 2)))
-    return Image.composite(image, shifted, mask)
+    pixels = shifted.load()
+    cx, cy = w // 2, h // 2
+    for y in range(h):
+        left, right = pixels[cx - band - 1, y], pixels[cx + band, y]
+        for i in range(2 * band):
+            t = (i + 1) / (2 * band + 1)
+            pixels[cx - band + i, y] = tuple(round(a * (1 - t) + b * t) for a, b in zip(left, right))
+    for x in range(w):
+        top, bottom = pixels[x, cy - band - 1], pixels[x, cy + band]
+        for i in range(2 * band):
+            t = (i + 1) / (2 * band + 1)
+            pixels[x, cy - band + i] = tuple(round(a * (1 - t) + b * t) for a, b in zip(top, bottom))
+    unshifted = Image.new("RGB", (w, h))
+    unshifted.paste(shifted.crop((w // 2, h // 2, w, h)), (0, 0))
+    unshifted.paste(shifted.crop((0, h // 2, w // 2, h)), (w // 2, 0))
+    unshifted.paste(shifted.crop((w // 2, 0, w, h // 2)), (0, h // 2))
+    unshifted.paste(shifted.crop((0, 0, w // 2, h // 2)), (w // 2, h // 2))
+    return unshifted
 
 
 def crop_cells(sheet: Image.Image) -> list[Image.Image]:
