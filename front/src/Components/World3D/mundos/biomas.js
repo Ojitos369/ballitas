@@ -22,11 +22,14 @@ export const BIOMES = {
     cloudSpeed: 0.018,
     cityLight: '#b388ff',
     roadColor: '#1a1626',
-    buildingColors: ['#2a233d', '#3a3054', '#4e3f6e', '#1f1a2e'],
-    buildingRoughness: 0.72,
-    buildingMetalness: 0.25,
-    emissiveColor: '#a67cff',
-    emissiveIntensity: 0.65,
+    buildingColors: ['#5b4980', '#735ea3', '#9174c7', '#433763'],
+    parkColor: '#2d4749',
+    downtownColor: '#3b305c',
+    portColor: '#2d2847',
+    buildingRoughness: 0.62,
+    buildingMetalness: 0.28,
+    emissiveColor: '#c09eff',
+    emissiveIntensity: 0.82,
     planetRoughness: 0.9,
     planetMetalness: 0.08,
     relief: 'craters',
@@ -51,11 +54,14 @@ export const BIOMES = {
     cloudSpeed: 0.028,
     cityLight: '#88ff9e',
     roadColor: '#2d241c',
-    buildingColors: ['#4a3525', '#5e442f', '#355c39', '#6e5138'],
-    buildingRoughness: 0.78,
+    buildingColors: ['#7d5c3f', '#9c734e', '#4c8552', '#b38960'],
+    parkColor: '#2f6e39',
+    downtownColor: '#4e4234',
+    portColor: '#3f382d',
+    buildingRoughness: 0.72,
     buildingMetalness: 0.08,
     emissiveColor: '#ffe082',
-    emissiveIntensity: 0.45,
+    emissiveIntensity: 0.62,
     planetRoughness: 0.88,
     planetMetalness: 0.04,
     relief: 'mountains',
@@ -80,11 +86,14 @@ export const BIOMES = {
     cloudSpeed: 0.038,
     cityLight: '#5ce1e6',
     roadColor: '#293e52',
-    buildingColors: ['#d9e4ec', '#b7ccd9', '#4a7c9b', '#e6dfd3'],
-    buildingRoughness: 0.52,
-    buildingMetalness: 0.16,
+    buildingColors: ['#e3eef5', '#bfd7e6', '#5c97ba', '#f0e7d8'],
+    parkColor: '#287a82',
+    downtownColor: '#376687',
+    portColor: '#2d4b69',
+    buildingRoughness: 0.48,
+    buildingMetalness: 0.18,
     emissiveColor: '#7ef9ff',
-    emissiveIntensity: 0.5,
+    emissiveIntensity: 0.65,
     planetRoughness: 0.42,
     planetMetalness: 0.22,
     relief: 'ocean',
@@ -109,11 +118,14 @@ export const BIOMES = {
     cloudSpeed: 0.042,
     cityLight: '#ffca64',
     roadColor: '#4f3a24',
-    buildingColors: ['#c99e6b', '#b08250', '#dec194', '#8f6138'],
-    buildingRoughness: 0.84,
-    buildingMetalness: 0.06,
-    emissiveColor: '#ffb74d',
-    emissiveIntensity: 0.44,
+    buildingColors: ['#ddb27c', '#c7955d', '#ecd2a6', '#a87444'],
+    parkColor: '#4f7a44',
+    downtownColor: '#8c6239',
+    portColor: '#69492c',
+    buildingRoughness: 0.78,
+    buildingMetalness: 0.08,
+    emissiveColor: '#ffca66',
+    emissiveIntensity: 0.58,
     planetRoughness: 0.9,
     planetMetalness: 0.05,
     relief: 'dunes',
@@ -138,11 +150,14 @@ export const BIOMES = {
     cloudSpeed: 0.035,
     cityLight: '#9be7ff',
     roadColor: '#365066',
-    buildingColors: ['#8fc3e8', '#b8e0fa', '#6394bd', '#dff2ff'],
+    buildingColors: ['#99ccf0', '#c2e6ff', '#71a6d1', '#e8f6ff'],
+    parkColor: '#4f96b8',
+    downtownColor: '#4c7599',
+    portColor: '#3d5c7a',
     buildingRoughness: 0.25,
     buildingMetalness: 0.35,
-    emissiveColor: '#80e5ff',
-    emissiveIntensity: 0.55,
+    emissiveColor: '#8ae8ff',
+    emissiveIntensity: 0.68,
     planetRoughness: 0.28,
     planetMetalness: 0.32,
     relief: 'glacier',
@@ -167,11 +182,14 @@ export const BIOMES = {
     cloudSpeed: 0.022,
     cityLight: '#ff6f3c',
     roadColor: '#261a1a',
-    buildingColors: ['#2e2022', '#472a28', '#5e352b', '#1c1415'],
-    buildingRoughness: 0.74,
+    buildingColors: ['#633f3b', '#874c3f', '#a85a42', '#47302e'],
+    parkColor: '#6b3222',
+    downtownColor: '#452826',
+    portColor: '#362323',
+    buildingRoughness: 0.66,
     buildingMetalness: 0.28,
-    emissiveColor: '#ff5722',
-    emissiveIntensity: 0.78,
+    emissiveColor: '#ff7038',
+    emissiveIntensity: 0.9,
     planetRoughness: 0.85,
     planetMetalness: 0.14,
     relief: 'volcano',
@@ -196,11 +214,14 @@ export const BIOMES = {
     cloudSpeed: 0.025,
     cityLight: '#80f5ff',
     roadColor: '#272042',
-    buildingColors: ['#6c5ce7', '#a29bfe', '#74b9ff', '#55efc4'],
-    buildingRoughness: 0.18,
-    buildingMetalness: 0.55,
-    emissiveColor: '#a8f9ff',
-    emissiveIntensity: 0.65,
+    buildingColors: ['#7d6ef0', '#afa8ff', '#82c4ff', '#6cf5cf'],
+    parkColor: '#40708a',
+    downtownColor: '#483b7a',
+    portColor: '#372e5c',
+    buildingRoughness: 0.2,
+    buildingMetalness: 0.52,
+    emissiveColor: '#b0f9ff',
+    emissiveIntensity: 0.78,
     planetRoughness: 0.22,
     planetMetalness: 0.5,
     relief: 'crystal',
@@ -225,11 +246,14 @@ export const BIOMES = {
     cloudSpeed: 0.045,
     cityLight: '#fff3b0',
     roadColor: '#6b85a8',
-    buildingColors: ['#e3eefc', '#c7dcf5', '#f7faff', '#a5c4eb'],
-    buildingRoughness: 0.46,
+    buildingColors: ['#ebf3ff', '#cfe2f7', '#ffffff', '#b2cef0'],
+    parkColor: '#7eb8c9',
+    downtownColor: '#90b4db',
+    portColor: '#789cc4',
+    buildingRoughness: 0.44,
     buildingMetalness: 0.18,
     emissiveColor: '#ffe8a3',
-    emissiveIntensity: 0.48,
+    emissiveIntensity: 0.62,
     planetRoughness: 0.65,
     planetMetalness: 0.1,
     relief: 'sky',
@@ -254,11 +278,14 @@ export const BIOMES = {
     cloudSpeed: 0.032,
     cityLight: '#00f5d4',
     roadColor: '#11162b',
-    buildingColors: ['#182040', '#232d59', '#121830', '#2d3b70'],
+    buildingColors: ['#314275', '#425999', '#283663', '#526db8'],
+    parkColor: '#1b4b5c',
+    downtownColor: '#222d57',
+    portColor: '#1a2345',
     buildingRoughness: 0.28,
-    buildingMetalness: 0.62,
+    buildingMetalness: 0.58,
     emissiveColor: '#00f5d4',
-    emissiveIntensity: 0.92,
+    emissiveIntensity: 1.05,
     planetRoughness: 0.38,
     planetMetalness: 0.45,
     relief: 'grid',
@@ -283,11 +310,14 @@ export const BIOMES = {
     cloudSpeed: 0.026,
     cityLight: '#ff9ecd',
     roadColor: '#3d332c',
-    buildingColors: ['#d9c7b8', '#e8a5c4', '#7ab882', '#f2e4d8'],
-    buildingRoughness: 0.62,
+    buildingColors: ['#e8d8c8', '#f2b3d0', '#87c78f', '#faf0e6'],
+    parkColor: '#488c51',
+    downtownColor: '#5c7557',
+    portColor: '#4f5e4d',
+    buildingRoughness: 0.58,
     buildingMetalness: 0.1,
-    emissiveColor: '#ffb3d9',
-    emissiveIntensity: 0.48,
+    emissiveColor: '#ffc2e2',
+    emissiveIntensity: 0.6,
     planetRoughness: 0.78,
     planetMetalness: 0.06,
     relief: 'terraces',
@@ -405,28 +435,112 @@ export function sampleBiomeRelief(x, y, z, biome, seedPhase) {
 }
 
 /**
- * Construye la geometría del planeta con relieve y paleta de colores por vértice según el bioma.
+ * Define los distritos de la ciudad sobre la esfera unitaria del planeta:
+ * - centro: alrededor del monumento principal (rascacielos y plaza cívica)
+ * - puertos: alrededor de los terminales de entrada/salida (estaciones y comercios)
+ * - parques: destinos de energía y bolsones verdes/oasis repartidos por la esfera
+ * - barrios: zonas residenciales/comerciales en el resto de la ciudad
  */
-export function buildBiomePlanetGeo(node, biome) {
-  const g = new THREE.SphereGeometry(NODE_R - 0.02, 80, 60)
+export function buildCityDistricts(node, monumentSpot, terminals = []) {
+  const rng = mulberry32(6100 + node.idx * 409)
+  const centroDir = (monumentSpot?.dir || new THREE.Vector3(0, 1, 0)).clone().normalize()
+  const centroAng = 0.44
+  const centroCos = Math.cos(centroAng)
+
+  const puertoDirs = terminals
+    .map((t) => (t.dir || node.verts?.[t.vert]?.dir)?.clone().normalize())
+    .filter(Boolean)
+  const puertoAng = 0.28
+  const puertoCos = Math.cos(puertoAng)
+
+  const parqueDirs = []
+  for (const d of node.destinos || []) {
+    if (d.kind === 'energia' && d.dir) parqueDirs.push(d.dir.clone().normalize())
+  }
+  // Añade bolsones de parque adicionales lejos del centro y los puertos
+  const rot = rng() * Math.PI * 2
+  for (let i = 0; i < 24 && parqueDirs.length < 6; i++) {
+    const yy = 1 - (2 * (i + 0.5)) / 24
+    const rr = Math.sqrt(Math.max(0, 1 - yy * yy))
+    const ang = i * Math.PI * (3 - Math.sqrt(5)) + rot
+    const dir = new THREE.Vector3(Math.cos(ang) * rr, yy, Math.sin(ang) * rr).normalize()
+    if (dir.dot(centroDir) > Math.cos(0.55)) continue
+    if (puertoDirs.some((p) => dir.dot(p) > Math.cos(0.36))) continue
+    if (parqueDirs.some((p) => dir.dot(p) > Math.cos(0.42))) continue
+    parqueDirs.push(dir)
+  }
+  const parqueAng = 0.24
+  const parqueCos = Math.cos(parqueAng)
+
+  const classify = (dir) => {
+    const dc = dir.dot(centroDir)
+    if (dc >= centroCos) {
+      const k = THREE.MathUtils.clamp((dc - centroCos) / Math.max(1e-4, 1 - centroCos), 0, 1)
+      return { kind: 'centro', k }
+    }
+    let bestP = -1
+    for (const p of puertoDirs) {
+      const d = dir.dot(p)
+      if (d > bestP) bestP = d
+    }
+    if (bestP >= puertoCos) {
+      const k = THREE.MathUtils.clamp((bestP - puertoCos) / Math.max(1e-4, 1 - puertoCos), 0, 1)
+      return { kind: 'puerto', k }
+    }
+    let bestG = -1
+    for (const g of parqueDirs) {
+      const d = dir.dot(g)
+      if (d > bestG) bestG = d
+    }
+    if (bestG >= parqueCos) {
+      const k = THREE.MathUtils.clamp((bestG - parqueCos) / Math.max(1e-4, 1 - parqueCos), 0, 1)
+      return { kind: 'parque', k }
+    }
+    return { kind: 'barrio', k: 0.5 }
+  }
+
+  return { centroDir, centroAng, puertoDirs, puertoAng, parqueDirs, parqueAng, classify }
+}
+
+/**
+ * Construye la geometría del planeta con relieve, distritos y paleta de colores por vértice según el bioma.
+ */
+export function buildBiomePlanetGeo(node, biome, districts = null) {
+  const segW = Math.min(128, Math.max(84, Math.round(NODE_R * 4.5)))
+  const segH = Math.round(segW * 0.72)
+  const g = new THREE.SphereGeometry(NODE_R - 0.02, segW, segH)
   const p = g.attributes.position
   const cols = new Float32Array(p.count * 3)
   const low = new THREE.Color(biome.groundLow)
   const mid = new THREE.Color(biome.groundMid)
   const high = new THREE.Color(biome.groundHigh)
+  const parkCol = new THREE.Color(biome.parkColor || biome.groundHigh)
+  const downCol = new THREE.Color(biome.downtownColor || biome.groundMid)
+  const portCol = new THREE.Color(biome.portColor || biome.groundMid)
   const c = new THREE.Color()
   const v = new THREE.Vector3()
+  const dir = new THREE.Vector3()
   const rng = mulberry32(4242 + node.idx * 97)
   const seedPhase = rng() * Math.PI * 2
   const amp = biome.reliefAmp ?? 0.024
+  const freqScale = 7.5 * Math.pow(NODE_R / 7.5, 0.35)
 
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i)
-    const { h, t } = sampleBiomeRelief(v.x, v.y, v.z, biome, seedPhase)
-    v.multiplyScalar(1 + (h * amp) / NODE_R * 6.5)
+    dir.copy(v).normalize()
+    const { h, t } = sampleBiomeRelief(dir.x * freqScale, dir.y * freqScale, dir.z * freqScale, biome, seedPhase)
+    const dist = districts ? districts.classify(dir) : null
+    // Aplanar suave en centro y puertos para que plazas y avenidas sienten limpias sobre el suelo
+    const flatten = dist && (dist.kind === 'centro' || dist.kind === 'puerto') ? 1 - dist.k * 0.72 : 1
+    v.multiplyScalar(1 + h * amp * 0.42 * flatten)
     p.setXYZ(i, v.x, v.y, v.z)
     if (t < 0.5) c.lerpColors(low, mid, t * 2)
     else c.lerpColors(mid, high, (t - 0.5) * 2)
+    if (dist) {
+      if (dist.kind === 'centro') c.lerp(downCol, 0.35 + dist.k * 0.35)
+      else if (dist.kind === 'puerto') c.lerp(portCol, 0.3 + dist.k * 0.35)
+      else if (dist.kind === 'parque') c.lerp(parkCol, 0.45 + dist.k * 0.4)
+    }
     cols.set([c.r, c.g, c.b], i * 3)
   }
   g.setAttribute('color', new THREE.BufferAttribute(cols, 3))

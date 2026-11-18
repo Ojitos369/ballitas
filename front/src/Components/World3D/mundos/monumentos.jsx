@@ -125,6 +125,8 @@ export function pickMonumentSpot(node, near) {
   let bestDir = new THREE.Vector3(0, 1, 0)
   let bestScore = -Infinity
 
+  const scaleK = NODE_R / 7.5
+  const minClear = 2.2 * scaleK * scaleK
   for (let i = 0; i < samples; i++) {
     const yy = 0.96 - (i / samples) * 0.62 // hemisferio superior (y: 0.96 .. 0.34)
     const rr = Math.sqrt(Math.max(0, 1 - yy * yy))
@@ -136,7 +138,7 @@ export function pickMonumentSpot(node, near) {
       const d2 = p.distanceToSquared(worldPt) - rad * rad
       if (d2 < minD2) minD2 = d2
     }
-    if (minD2 > 2.2) {
+    if (minD2 > minClear) {
       bestDir = dir
       break
     }
@@ -148,7 +150,7 @@ export function pickMonumentSpot(node, near) {
 
   return {
     dir: bestDir,
-    pos: bestDir.clone().multiplyScalar(NODE_R - 0.06),
+    pos: bestDir.clone().multiplyScalar(NODE_R - 0.06 * scaleK),
     quat: new THREE.Quaternion().setFromUnitVectors(UP, bestDir),
   }
 }
@@ -174,7 +176,7 @@ export function Monument({ node, biome, spot }) {
   }, [mats])
 
   useFrame(({ clock, camera }) => {
-    if (camera.position.distanceTo(node.pos) > 140) return
+    if (camera.position.distanceTo(node.pos) > Math.max(140, NODE_R * 10)) return
     const t = clock.elapsedTime + node.idx * 1.7
     if (animRef.current) {
       if (biome.id === 'mar') {
@@ -193,8 +195,10 @@ export function Monument({ node, biome, spot }) {
     }
   })
 
+  const monScale = Math.pow(NODE_R / 7.5, 0.45)
+
   return (
-    <group position={spot.pos} quaternion={spot.quat}>
+    <group position={spot.pos} quaternion={spot.quat} scale={monScale}>
       {biome.id === 'bosque' && (
         <group>
           <mesh geometry={GEO.plinth} material={mats.dark} />
