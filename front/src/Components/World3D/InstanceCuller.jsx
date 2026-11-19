@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { FOCO } from './mundos/foco.js'
 
 // Recorte por distancia para TODAS las InstancedMesh grandes, sin tocar a quien las anima:
 // justo antes del render (prioridad 0.9, tras los useFrame normales y antes del EffectComposer en 1)
@@ -17,6 +19,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 // Interruptor en caliente: window.__aparece.off = true deja exactamente el camino de main.
 // Cronómetro (solo con ?stats=1): window.__aparece.ms = media móvil de ms por cuadro de before + after.
 const MIN_COUNT = 48
+const FWD = new THREE.Vector3()
 const MOVE2 = 1.5 * 1.5
 const REVELA_MS = 400
 const BORDE = 0.8
@@ -24,7 +27,31 @@ const AP = typeof window !== 'undefined'
   ? (window.__aparece = window.__aparece ?? { off: false, ms: 0 })
   : { off: false, ms: 0 }
 Object.assign(AP, { borde: BORDE, radio: 60, min: MIN_COUNT }) // lo leen las sondas
+if (AP.delante == null) AP.delante = 2.5
 const CRONO = typeof window !== 'undefined' && /[?&]stats=1/.test(window.location?.search ?? '')
+
+// Alcance delantero (siguiendo a una ballita, Seguir/POV): el recorte por distancia es una elipse alargada K veces en el
+// rumbo de la cámara. Lo que está delante, en el centro de la vista, se completa K veces más lejos; detrás y a los lados
+// no cambia, así el número de piezas crece solo en el cono delantero. Interruptor en caliente: window.__aparece.delante
+// (1 = recorte esférico de antes). Sin ballita seguida, o con __aparece.off, vale 1.
+export function kDelante() { return AP.off || !FOCO.b ? 1 : Math.max(1, AP.delante) }
+// Medición (solo con ?stats=1): distancia real de la pieza más cercana que aún crece (escala < 0.98) dentro del cono
+// delantero de la cámara (±25°). Cada dueño la publica en mesh.userData.__crece al recompactar; la leen las sondas.
+export const MIDE = CRONO
+export function creceDe(dx, dy, dz, f, k, min) {
+  if (k >= 0.98) return min
+  const d2 = dx * dx + dy * dy + dz * dz; const a = dx * f.x + dy * f.y + dz * f.z
+  if (a <= 0 || a * a < 0.82 * d2) return min
+  const d = Math.sqrt(d2)
+  return d < min ? d : min
+}
+/** Distancia efectiva al cuadrado de (dx, dy, dz) con rumbo unitario f: delante se divide por K. */
+export function d2Delante(dx, dy, dz, f, K) {
+  const d2 = dx * dx + dy * dy + dz * dz
+  if (K <= 1) return d2
+  const a = dx * f.x + dy * f.y + dz * f.z
+  return a > 0 ? d2 - a * a * (1 - 1 / (K * K)) : d2
+}
 
 // Factor de borde para los dueños que recortan sus piezas (1 dentro de b·D, 0 en D; sin raíz si está claramente dentro).
 // Con el interruptor apagado devuelve 1 (camino de main).
@@ -102,6 +129,8 @@ export default function InstanceCuller({ active, radius = 60 }) {
       const on = !AP.off
       const now = on ? performance.now() : 0
       const cx = camera.position.x; const cy = camera.position.y; const cz = camera.position.z
+      const K = on ? kDelante() : 1
+      if (K > 1 || MIDE) camera.getWorldDirection(FWD)
       if (on) for (const mesh of otras) vigila(mesh, now)
       else if (revela.size) { for (const mesh of revela.keys()) { mesh.userData.__rev = 1; if (mesh.userData.noCull) subeTodo(mesh) } revela.clear() }
       for (const mesh of list) {
@@ -125,17 +154,18 @@ export default function InstanceCuller({ active, radius = 60 }) {
         let s = state.get(mesh)
         if (!s) { s = { vers: [], n: -1, cam: [Infinity, 0, 0], near: 0, idx: null, backup: [], gpuCompact: false }; state.set(mesh, s) }
         if (s.revSitio) { s.revSitio = false; s.n = -1 }
-        const dirty = s.n !== n || s.on !== on || rev < 1 || s.rev < 1 || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
+        const giro = K > 1 && (s.fx * FWD.x + s.fy * FWD.y + s.fz * FWD.z < 0.985)
+        const dirty = s.n !== n || s.on !== on || s.K !== K || giro || rev < 1 || s.rev < 1 || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
           (cx - s.cam[0]) ** 2 + (cy - s.cam[1]) ** 2 + (cz - s.cam[2]) ** 2 > MOVE2
         if (!dirty) {
           if (s.gpuCompact) { restore.push(mesh, n, null); mesh.count = s.near }
           continue
         }
-        s.on = on; s.rev = rev
+        s.on = on; s.rev = rev; s.K = K; s.fx = FWD.x; s.fy = FWD.y; s.fz = FWD.z
         // posición mundial de cada instancia: matrixWorld × traslación de su matriz
         const m = mesh.instanceMatrix.array; const w = mesh.matrixWorld.elements
         if (!s.idx || s.idx.length < n) { s.idx = new Int32Array(n); s.k = new Float32Array(n) }
-        let near = 0; let escala = false
+        let near = 0; let escala = false; let cm = Infinity
         if (on) {
           const b2 = (radius * BORDE) ** 2; const d0 = radius * BORDE; const dd = radius - d0
           for (let i = 0; i < n; i++) {
@@ -143,11 +173,11 @@ export default function InstanceCuller({ active, radius = 60 }) {
             const dx = w[0] * x + w[4] * y + w[8] * z + w[12] - cx
             const dy = w[1] * x + w[5] * y + w[9] * z + w[13] - cy
             const dz = w[2] * x + w[6] * y + w[10] * z + w[14] - cz
-            const d2 = dx * dx + dy * dy + dz * dz
+            const d2 = K > 1 ? d2Delante(dx, dy, dz, FWD, K) : dx * dx + dy * dy + dz * dz
             if (d2 >= R2) continue
             let k = rev
             if (d2 > b2) { const c = (Math.sqrt(d2) - d0) / dd; k *= 1 - c * c * (3 - 2 * c) }
-            if (k < 1) escala = true
+            if (k < 1) { escala = true; if (MIDE) cm = creceDe(dx, dy, dz, FWD, k, cm) }
             s.k[near] = k
             s.idx[near++] = i
           }
@@ -160,6 +190,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
             if (dx * dx + dy * dy + dz * dz < R2) s.idx[near++] = i
           }
         }
+        if (MIDE) mesh.userData.__crece = cm
         s.n = n; s.cam[0] = cx; s.cam[1] = cy; s.cam[2] = cz; s.near = near
         if (near === n && !escala) {
           if (s.gpuCompact) for (const a of attrs) { a.clearUpdateRanges(); a.needsUpdate = true }
