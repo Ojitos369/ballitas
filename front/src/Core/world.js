@@ -811,24 +811,69 @@ function braidCap(C, N, step) {
   return out
 }
 
+// Cota del semiancho de la cinta plana de carriles (u) por muestra del eje. Sólo cuenta lo que pasa en el PLANO de la
+// cinta: otra vuelta del mismo tramo (hélice, rizo) que queda a menos del gálibo a lo largo de la normal obliga a dejarle
+// aire lateral; la curvatura dentro del plano no deja que el carril interior se pliegue. Una vuelta apilada a más del
+// gálibo (hélice) no limita el ancho.
+function ribbonCap(C, SD, UP, N, step, nLanes) {
+  const W0 = ((nLanes - 1) * ROLL_GAP) / 2; const reach = 2 * W0 + 2 * RIBBON_HALF + AIRE_LAT
+  const CELL = Math.max(13 * TK, reach / 2); const grid = new Map(); const key = (x, y, z) => `${x},${y},${z}`
+  for (let i = 0; i <= N; i++) {
+    const k = key(Math.floor(C[i * 3] / CELL), Math.floor(C[i * 3 + 1] / CELL), Math.floor(C[i * 3 + 2] / CELL)); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i)
+  }
+  const cap = new Float32Array(N + 1).fill(Infinity); const minJ = Math.ceil(LANE_SELF / step); const B_OK = GALIBO_H + RIBBON_HALF + TK
+  for (let i = 0; i <= N; i++) {
+    const x = Math.floor(C[i * 3] / CELL); const y = Math.floor(C[i * 3 + 1] / CELL); const z = Math.floor(C[i * 3 + 2] / CELL)
+    const sx = SD[i * 3]; const sy = SD[i * 3 + 1]; const sz = SD[i * 3 + 2]; const ux = UP[i * 3]; const uy = UP[i * 3 + 1]; const uz = UP[i * 3 + 2]
+    let m = Infinity
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const b = grid.get(key(x + dx, y + dy, z + dz)); if (!b) continue
+      for (const j of b) {
+        if (Math.abs(j - i) < minJ) continue
+        const ex = C[j * 3] - C[i * 3]; const ey = C[j * 3 + 1] - C[i * 3 + 1]; const ez = C[j * 3 + 2] - C[i * 3 + 2]
+        if (Math.abs(ex * ux + ey * uy + ez * uz) >= B_OK) continue
+        const a = Math.abs(ex * sx + ey * sy + ez * sz); const h = ex * ux + ey * uy + ez * uz
+        // sólo lo que queda al través (a lo largo del avance, a menos de un paso de muestreo y de media cinta)
+        if (ex * ex + ey * ey + ez * ez - a * a - h * h > (step + RIBBON_HALF) ** 2) continue
+        if (a < reach) m = Math.min(m, (a - 2 * RIBBON_HALF - AIRE_LAT) / 2)
+      }
+    }
+    cap[i] = Math.max(0, m)
+  }
+  // curvatura dentro del plano: el borde interior no pasa del 0.9 del radio
+  for (let i = 1; i < N; i++) {
+    const ax = C[i * 3] - C[i * 3 - 3]; const ay = C[i * 3 + 1] - C[i * 3 - 2]; const az = C[i * 3 + 2] - C[i * 3 - 1]
+    const bx = C[i * 3 + 3] - C[i * 3]; const by = C[i * 3 + 4] - C[i * 3 + 1]; const bz = C[i * 3 + 5] - C[i * 3 + 2]
+    const la = Math.hypot(ax, ay, az); const lb = Math.hypot(bx, by, bz)
+    if (la < 1e-6 || lb < 1e-6) continue
+    const kx = bx / lb - ax / la; const ky = by / lb - ay / la; const kz = bz / lb - az / la
+    const kl = Math.abs(kx * SD[i * 3] + ky * SD[i * 3 + 1] + kz * SD[i * 3 + 2]) / ((la + lb) / 2)
+    if (kl > 1e-6) cap[i] = Math.min(cap[i], 0.9 / kl - RIBBON_HALF)
+  }
+  const w = Math.max(2, Math.ceil((6 * TK) / step)); const lo = new Float32Array(N + 1); const out = new Float32Array(N + 1)
+  for (let i = 0; i <= N; i++) { let m = Infinity; for (let j = Math.max(0, i - w); j <= Math.min(N, i + w); j++) m = Math.min(m, cap[j]); lo[i] = Math.max(0, m) }
+  for (let i = 0; i <= N; i++) { let t = 0; let n = 0; for (let j = Math.max(0, i - w); j <= Math.min(N, i + w); j++) { t += Math.min(lo[j], 1e3 * TK); n++ } out[i] = t / n }
+  return out
+}
+
 // Carriles y mecanismos de un way (rng propio: no altera la generación de las rutas).
 function buildBraid(s) {
   const N = clamp(Math.ceil(s.length / (1.5 * TK)), 48, 1200)
   const lanes = s.lanes; const P = lanes.map(() => new Float32Array((N + 1) * 3)); const env = new Float32Array(N + 1)
   const tangent = new THREE.Vector3(); const ref = new THREE.Vector3(); const priorRef = new THREE.Vector3(); const side = new THREE.Vector3(); const center = new THREE.Vector3()
-  const C = new Float32Array((N + 1) * 3); const R = new Float32Array((N + 1) * 3); const S = new Float32Array((N + 1) * 3)
+  const C = new Float32Array((N + 1) * 3); const SD = new Float32Array((N + 1) * 3); const UP = new Float32Array((N + 1) * 3)
+  buildBank(s)
+  const pf = {}
   for (let i = 0; i <= N; i++) {
-    const u = i / N; const f = wallFrame(s, 0, u, 0, {})
-    center.copy(f.axis); segmentTangent(s, u, tangent)
-    if (i) ref.copy(priorRef).addScaledVector(tangent, -priorRef.dot(tangent))
-    else ref.crossVectors(tangent, Y)
-    if (ref.lengthSq() < 1e-8) ref.set(1, 0, 0).addScaledVector(tangent, -tangent.x)
-    ref.normalize(); side.crossVectors(tangent, ref).normalize()
-    priorRef.copy(ref)
+    const u = i / N
+    // plano de la cinta: el del eje con el peralte del conjunto (el mismo que el carril plano)
+    const bk = s._bank; let a0 = 0
+    if (bk) { const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y); if (m > 1e-6) a0 = m * Math.sin(angDiff(0, Math.atan2(y, x))) }
+    const f = wallFrame(s, a0, u, 0, pf)
     env[i] = braidEnv(s, u)
-    center.toArray(C, i * 3); ref.toArray(R, i * 3); side.toArray(S, i * 3)
+    f.axis.toArray(C, i * 3); f.side.toArray(SD, i * 3); f.up.toArray(UP, i * 3)
   }
-  const cap = braidCap(C, N, s.length / N)
+  const cap = ribbonCap(C, SD, UP, N, s.length / N, lanes.length)
   const rad = new Float32Array(N + 1)
   const [da, db] = braidDelay(s)
   const full = [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)]
@@ -840,17 +885,14 @@ function buildBraid(s) {
   for (let i = 0; i <= N; i++) { let m = 1; for (let j = Math.max(0, i - wk); j <= Math.min(N, i + wk); j++) m = Math.min(m, rk[j]); rollK[i] = m }
   const [fi0, fi1] = [Math.floor(full[0] * N), Math.ceil(full[1] * N)]; let kMin = 1; for (let i = fi0; i <= fi1; i++) kMin = Math.min(kMin, rollK[i])
   s._braid = { full, rollK, spin: kMin >= 0.999 } // rollAt los necesita
-  buildBank(s)
   // Cinta plana de carriles: todos en el plano del tramo (peralte del conjunto), uno junto a otro, sin pasar nadie por
   // encima de nadie. Orden lateral: el central (plano) en medio, los demás alternando a cada lado.
   const slot = []; for (const l of lanes) { if (l.id % 2) slot.push(l.id); else slot.unshift(l.id) }
   const nL = slot.length; const xs = new Float64Array(nL); const sig = new Float64Array(nL)
-  const pf = {}; const lf = {}
+  const lf = {}; const sd = new THREE.Vector3()
   for (let i = 0; i <= N; i++) {
     const u = i / N
-    const bk = s._bank; let a0 = 0
-    if (bk) { const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y); if (m > 1e-6) a0 = m * Math.sin(angDiff(0, Math.atan2(y, x))) }
-    const sd = wallFrame(s, a0, u, 0, pf).side
+    sd.fromArray(SD, i * 3)
     // un carril girado (de lado, de cabeza, tirabuzón) apunta su «arriba» hacia un vecino: ese hueco crece hasta el gálibo
     for (let k = 0; k < nL; k++) sig[k] = wallFrame(s, laneAngle(s, slot[k], u), u, 0, lf).up.dot(sd)
     xs[0] = 0
