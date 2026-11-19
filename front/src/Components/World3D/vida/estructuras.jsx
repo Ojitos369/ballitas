@@ -8,7 +8,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe } from '../colisionObjetos.js'
-import { kBorde } from '../InstanceCuller.jsx'
+import { MIDE, creceDe, publicaCrece, d2Delante, kBorde, kDelante } from '../InstanceCuller.jsx'
 import { triplanarMaterial } from '../triplanar.js'
 import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
 import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
@@ -461,6 +461,10 @@ export default function Estructuras({ way, detail, focused, time }) {
   const lastFwdRef = useRef(new THREE.Vector3(0, 0, 1))
   const camFwdTmp = useMemo(() => new THREE.Vector3(), [])
   const deltaTmp = useMemo(() => new THREE.Vector3(), [])
+  const aheadTmp = useMemo(() => new THREE.Vector3(), [])
+  const lastSegFwdRef = useRef(new THREE.Vector3(0, 0, 1))
+  const lastKRef = useRef(1)
+  const lejos = useMemo(() => [], [])
   const lastSegCheckRef = useRef(new THREE.Vector3(Infinity, 0, 0))
   const dirtyPoolRef = useRef(true)
   const groupRef = useRef()
@@ -484,18 +488,25 @@ export default function Estructuras({ way, detail, focused, time }) {
     if (!show) return
 
     const cam = camera.position
-    // 1) Detectar tramos cercanos (curva <= SEG_ACTIVE_DIST + seg.length * 0.2)
+    // Alcance delantero (Seguir/POV): el recorte es una elipse K veces más larga en el rumbo de la cámara
+    const K = kDelante()
+    camera.getWorldDirection(camFwdTmp)
+    // 1) Detectar tramos cercanos (curva <= SEG_ACTIVE_DIST + seg.length * 0.2); con K > 1, también los que están
+    //    delante (alrededor de un punto adelantado en el rumbo), para que sus piezas existan antes de llegar.
     let segChanged = false
-    if (cam.distanceToSquared(lastSegCheckRef.current) >= 100) {
+    if (cam.distanceToSquared(lastSegCheckRef.current) >= 100 || K !== lastKRef.current || (K > 1 && camFwdTmp.dot(lastSegFwdRef.current) < 0.9)) {
       lastSegCheckRef.current.copy(cam)
+      lastSegFwdRef.current.copy(camFwdTmp)
+      lastKRef.current = K
       const near = []
       let bestD2 = Infinity
+      if (K > 1) aheadTmp.copy(cam).addScaledVector(camFwdTmp, (K - 1) * SEG_ACTIVE_DIST * 0.75)
       for (let i = 0; i < nonAirSegs.length; i++) {
         const x = nonAirSegs[i]
         const d2 = minSegDistSq(x.seg, cam)
         if (d2 < bestD2) bestD2 = d2
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
-        if (d2 <= lim * lim) near.push(x)
+        if (d2 <= lim * lim || (K > 1 && minSegDistSq(x.seg, aheadTmp) <= lim * lim)) near.push(x)
       }
       minDistSqRef.current = bestD2
       nearSegsRef.current = near
@@ -532,7 +543,6 @@ export default function Estructuras({ way, detail, focused, time }) {
     }
 
     // 3) Compactar instancias cercanas solo cuando la cámara se mueve >= 4.5 u, gira > 14°, o llegó un tramo nuevo
-    camera.getWorldDirection(camFwdTmp)
     if (!dirtyPoolRef.current && cam.distanceToSquared(lastCamRef.current) < MOVE_RECOMPACT_SQ && camFwdTmp.dot(lastFwdRef.current) > 0.97) return
     lastCamRef.current.copy(cam)
     lastFwdRef.current.copy(camFwdTmp)
@@ -549,18 +559,33 @@ export default function Estructuras({ way, detail, focused, time }) {
       let ac = 0
       const rSq = (overview ? 105 : ARCH_CULL_DIST) ** 2
       const rA = overview ? 105 : ARCH_CULL_DIST // los arcos crecen desde ese borde (kBorde)
+      const Ka = K // también en vista general: el camino siguiente se ve al fondo de la recta
+      const cmA = [Infinity, Infinity]
+      lejos.length = 0
       for (let s = 0; s < nearData.length && ac < ARCH_CAP; s++) {
         const list = nearData[s].arches
         for (let i = 0; i < list.length && ac < ARCH_CAP; i += (overview ? 2 : 1)) {
           const it = list[i]
           deltaTmp.copy(it.pos).sub(cam)
-          const d2 = deltaTmp.lengthSq()
-          if (d2 > rSq || (!overview && d2 > 400 && deltaTmp.dot(camFwdTmp) < -16)) continue
+          const d2r = deltaTmp.lengthSq()
+          if (!overview && d2r > 400 && deltaTmp.dot(camFwdTmp) < -16) continue
+          const d2 = Ka > 1 ? d2Delante(deltaTmp.x, deltaTmp.y, deltaTmp.z, camFwdTmp, Ka) : d2r
+          if (d2 > rSq) continue
+          // lo que solo entra por el alcance delantero va al final: si se llena el tope, queda fuera lo lejano
+          if (d2r > rSq) { lejos.push(it, d2, deltaTmp.x, deltaTmp.y, deltaTmp.z); continue }
           const kb = kBorde(d2, rA)
           tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
           archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
+          if (MIDE) creceDe(deltaTmp.x, deltaTmp.y, deltaTmp.z, camFwdTmp, kb, cmA)
         }
       }
+      for (let j = 0; j < lejos.length && ac < ARCH_CAP; j += 5) {
+        const it = lejos[j]; const kb = kBorde(lejos[j + 1], rA)
+        tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
+        archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
+        if (MIDE) creceDe(lejos[j + 2], lejos[j + 3], lejos[j + 4], camFwdTmp, kb, cmA)
+      }
+      if (MIDE) publicaCrece(archMesh, cmA)
       archMesh.count = ac
       if (ac > 0) archMesh.instanceMatrix.needsUpdate = true
     }
@@ -575,23 +600,37 @@ export default function Estructuras({ way, detail, focused, time }) {
       const stride = overview ? 2 : 1
       const effRangeSq = overview ? 96 * 96 : rangeSq
       const rP = Math.sqrt(effRangeSq) // la pieza mide 0 en el borde y crece al acercarse (kBorde)
+      const Kp = K
       let count = 0
       let tinted = false
+      lejos.length = 0
+      const cm = [Infinity, Infinity]
+      const pon = (it, d2, dx, dy, dz) => {
+        const kb = kBorde(d2, rP)
+        tmpS.setScalar(it.scale * kb)
+        mesh.setMatrixAt(count, tmpM.compose(it.pos, it.quat, tmpS))
+        if (it.color) { mesh.setColorAt(count, it.color); tinted = true }
+        else if (tinted) mesh.setColorAt(count, white)
+        count++
+        if (MIDE) creceDe(dx, dy, dz, camFwdTmp, kb, cm)
+      }
       for (let s = 0; s < nearData.length && count < POOL_CAP; s++) {
         const list = nearData[s].byModel.get(model)
         if (!list) continue
         for (let i = 0; i < list.length && count < POOL_CAP; i += stride) {
           const it = list[i]
           deltaTmp.copy(it.pos).sub(cam)
-          const d2 = deltaTmp.lengthSq()
-          if (d2 > effRangeSq || (!overview && d2 > 400 && deltaTmp.dot(camFwdTmp) < -16)) continue
-          tmpS.setScalar(it.scale * kBorde(d2, rP))
-          mesh.setMatrixAt(count, tmpM.compose(it.pos, it.quat, tmpS))
-          if (it.color) { mesh.setColorAt(count, it.color); tinted = true }
-          else if (tinted) mesh.setColorAt(count, white)
-          count++
+          const d2r = deltaTmp.lengthSq()
+          if (!overview && d2r > 400 && deltaTmp.dot(camFwdTmp) < -16) continue
+          const d2 = Kp > 1 ? d2Delante(deltaTmp.x, deltaTmp.y, deltaTmp.z, camFwdTmp, Kp) : d2r
+          if (d2 > effRangeSq) continue
+          // solo por el alcance delantero: al final (si se llena el tope, queda fuera lo lejano)
+          if (d2r > effRangeSq) { lejos.push(it, d2, deltaTmp.x, deltaTmp.y, deltaTmp.z); continue }
+          pon(it, d2, deltaTmp.x, deltaTmp.y, deltaTmp.z)
         }
       }
+      for (let j = 0; j < lejos.length && count < POOL_CAP; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
+      if (MIDE) publicaCrece(mesh, cm)
       mesh.count = count
       if (count > 0) {
         mesh.instanceMatrix.needsUpdate = true

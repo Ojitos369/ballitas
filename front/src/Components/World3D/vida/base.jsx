@@ -393,7 +393,7 @@ export function segPath(segs) {
 const _s = new THREE.Vector3()
 const _c = new THREE.Color()
 
-function writeInstance(mesh, i, it) {
+export function writeInstance(mesh, i, it) {
   const sc = it.scale ?? 1
   if (typeof sc === 'number') _s.setScalar(sc)
   else if (Array.isArray(sc)) _s.set(sc[0], sc[1], sc[2])

@@ -10,7 +10,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32 } from './base.jsx'
-import { kBorde } from '../InstanceCuller.jsx'
+import { MIDE, creceDe, publicaCrece, d2Delante, kBorde, kDelante } from '../InstanceCuller.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, bermY, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 
@@ -978,6 +978,10 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
   const nearRef = useRef([])
   const overviewRef = useRef(false)
   const lastSeg = useRef(new THREE.Vector3(Infinity, 0, 0))
+  const lastSegFwd = useRef(new THREE.Vector3(0, 0, 1))
+  const lastK = useRef(1)
+  const ahead = useMemo(() => new THREE.Vector3(), [])
+  const lejos = useMemo(() => [], [])
   const lastCam = useRef(new THREE.Vector3(Infinity, 0, 0))
   const lastFwd = useRef(new THREE.Vector3())
   const dirty = useRef(true)
@@ -991,16 +995,22 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     if (groupRef.current) groupRef.current.visible = show
     if (!show) return
     const cam = camera.position
+    // Alcance delantero (Seguir/POV, ver InstanceCuller): elipse K veces más larga en el rumbo de la cámara
+    const K = kDelante()
+    camera.getWorldDirection(tmp.f)
     let segChanged = false
-    if (cam.distanceToSquared(lastSeg.current) >= 100) {
+    if (cam.distanceToSquared(lastSeg.current) >= 100 || K !== lastK.current || (K > 1 && tmp.f.dot(lastSegFwd.current) < 0.9)) {
       lastSeg.current.copy(cam)
+      lastSegFwd.current.copy(tmp.f)
+      lastK.current = K
       const near = []
       let best = Infinity
+      if (K > 1) ahead.copy(cam).addScaledVector(tmp.f, (K - 1) * SEG_ACTIVE_DIST * 0.75)
       for (const x of nonAirSegs) {
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
         const d2 = segDistSq(x.seg, cam)
         if (d2 < best) best = d2
-        if (d2 <= lim * lim) near.push(x)
+        if (d2 <= lim * lim || (K > 1 && segDistSq(x.seg, ahead) <= lim * lim)) near.push(x)
       }
       nearRef.current = near
       overviewRef.current = best > OVERVIEW_DIST_SQ
@@ -1026,7 +1036,6 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       const key = list.map((x) => x.si).join(',')
       if (key !== waterKey.current) { waterKey.current = key; setWaterList(list) }
     }
-    camera.getWorldDirection(tmp.f)
     if (!dirty.current && cam.distanceToSquared(lastCam.current) < MOVE_RECOMPACT_SQ && tmp.f.dot(lastFwd.current) > 0.97) return
     dirty.current = false
     lastCam.current.copy(cam)
@@ -1035,6 +1044,16 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       const mesh = meshes[li]
       const r2 = ly.range * ly.range
       let n = 0
+      lejos.length = 0
+      const cm = [Infinity, Infinity]
+      const pon = (it, d2, dx, dy, dz) => {
+        const kb = kBorde(d2, ly.range)
+        tmp.s.setScalar(it.scale * kb) // crece desde el borde de recorte
+        mesh.setMatrixAt(n, tmp.m.compose(it.pos, it.quat, tmp.s))
+        mesh.setColorAt(n, it.color)
+        n++
+        if (MIDE) creceDe(dx, dy, dz, tmp.f, kb, cm)
+      }
       for (const { seg } of overview ? [] : nearRef.current) {
         const sd = segCache.get(seg)
         if (!sd) continue
@@ -1042,14 +1061,17 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
         for (let i = 0; i < list.length && n < ly.cap; i++) {
           const it = list[i]
           tmp.d.copy(it.pos).sub(cam)
-          const d2 = tmp.d.lengthSq()
-          if (d2 > r2 || (d2 > 400 && tmp.d.dot(tmp.f) < -16)) continue
-          tmp.s.setScalar(it.scale * kBorde(d2, ly.range)) // crece desde el borde de recorte
-          mesh.setMatrixAt(n, tmp.m.compose(it.pos, it.quat, tmp.s))
-          mesh.setColorAt(n, it.color)
-          n++
+          const d2r = tmp.d.lengthSq()
+          if (d2r > 400 && tmp.d.dot(tmp.f) < -16) continue
+          const d2 = K > 1 ? d2Delante(tmp.d.x, tmp.d.y, tmp.d.z, tmp.f, K) : d2r
+          if (d2 > r2) continue
+          // solo por el alcance delantero: al final (si se llena el tope, queda fuera lo lejano)
+          if (d2r > r2) { lejos.push(it, d2, tmp.d.x, tmp.d.y, tmp.d.z); continue }
+          pon(it, d2, tmp.d.x, tmp.d.y, tmp.d.z)
         }
       }
+      for (let j = 0; j < lejos.length && n < ly.cap; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
+      if (MIDE) publicaCrece(mesh, cm)
       mesh.count = n
       if (n) {
         mesh.instanceMatrix.needsUpdate = true
