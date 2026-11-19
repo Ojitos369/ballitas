@@ -130,13 +130,57 @@ function dibujarOculto(gl, mesh, scene, camera) {
   }
 }
 
-/** Dibuja oculto, uno por hueco, un ejemplar de cada programa de `root` aún no dibujado; resuelve al terminar. */
-export function primerDibujo(gl, root, scene, camera) {
+const porCuadro = (f) => requestAnimationFrame(f)
+const materialesDe = (o) => (Array.isArray(o.material) ? o.material : o.material ? [o.material] : [])
+
+/**
+ * Enlaza solo los programas de `root`, por cuadro y con tope de 4 ms (al menos uno por cuadro). Es la vía URGENTE
+ * de lo que se acaba de montar para verse ya: no espera a la cola global de `enlazarPendientes`, que avanza un
+ * programa por hueco libre y comparte turno con el calentado de todo el mundo (decenas de segundos al cargar).
+ */
+function enlazarGrupo(gl, root) {
+  const progs = new Set()
+  root.traverse((o) => {
+    for (const m of materialesDe(o)) {
+      const p = gl.properties.get(m).currentProgram
+      if (p && !enlazados.has(p)) progs.add(p)
+    }
+  })
+  const lista = [...progs]
+  if (!lista.length) return Promise.resolve()
+  return new Promise((resolve) => {
+    const sig = () => {
+      const t0 = performance.now()
+      while (lista.length) {
+        const p = lista[0]
+        if (!p.isReady()) break // compilación en paralelo en curso: se mira al cuadro siguiente
+        lista.shift()
+        if (!enlazados.has(p)) {
+          enlazados.add(p)
+          const t1 = performance.now()
+          p.getUniforms()
+          const dt = performance.now() - t1
+          ENLACE.programas++; ENLACE.ms += dt; ENLACE.max = Math.max(ENLACE.max, Math.round(dt))
+        }
+        if (performance.now() - t0 > 4) break
+      }
+      if (lista.length) porCuadro(sig)
+      else resolve()
+    }
+    porCuadro(sig)
+  })
+}
+
+/**
+ * Dibuja oculto un ejemplar de cada programa de `root` aún no dibujado; resuelve al terminar. `turno` reparte el
+ * trabajo: por hueco libre (calentado de fondo, por defecto) o por cuadro (lo que espera para revelarse).
+ */
+export function primerDibujo(gl, root, scene, camera, turno = hueco) {
   const porPrograma = new Map()
   root.traverse((o) => {
     if (!(o.isMesh || o.isPoints || o.isLine) || !o.geometry) return
     if (o.isInstancedMesh && o.count === 0) return
-    for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+    for (const m of materialesDe(o)) {
       const prog = gl.properties.get(m).currentProgram
       if (prog && !dibujados.has(prog) && !porPrograma.has(prog)) porPrograma.set(prog, o)
     }
@@ -146,16 +190,16 @@ export function primerDibujo(gl, root, scene, camera) {
   return new Promise((resolve) => {
     const sig = () => {
       const t0 = performance.now()
-      // varios por hueco mientras quede tiempo (con ~1 ms por dibujo ya en caché); al menos uno
+      // varios por turno mientras quede tiempo (con ~1 ms por dibujo ya en caché); al menos uno
       while (lista.length) {
         const [prog, mesh] = lista.shift()
         if (!dibujados.has(prog)) { dibujados.add(prog); if (mesh.parent) dibujarOculto(gl, mesh, scene, camera) }
         if (performance.now() - t0 > 4) break
       }
-      if (lista.length) hueco(sig)
+      if (lista.length) turno(sig)
       else resolve()
     }
-    hueco(sig)
+    turno(sig)
   })
 }
 
@@ -163,13 +207,17 @@ export function primerDibujo(gl, root, scene, camera) {
 // (ANGLE/D3D), y revelar túnel, interior, vida y ciudad a la vez lo sumaba todo en un solo cuadro.
 const cola = []
 function paso() {
-  cola.shift()?.()
-  if (cola.length) requestAnimationFrame(paso)
+  // un revelado que falle no puede dejar la cola parada (lo siguiente se quedaría oculto para siempre)
+  try { cola.shift()?.() } finally { if (cola.length) requestAnimationFrame(paso) }
 }
 function revelar(fn) {
   cola.push(fn)
   if (cola.length === 1) requestAnimationFrame(paso)
 }
+
+const REVELAR_PLAZO_MS = 700 // tope de espera oculto desde que se monta
+export const REVELADO = { n: 0, max: 0 } // ?stats=1: window.__revelado (cuántos grupos y la peor espera en ms)
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stats') === '1') window.__revelado = REVELADO
 
 /**
  * Monta sus hijos ocultos, compila sus programas un cuadro después y los muestra al quedar listos: la
@@ -185,14 +233,22 @@ export default function Precompilado({ children }) {
     let vivo = true
     const g = ref.current
     const raf = requestAnimationFrame(() => {
-      // compila, enlaza lo nuevo fuera del cuadro y revela: con todo ya en caché se muestra al cuadro siguiente
+      // compila, enlaza y dibuja una vez lo SUYO, por cuadro, y revela: con todo ya en caché se muestra al cuadro
+      // siguiente. Nunca espera a la cola global del calentado de fondo, y tiene plazo: lo montado es lo que la
+      // cámara necesita ahora, y oculto (pista y ballita sin dibujar varios segundos) es peor que un cuadro largo.
       if (vivo && g) {
-        precompilar(gl, g, camera, scene)
-          .then(() => (vivo ? enlazarPendientes(gl) : null))
-          .then(() => (vivo ? primerDibujo(gl, g, scene, camera) : null))
-          .then(() => revelar(() => { if (vivo) g.visible = true }))
+        const listo = precompilar(gl, g, camera, scene)
+          .then(() => (vivo ? enlazarGrupo(gl, g) : null))
+          .then(() => (vivo ? primerDibujo(gl, g, scene, camera, porCuadro) : null))
+        const plazo = new Promise((ok) => setTimeout(ok, REVELAR_PLAZO_MS))
+        Promise.race([listo, plazo]).then(() => revelar(() => {
+          if (!vivo) return
+          g.visible = true
+          REVELADO.n++; REVELADO.max = Math.max(REVELADO.max, Math.round(performance.now() - t0))
+        }))
       }
     })
+    const t0 = performance.now()
     return () => { vivo = false; cancelAnimationFrame(raf) }
   }, [gl, camera, scene])
   return <group ref={ref} visible={false}>{children}</group>
