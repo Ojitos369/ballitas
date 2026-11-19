@@ -58,3 +58,21 @@
 - Capturas (cerca.mjs, rama): front/_capturas/s2_cerca/c0_t2.jpg y c1_t3.jpg abiertas: pista, arcos, corales, peces y burbujas completos; ninguna pieza encogida cerca de la cámara; 980 k-1.07 M triángulos.
 - VEREDICTO: piezas bruscas -95 % en ambos; escritorio igual en FPS; MÓVIL -20 % FPS y peor cuadro 199 ms en una sola corrida: NO INTEGRAR sin repetir móvil (si se repite, perfilar el coste de las rampas de revelado en InstanceCuller: con 23-57 k instancias, recopiar las mallas que se revelan a la vez puede costar).
 - No medidos por tiempo: estable.mjs, antelacion.mjs (M1 redefinida), memoria 300 s.
+
+## Sesión 3 (2026-11-19, 02:50-03:35): coste de la aparición gradual
+
+Cambios: `window.__aparece.off` (true = camino de main) y `window.__aparece.ms` (media móvil de ms por cuadro de before+after, solo con ?stats=1). InstanceCuller vuelve a saltar noCull y < 48 como main; la escala de borde de estructuras (pools y arcos) y paisaje (capas) la aplica su dueño al componer la matriz (`kBorde`, franja 0.7·D por la cadencia de 4.5 u); InstanceCuller solo escala en el compactado que ya hacía (cuadros sucios como main); el revelado de 0.4 s vive en una lista corta (Map) y solo cuesta mientras dura; `userData.__rev` publicado para las sondas.
+
+A/B en caliente, misma sesión y ruta (ab_aparece.mjs, 80 s, tramos de 5 s, 1 s descartado):
+
+| | FPS on | FPS off | dif | ms on | ms off | tris dif | mallas vis dif |
+|---|---|---|---|---|---|---|---|
+| escritorio | 56.1 | 56.6 | -0.9 % | 2.13 | 2.00 | +3.5 % | +2.2 % |
+| móvil | 96.9 | 98.3 | -1.4 % | 0.67 | 0.47 | +3.8 % | +1.4 % |
+
+(Primera corrida, con la sonda re-eligiendo ballita cada cuadro: escritorio +2.7 %, móvil -3.1 %; descartada por ruido.)
+
+- recorrido.mjs móvil 60 s x 2 (con `__rev` publicado): bruscas de piezas 0.5/min (bruscas totales 14.5/min, todas de la escena entera al salir del planeta, rad > 60); fps 73.1; 0 errores. La corrida previa sin `__rev` daba 30/min falsos (la sonda no veía el revelado).
+- estable.mjs 3, ballita: 66.3 / 67.8 / 59.3 (CPU compartida con otro delegado: 5-36 %).
+- entrada.mjs 3: peor cuadro 94 / 46 / 43 ms, 0 errores.
+- Errores de consola en ab_aparece: 2 «Failed to load resource 500» por corrida (recurso del servidor de preview; no verificado si main también los da).

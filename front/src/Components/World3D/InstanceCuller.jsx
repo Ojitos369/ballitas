@@ -74,7 +74,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
       const vis = mesh.count > 0 && !!mesh.parent && visible(mesh)
       const u = mesh.userData; const antes = u.__vis
       u.__vis = vis // en la malla: más barato que un WeakMap por cuadro
-      if (vis && antes === false) revela.set(mesh, now)
+      if (vis && antes === false) { revela.set(mesh, now); u.__rev = 0 } // __rev: tamaño dibujado, lo leen las sondas
       else if (!vis && revela.size && revela.has(mesh)) revela.delete(mesh)
       return vis
     }
@@ -103,7 +103,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
       const now = on ? performance.now() : 0
       const cx = camera.position.x; const cy = camera.position.y; const cz = camera.position.z
       if (on) for (const mesh of otras) vigila(mesh, now)
-      else if (revela.size) { for (const mesh of revela.keys()) if (mesh.userData.noCull) subeTodo(mesh); revela.clear() }
+      else if (revela.size) { for (const mesh of revela.keys()) { mesh.userData.__rev = 1; if (mesh.userData.noCull) subeTodo(mesh) } revela.clear() }
       for (const mesh of list) {
         const n = mesh.count
         let rev = 1; let vis = true
@@ -111,7 +111,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
           vis = vigila(mesh, now)
           if (!vis && n >= MIN_COUNT) continue
           const r0 = revela.size ? revela.get(mesh) : undefined
-          if (r0 !== undefined) { rev = Math.min(1, (now - r0) / REVELA_MS); if (rev >= 1) revela.delete(mesh) }
+          if (r0 !== undefined) { rev = Math.min(1, (now - r0) / REVELA_MS); mesh.userData.__rev = rev; if (rev >= 1) revela.delete(mesh) }
         }
         if (n < MIN_COUNT) {
           const s = state.get(mesh)
@@ -199,6 +199,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
         for (const [mesh, r0] of revela) {
           if (!mesh.userData.noCull) { if (!mesh.parent) revela.delete(mesh); continue }
           const rev = Math.min(1, (now - r0) / REVELA_MS)
+          mesh.userData.__rev = rev
           if (rev >= 1) { revela.delete(mesh); subeTodo(mesh); const s = state.get(mesh); if (s) s.revSitio = false; continue }
           revelaEnSitio(mesh, rev)
         }
