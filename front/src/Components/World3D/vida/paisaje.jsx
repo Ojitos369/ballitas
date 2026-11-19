@@ -20,6 +20,30 @@ const SEG_ACTIVE_DIST = 96
 const SEG_PASO_MS = 3 // presupuesto por cuadro para construir un tramo cercano aún sin datos (la precarga suele adelantarlo)
 const MOVE_RECOMPACT_SQ = 20
 const OVERVIEW_DIST_SQ = 36 * 36 // como estructuras.jsx: > 36 u del tramo más cercano = vista general
+// minSegDistSq (base.jsx) mira solo 5 puntos por tramo: con tramos de cientos de unidades (TRACK_K) la cámara
+// que sigue a una ballita queda a > 36 u de todos y el paisaje se creía siempre en vista general (count 0).
+// Aquí se muestrea el tramo cada ~SEG_SAMPLE_STEP u (caché por tramo) para medir la distancia real.
+const SEG_SAMPLE_STEP = 8
+const denseCache = new WeakMap()
+function segDistSq(seg, cam) {
+  let pts = denseCache.get(seg)
+  if (!pts) {
+    if (seg.curve) {
+      const n = Math.min(400, Math.max(4, Math.ceil((seg.length ?? seg.curve.getLength()) / SEG_SAMPLE_STEP)))
+      pts = seg.curve.getSpacedPoints(n)
+    } else if (seg.start && seg.end) {
+      const n = Math.min(400, Math.max(1, Math.ceil(seg.start.distanceTo(seg.end) / SEG_SAMPLE_STEP)))
+      pts = Array.from({ length: n + 1 }, (_, i) => seg.start.clone().lerp(seg.end, i / n))
+    } else return minSegDistSq(seg, cam)
+    denseCache.set(seg, pts)
+  }
+  let best = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    const d2 = pts[i].distanceToSquared(cam)
+    if (d2 < best) best = d2
+  }
+  return best
+}
 
 // ═══════════════════════════ GEOMETRÍAS PROCEDURALES ═══════════════════════════
 const _m4 = new THREE.Matrix4()
@@ -319,25 +343,26 @@ const GEOS = {
   },
 
   // ─── hielo ───
-  // Pino nevado: pisos de cono verde oscuro con capa de nieve en la cara superior.
+  // Pino nevado: pisos de cono verde azulado casi negro con nieve espesa en el lomo (la silueta blanca sobre el cielo oscuro es lo que lee).
   snowPine: () => {
-    const parts = [piece(cyl(0.035, 0.06, 0.36, 7), { pos: [0, 0.18, 0], color: '#4a3a33', shade: 0.4 })]
-    const tiers = [[0.3, 0.42, 0.36], [0.24, 0.38, 0.6], [0.18, 0.32, 0.82], [0.11, 0.26, 1.02]]
+    const parts = [piece(cyl(0.035, 0.06, 0.36, 7), { pos: [0, 0.18, 0], color: '#3a2e2a', shade: 0.4 })]
+    const tiers = [[0.36, 0.44, 0.34], [0.29, 0.4, 0.58], [0.22, 0.36, 0.8], [0.14, 0.3, 1.0]]
     for (const [r, h, y] of tiers) {
       parts.push(piece(cone(r, h, 11), {
-        pos: [0, y, 0], noise: 0.18, jitter: 0.2,
-        color: (c, x, py) => c.set('#1f4a44').lerp(_c2.set('#f4fbff'), THREE.MathUtils.smoothstep(py, y - h * 0.15, y + h * 0.12)),
+        pos: [0, y, 0], noise: 0.2, jitter: 0.12,
+        color: (c, x, py) => c.set('#0f3038').lerp(_c2.set('#f6fcff'), THREE.MathUtils.smoothstep(py, y - h * 0.46, y - h * 0.08)),
       }))
     }
+    parts.push(piece(cone(0.06, 0.2, 7), { pos: [0, 1.2, 0], color: '#ffffff' }))
     return merge(parts, 'snowPine')
   },
-  // Bloques y agujas de hielo: cristales gruesos inclinados (material translúcido).
+  // Bloques y agujas de hielo: espiras altas de cristal inclinadas sobre un lecho de nieve (material translúcido con borde claro).
   iceShards: () => {
-    const parts = [piece(ico(0.22, 1), { pos: [0, 0.06, 0], scl: [1.6, 0.4, 1.3], noise: 0.3, color: '#a8d8f0', jitter: 0.2 })]
-    const set = [[0, 0, 0.5, 0.11, 0], [0.16, 0.06, 0.34, 0.08, -0.35], [-0.15, -0.05, 0.3, 0.075, 0.4], [0.04, -0.16, 0.24, 0.06, 0.3], [-0.06, 0.17, 0.2, 0.055, -0.3]]
+    const parts = [piece(ico(0.24, 1), { pos: [0, 0.05, 0], scl: [1.6, 0.4, 1.3], noise: 0.3, color: '#cfe8f8', jitter: 0.2 })]
+    const set = [[0, 0, 0.95, 0.12, 0], [0.18, 0.06, 0.6, 0.09, -0.35], [-0.17, -0.05, 0.55, 0.085, 0.4], [0.05, -0.17, 0.4, 0.065, 0.3], [-0.07, 0.18, 0.34, 0.06, -0.3], [0.3, -0.12, 0.26, 0.05, -0.5]]
     for (const [x, z, h, r, t] of set) {
-      parts.push(piece(cyl(r * 0.6, r, h, 6), { pos: [x, h / 2, z], rot: [t * 0.6, 0, t], color: (c, px, py) => c.set('#7fc4ea').lerp(_c2.set('#eafaff'), THREE.MathUtils.smoothstep(py, 0, 0.5)) }))
-      parts.push(piece(cone(r * 0.6, h * 0.35, 6), { pos: [x - Math.sin(t) * h * 0.5, h + h * 0.15, z + Math.sin(t * 0.6) * h * 0.5], rot: [t * 0.6, 0, t], color: '#f2fcff' }))
+      parts.push(piece(cyl(r * 0.5, r, h, 6), { pos: [x, h / 2, z], rot: [t * 0.6, 0, t], color: (c, px, py) => c.set('#3fa8e6').lerp(_c2.set('#e8fbff'), THREE.MathUtils.smoothstep(py, 0, h)) }))
+      parts.push(piece(cone(r * 0.5, h * 0.3, 6), { pos: [x - Math.sin(t) * h * 0.5, h + h * 0.13, z + Math.sin(t * 0.6) * h * 0.5], rot: [t * 0.6, 0, t], color: '#ffffff' }))
     }
     return merge(parts, 'iceShards')
   },
@@ -345,22 +370,46 @@ const GEOS = {
   snowMound: () => {
     const parts = []
     for (const [x, z, r] of [[0, 0, 0.3], [0.28, 0.1, 0.2], [-0.24, -0.08, 0.22]]) {
-      parts.push(piece(sphere(r, 12, 7, 0, TAU, 0, Math.PI / 2), { pos: [x, 0, z], scl: [1.2, 0.5, 1], noise: 0.08, color: (c, px, y) => c.set('#a9c8e6').lerp(_c2.set('#ffffff'), THREE.MathUtils.smoothstep(y, 0.0, 0.12)) }))
+      parts.push(piece(sphere(r, 12, 7, 0, TAU, 0, Math.PI / 2), { pos: [x, 0, z], scl: [1.2, 0.6, 1], noise: 0.08, color: (c, px, y) => c.set('#8fb4dc').lerp(_c2.set('#ffffff'), THREE.MathUtils.smoothstep(y, 0.0, 0.12)) }))
     }
     return merge(parts, 'snowMound')
   },
-
+  // Copos: puntitos blancos muy luminosos (color > 1, florecen con el bloom) que flotan cerca de la cámara.
+  flakes: () => {
+    const parts = []
+    const rng = mulberry32(83)
+    for (let i = 0; i < 22; i++) {
+      parts.push(piece(sphere(0.02 + rng() * 0.012, 5, 4), { pos: [(rng() - 0.5) * 2, rng() * 1.2, (rng() - 0.5) * 2], color: (c) => c.setRGB(1.9, 2.2, 2.6), phase: rng() * TAU }))
+    }
+    return merge(parts, 'flakes')
+  },
+  // Aurora: cortina en arco, verde en la base, cian y violeta arriba (el material la ondula y le da franjas).
+  aurora: () => merge([piece(new THREE.CylinderGeometry(1, 1, 1, 28, 6, true, 0, 1.9), {
+    pos: [0, 0.5, 0],
+    color: (c, x, y) => {
+      const t = THREE.MathUtils.clamp(y, 0, 1)
+      c.set(t < 0.4 ? '#38ffa0' : '#2fd8ff').lerp(_c2.set(t < 0.4 ? '#2fd8ff' : '#a070ff'), t < 0.4 ? t / 0.4 : (t - 0.4) / 0.6).multiplyScalar(1.7)
+    },
+  })], 'aurora'),
   // ─── volcán ───
-  // Columnas de basalto: prismas hexagonales de alturas distintas con brasa en las juntas.
+  // Columnas de basalto: prismas hexagonales casi negros, altos y de alturas distintas, con tapa incandescente,
+  // vetas de lava entre ellos y un anillo de brasa en la base (la roca oscura contra la lava es lo que lee el tema).
   basalt: () => {
     const parts = []
     const rng = mulberry32(23)
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * TAU; const r = i === 0 ? 0 : 0.16
-      const h = 0.3 + rng() * 0.45
-      parts.push(piece(cyl(0.085, 0.095, h, 6), { pos: [Math.cos(a) * r, h / 2, Math.sin(a) * r], color: (c, x, y) => c.set('#2a2224').lerp(_c2.set('#4a3c3a'), THREE.MathUtils.smoothstep(y, 0, 0.7)), jitter: 0.3 }))
+    const rock = (c, x, y) => c.set('#150f11').lerp(_c2.set('#3a2c2c'), THREE.MathUtils.smoothstep(y, 0, 1.1))
+    for (let i = 0; i < 9; i++) {
+      const a = ((i - 1) / 8) * TAU + 0.2; const r = i === 0 ? 0 : 0.17 + rng() * 0.03
+      const h = i === 0 ? 1.2 : 0.4 + rng() * 0.6
+      const x = Math.cos(a) * r; const z = Math.sin(a) * r
+      parts.push(piece(cyl(0.085, 0.1, h, 6), { pos: [x, h / 2, z], rot: [0, rng(), 0], color: rock, jitter: 0.3 }))
+      if (i === 0 || rng() < 0.55) parts.push(piece(cyl(0.07, 0.07, 0.015, 6), { pos: [x, h + 0.008, z], color: '#ff6418' }))
     }
-    parts.push(piece(sphere(0.5, 12, 4), { pos: [0, 0.01, 0], scl: [0.75, 0.03, 0.75], color: '#ff5a1a' }))
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + 0.5; const h = 0.45 + rng() * 0.4
+      parts.push(piece(cyl(0.008, 0.012, h, 4), { pos: [Math.cos(a) * 0.105, h / 2, Math.sin(a) * 0.105], color: (c, x, y) => c.set('#ff4a10').lerp(_c2.set('#ffd060'), THREE.MathUtils.smoothstep(y, 0.15, 0.7)) }))
+    }
+    parts.push(piece(sphere(0.5, 12, 4), { pos: [0, 0.01, 0], scl: [0.85, 0.03, 0.85], color: '#ff5a1a' }))
     return merge(parts, 'basalt')
   },
   // Charco de lava: disco irregular naranja con borde de roca oscura (material de brillo).
@@ -380,6 +429,25 @@ const GEOS = {
     }
     parts.push(piece(sphere(0.02, 6, 4), { pos: [0.06, 0.73, 0.05], color: '#ffa030' }))
     return merge(parts, 'charTree')
+  },
+  // Fumarola: pila de bocanadas que el material 'smoke' hace subir, ensancharse y apagarse (naranja en la boca, gris arriba).
+  fumarola: () => {
+    const parts = [piece(cone(0.16, 0.12, 8), { pos: [0, 0.06, 0], noise: 0.3, color: (c, x, y) => c.set('#1c1416').lerp(_c2.set('#ff5a14'), THREE.MathUtils.smoothstep(y, 0.07, 0.12)) })]
+    const rng = mulberry32(41)
+    for (let i = 0; i < 10; i++) {
+      parts.push(piece(sphere(0.07 + rng() * 0.05, 7, 5), { pos: [(rng() - 0.5) * 0.08, 0.1, (rng() - 0.5) * 0.08], color: '#8a7a78', phase: i / 10 + rng() * 0.05, jitter: 0.3 }))
+    }
+    return merge(parts, 'fumarola')
+  },
+  // Ascuas: chispas diminutas muy calientes (color > 1 para que florezcan con el bloom) que suben desde el suelo.
+  embers: () => {
+    const parts = []
+    const rng = mulberry32(67)
+    for (let i = 0; i < 16; i++) {
+      const hot = rng() < 0.4
+      parts.push(piece(sphere(0.014 + rng() * 0.012, 5, 4), { pos: [(rng() - 0.5) * 0.9, 0, (rng() - 0.5) * 0.9], color: (c) => (hot ? c.setRGB(3.2, 1.9, 0.5) : c.setRGB(3.0, 0.85, 0.15)), phase: rng() }))
+    }
+    return merge(parts, 'embers')
   },
 
   // ─── cristal ───
@@ -477,13 +545,15 @@ const PH = `
 const matCache = new Map()
 function pMat(kind) {
   if (matCache.has(kind)) return matCache.get(kind)
-  const additive = kind === 'ray' || kind === 'motes' || kind === 'bubbles'
+  const additive = kind === 'ray' || kind === 'motes' || kind === 'bubbles' || kind === 'aurora'
   const m = additive
     ? new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false })
     : kind === 'glass'
       ? new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.78 })
-      : new THREE.MeshLambertMaterial({ vertexColors: true })
-  m.defines = { P_KIND: { solid: 0, soft: 0, sway: 1, school: 2, bubbles: 3, motes: 4, ray: 5, neon: 6, glow: 7, glass: 8 }[kind] }
+      : kind === 'smoke'
+        ? new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false })
+        : new THREE.MeshLambertMaterial({ vertexColors: true })
+  m.defines = { P_KIND: { solid: 0, soft: 0, sway: 1, school: 2, bubbles: 3, motes: 4, ray: 5, neon: 6, glow: 7, glass: 8, smoke: 9, aurora: 10 }[kind] }
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uPTime = P_TIME
     sh.vertexShader = sh.vertexShader
@@ -515,9 +585,22 @@ function pMat(kind) {
           vPFade = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(uPTime * 2.6 + aPhase * 7.0 + iph), 3.0);
         #elif P_KIND == 5
           vPFade = 0.55 + 0.45 * sin(uPTime * 0.6 + iph);
+        #elif P_KIND == 9
+          // humo: cada bocanada sube, se ensancha y se desvanece; vPLocal.x lleva su edad (0 boca, 1 arriba)
+          float k = fract(aPhase + uPTime * 0.1 + iph * 0.1);
+          transformed.y += k * 2.4;
+          transformed.xz *= 1.0 + k * 1.5;
+          transformed.x += sin(k * 6.0 + aPhase * 20.0) * 0.14 * k;
+          vPFade = smoothstep(0.0, 0.1, k) * (1.0 - smoothstep(0.5, 1.0, k));
+          vPLocal = vec3(k, 0.0, 0.0);
+        #elif P_KIND == 10
+          // aurora: cortina que ondula despacio y respira
+          float aw = sin(position.x * 4.0 + uPTime * 0.45 + iph) * 0.16 + sin(position.x * 9.0 - uPTime * 0.8 + iph) * 0.05;
+          transformed.xz += normalize(vec2(position.x, position.z) + 1e-4) * aw * (0.25 + position.y);
+          vPFade = 0.65 + 0.35 * sin(uPTime * 0.7 + iph * 1.3);
         #endif`)
       .replace('#include <project_vertex>', `#include <project_vertex>
-        #if P_KIND >= 3 && P_KIND <= 5
+        #if (P_KIND >= 3 && P_KIND <= 5) || P_KIND == 9 || P_KIND == 10
           vPFade *= smoothstep(1.5, 7.0, -mvPosition.z);
         #endif`)
     sh.fragmentShader = sh.fragmentShader
@@ -531,6 +614,12 @@ function pMat(kind) {
         #elif P_KIND == 5
           float side = 1.0 - smoothstep(0.0, 0.11, abs(vPLocal.x) + abs(vPLocal.z));
           diffuseColor.a *= 0.16 * vPFade * pow(vPLocal.y, 1.4) * (1.0 - smoothstep(0.85, 1.0, vPLocal.y)) * (0.4 + 0.6 * side);
+        #elif P_KIND == 9
+          diffuseColor.a *= 0.7 * vPFade;
+        #elif P_KIND == 10
+          // franjas verticales que se desplazan y base brillante que se apaga hacia arriba
+          float rays = 0.55 + 0.45 * sin(vPLocal.x * 38.0 + uPTime * 0.6 + vPLocal.z * 9.0);
+          diffuseColor.a *= vPFade * rays * smoothstep(0.0, 0.1, vPLocal.y) * pow(1.0 - vPLocal.y, 1.1) * 0.85;
         #endif`)
     if (kind === 'neon') {
       sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -546,6 +635,10 @@ function pMat(kind) {
         float pulse = 0.78 + 0.22 * sin(uPTime * 2.1 + vPLocal.y * 8.0);
         vec3 hot = diffuseColor.rgb * diffuseColor.rgb;
         totalEmissiveRadiance += hot * (1.1 + 0.9 * flow) * pulse + diffuseColor.rgb * 0.18;`)
+    } else if (kind === 'smoke') {
+      // Brasa en la boca de la fumarola que se enfría con la edad de la bocanada.
+      sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += vec3(1.0, 0.34, 0.07) * pow(1.0 - vPLocal.x, 2.5) * 1.4 + diffuseColor.rgb * 0.3;`)
     } else if (kind === 'glass') {
       // Hielo y cristal: borde iluminado (fresnel), núcleo un poco transparente y destello que recorre.
       sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -600,7 +693,7 @@ function waterMat() {
 }
 
 export function paisajeWarmup() {
-  return [pMat('solid'), pMat('soft'), pMat('sway'), pMat('school'), pMat('bubbles'), pMat('motes'), pMat('ray'), pMat('neon'), pMat('glow'), pMat('glass'), waterMat()]
+  return [pMat('solid'), pMat('soft'), pMat('sway'), pMat('school'), pMat('bubbles'), pMat('motes'), pMat('ray'), pMat('neon'), pMat('glow'), pMat('glass'), pMat('smoke'), pMat('aurora'), waterMat()]
 }
 
 // ═══════════════════════════ CATÁLOGO POR TEMA ═══════════════════════════
@@ -669,21 +762,22 @@ const PAISAJE = {
   // Hielo: pinos nevados, agujas de hielo translúcido, montículos de nieve, copos y aurora.
   hielo: {
     layers: [
-      { geo: 'snowPine', mat: 'sway', step: 8, ax: [1.0, 3.2], scale: [7, 11], foot: 0.25, both: 0.75, cap: 100, range: 100, tints: ['#ffffff', '#e8f4ff'], ground: true },
-      { geo: 'iceShards', mat: 'glass', step: 8, ax: [0.25, 1.4], scale: [2.2, 4], foot: 0.4, both: 0.55, cap: 80, range: 70, tints: ['#ffffff', '#d8f0ff', '#e0e8ff'], berm: true },
-      { geo: 'snowMound', mat: 'soft', step: 5, ax: [0.15, 1.2], scale: [2, 3.5], foot: 0.35, both: 0.6, cap: 120, range: 60, tints: ['#ffffff', '#eef6ff'], berm: true },
-      { geo: 'motes', mat: 'motes', step: 6, ax: [-0.6, 1.6], scale: [3, 5], y: [0.4, 3.0], foot: 0, both: 0.7, cap: 90, range: 70, tints: ['#ffffff', '#e0f4ff'], noClear: true },
+      { geo: 'snowPine', mat: 'sway', step: 8, ax: [0.8, 2.8], scale: [8, 13], foot: 0.26, both: 0.8, cap: 100, range: 100, tints: ['#ffffff', '#e8f4ff'], ground: true },
+      { geo: 'iceShards', mat: 'glass', step: 7, ax: [0.3, 1.8], scale: [3.5, 6.5], foot: 0.35, both: 0.6, cap: 90, range: 80, tints: ['#ffffff', '#d8f0ff', '#e0e8ff'], berm: true },
+      { geo: 'snowMound', mat: 'soft', step: 5, ax: [0.12, 1.4], scale: [3.5, 6], foot: 0.35, both: 0.65, cap: 120, range: 65, tints: ['#ffffff', '#eef6ff'], berm: true },
+      { geo: 'flakes', mat: 'motes', step: 4.5, ax: [-0.6, 1.6], scale: [2.4, 3.6], y: [0.4, 3.0], foot: 0, both: 0.7, cap: 110, range: 45, tints: ['#ffffff', '#dff2ff'], noClear: true },
+      { geo: 'aurora', mat: 'aurora', step: 18, ax: [2.2, 4.2], scale: [14, 22], y: [5, 10], foot: 0, both: 0.6, cap: 14, range: 130, tints: ['#ffffff'], noClear: true },
       { geo: 'ray', mat: 'ray', step: 15, ax: [0.6, 2.4], scale: [12, 18], y: [-0.5, 0.2], foot: 0, both: 0.5, cap: 34, range: 90, tints: ['#9fffe0', '#b8c8ff', '#d0a8ff'], tilt: 0.2, noClear: true },
     ],
   },
   // Volcán: columnas de basalto, charcos de lava, árboles calcinados, fumarolas y ascuas.
   volcan: {
     layers: [
-      { geo: 'basalt', mat: 'glow', step: 8, ax: [0.6, 2.8], scale: [3, 6], foot: 0.3, both: 0.7, cap: 90, range: 95, tints: ['#ffffff', '#f0e0e0'], ground: true },
-      { geo: 'lavaPool', mat: 'glow', step: 9, ax: [0.25, 1.4], scale: [2.5, 4.5], foot: 0.5, both: 0.5, cap: 60, range: 70, tints: ['#ffffff', '#ffe0c0'], berm: true },
-      { geo: 'charTree', mat: 'glow', step: 10, ax: [1.2, 3.4], scale: [6, 9.5], foot: 0.2, both: 0.6, cap: 60, range: 100, tints: ['#ffffff', '#e8d8d0'], ground: true },
-      { geo: 'bubbles', mat: 'bubbles', step: 9, ax: [0.3, 2.2], scale: [3, 5], y: [0, 0.3], foot: 0, both: 0.6, cap: 60, range: 70, tints: ['#ff8a3a', '#ffb36a', '#a89890'], noClear: true },
-      { geo: 'motes', mat: 'motes', step: 7, ax: [-0.5, 1.6], scale: [3, 5], y: [0.3, 3.0], foot: 0, both: 0.7, cap: 80, range: 70, tints: ['#ff6a1a', '#ffb030', '#ff3a10'], noClear: true },
+      { geo: 'basalt', mat: 'glow', step: 8, ax: [0.6, 2.6], scale: [4, 7], foot: 0.3, both: 0.7, cap: 90, range: 95, tints: ['#ffffff', '#f0e0e0'], ground: true },
+      { geo: 'lavaPool', mat: 'glow', step: 8, ax: [0.3, 1.6], scale: [4.5, 8], foot: 0.5, both: 0.55, cap: 60, range: 80, tints: ['#ffffff', '#ffe0c0'], berm: true },
+      { geo: 'charTree', mat: 'glow', step: 10, ax: [1.2, 3.4], scale: [7, 11], foot: 0.2, both: 0.6, cap: 60, range: 100, tints: ['#ffffff', '#e8d8d0'], ground: true },
+      { geo: 'fumarola', mat: 'smoke', step: 13, ax: [0.5, 2.4], scale: [3.5, 5.5], foot: 0.15, both: 0.6, cap: 36, range: 90, tints: ['#ffffff', '#e8d8d0'], ground: true },
+      { geo: 'embers', mat: 'bubbles', step: 5, ax: [0.2, 2.2], scale: [3.5, 5.5], y: [0, 0.3], foot: 0, both: 0.6, cap: 90, range: 55, tints: ['#ffffff'], noClear: true },
       { geo: 'ray', mat: 'ray', step: 18, ax: [0.6, 2.4], scale: [12, 17], y: [-0.5, 0.2], foot: 0, both: 0.4, cap: 24, range: 90, tints: ['#ff7a3a', '#ffa060'], tilt: 0.25, noClear: true },
     ],
   },
@@ -903,7 +997,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       let best = Infinity
       for (const x of nonAirSegs) {
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
-        const d2 = minSegDistSq(x.seg, cam)
+        const d2 = segDistSq(x.seg, cam)
         if (d2 < best) best = d2
         if (d2 <= lim * lim) near.push(x)
       }
