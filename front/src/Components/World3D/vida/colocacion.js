@@ -69,6 +69,12 @@ export function bermaAjusta(o, side, up, E, terr, rad) {
   }
 }
 
+// Gálibo ajeno (M4): la esfera (c, r) de una pieza no invade el prisma libre (calzada x GALIBO_H) de otra cinta.
+// own = { way, seg, lane } (lane '*' = todo el haz del tramo; seg '*' = todo el camino). Sin mundo registrado, pasa.
+export function prismaLibre(world, c, r, own) {
+  return !world || !WORLD.prismaLibre || WORLD.prismaLibre(world, c, r, own)
+}
+
 function segStartsByWay(way) {
   const byI = new Map()
   for (const rt of way.routes ?? []) {
@@ -93,6 +99,7 @@ export function buildAnillosData(way) {
   const P = pal(way.theme.id)
   const baseCol = new THREE.Color(P.mec)
   const starts = segStartsByWay(way)
+  const world = mundoDe(way)
   const rings = []
   const box = new THREE.Box3()
 
@@ -120,8 +127,9 @@ export function buildAnillosData(way) {
           if (rings[i].pos.distanceToSquared(pos) < minSep2) { overlap = true; break }
         }
         if (overlap) continue
-        box.expandByPoint(pos)
         const center = f.pos.clone().addScaledVector(f.up, 0.24 * sc)
+        if (!prismaLibre(world, center, 0.56 * sc, { way, seg, lane: lane.id })) continue
+        box.expandByPoint(pos)
         rings.push({
           pos,
           quat: basisQuat(f.up, f.tangent),
@@ -331,6 +339,7 @@ export function placeSegArchesAndProps(way, seg, si) {
               const sy = (archSpec.sy ?? 8.2) * (0.95 + rng() * 0.14)
               const sz = 2.8 + rng() * 0.8
               const pos = f.pos.clone().addScaledVector(f.side, midLat).addScaledVector(f.up, -0.14)
+              if (!prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.5 * sx, { way, seg, lane: '*' })) continue
               arches.push({
                 pos,
                 quat: basisQuat(f.up, f.tangent),
@@ -366,6 +375,7 @@ export function placeSegArchesAndProps(way, seg, si) {
         const sy = (archSpec.sy ?? 7.4) * (0.94 + rng() * 0.14)
         const sz = 2.6 + rng() * 0.8
         const pos = f.pos.clone().addScaledVector(f.up, -0.12)
+        if (!prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.5 * sx, { way, seg, lane: lane.id })) continue
         arches.push({
           pos,
           quat: basisQuat(f.up, f.tangent),
@@ -534,7 +544,8 @@ export function buildUnionesData(way) {
         }).sort((a, b) => a.lat - b.lat)
       : null
 
-    if (beamMid) {
+    // pórtico de unión: abarca los tramos de su camino que nacen ahí (exentos); no debe invadir cintas de OTROS caminos
+    if (beamMid && prismaLibre(world, beamMid, beamSpan * 0.5, { way, seg: '*', lane: '*' })) {
       beams.push({ pos: beamMid, quat: beamQuat, scale: [beamSpan, 1, 1], color: BEAM_COL })
       beamTrims.push({
         pos: beamMid.clone().addScaledVector(hubUp, 0.14),
@@ -795,7 +806,8 @@ export function buildKartPistaData(way) {
       const sy = Math.min(3.4, Math.max(2.1, sx * 0.98))
       const sz = Math.min(2.6, Math.max(1.8, sx * 0.85))
       const pos = f.pos.clone().addScaledVector(f.up, -0.02)
-      arcos.push({
+      // arco de parrilla: abarca el haz en la zona cerrada; no debe invadir cintas de otros tramos
+      if (prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.42 * sx, { way, seg: salida, lane: '*' })) arcos.push({
         pos, quat: qArch, scale: [sx, sy, sz],
         way: way.idx, seg: salida, lane: lane0.id, u,
         center: pos.clone().addScaledVector(f.up, 0.5 * sy), r: 0.42 * sx, spanHalf: 0.42 * sx, clearH: sy,
@@ -819,7 +831,7 @@ export function buildKartPistaData(way) {
       const sy = Math.min(3.4, Math.max(2.1, sx * 0.98))
       const sz = Math.min(2.6, Math.max(1.8, sx * 0.85))
       const pos = f.pos.clone().addScaledVector(f.up, -0.02)
-      arcos.push({
+      if (prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.42 * sx, { way, seg: llegada, lane: '*' })) arcos.push({
         pos, quat: qArch, scale: [sx, sy, sz],
         way: way.idx, seg: llegada, lane: lane0.id, u,
         center: pos.clone().addScaledVector(f.up, 0.5 * sy), r: 0.42 * sx, spanHalf: 0.42 * sx, clearH: sy,
@@ -849,6 +861,10 @@ export function buildKartPistaData(way) {
         if (tooCloseToSwitch(seg, lane0.id, siPos, 3.5)) { ok = false; break }
         const { k } = sampleCurvature(seg, lane0.id, siPos / L, L)
         if (k > STRAIGHT_K) { ok = false; break }
+        // gálibo ajeno: ninguna costilla del túnel invade otra cinta
+        const E0 = halfWidth(lane0) + CURB; const tsx = (E0 + TERR * 0.25) / 0.45; const tsy = Math.min(4.2, Math.max(2.3, tsx * 1.25))
+        const tf = surfFrame(seg, lane0.id, siPos / L, {})
+        if (!prismaLibre(world, tf.pos.clone().addScaledVector(tf.up, 0.5 * tsy - 0.02), 0.45 * tsx, { way, seg, lane: lane0.id })) { ok = false; break }
       }
       if (ok) {
         tunnelPicked = { seg, lane: lane0, s0 }
@@ -956,11 +972,11 @@ export function colocarTodoMundo(world) {
     }
     const un = buildUnionesData(way)
     for (const p of un.porticos) {
-      items.push({ kind: `portico_${p.kind}`, way: way.idx, seg: p.seg, lane: p.lane, u: p.u, center: p.center, r: p.r, clearH: p.clearH, isJoint: true })
+      items.push({ kind: `portico_${p.kind}`, way: way.idx, seg: '*', lane: '*', hubSeg: p.seg, u: p.u, center: p.center, r: p.r, clearH: p.clearH, isJoint: true })
     }
     const kp = buildKartPistaData(way)
     for (const a of kp.arcos) {
-      items.push({ kind: 'arco_kart', way: way.idx, seg: a.seg, lane: a.lane, u: a.u, center: a.center, r: a.r, clearH: a.clearH, isJoint: true })
+      items.push({ kind: 'arco_kart', way: way.idx, seg: a.seg, lane: '*', u: a.u, center: a.center, r: a.r, clearH: a.clearH, isJoint: true })
     }
     for (const t of kp.tuneles) {
       items.push({ kind: 'tunel_kart', way: way.idx, seg: t.seg, lane: t.lane, u: t.u, center: t.center, r: t.r, clearH: t.clearH })
@@ -969,7 +985,7 @@ export function colocarTodoMundo(world) {
       if (seg.air) return
       const st = placeSegArchesAndProps(way, seg, si)
       for (const a of st.arches) {
-        items.push({ kind: `arco_${way.theme.id}`, way: way.idx, seg, lane: a.lane, u: a.u, center: a.center, r: a.r, clearH: a.clearH, bundled: a.bundled })
+        items.push({ kind: `arco_${way.theme.id}`, way: way.idx, seg, lane: a.bundled ? '*' : a.lane, u: a.u, center: a.center, r: a.r, clearH: a.clearH, bundled: a.bundled })
       }
     })
   }

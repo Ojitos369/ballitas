@@ -2015,27 +2015,47 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
 
 // Estructuras (esferas { center, r, way, seg, lane }) que invaden el prisma de gálibo o cortan la calzada de una cinta
 // AJENA a su carril. { n, worst (máx. penetración, u), at, list }.
-export function structureIntrusions(S, items, { maxList = 200 } = {}) {
-  const { ribs, X, Y: Yy, Z, R } = S; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim); const grid = new Map()
+// Rejilla de muestras con marco para consultas de estructuras (celda CLR_LIM).
+function clearanceGrid(S) {
+  const { X, Y: Yy, Z } = S; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim); const grid = new Map()
   for (let i = 0; i < X.length; i++) { const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
+  return grid
+}
+// Penetración máxima (u) de una esfera (c, r) en el prisma [±CALZADA_HALF] x [-QUILLA, GALIBO_H] de cualquier cinta que no
+// sea la suya (own = { way (objeto o índice), seg, lane }). { p, i } con i = -1 si no invade.
+function prismInvasion(S, grid, c, r, own) {
+  const { ribs, X, Y: Yy, Z, R } = S; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim)
+  const rings = Math.ceil((r + lim) / lim); const ow = own?.way?.idx ?? own?.way
+  const x0 = cell(c.x); const y0 = cell(c.y); const z0 = cell(c.z); let worst = 0; let wi = -1
+  for (let dx = -rings; dx <= rings; dx++) for (let dy = -rings; dy <= rings; dy++) for (let dz = -rings; dz <= rings; dz++) {
+    const b = grid.get(cellKey(x0 + dx, y0 + dy, z0 + dz)); if (!b) continue
+    for (const i of b) {
+      const rb = ribs[R[i]]
+      // propia: su carril; lane '*' = todos los carriles del tramo (arco sobre el haz); seg '*' = todo el camino (pórtico de unión)
+      if (own && rb.way.idx === ow && (own.seg === '*' || rb.seg === own.seg) && (own.lane === '*' || rb.lane === own.lane)) continue
+      const ex = c.x - X[i]; const ey = c.y - Yy[i]; const ez = c.z - Z[i]
+      const cz = ex * S.TX[i] + ey * S.TY[i] + ez * S.TZ[i]; if (Math.abs(cz) > r + rb.ds * 0.5) continue
+      const cx = Math.abs(ex * S.SX[i] + ey * S.SY[i] + ez * S.SZ[i]); const cy = ex * S.UX[i] + ey * S.UY[i] + ez * S.UZ[i]
+      const p = Math.min(CALZADA_HALF - (cx - r), (cy + r) + QUILLA, GALIBO_H - (cy - r))
+      if (p > worst) { worst = p; wi = i }
+    }
+  }
+  return { p: worst, i: wi }
+}
+// Consulta para la colocación de estructuras (vida/colocacion.js): true si la esfera (c, r) de una pieza de `own` no
+// invade el gálibo ni la calzada de otra cinta. Las muestras con marco se construyen una vez por mundo, al primer uso.
+const CLR_CACHE = new WeakMap()
+export function prismaLibre(world, c, r, own) {
+  let k = CLR_CACHE.get(world)
+  if (!k) { const S = clearanceSamples(world); k = { S, grid: clearanceGrid(S) }; CLR_CACHE.set(world, k) }
+  return prismInvasion(k.S, k.grid, c, r, own).i < 0
+}
+export function structureIntrusions(S, items, { maxList = 200 } = {}) {
+  const { ribs, R } = S; const grid = clearanceGrid(S)
   const out = { n: 0, worst: 0, at: '', list: [] }
   const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
   for (const it of items) {
-    const c = it.center; const r = it.r; const rings = Math.ceil((r + lim) / lim)
-    const x0 = cell(c.x); const y0 = cell(c.y); const z0 = cell(c.z); let worst = 0; let wi = -1
-    for (let dx = -rings; dx <= rings; dx++) for (let dy = -rings; dy <= rings; dy++) for (let dz = -rings; dz <= rings; dz++) {
-      const b = grid.get(cellKey(x0 + dx, y0 + dy, z0 + dz)); if (!b) continue
-      for (const i of b) {
-        const rb = ribs[R[i]]
-        if (rb.way.idx === (it.way?.idx ?? it.way) && rb.seg === it.seg && rb.lane === it.lane) continue
-        const ex = c.x - X[i]; const ey = c.y - Yy[i]; const ez = c.z - Z[i]
-        const cz = ex * S.TX[i] + ey * S.TY[i] + ez * S.TZ[i]; if (Math.abs(cz) > r + rb.ds * 0.5) continue
-        const cx = Math.abs(ex * S.SX[i] + ey * S.SY[i] + ez * S.SZ[i]); const cy = ex * S.UX[i] + ey * S.UY[i] + ez * S.UZ[i]
-        // penetración en el prisma [±CALZADA_HALF] x [-QUILLA, GALIBO_H]
-        const p = Math.min(CALZADA_HALF - (cx - r), (cy + r) + QUILLA, GALIBO_H - (cy - r))
-        if (p > worst) { worst = p; wi = i }
-      }
-    }
+    const { p: worst, i: wi } = prismInvasion(S, grid, it.center, it.r, it)
     if (wi >= 0) {
       out.n++
       if (worst > out.worst) Object.assign(out, { worst, at: `${it.kind} w${it.way?.idx ?? it.way} L${it.lane} en ${tag(wi)}` })

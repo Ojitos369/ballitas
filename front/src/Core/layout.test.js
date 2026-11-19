@@ -59,3 +59,17 @@ test('contrato world.colision: lejos libre, centro de cinta ocupado salvo que se
   assert.equal(col.libre(p, 0, { way: r.way, seg: r.seg, lane: r.lane }), true)
   assert.equal(col.libre(p, 0, { way: r.way.idx, si: r.way.segments.indexOf(r.seg), lane: r.lane }), true)
 })
+
+// M4: ninguna estructura (anillo, arco, pórtico, túnel o arco del kit) invade el gálibo ni la calzada de una cinta ajena.
+// Se mide la misma colocación que dibujan los .jsx (vida/colocacion.js). M1-M3 (galibo, lateral, union) los reporta
+// tools/overlap.mjs con sus cifras; aún no llegan a 0 (ver front/_capturas/REPORTE.md).
+for (const seed of [1, 369]) {
+  test(`estructuras sin invadir el gálibo de otras cintas (semilla ${seed})`, async () => {
+    const { ribbonClearance, structureIntrusions, clearanceSamples } = await import('./world.js')
+    const { colocarTodoMundo } = await import('../Components/World3D/vida/colocacion.js')
+    const w = mundo(seed); const items = colocarTodoMundo(w)
+    const est = structureIntrusions(clearanceSamples(w), items)
+    assert.equal(est.n, 0, `semilla ${seed}: ${est.n}/${items.length} piezas invaden (pen máx ${est.worst.toFixed(1)}u ${est.at})`)
+    assert.ok(typeof ribbonClearance === 'function')
+  })
+}
