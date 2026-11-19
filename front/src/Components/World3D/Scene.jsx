@@ -110,6 +110,7 @@ const nodeEnvC = new THREE.Vector3()
 const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
 const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
 const NODE_ARM_MIN = 1.3 // brazo mínimo en un planeta cuando una estructura se interpone
+const NODE_SUBIR = 0.5 // cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -239,7 +240,8 @@ const occSize = new THREE.Vector2()
 const COL_REFRESH = 0.5
 const COL_BUILD_MS = 0.6 // presupuesto por cuadro para indexar geometría nueva (el grueso va en tiempo ocioso)
 const COL_PRECARGA = /^(pista|estructuras|puertas)/ // grandes y estáticas: se indexan en tiempo ocioso desde el inicio
-const COL_EXCLUIR = /^(eventos|anillos|criaturas|kart|paisaje:(bubbles|motes|ray)|uniones:(routeArrow|groundChevron|dividerGlow|portGlow))/
+// fuera: marcas del suelo, brillos, fauna animada (cardúmenes) y aros finos que la pista atraviesa (los cubre el disco OCC)
+const COL_EXCLUIR = /^(eventos|anillos|criaturas|kart|paisaje:(bubbles|motes|ray|school)|kit:anillo|uniones:(routeArrow|groundChevron|dividerGlow|portGlow))/
 const colM4 = new THREE.Matrix4()
 const colSph = new THREE.Sphere()
 const colA = new THREE.Vector3()
@@ -345,7 +347,7 @@ function colSegmento(cs, a, b) {
     if (colA.copy(a).addScaledVector(colP, u).distanceToSquared(col.c) > col.r * col.r) continue
     colA.copy(a).applyMatrix4(col.inv); colB.copy(b).applyMatrix4(col.inv)
     const t = rayoRejilla(col.g, colA.x, colA.y, colA.z, colB.x - colA.x, colB.y - colA.y, colB.z - colA.z, best)
-    if (t < best) best = t
+    if (t < best) { best = t; cs.golpe = col }
   }
   return best
 }
@@ -371,7 +373,7 @@ function colCercano(cs, p, r, out) {
 // Punto de pantalla (NDC) donde se coloca la ballita: algo por debajo del centro (se ve el camino delante) y por
 // encima de los paneles que la taparían (tarjeta de detalle, fila de círculos, joystick del POV...).
 const PANELES_UI = 'aside.tarjeta, nav.puntos, .pov-panel, .pov-joy-wrap, .vista-esquina, .camino-panel, .lista-panel'
-const ENCUADRE_Y = -0.12
+const ENCUADRE_Y = -0.2
 function encuadreUI(dom, out, mbx, mby) {
   out.x = 0; out.y = ENCUADRE_Y
   if (typeof document === 'undefined' || !dom) return out
@@ -426,6 +428,28 @@ function arribaAcotado(out, ref, up, fwd, maxA) {
 }
 const ROLL_MAX_CAMINO = THREE.MathUtils.degToRad(12)
 const ROLL_MAX_PARED = THREE.MathUtils.degToRad(28) // pared, techo, espiral
+const ROLL_HOLGURA = THREE.MathUtils.degToRad(8) // margen del tope duro sobre el objetivo (deja respirar al suavizado)
+const ROLL_LIM_PLANETA = THREE.MathUtils.degToRad(15)
+const rollF = new THREE.Vector3()
+const rollU = new THREE.Vector3()
+const rollR = new THREE.Vector3()
+const rollQ = new THREE.Quaternion()
+const rollC = new THREE.Vector3()
+// Tope duro del alabeo de `q`: si su "arriba" se separa de `ref` (proyectada en el plano de la vista) más de `lim`,
+// se gira alrededor de la mirada lo justo para volver al límite. Mirada casi paralela a ref: sin tope (no definido).
+function topeAlabeo(q, ref, lim) {
+  if (lim == null) return
+  rollF.set(0, 0, -1).applyQuaternion(q)
+  rollR.copy(ref).addScaledVector(rollF, -ref.dot(rollF))
+  const L = rollR.length()
+  if (L < 0.3) return
+  rollR.divideScalar(L)
+  rollU.set(0, 1, 0).applyQuaternion(q)
+  const ang = Math.atan2(rollC.crossVectors(rollU, rollR).dot(rollF), rollU.dot(rollR)) // de U a R, alrededor de F
+  if (Math.abs(ang) <= lim) return
+  const giro = ang - Math.sign(ang) * lim
+  q.premultiply(rollQ.setFromAxisAngle(rollF, giro))
+}
 
 const KEY_TO_ACTION = {
   arrowleft: 'left',
@@ -770,7 +794,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
   const delta = useMemo(() => new THREE.Vector3(), [])
   const colis = useRef(null)
   if (!colis.current) colis.current = crearColisionador()
-  const camExtra = useRef({ viewUp: new THREE.Vector3(0, 1, 0), push: new THREE.Vector3(), enc: { x: 0, y: ENCUADRE_Y }, encGoal: { x: 0, y: ENCUADRE_Y }, encT: -1e9, msEma: 0, msMax: 0, buildEma: 0, pRef: 0, pSeg: 0, pNear: 0 })
+  const camExtra = useRef({ viewUp: new THREE.Vector3(0, 1, 0), push: new THREE.Vector3(), enc: { x: 0, y: ENCUADRE_Y }, encGoal: { x: 0, y: ENCUADRE_Y }, encT: -1e9, rollRef: new THREE.Vector3(0, 1, 0), rollLim: null, subir: 0, msEma: 0, msMax: 0, buildEma: 0, pRef: 0, pSeg: 0, pNear: 0 })
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
   const ultima = useRef(null)
   const userActive = useRef(false)
@@ -1341,13 +1365,15 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       // "arriba" de la VISTA (alabeo), aparte del de colocación: en camino se inclina como mucho ROLL_MAX_* hacia
       // el de la ballita (nada en vuelo ni cambio de carril); con H desactivado sigue a la ballita como antes.
       const ce = camExtra.current
-      if (enNodo) upGoalV.copy(nodeRadial)
+      // ce.rollRef / ce.rollLim: tope duro del alabeo final (respecto a Y o a la radial del planeta); null = libre
+      if (enNodo) { upGoalV.copy(nodeRadial); ce.rollRef.copy(nodeRadial); ce.rollLim = ROLL_LIM_PLANETA }
       else if (selected.phase === 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
         const libre = horizonRef?.current === false
         const aire = Boolean(selected.seg?.air || selected.airborne || selected.flight)
         const maxA = libre ? Math.PI : aire ? 0 : selected.up.y < 0.6 ? ROLL_MAX_PARED : ROLL_MAX_CAMINO
         arribaAcotado(upGoalV, Y_AXIS, selected.up, fs.fwd, maxA)
-      } else upGoalV.copy(followUp.current)
+        ce.rollRef.copy(Y_AXIS); ce.rollLim = libre ? null : maxA + ROLL_HOLGURA
+      } else { upGoalV.copy(followUp.current); ce.rollRef.copy(followUp.current); ce.rollLim = ROLL_LIM_PLANETA }
       if (entrando || !(ce.viewUp.lengthSq() > 0.5)) ce.viewUp.copy(upGoalV)
       else ce.viewUp.lerp(upGoalV, 1 - Math.exp(-WALL_UP_RATE * h))
       if (ce.viewUp.lengthSq() < 1e-6) ce.viewUp.copy(upGoalV)
@@ -1417,7 +1443,8 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
 
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
       const yaw = fs.rel.yaw + fs.uYaw + sway
-      const pitch = fs.rel.pitch + NODE_PITCH_PLUS * (fs.nodeBlend ?? 0) + fs.uPitch + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0)
+      // en un planeta, si una estructura acorta el brazo, la cámara sube por encima (rodea) en vez de pegarse a la ballita
+      const pitch = Math.min(1.3, fs.rel.pitch + NODE_PITCH_PLUS * (fs.nodeBlend ?? 0) + fs.uPitch + NODE_SUBIR * camExtra.current.subir + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0))
       const dist = fs.rel.dist * distK
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal
@@ -1490,6 +1517,9 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         }
       }
       fs.clear += (fs.clearGoal - fs.clear) * (1 - Math.exp(-(fs.clearGoal < fs.clear ? FOLLOW_ARM_IN : FOLLOW_ARM_OUT) * h))
+      // subida con histéresis: sube rápido mientras algo tapa, baja muy despacio cuando ya no (sin vaivén)
+      const subirGoal = enNodo && !entrando && fs.clearGoal < 0.7 ? 1 : 0
+      ce.subir += (subirGoal - ce.subir) * (1 - Math.exp(-(subirGoal > ce.subir ? 1.6 : 0.25) * h))
       const brazo = Math.min(fs.clear, duro)
       if (!entrando && brazo < 0.999) {
         collisionOrigin.copy(bp).addScaledVector(upB, 0.45)
@@ -1588,6 +1618,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
           const fuera = midVec.z >= 0 ? 4 : Math.hypot((midVec.x / (z * tanH * aspecto) - ce.enc.x) / zona, (midVec.y / (z * tanH) - ce.enc.y) / zona)
           if (fuera > 1) fs.quat.slerp(rotGoal, 1 - 1 / fuera)
         }
+        if (!entrando) topeAlabeo(fs.quat, ce.rollRef, ce.rollLim)
         camera.quaternion.copy(fs.quat)
       }
       // disco de oclusión en pantalla: todo lo que esté delante de la ballita y la tape se disuelve
@@ -1638,7 +1669,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
     const dbg = typeof window !== 'undefined' && window.__ballitasDebug // sólo con ?stats=1: sondeo de la cámara
     if (dbg) {
       const ce = camExtra.current
-      dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: followRef.current.info, colMs: +ce.msEma.toFixed(3), colMsMax: +ce.msMax.toFixed(2), colBuildMs: +ce.buildEma.toFixed(3), colN: colis.current.cols.length, colCola: colis.current.cola.length, colColaEtq: colis.current.cola.slice(0, 4).map((g) => `${g.etq}@${g.fase}:${g.next}`), colHechas: (colis.current.hechas ?? []).slice(-8), colProf: [ce.pRef, ce.pSeg, ce.pNear].map((x) => +x.toFixed(3)), enc: { ...ce.enc } }
+      dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: followRef.current.info, colis: colis.current, colGolpe: colis.current.golpe ? `${colis.current.golpe.g.etq}${colis.current.golpe.o ? '' : '[i]'}|${colis.current.golpe.o?.material?.type ?? ''}|r${Math.round(colis.current.golpe.r)}` : null, arm: +followRef.current.clear.toFixed(2), armGoal: +followRef.current.clearGoal.toFixed(2),colMs: +ce.msEma.toFixed(3), colMsMax: +ce.msMax.toFixed(2), colBuildMs: +ce.buildEma.toFixed(3), colN: colis.current.cols.length, colCola: colis.current.cola.length, colColaEtq: colis.current.cola.slice(0, 4).map((g) => `${g.etq}@${g.fase}:${g.next}`), colHechas: (colis.current.hechas ?? []).slice(-8), colProf: [ce.pRef, ce.pSeg, ce.pNear].map((x) => +x.toFixed(3)), enc: { ...ce.enc } }
     }
   })
 
