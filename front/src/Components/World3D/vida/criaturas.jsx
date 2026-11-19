@@ -359,7 +359,7 @@ function buildBermCritters(way, rng) {
     })
 }
 
-function getWayFaunaData(way) {
+export function getWayFaunaData(way) {
   if (dataCache.has(way)) return dataCache.get(way)
   const themeId = way.theme?.id
   const spec = THEME_FAUNA[themeId] ?? THEME_FAUNA.bosque

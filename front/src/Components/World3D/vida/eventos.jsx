@@ -61,8 +61,27 @@ const _q = new THREE.Quaternion(); const _v = new THREE.Vector3(); const _w = ne
 const Q_RING = new THREE.Quaternion() // el anillo del kit está de pie en XY: el carril lo atraviesa por Z
 const wayCache = new WeakMap()
 
-function buildWayData(way) {
-  if (wayCache.has(way)) return wayCache.get(way)
+const wayGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+const NUNCA = () => false
+/** Avanza los eventos de `way` hasta que `agotado()` diga basta; true cuando quedaron en caché. Mismo orden que de un tirón. */
+export function eventosPaso(way, agotado) {
+  if (wayCache.has(way)) return true
+  let g = wayGens.get(way)
+  if (!g) { g = wayGen(way); wayGens.set(way, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { wayGens.delete(way); wayCache.set(way, r.value); return true }
+    if (agotado()) return false
+  }
+}
+
+export function buildWayData(way) {
+  eventosPaso(way, NUNCA)
+  return wayCache.get(way)
+}
+
+// Cede al final de cada tanda de marcas y de cada cambio: ningún marco ni temporal compartido queda a medias.
+function* wayGen(way) {
   const theme = way.theme.id
   const items = []; const kits = new Map(); const icons = new Map(); const holes = []; const chevrons = []; const dashes = []; const laneDashes = []; const laneStarts = []
   const originRings = []; const landRings = []; const beams = []; const swirls = []; const eventBoxes = []; const turboPads = []
@@ -70,7 +89,9 @@ function buildWayData(way) {
   const F = {}; const Fp = {}; const Fl = {}
   const markCol = new THREE.Color(pal(theme).linea).multiplyScalar(1.6)
 
-  way.segments?.forEach((seg, si) => {
+  const segsW = way.segments ?? []
+  for (let si = 0; si < segsW.length; si++) {
+    const seg = segsW[si]
     const L = Math.max(seg.length ?? 1, 1)
     // Las cuatro divisorias recorren toda la superficie y continúan a través de sus tramos.
     // Cada dash queda elevado sobre el firme para evitar z-fighting y se agrupa en una malla instanciada.
@@ -86,6 +107,7 @@ function buildWayData(way) {
             const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, -0.055)
             laneDashes.push({ pos: p, quat: basisQuat(Fp.up, Fp.tangent), scale: [0.75, 1, Math.min(1.25 * TRACK_K, L / marks * 0.62)], color: markCol })
           }
+          if (j % 8 === 7) yield
         }
       }
     }
@@ -157,8 +179,9 @@ function buildWayData(way) {
       } else landRings.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: 1.4, color: col })
 
       items.push({ seg, si, sw, kind, col, seed, dots, A, B })
+      yield
     }
-  })
+  }
 
   // cajas de evento del tramo y placas turbo (como antes, sobre el centro de cada camino)
   way.segments?.forEach((seg, si) => {
@@ -178,9 +201,7 @@ function buildWayData(way) {
   })
 
   const bySw = new Map(items.map((it, i) => [it.sw, i]))
-  const out = { items, bySw, kits: [...kits.entries()], icons: [...icons.entries()], holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads }
-  wayCache.set(way, out)
-  return out
+  return { items, bySw, kits: [...kits.entries()], icons: [...icons.entries()], holes, chevrons, dashes, laneDashes, laneStarts, originRings, landRings, beams, swirls, eventBoxes, turboPads }
 }
 
 function sphereOf(points, pad = 4) {

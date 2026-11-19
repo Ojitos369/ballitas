@@ -17,6 +17,7 @@ const P_TIME = { value: 0 }
 const TAU = Math.PI * 2
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const SEG_ACTIVE_DIST = 96
+const SEG_PASO_MS = 3 // presupuesto por cuadro para construir un tramo cercano aún sin datos (la precarga suele adelantarlo)
 const MOVE_RECOMPACT_SQ = 20
 const OVERVIEW_DIST_SQ = 36 * 36 // como estructuras.jsx: > 36 u del tramo más cercano = vista general
 
@@ -760,29 +761,52 @@ function buildWater(way, seg, spec, col) {
   return markShared(g)
 }
 
-/** Construye el tramo por pasos (una capa o el agua por llamada) para no cargar un cuadro entero.
- *  Devuelve true cuando el tramo quedó completo. */
-function buildSegStep(way, seg, si, spec) {
+/** Construye el tramo por pasos (capa a capa, cada capa por muestras) hasta que `agotado()` diga basta, para no
+ *  cargar un cuadro entero (una capa entera llegaba a ~200 ms). Devuelve true cuando el tramo quedó completo. */
+const NUNCA = () => false
+function buildSegStep(way, seg, si, spec, agotado = NUNCA) {
   let st = segCache.get(seg)
   if (!st) {
     const world = mundoDe(way)
     st = {
-      layers: spec.layers.map(() => []), next: 0, done: false, water: null,
+      layers: spec.layers.map(() => []), next: 0, done: false, water: null, gen: null,
       rng: mulberry32(5303 + way.idx * 419 + si * 61), col: world ? colisionDe(world) : null, local: nuevoLocal(),
     }
     segCache.set(seg, st)
   }
-  if (st.done) return true
-  const li = st.next++
-  if (li < spec.layers.length) buildLayer(way, seg, spec.layers[li], st.layers[li], st)
-  else {
-    if (spec.water) st.water = buildWater(way, seg, spec.water, st.col)
-    st.done = true
+  while (!st.done) {
+    if (!st.gen) {
+      const li = st.next++
+      if (li < spec.layers.length) st.gen = buildLayer(way, seg, spec.layers[li], st.layers[li], st)
+      else {
+        if (spec.water) st.water = buildWater(way, seg, spec.water, st.col)
+        st.done = true
+        break
+      }
+    }
+    if (st.gen.next().done) st.gen = null
+    if (agotado()) break
   }
   return st.done
 }
 
-function buildLayer(way, seg, ly, out, { rng, col, local }) {
+/** Precarga (vida/precarga.js): construye por delante todas las capas de todos los tramos de `way` (una capa
+ *  por paso) hasta que `agotado()` diga basta; true al terminar. Mismos datos que al acercarse: solo cambia cuándo. */
+export function paisajePaso(way, agotado) {
+  const spec = PAISAJE[way.theme?.id]
+  if (!spec) return true
+  const segs = way.segments ?? []
+  for (let si = 0; si < segs.length; si++) {
+    const seg = segs[si]
+    if (seg.air) continue
+    if (!buildSegStep(way, seg, si, spec, agotado)) return false
+    if (agotado()) return false
+  }
+  return true
+}
+
+// Generador (planificación, no aspecto): cede al empezar cada muestra; mismo rng y mismo orden que de un tirón.
+function* buildLayer(way, seg, ly, out, { rng, col, local }) {
   const L = Math.max(seg.length ?? 1, 1)
   const lanes = lanesOf(seg)
   {
@@ -791,6 +815,7 @@ function buildLayer(way, seg, ly, out, { rng, col, local }) {
       const E = halfWidth(lane) + CURB
       const busy = (seg.switches ?? []).filter((w) => w.from === lane.id || w.to === lane.id).map((w) => w.u * L)
       for (let s = 2 + rng() * ly.step; s < L - 2; s += ly.step * (0.7 + rng() * 0.6)) {
+        yield
         if (!ly.noClear && busy.some((b) => Math.abs(b - s) < 5)) continue
         const u = s / L
         const f = surfFrame(seg, lane.id, u, F0)
@@ -892,7 +917,12 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     let built = false
     if (!overview) {
       for (const { seg, si } of nearRef.current) {
-        if (!segCache.get(seg)?.done) { if (buildSegStep(way, seg, si, spec)) segChanged = true; built = true; break }
+        if (!segCache.get(seg)?.done) {
+          const t0 = performance.now()
+          if (buildSegStep(way, seg, si, spec, () => performance.now() - t0 > SEG_PASO_MS)) segChanged = true
+          built = true
+          break
+        }
       }
     }
     if (built) dirty.current = true

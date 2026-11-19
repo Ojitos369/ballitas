@@ -73,7 +73,7 @@ export function anillosWarmup() {
 const F0 = {}
 const ringsCache = new WeakMap()
 
-function buildAnillosData(way) {
+export function buildAnillosData(way) {
   if (ringsCache.has(way)) return ringsCache.get(way)
   const P = pal(way.theme.id)
   const baseCol = new THREE.Color(P.mec)

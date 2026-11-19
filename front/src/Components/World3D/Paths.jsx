@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { TRACK_K } from '../../Core/world.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -8,8 +8,10 @@ import { VISUALS } from './themes.js'
 import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
-import { pistaWarmup, trackGeoPaso } from './vida/pista.jsx'
-import Precompilado from './Precompilado.jsx'
+import { pistaWarmup } from './vida/pista.jsx'
+import { precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
+import { fijarPreparadorKit } from './Modelos.jsx'
+import Precompilado, { enlazarPendientes, precompilar, primerDibujo } from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 import Neon from './Neon.jsx'
 import Fauna from './Fauna.jsx'
@@ -1281,7 +1283,12 @@ function updateWayController(ctrl, h, t, dist, worldRadius) {
   ctrl.detailU.value = det
 
   const showNearExt = ctrl.detailActive || ctrl.nearActive || det > 0.03
-  if (ctrl.intGroupRef.current) ctrl.intGroupRef.current.visible = ctrl.detailActive && det > 0.01
+  if (ctrl.intGroupRef.current) {
+    const vis = ctrl.detailActive && det > 0.01
+    ctrl.intGroupRef.current.visible = vis
+    // Oculta (precargada o ya dejada atrás) no recalcula las matrices de sus miles de objetos cada cuadro.
+    ctrl.intGroupRef.current.matrixWorldAutoUpdate = vis
+  }
   if (ctrl.extGroupRef.current) ctrl.extGroupRef.current.visible = det < 0.99
   if (ctrl.extFineRef.current) ctrl.extFineRef.current.visible = showNearExt && det < 0.99
 
@@ -1386,11 +1393,32 @@ function Precalentar() {
     return { mats, group: pistaWarmup([mats.extMetal, mats.extFlora, mats.extFloraGlow, mats.extRuins, ecoMaterial(SHARED_TIME)]) }
   }, [])
   useEffect(() => () => disposeMats(mats), [mats])
+  // Piezas del kit GLB (kart, decoración, eventos, anillos): cada una trae sus materiales y texturas. Al llegar
+  // (las pide la precarga de caminos) se añade oculta, con y sin color por instancia, y se compila, sube y enlaza
+  // en huecos libres: la vida que las muestra después ya no paga su programa ni su textura dentro del cuadro.
+  const gl = useThree((s) => s.gl)
+  const camera = useThree((s) => s.camera)
+  const scene = useThree((s) => s.scene)
+  useEffect(() => fijarPreparadorKit((nombre, kit) => {
+    const g = new THREE.Group()
+    for (const color of [false, true]) {
+      const im = new THREE.InstancedMesh(kit.geometry, kit.material, 1)
+      if (color) im.setColorAt(0, new THREE.Color('#ffffff'))
+      im.frustumCulled = false
+      g.add(im)
+    }
+    group.add(g)
+    return precompilar(gl, g, camera, scene).then(() => enlazarPendientes(gl)).then(() => primerDibujo(gl, g, scene, camera))
+  }), [group, gl, camera, scene])
   return <primitive object={group} visible={false} />
 }
 
 const MAX_ACTIVE_VIDA = 2
+// Siguiendo a una ballita: su camino + los dos siguientes (el planeado primero) quedan montados ocultos y compilados.
+const MAX_ACTIVE_VIDA_PRE = 3
 const MAX_ACTIVE_NEAR = 3
+const PRECARGA_ENTRADA_MS = 6 // por cuadro, si falta el camino que la cámara ya mira
+const PRECARGA_CUADRO_MS = 3 // por cuadro, para los caminos que vienen
 
 function reconcileLodSet(curSet, desiredSet, maxAdds = Infinity) {
   let changed = false
@@ -1411,9 +1439,11 @@ function reconcileLodSet(curSet, desiredSet, maxAdds = Infinity) {
   return changed ? next : null
 }
 
+// pri: 0 el camino enfocado, 1.. los de la precarga en su orden (el planeado primero), 99 el resto (por distancia)
 function selectTopIds(list, maxCount) {
   list.sort((a, b) => {
     if (a.isFocus !== b.isFocus) return a.isFocus ? -1 : 1
+    if ((a.pri ?? 99) !== (b.pri ?? 99)) return (a.pri ?? 99) - (b.pri ?? 99)
     return a.dist - b.dist
   })
   const out = new Set()
@@ -1439,22 +1469,25 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     return { idx: w.idx, radius: w.params.radius, flat, sphere }
   }), [world])
 
-  // Pistas precalculadas en huecos libres del mapa (primero los caminos con ballitas): su construcción
-  // (cientos de ms) era el congelón de la primera entrada a Ballita/Camino.
+  // Precarga de la vida por caminos (vida/precarga.js): pista, piezas kart, decoración, anillos, eventos, uniones,
+  // criaturas, estructuras y paisaje se calculan por porciones con presupuesto, nunca de golpe al montar ni al
+  // acercarse. Orden: `urgentes` (el camino de la cámara, el planeado y los candidatos de la ballita seguida, que se
+  // llenan en useFrame) con unos ms por cuadro aunque no haya hueco; luego, en huecos libres, el camino de cada
+  // ballita viva (la primera es la que abre la tecla 3) y por último el resto del mundo.
+  const urgentesRef = useRef([])
   useEffect(() => {
     let vivo = true
     let id = 0
-    // con plazo: si los cuadros del mapa no dejan hueco libre, sin timeout no avanzaría nunca
+    // con plazo: si los cuadros no dejan hueco libre, sin timeout no avanzaría nunca
     const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 1000 }) : (f) => setTimeout(() => f({ didTimeout: true }), 50)
     const cancel = (i) => (window.cancelIdleCallback ? window.cancelIdleCallback(i) : clearTimeout(i))
-    const hechos = new Set()
-    // Prioridad al momento: el camino de cada ballita viva (en orden: la primera es la que abre la tecla 3) y luego el resto.
     const siguiente = () => {
+      for (const w of urgentesRef.current) if (!vidaCompleta(w)) return w
       for (const b of sim?.ballitas ?? []) {
         const w = b.phase === 'dying' || b.phase === 'gone' ? null : (b.seg?.way ?? b.way)
-        if (w && !hechos.has(w)) return w
+        if (w && !vidaCompleta(w)) return w
       }
-      return world.ways.find((w) => !hechos.has(w))
+      return world.ways.find((w) => !vidaCompleta(w))
     }
     const paso = (dl) => {
       if (!vivo) return
@@ -1462,10 +1495,12 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
       const lim = dl.didTimeout ? 4 : Math.min(8, dl.timeRemaining())
       const agotado = () => performance.now() - t0 > lim
       let w = siguiente()
-      while (w && !agotado()) { if (trackGeoPaso(w, agotado)) { hechos.add(w); w = siguiente() } }
+      while (w && !agotado()) { if (precargaPaso(w, agotado)) w = siguiente() }
+      // sigue aunque esté todo: los urgentes cambian al seguir otra ballita (sin trabajo, se mira cada 0,5 s)
       if (w) id = idle(paso)
+      else id = setTimeout(() => { if (vivo) id = idle(paso) }, 500)
     }
-    const t = setTimeout(() => { id = idle(paso) }, 3000)
+    const t = setTimeout(() => { id = idle(paso) }, 1500)
     return () => { vivo = false; clearTimeout(t); cancel(id) }
   }, [world, sim])
 
@@ -1503,11 +1538,15 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
 
       const vidaCands = []
       const nearCands = []
+      const faltan = []
       for (let i = 0; i < wayMetas.length; i++) {
         const m = wayMetas[i]
         const isFocus = focusWay === m.idx
         // Precarga: los caminos que siguen a la ballita seguida se montan (ocultos y compilados) antes de entrar.
-        const pre = !isFocus && prefetchWays != null && prefetchWays.includes(m.idx)
+        const preIdx = !isFocus && prefetchWays != null ? prefetchWays.indexOf(m.idx) : -1
+        const pre = preIdx >= 0
+        // Sin sus datos calculados (vida/precarga.js) no se monta: montarla los construiría de golpe en el render.
+        const montable = vidaMontable(world.ways[m.idx])
         const enterDist = (focusWay != null && !isFocus) ? (m.radius * 2.5 + 2.5) : (m.radius * 7.5 + worldRadius * 0.09)
         const exitDist = enterDist * 1.35
         const nearEnter = (focusWay != null && !isFocus) ? (m.radius * 5.0 + 6.0) : (m.radius * 13.0 + worldRadius * 0.3)
@@ -1537,11 +1576,23 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
           dist = Math.max(0, Math.sqrt(minD2) - m.radius)
         }
         dists[m.idx] = dist
-        if ((isFocus && forceFocusDetail) || pre || dist < vidaLim) vidaCands.push({ idx: m.idx, dist, isFocus })
-        if ((isFocus && forceFocusDetail) || pre || dist < nearLim) nearCands.push({ idx: m.idx, dist, isFocus })
+        const pri = isFocus ? 0 : pre ? 1 + preIdx : 99
+        if ((isFocus && forceFocusDetail) || pre || dist < vidaLim) {
+          if (montable) vidaCands.push({ idx: m.idx, dist, isFocus, pri })
+          else faltan.push(world.ways[m.idx])
+        }
+        if ((isFocus && forceFocusDetail) || pre || dist < nearLim) nearCands.push({ idx: m.idx, dist, isFocus, pri })
       }
 
-      const nextMounted = reconcileLodSet(curMounted, selectTopIds(vidaCands, MAX_ACTIVE_VIDA), 1)
+      // Cola de precarga urgente (se avanza abajo cada cuadro): enfocado, precargados en orden y candidatos cercanos.
+      const urg = []
+      if (focusWay != null) urg.push(world.ways[focusWay])
+      for (const i of prefetchWays ?? []) if (world.ways[i]) urg.push(world.ways[i])
+      for (const w of faltan) urg.push(w)
+      for (const c of vidaCands) urg.push(world.ways[c.idx])
+      urgentesRef.current = urg
+
+      const nextMounted = reconcileLodSet(curMounted, selectTopIds(vidaCands, prefetchWays ? MAX_ACTIVE_VIDA_PRE : MAX_ACTIVE_VIDA), 1)
       const nearDesired = selectTopIds(nearCands, MAX_ACTIVE_NEAR)
       for (const id of (nextMounted ?? mountedRef.current)) nearDesired.add(id)
       const nextNear = reconcileLodSet(curNear, nearDesired, 1)
@@ -1555,6 +1606,16 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
           if (nextNear) setNearIds(nextNear)
         })
       }
+    }
+
+    // Precarga urgente con presupuesto por cuadro (no depende de que haya huecos libres, que en el móvil o con los
+    // cuadros llenos casi no hay): más ms si falta el camino que se ve ahora (entrada), menos para los siguientes.
+    for (const w of urgentesRef.current) {
+      if (vidaCompleta(w)) continue
+      const t0 = performance.now()
+      const lim = !vidaMontable(w) && w.idx === focusWay ? PRECARGA_ENTRADA_MS : PRECARGA_CUADRO_MS
+      precargaPaso(w, () => performance.now() - t0 > lim)
+      break
     }
 
     // Actualizar solo ways activos/en transición; suspender por completo caminos lejanos estables
