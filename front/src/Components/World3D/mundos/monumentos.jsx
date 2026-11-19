@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { NODE_R, mulberry32 } from '../../../Core/world.js'
+import { conFoco } from './foco.js'
 
 const UP = new THREE.Vector3(0, 1, 0)
 const BASE_URL = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/') + 'models/'
@@ -171,14 +172,16 @@ export function Monument({ node, biome, spot, surfaceR = NODE_R, animRegRef = nu
 
   const mats = useMemo(() => {
     const texProps = emissiveMap ? { emissive: biome.cityLight, emissiveMap, emissiveIntensity: 0.75 } : {}
+    // conFoco: con la ballita seguida en el planeta, la piedra oscura sube a tono medio y lo lejano se atenúa
+    // (k = 0 en mapa/camino: idéntico). La vista Superficie no lo usa (FOCO.k es 0 allí).
     return {
-      stone: new THREE.MeshStandardMaterial({ color: liftColor(biome.groundHigh, minLight * 1.45), roughness: 0.78, metalness: 0.14, ...texProps }),
-      accent: new THREE.MeshStandardMaterial({ color: biome.cityLight, emissive: biome.cityLight, emissiveIntensity: 1.15, roughness: 0.25, metalness: 0.35, toneMapped: false }),
-      dark: new THREE.MeshStandardMaterial({ color: liftColor(biome.groundLow, minLight * 0.9), roughness: 0.85, metalness: 0.2 }),
-      mid: new THREE.MeshStandardMaterial({ color: liftColor(biome.groundMid, minLight * 1.15), roughness: 0.68, metalness: 0.18, ...texProps }),
-      glass: new THREE.MeshStandardMaterial({ color: biome.atmoRim, emissive: biome.atmoBase, emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.55, transparent: true, opacity: 0.88 }),
+      stone: conFoco(new THREE.MeshStandardMaterial({ color: liftColor(biome.groundHigh, minLight * 1.45), roughness: 0.78, metalness: 0.14, ...texProps })),
+      accent: conFoco(new THREE.MeshStandardMaterial({ color: biome.cityLight, emissive: biome.cityLight, emissiveIntensity: 1.15, roughness: 0.25, metalness: 0.35, toneMapped: false }), { desat: 0.7, oscurece: 0.55 }),
+      dark: conFoco(new THREE.MeshStandardMaterial({ color: liftColor(biome.groundLow, minLight * 0.9), roughness: 0.85, metalness: 0.2 }), { lift: [new THREE.Color(biome.groundMid).lerp(new THREE.Color('#9a9a9a'), 0.5), 0.5] }),
+      mid: conFoco(new THREE.MeshStandardMaterial({ color: liftColor(biome.groundMid, minLight * 1.15), roughness: 0.68, metalness: 0.18, ...texProps }), { lift: [new THREE.Color(biome.groundHigh).lerp(new THREE.Color('#b0b0b0'), 0.4), 0.35] }),
+      glass: conFoco(new THREE.MeshStandardMaterial({ color: biome.atmoRim, emissive: biome.atmoBase, emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.55, transparent: true, opacity: 0.88 })),
       beam: new THREE.MeshBasicMaterial({ color: biome.cityLight, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
-      glb: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.12 }),
+      glb: conFoco(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.12 })),
     }
   }, [biome, minLight, emissiveMap])
 

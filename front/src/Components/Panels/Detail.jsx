@@ -154,6 +154,22 @@ export function SkinThumb({ skin, bodyCss, size = 32 }) {
   )
 }
 
+const signo = (n) => (n > 0 ? '+' : '−') + Math.abs(n)
+const efecto = (d) => (d ? (d.kind === 'puntos' ? `⭐${signo(d.dp)}` : `⚡${signo(d.de)}`) : '')
+
+// Estado en una línea para la tarjeta compacta: «En Eco → Spa ⭐+3».
+function estadoCorto(b, sim, lugar) {
+  try {
+    const n = sim.world.nodes
+    const aqui = n[b.node]?.name
+    if (b.phase === 'toDest' && b.dest) return `En ${aqui} → ${b.dest.name} ${efecto(b.dest)}`
+    if (b.phase === 'at' && b.dest) return `En ${aqui} · ${b.dest.name} ${efecto(b.dest)}`
+    if (b.phase === 'toPort' && b.way) return `En ${aqui} → puerto de ${n[b.way.to].name}`
+    if (b.phase === 'travel' && b.way) return `${n[b.way.from].name} → ${n[b.way.to].name} · ${b.way.theme?.emoji ?? ''} ${b.way.theme?.name ?? ''}`.trim()
+  } catch {}
+  return lugar
+}
+
 export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }) {
   const ida = b.phase === 'gone' || b.phase === 'dying'
   const lugar = ida ? '' : donde(b, sim)
@@ -162,6 +178,64 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
   const skin = useMemo(() => generateSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyCss = colorDe(b)
   const [min, toggleMin] = usePanelMin('ficha')
+  // Siguiendo (Seguir o POV) la ficha es compacta: fila de cabecera + barras + estado; el resto, en «más».
+  const compacto = (follow || pov) && !ida
+
+  const perfil = (
+    <>
+      <p className="sub">{b.arch?.title} · {b.mood} · gen {b.gen} · {Math.round(b.age)}s</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 4px' }}>
+        <SkinThumb skin={skin} bodyCss={bodyCss} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.25 }}>
+            {skin.emoji} {skin.name}
+          </div>
+          <div className="sub" style={{ margin: 0 }}>{PATTERN_LABEL[skin.patternType]}</div>
+        </div>
+      </div>
+      {skin.partsSummary?.length > 0 && (
+        <div className="chips" aria-label="Piezas del skin">
+          {skin.partsSummary.map((label) => <span key={label}>{label}</span>)}
+        </div>
+      )}
+    </>
+  )
+  const extra = (
+    <>
+      <h3>Personalidad</h3>
+      {TRAITS.map(([k, l]) => <Barra key={k} label={l} v={b.genome.traits[k] ?? 0} color="#8aa7ff" />)}
+      {fav.length > 0 && <><h3>Le gusta</h3>{fav.map((t, i) => <p key={`${i}-${t}`} className="linea">{t}</p>)}</>}
+      <h3>Pensamientos</h3>
+      <ul className="diario">{(b.log ?? []).slice(0, 8).map((l, i) => <li key={i}><em>{l.t}s</em> {l.emoji} {l.text}</li>)}</ul>
+    </>
+  )
+
+  if (compacto) {
+    return (
+      <aside className={`tarjeta compacta${min ? ' min' : ''}`} aria-label={`Detalles de ${b.name}`}>
+        <div className="cabecera">
+          <span className="punto" style={{ background: bodyCss }} />
+          <h2>{b.name}</h2>
+          <button className="seguir" aria-pressed={follow} onClick={onFollow}>{follow ? '↩ Salir' : '👁 Seguir'}</button>
+          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista frontal (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
+          <button className="cerrar" onClick={toggleMin} aria-expanded={!min} aria-label={min ? 'Mostrar ficha' : 'Minimizar ficha'} title={min ? 'Mostrar ficha' : 'Minimizar ficha'}>{min ? '▴' : '▾'}</button>
+          <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
+        </div>
+        <div className="barras-fila">
+          <Barra label={`⭐ ${Math.round(b.p)}`} v={b.p / 100} color="#ffd54a" />
+          <Barra label={`⚡ ${Math.round(b.e)}`} v={b.e / 100} color="#5dffb0" />
+        </div>
+        {lugar && <p className="linea estado" title={lugar}>📍 {estadoCorto(b, sim, lugar)}</p>}
+        <details>
+          <summary>más</summary>
+          {perfil}
+          {lugar && <p className="linea">📍 {lugar}</p>}
+          {idea && <p className="linea">{idea.emoji ?? '💭'} {idea.text}</p>}
+          {extra}
+        </details>
+      </aside>
+    )
+  }
 
   return (
     <aside className={`tarjeta${min ? ' min' : ''}`} aria-label={`Detalles de ${b.name}`}>
