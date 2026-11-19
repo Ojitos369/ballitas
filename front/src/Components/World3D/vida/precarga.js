@@ -39,7 +39,8 @@ const ETAPAS = ETAPAS_NOMBRES.map((n) => [n, FN[n]])
 const MONTABLE = ETAPAS_NOMBRES.indexOf('modelos') + 1
 
 /** Tiempos por etapa (ms acumulados y peor porción), visibles con ?stats=1 en window.__precarga. */
-export const PRECARGA = { ms: {}, max: {}, caminos: 0 }
+// listo[idx] / montado[idx]: performance.now() en que la vida del camino quedó calculada / montada (para las sondas)
+export const PRECARGA = { ms: {}, max: {}, caminos: 0, listo: {}, montado: {} }
 if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stats') === '1') window.__precarga = PRECARGA
 
 /** true si montar la vida de `way` ya no construye nada pesado de golpe. */
@@ -59,7 +60,7 @@ export function precargaPaso(way, agotado) {
     if (dt > (PRECARGA.max[nombre] ?? 0)) PRECARGA.max[nombre] = Math.round(dt * 10) / 10
     if (!ok) return false
     marcarEtapa(way, ++k)
-    if (k === ETAPAS.length) PRECARGA.caminos++
+    if (k === ETAPAS.length) { PRECARGA.caminos++; PRECARGA.listo[way.idx] = Math.round(performance.now()) }
     if (agotado()) return k >= ETAPAS.length
   }
   return true

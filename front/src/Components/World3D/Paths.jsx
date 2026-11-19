@@ -9,13 +9,14 @@ import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
 import { pistaWarmup } from './vida/pista.jsx'
-import { precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
+import { PRECARGA, precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
 import { fijarPreparadorKit } from './Modelos.jsx'
 import Precompilado, { enlazarPendientes, precompilar, primerDibujo } from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
 import Neon, { makeNeonMaterial } from './Neon.jsx'
 import Fauna, { faunaWarmup } from './Fauna.jsx'
 import { criaturasWarmup } from './vida/criaturas.jsx'
+import { anilloCoreWarmup } from './vida/anillos.jsx'
 import { registrarMundo } from './colisionObjetos.js'
 import Ecosistema, { ecoMaterial, withObjLight } from './Ecosistema.jsx'
 
@@ -1304,7 +1305,7 @@ function updateWayController(ctrl, h, t, dist, worldRadius) {
   ctrl.dirty = f !== targetF || Math.abs(det - targetDet) > 0.001 || det > 0
 }
 
-function Way({ way, world = null, focused, detailActive = false, nearActive = false, forceFocusDetail = false, controllersRef, onPickWay }) {
+function Way({ way, world = null, focused, detailActive = false, detailMounted = detailActive, nearActive = false, forceFocusDetail = false, controllersRef, onPickWay }) {
   const id = way.theme.id
   const focusU = useMemo(() => ({ value: 1 }), [])
   const detailU = useMemo(() => ({ value: 0 }), [])
@@ -1371,7 +1372,7 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
       )}
 
       {/* Pista de carreras del tema + mecanismos (solo en los caminos cercanos/enfocados) */}
-      {detailActive && (
+      {(detailActive || detailMounted) && (
         <Precompilado>
           {/* la vida va dentro del interior: montada de antemano (precarga) no se ve hasta que hay detalle */}
           <group ref={intGroupRef}>
@@ -1411,6 +1412,12 @@ function Precalentar() {
       im.frustumCulled = false
       g.add(im)
     }
+    // el núcleo del anillo usa un material derivado (otra clave de programa): se calienta igual que lo dibuja la capa
+    if (nombre === 'anillo_neon_lod') {
+      const im = new THREE.InstancedMesh(kit.geometry, anilloCoreWarmup(kit.material), 1)
+      im.frustumCulled = false
+      g.add(im)
+    }
     group.add(g)
     return precompilar(gl, g, camera, scene).then(() => enlazarPendientes(gl)).then(() => primerDibujo(gl, g, scene, camera))
   }), [group, gl, camera, scene])
@@ -1423,6 +1430,8 @@ const MAX_ACTIVE_VIDA_PRE = 3
 const MAX_ACTIVE_NEAR = 3
 const PRECARGA_ENTRADA_MS = 6 // por cuadro, si falta el camino que la cámara ya mira
 const PRECARGA_CUADRO_MS = 3 // por cuadro, para los caminos que vienen
+const FONDO_CUADRO_MS = 1.5 // por cuadro, el resto del mundo, solo si el cuadro deja margen
+const DESCARGA_S = 6 // un camino que deja de hacer falta se oculta ya y se desmonta pasado este tiempo (histéresis)
 
 function reconcileLodSet(curSet, desiredSet, maxAdds = Infinity) {
   let changed = false
@@ -1479,11 +1488,12 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
   // llenan en useFrame) con unos ms por cuadro aunque no haya hueco; luego, en huecos libres, el camino de cada
   // ballita viva (la primera es la que abre la tecla 3) y por último el resto del mundo.
   const urgentesRef = useRef([])
+  const fondoRef = useRef(null) // paso de fondo por cuadro (ver useFrame): sin huecos libres, el idle solo daba 4 ms/s
   useEffect(() => {
     let vivo = true
     let id = 0
     // con plazo: si los cuadros no dejan hueco libre, sin timeout no avanzaría nunca
-    const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 1000 }) : (f) => setTimeout(() => f({ didTimeout: true }), 50)
+    const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 300 }) : (f) => setTimeout(() => f({ didTimeout: true }), 50)
     const cancel = (i) => (window.cancelIdleCallback ? window.cancelIdleCallback(i) : clearTimeout(i))
     const siguiente = () => {
       for (const w of urgentesRef.current) if (!vidaCompleta(w)) return w
@@ -1496,7 +1506,7 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     const paso = (dl) => {
       if (!vivo) return
       const t0 = performance.now()
-      const lim = dl.didTimeout ? 4 : Math.min(8, dl.timeRemaining())
+      const lim = dl.didTimeout ? 4 : Math.max(2, Math.min(8, dl.timeRemaining()))
       const agotado = () => performance.now() - t0 > lim
       let w = siguiente()
       while (w && !agotado()) { if (precargaPaso(w, agotado)) w = siguiente() }
@@ -1505,7 +1515,15 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
       else id = setTimeout(() => { if (vivo) id = idle(paso) }, 500)
     }
     const t = setTimeout(() => { id = idle(paso) }, 1500)
-    return () => { vivo = false; clearTimeout(t); cancel(id) }
+    // por cuadro, con lo que sobre del cuadro de 60 Hz (0 si el cuadro ya va justo): el idle casi nunca llega
+    // cuando los cuadros se encadenan sin hueco, y a los 56 s no había ni un camino completo
+    fondoRef.current = (lim) => {
+      const t0 = performance.now()
+      const agotado = () => performance.now() - t0 > lim
+      let w = siguiente()
+      while (w && !agotado()) { if (precargaPaso(w, agotado)) w = siguiente() }
+    }
+    return () => { vivo = false; clearTimeout(t); cancel(id); fondoRef.current = null }
   }, [world, sim])
 
   const wayDistRef = useRef([])
@@ -1513,6 +1531,8 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
   const mountedRef = useRef(new Set())
   const nearRef = useRef(new Set())
   const [mountedIds, setMountedIds] = useState(() => new Set())
+  const [wantedIds, setWantedIds] = useState(() => new Set())
+  const retiroRef = useRef(new Map()) // idx -> t en que dejó de hacer falta (sigue montado, oculto)
   const [nearIds, setNearIds] = useState(() => new Set())
   const lastEvalRef = useRef(-10)
   const prevFocusRef = useRef(focusWay)
@@ -1600,13 +1620,29 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
       const nearDesired = selectTopIds(nearCands, MAX_ACTIVE_NEAR)
       for (const id of (nextMounted ?? mountedRef.current)) nearDesired.add(id)
       const nextNear = reconcileLodSet(curNear, nearDesired, 1)
+      // Descarga con histéresis: lo que deja de hacer falta se oculta ya (wanted) y sigue montado DESCARGA_S;
+      // si vuelve a ser candidato reaparece sin reconstruir nada. Se desmonta como mucho uno por evaluación.
+      let retiroCambio = false
+      const retiro = retiroRef.current
+      if (nextMounted) {
+        for (const id of curMounted) if (!nextMounted.has(id)) { retiro.set(id, t); retiroCambio = true }
+        for (const id of nextMounted) {
+          if (retiro.delete(id)) retiroCambio = true
+          else if (!curMounted.has(id)) PRECARGA.montado[id] = Math.round(performance.now())
+        }
+      }
+      for (const [id, t0] of retiro) {
+        if (t - t0 > DESCARGA_S) { retiro.delete(id); retiroCambio = true; break }
+      }
       if (nextMounted) mountedRef.current = nextMounted
       if (nextNear) nearRef.current = nextNear
       // Transición: React reparte el render del montaje (pista, capas cercanas) en porciones
       // de ~5 ms entre cuadros en vez de un único cuadro largo en la primera entrada.
-      if (nextMounted || nextNear) {
+      if (nextMounted || nextNear || retiroCambio) {
+        const wanted = mountedRef.current
+        const montados = new Set([...wanted, ...retiro.keys()])
         startTransition(() => {
-          if (nextMounted) setMountedIds(nextMounted)
+          if (nextMounted || retiroCambio) { setMountedIds(montados); setWantedIds(wanted) }
           if (nextNear) setNearIds(nextNear)
         })
       }
@@ -1614,12 +1650,19 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
 
     // Precarga urgente con presupuesto por cuadro (no depende de que haya huecos libres, que en el móvil o con los
     // cuadros llenos casi no hay): más ms si falta el camino que se ve ahora (entrada), menos para los siguientes.
+    let urgente = false
     for (const w of urgentesRef.current) {
       if (vidaCompleta(w)) continue
       const t0 = performance.now()
       const lim = !vidaMontable(w) && w.idx === focusWay ? PRECARGA_ENTRADA_MS : PRECARGA_CUADRO_MS
       precargaPaso(w, () => performance.now() - t0 > lim)
+      urgente = true
       break
+    }
+    // Fondo: el resto del mundo con lo que sobre de un cuadro de 60 Hz (tope 1,5 ms; nada si el cuadro va justo).
+    if (!urgente && fondoRef.current) {
+      const libre = Math.min(FONDO_CUADRO_MS, 1000 / 60 - 3 - dt * 1000)
+      if (libre > 0.3) fondoRef.current(libre)
     }
 
     // Actualizar solo ways activos/en transición; suspender por completo caminos lejanos estables
@@ -1643,7 +1686,8 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
           way={w}
           world={world}
           focused={focusWay == null || focusWay === w.idx}
-          detailActive={mountedIds.has(w.idx)}
+          detailActive={wantedIds.has(w.idx)}
+          detailMounted={mountedIds.has(w.idx)}
           nearActive={nearIds.has(w.idx)}
           forceFocusDetail={forceFocusDetail}
           controllersRef={controllersRef}
