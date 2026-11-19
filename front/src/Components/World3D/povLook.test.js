@@ -48,6 +48,22 @@ test('povZoomView: continuo, espalda a ojos a zoom óptico', () => {
   }
 })
 
+test('povZoomView: bocadillo solo en la mitad de espalda (cuerpo entero), nunca en ojos', () => {
+  assert.ok(povZoomView(0).espalda)
+  assert.ok(povZoomView(0.1).espalda)
+  assert.ok(!povZoomView(POV_ZOOM_EYE).espalda && !povZoomView(1).espalda)
+  // umbral único y monótono: de espalda a ojos cambia una sola vez, y siempre con el cuerpo visible
+  let cambios = 0
+  let prev = povZoomView(0).espalda
+  for (let z = 0.01; z <= 1; z += 0.01) {
+    const v = povZoomView(z)
+    if (v.espalda) assert.ok(v.body && v.back >= 1)
+    if (v.espalda !== prev) cambios++
+    prev = v.espalda
+  }
+  assert.equal(cambios, 1)
+})
+
 test('rayEnterSphere da la fraccion de entrada o 1 si no toca', () => {
   const o = { x: 0, y: 0, z: 0 }
   const e = { x: 10, y: 0, z: 0 }

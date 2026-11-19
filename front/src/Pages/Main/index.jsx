@@ -43,7 +43,6 @@ function MainScene() {
   const [speed, setSpeed] = useState(1)
   const [selected, setSelected] = useState(null)
   const [vista, setVista] = useState('mapa')
-  const [punto, setPunto] = useState('externa') // punto de vista en la vista ballita: externa | interna
   const [focusWay, setFocusWay] = useState(null)
   const [routeIndex, setRouteIndex] = useState(0)
   const [seek, setSeek] = useState(null)
@@ -54,12 +53,12 @@ function MainScene() {
   const [stats, setStats] = useState(null)
   const [, setTick] = useState(0)
 
+  // Un único punto de vista «POV»: en carretera la cámara de la ballita; en un planeta, Scene pasa sola a la de seguimiento.
   const enBallita = vista === 'ballita'
-  const follow = enBallita && punto === 'externa'
-  const pov = enBallita && punto === 'interna'
+  const pov = enBallita
   const activeWay = focusWay == null ? null : sim.world.ways[focusWay]
-  // Foco de la vista de planeta: solo con la ballita seguida (Seguir o POV).
-  const enFoco = (follow || pov) && selected ? selected : null
+  // Foco de la vista de planeta: solo con la ballita en POV.
+  const enFoco = pov && selected ? selected : null
   useEffect(() => { setFocoBallita(enFoco) }, [enFoco])
 
   // La sim vive fuera de React: se refresca la UI 5 veces por segundo.
@@ -71,7 +70,7 @@ function MainScene() {
   const enterWay = (way, ri = 0) => { setFocusWay(way.idx); setRouteIndex(ri); setSeek(null) }
   const pickWay = (way) => { if (way) enterWay(way) }
 
-  const goVista = (id, p) => {
+  const goVista = (id) => {
     if (id === 'camino') {
       let w = activeWay
       if (!w && selected?.way) { // camino de la ballita seleccionada, en su ruta
@@ -85,12 +84,11 @@ function MainScene() {
       if (!b || b.phase === 'gone' || b.phase === 'dying') b =sim.ballitas.find((o) => o.phase !== 'dying' && o.phase !== 'gone')
       if (!b) return
       setSelected(b)
-      if (p) setPunto(p)
     }
     setVista(id)
   }
 
-  // Atajos: 1/2/3 vistas, V alterna externa/interna, C cine, F3 stats, Esc al mapa (POV lo gestiona Scene).
+  // Atajos: 1/2/3 vistas, V entra/sale del POV, C cine, F3 stats, Esc al mapa (POV lo gestiona Scene).
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'F3') { e.preventDefault(); setShowStats((v) => !v); return }
@@ -104,8 +102,8 @@ function MainScene() {
       else if (k === '2') goVista('camino')
       else if (k === '3') goVista('ballita')
       else if (k === 'v') {
-        if (enBallita) setPunto((p) => (p === 'interna' ? 'externa' : 'interna'))
-        else goVista('ballita', 'interna')
+        if (enBallita) setVista('mapa')
+        else goVista('ballita')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -122,7 +120,6 @@ function MainScene() {
   const followBallita = (b) => {
     if (!b || b.phase === 'dying' || b.phase === 'gone') return
     setSelected(b)
-    setPunto('externa')
     setVista('ballita')
   }
   // Si la ballita seguida muere, se vuelve sola al mapa.
@@ -135,19 +132,18 @@ function MainScene() {
 
   return (
     <div className="app">
-      <Scene sim={sim} ballitas={sim.ballitas} speed={speed} selected={selected} follow={follow} pov={pov} cine={cine} showStats={showStats} onStatsSample={setStats}
+      <Scene sim={sim} ballitas={sim.ballitas} speed={speed} selected={selected} pov={pov} cine={cine} showStats={showStats} onStatsSample={setStats}
         vista={vista} activeWay={activeWay} routeIndex={routeIndex} seek={seek} caminoSpeed={caminoSpeed} caminoPaused={caminoPaused} progressRef={progressRef}
         onSelect={select} onSelectWay={pickWay} onExitPov={exitPov} />
       {showStats && <StatsHud stats={stats} />}
-      <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={follow} onFollowBallita={followBallita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
+      <Hud sim={sim} speed={speed} setSpeed={setSpeed} selected={selected} onSelect={select} follow={pov} onFollowBallita={followBallita} cine={cine} onToggleCine={() => setCine((v) => !v)} />
       <ViewTabs vista={vista} goVista={goVista} sim={sim} way={activeWay} routeIndex={routeIndex} setRouteIndex={(i) => { setRouteIndex(i); setSeek(null) }}
         paused={caminoPaused} setPaused={setCaminoPaused} caminoSpeed={caminoSpeed} setCaminoSpeed={setCaminoSpeed}
         seekTo={(i) => setSeek({ i, k: performance.now() })} onFollow={followBallita} progressRef={progressRef} />
       {enFoco && <Llegada b={enFoco} world={sim.world} />}
       {selected && vista !== 'camino' && (
-        <Detail b={selected} sim={sim} follow={follow} pov={pov}
-          onFollow={() => (follow ? setVista('mapa') : followBallita(selected))}
-          onPov={() => (pov ? setPunto('externa') : goVista('ballita', 'interna'))}
+        <Detail b={selected} sim={sim} pov={pov}
+          onPov={() => (pov ? setVista('mapa') : followBallita(selected))}
           onClose={() => select(null)} />
       )}
     </div>

@@ -170,7 +170,7 @@ function estadoCorto(b, sim, lugar) {
   return lugar
 }
 
-export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }) {
+export default function Detail({ b, sim, pov, onPov, onClose }) {
   const ida = b.phase === 'gone' || b.phase === 'dying'
   const lugar = ida ? '' : donde(b, sim)
   const idea = obtenerGlobo(b, sim) ?? b.thought ?? b.log?.[0]
@@ -178,8 +178,8 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
   const skin = useMemo(() => generateSkin(b.genome, b.arch), [b.genome, b.arch])
   const bodyCss = colorDe(b)
   const [min, toggleMin] = usePanelMin('ficha')
-  // Siguiendo (Seguir o POV) la ficha es compacta: fila de cabecera + barras + estado; el resto, en «más».
-  const compacto = (follow || pov) && !ida
+  // En POV (carretera o planeta) la ficha es compacta: fila de cabecera + barras + estado; el resto, en «más».
+  const compacto = pov && !ida
 
   const perfil = (
     <>
@@ -216,8 +216,7 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
         <div className="cabecera">
           <span className="punto" style={{ background: bodyCss }} />
           <h2>{b.name}</h2>
-          <button className="seguir" aria-pressed={follow} onClick={onFollow}>{follow ? '↩ Salir' : '👁 Seguir'}</button>
-          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista frontal (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
+          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista: en el camino desde la ballita; en un planeta, cámara de seguimiento (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
           <button className="cerrar" onClick={toggleMin} aria-expanded={!min} aria-label={min ? 'Mostrar ficha' : 'Minimizar ficha'} title={min ? 'Mostrar ficha' : 'Minimizar ficha'}>{min ? '▴' : '▾'}</button>
           <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
@@ -243,8 +242,7 @@ export default function Detail({ b, sim, follow, pov, onFollow, onPov, onClose }
         <span className="punto" style={{ background: bodyCss }} />
         <h2>{b.name}</h2>
         {!ida && <>
-          <button className="seguir" aria-pressed={follow} onClick={onFollow}>{follow ? '↩ Salir' : '👁 Seguir'}</button>
-          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista frontal (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
+          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista: en el camino desde la ballita; en un planeta, cámara de seguimiento (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
         </>}
         <button className="cerrar" onClick={toggleMin} aria-expanded={!min} aria-label={min ? 'Mostrar ficha' : 'Minimizar ficha'} title={min ? 'Mostrar ficha' : 'Minimizar ficha'}>{min ? '▴' : '▾'}</button>
         <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>

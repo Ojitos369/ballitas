@@ -275,6 +275,9 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
 
   const [nearCam, setNearCam] = useState(false)
   const nearCamRef = useRef(false)
+  // POV de espalda (zoom con el cuerpo entero a la vista): se muestra su bocadillo; en ojos sigue oculto
+  const [espalda, setEspalda] = useState(false)
+  const espaldaRef = useRef(false)
 
   // Al seleccionarla (no al llegar la cámara) sube ya sus texturas: el primer cuadro de cerca no las espera.
   const gl = useThree((s) => s.gl)
@@ -316,6 +319,11 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
     if (nextNear !== nearCamRef.current) {
       nearCamRef.current = nextNear
       setNearCam(nextNear)
+    }
+    const nextEsp = Boolean(pov && povView.espalda)
+    if (nextEsp !== espaldaRef.current) {
+      espaldaRef.current = nextEsp
+      setEspalda(nextEsp)
     }
 
     // 1. Expresión viva según evento y situación (solo si el cuerpo es visible o está seleccionada)
@@ -837,7 +845,7 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
       {/* solo el diálogo, encima de la cabeza: nombre y ánimo ya están en la ficha y tapaban a la ballita */}
-      {talking && ((selected && follow) || nearCam) && !pov && (
+      {talking && ((selected && (follow || espalda)) || (nearCam && !pov)) && (
         // Tamaño fijo en pantalla (≥ 11 px reales, máx. 2 líneas): con distanceFactor quedaba una píldora de 8 px ilegible.
         <WorldHtml position={[0, 0, 0]} sobre={r * 1.05} center zIndexRange={[20, 10]} style={BUBBLE_WRAP} className="globo-wrap" opacity={selected ? undefined : OP_OTRA}>
           <div className={`bubble globo${selected ? '' : ' otra'}`} style={{ borderColor: color.getStyle() }}>

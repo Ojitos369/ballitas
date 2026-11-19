@@ -30,23 +30,25 @@ export function decayOffset(v, h, idleS, centering = false) {
 }
 
 // Zoom continuo del POV: z 0..1. 0 = tercera persona a la espalda, POV_ZOOM_EYE = ojos de la ballita,
-// 1 = ojos con zoom �ptico (FOV bajo). Todo con suavizado en S: sin saltos entre tramos.
+// 1 = ojos con zoom óptico (FOV bajo). Todo con suavizado en S: sin saltos entre tramos.
 export const POV_ZOOM_EYE = 0.5
-export const POV_BACK_MAX = 2.2 // distancia atr�s con z = 0
+export const POV_BACK_MAX = 2.2 // distancia atrás con z = 0
 export const POV_UP_MAX = 0.55 // altura extra con z = 0
 export const POV_FOV_MIN = 28
+// Mitad de espalda: desde aquí la cámara ve el cuerpo entero y se muestra el bocadillo de la ballita (en ojos, oculto).
+export const POV_ESPALDA = 0.5
 const smooth = (t) => t * t * (3 - 2 * t)
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t)
 
 export function povZoomView(z) {
-  const k = smooth(clamp01(z / POV_ZOOM_EYE)) // 0 espalda ? 1 ojos
-  const t = smooth(clamp01((z - POV_ZOOM_EYE) / (1 - POV_ZOOM_EYE))) // 0 ojos ? 1 zoom m�ximo
+  const k = smooth(clamp01(z / POV_ZOOM_EYE)) // 0 espalda → 1 ojos
+  const t = smooth(clamp01((z - POV_ZOOM_EYE) / (1 - POV_ZOOM_EYE))) // 0 ojos → 1 zoom máximo
   const base = 68 + 7 * k
-  return { back: POV_BACK_MAX * (1 - k), up: POV_UP_MAX * (1 - k), fov: base + (POV_FOV_MIN - base) * t, body: 1 - k > 0.1 }
+  return { back: POV_BACK_MAX * (1 - k), up: POV_UP_MAX * (1 - k), fov: base + (POV_FOV_MIN - base) * t, body: 1 - k > 0.1, espalda: 1 - k >= POV_ESPALDA }
 }
 
-// La escena escribe aqu� cada cuadro si la ballita debe dibujarse en POV (tercera persona); Ballita.jsx lo lee.
-export const povView = { body: false }
+// La escena escribe aquí cada cuadro si la ballita debe dibujarse en POV (tercera persona); Ballita.jsx lo lee.
+export const povView = { body: false, espalda: false }
 
 // Distancia minima entre una linea de camara y una envolvente esferica. Devuelve 0 si no bloquea.
 export function raySpherePenetration(origin, end, center, radius) {

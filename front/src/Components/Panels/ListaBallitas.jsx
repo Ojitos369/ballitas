@@ -72,8 +72,8 @@ const FilaBallita = memo(function FilaBallita({ b, sim, isSelected, isFollowing,
           type="button"
           className="lista-ojo"
           aria-pressed={isFollowing}
-          aria-label={isFollowing ? `Dejar de seguir a ${b.name}` : `Seguir a ${b.name}`}
-          title={isFollowing ? 'Dejar de seguir' : 'Seguir'}
+          aria-label={isFollowing ? `${b.name} ya está en POV` : `POV de ${b.name}`}
+          title={isFollowing ? 'En POV' : 'POV'}
           onClick={() => onFollow(b)}
         >
           👁
