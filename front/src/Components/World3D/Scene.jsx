@@ -1933,7 +1933,9 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   // está, si aún no eligió) se montan ocultos y compilados antes de que entre en ellos.
   const nodoSig = !forceFocusDetail || camino || !selected ? null
     : selected.phase === 'travel' ? selected.way?.to : (selected.way ? null : selected.node)
-  const prefetchKey = nodoSig == null ? '' : (sim.world.waysFrom[nodoSig] ?? []).map((w) => w.idx).filter((i) => i !== focusedWay).join(',')
+  // Ordenados de más a menos probable (sim.probWays: la misma utilidad que goWay, sin ruido ni RNG): Paths precarga y
+  // monta primero los que más probablemente elegirá.
+  const prefetchKey = nodoSig == null ? '' : (sim.probWays ? sim.probWays(selected, nodoSig) : (sim.world.waysFrom[nodoSig] ?? []).map((w) => w.idx)).filter((i) => i !== focusedWay).join(',')
   const prefetchWays = useMemo(() => (prefetchKey ? prefetchKey.split(',').map(Number) : null), [prefetchKey])
 
   const povControlRef = useRef(createPovState())

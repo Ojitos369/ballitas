@@ -47,10 +47,10 @@ await p.evaluate(() => {
   }, 100)
 })
 await p.waitForTimeout(secs * 1000)
-const R = await p.evaluate(() => ({ E: window.__ant.E, caminos: window.__precarga?.caminos ?? null, total: window.__ballitasDebug ? null : null }))
+const R = await p.evaluate(() => ({ E: window.__ant.E, caminos: window.__precarga?.caminos ?? null, ms: window.__precarga?.ms ?? null, max: window.__precarga?.max ?? null, total: window.__ballitasDebug ? null : null }))
 const entradas = R.E.filter((x) => x.tipo === 'entra')
 const ant = entradas.map((x) => x.antelacion_s).filter((x) => x != null)
-const res = { modo, caminos_8s: caminos8s, caminos_fin: R.caminos, entradas: entradas.length, antelacion_min_s: ant.length ? Math.min(...ant) : null, antelacion: ant, sin_listo: entradas.filter((x) => x.antelacion_s == null).length, eventos: R.E }
+const res = { modo, caminos_8s: caminos8s, caminos_fin: R.caminos, precarga_ms: R.ms, precarga_max: R.max, ok_pct: entradas.length ? Math.round(100 * entradas.filter((x) => x.listo != null && x.montado != null && (x.t - x.montado) >= 2000 && (x.t - x.listo) >= 500).length / entradas.length) : null, entradas: entradas.length, antelacion_min_s: ant.length ? Math.min(...ant) : null, antelacion: ant, sin_listo: entradas.filter((x) => x.antelacion_s == null).length, eventos: R.E }
 console.log(JSON.stringify({ ...res, eventos: undefined }))
 if (salida) writeFileSync(salida, JSON.stringify(res, null, 1))
 } finally {

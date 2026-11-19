@@ -40,7 +40,7 @@ const FN = {
 }
 const ETAPAS = ETAPAS_NOMBRES.map((n) => [n, FN[n]])
 // Con la pista lista el camino ya se monta: cada capa aparece (precompilada) cuando su etapa termina (useEtapa).
-const MONTABLE = ETAPAS_NOMBRES.indexOf('modelos') + 1
+export const MONTABLE = ETAPAS_NOMBRES.indexOf('modelos') + 1
 
 /** Tiempos por etapa (ms acumulados y peor porción), visibles con ?stats=1 en window.__precarga. */
 // listo[idx] / montado[idx]: performance.now() en que la vida del camino quedó calculada / montada (para las sondas)
@@ -53,9 +53,10 @@ export const vidaMontable = (way) => etapaActual(way) >= MONTABLE
 export const vidaCompleta = (way) => etapaActual(way) >= ETAPAS.length
 
 /** Avanza la precarga de `way` hasta que `agotado()` diga basta; true cuando está completa. */
-export function precargaPaso(way, agotado) {
+// `hasta`: etapa en la que parar (p. ej. MONTABLE, para llevar primero todos los candidatos hasta poder montarse).
+export function precargaPaso(way, agotado, hasta = ETAPAS.length) {
   let k = etapaActual(way)
-  while (k < ETAPAS.length) {
+  while (k < hasta) {
     const [nombre, fn] = ETAPAS[k]
     const t0 = performance.now()
     const ok = fn(way, agotado)
@@ -65,7 +66,7 @@ export function precargaPaso(way, agotado) {
     if (!ok) return false
     marcarEtapa(way, ++k)
     if (k === ETAPAS.length) { PRECARGA.caminos++; PRECARGA.listo[way.idx] = Math.round(performance.now()) }
-    if (agotado()) return k >= ETAPAS.length
+    if (agotado()) return k >= hasta
   }
   return true
 }
