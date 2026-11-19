@@ -1,6 +1,6 @@
 // Recorrido siguiendo ballitas: cuadros largos, FPS y apariciones cercanas (pop-in), y memoria.
 // uso: node recorrido.mjs <url> <escritorio|movil> [segundos_por_ballita=60] [ballitas=3] [salida.json] [throttle=1]
-//   memoria: node recorrido.mjs <url> memoria [segundos=300] -> geometrÃ­as/texturas/heap al minuto 1 y al final
+//   memoria: node recorrido.mjs <url> memoria [segundos=300] -> geometrÃƒÆ’Ã‚Â­as/texturas/heap al minuto 1 y al final
 import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39c74d688ef56/66ad59e0-d323-4be2-8707-8e648cba3105/scratchpad/pw/node_modules/playwright-core/index.mjs'
 import { writeFileSync } from 'node:fs'
 const [url, modo = 'escritorio', secsA, nA, salida, thrA] = process.argv.slice(2)
@@ -88,7 +88,7 @@ for (let k = 0; k < nBall; k++) {
       clearInterval(st.pop)
       const R = window.__rec.R; const d = window.__ballitasDebug
       const prev = new WeakMap(); const fr = new T.Frustum(); const M = new T.Matrix4(); const S = new T.Sphere()
-      // estado de dibujo: 'si' | 'oculto' (algún ancestro invisible: LOD, camino oculto) | 'vacio' (InstancedMesh sin instancias: tramo/rango)
+      // estado de dibujo: 'si' | 'oculto' (algÃƒÂºn ancestro invisible: LOD, camino oculto) | 'vacio' (InstancedMesh sin instancias: tramo/rango)
       const dib = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return 'oculto'; return o.isInstancedMesh && o.count === 0 ? 'vacio' : o.geometry ? 'si' : 'oculto' }
       const wayDe = (o) => { for (let q = o; q; q = q.parent) if (q.name?.startsWith('way:')) return +q.name.slice(4); return null }
       st.pop = setInterval(() => {
@@ -112,9 +112,9 @@ for (let k = 0; k < nBall; k++) {
           }
         })
       }, 200)
-      // Apariciones BRUSCAS (definición del orquestador): malla o instancia que pasa de no dibujarse a medir > 14 px de
-      // alto en un solo cuadro a < 60 u de la cámara. Se mira cada cuadro; con InstanceCuller nuevo (window.__aparece) el
-      // tamaño incluye su factor de borde y de revelado; en main el factor es 1.
+      // Apariciones BRUSCAS (definiciÃƒÂ³n del orquestador): malla o instancia que pasa de no dibujarse a medir > 14 px de
+      // alto en un solo cuadro a < 60 u de la cÃƒÂ¡mara. Se mira cada cuadro; con InstanceCuller nuevo (window.__aparece) el
+      // tamaÃƒÂ±o incluye su factor de borde y de revelado; en main el factor es 1.
       R.bruscas = R.bruscas ?? []
       const prevB = new WeakMap(); let lista = []; let nf = 0
       const AP = window.__aparece; const V = new T.Vector3(); const Mi = new T.Matrix4(); const Sc = new T.Vector3()
@@ -129,8 +129,10 @@ for (let k = 0; k < nBall; k++) {
           S.copy(bs).applyMatrix4(o.matrixWorld)
           const dist = S.center.distanceTo(cam.position)
           if (dist - S.radius > 60 || !fr.intersectsSphere(S)) return 0
+          medir.rad = S.radius
           return altoPx(S.radius, dist)
         }
+        medir.rad = 0
         const noCull = !!o.userData.noCull; const n = o.count
         const D = AP ? (noCull ? o.userData.recorte : (n >= AP.min ? AP.radio : null)) : null
         const rev = AP ? (o.userData.__rev ?? 1) : 1
@@ -159,12 +161,13 @@ for (let k = 0; k < nBall; k++) {
         M.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); fr.setFromProjectionMatrix(M)
         const t = performance.now()
         for (const o of lista) {
-          const ahora = dib(o) === 'si'; const antes = prevB.get(o)
+          let raiz = o; while (raiz.parent) raiz = raiz.parent
+          const ahora = raiz.isScene && dib(o) === 'si'; const antes = prevB.get(o)
           prevB.set(o, ahora)
           if (!ahora || antes !== false) continue
           if (o.userData?.__ballita || t - st.entrada < 5000) continue
           const px = medir(o)
-          if (px > 14) { const m = Array.isArray(o.material) ? o.material[0] : o.material; R.bruscas.push({ t: Math.round(t - st.t0), geo: o.geometry?.name || '-', mat: m?.name || m?.type, px: Math.round(px), way: wayDe(o) }) }
+          if (px > 14) { const m = Array.isArray(o.material) ? o.material[0] : o.material; R.bruscas.push({ t: Math.round(t - st.t0), geo: o.geometry?.name || '-', mat: m?.name || m?.type, px: Math.round(px), rad: Math.round(medir.rad), way: wayDe(o), ruta: (() => { const r = []; for (let q = o; q && r.length < 6; q = q.parent) r.push(q.name || q.type); return r.join('<') })(), fase: st.b?.phase }) }
         }
         requestAnimationFrame(bucle)
       }
@@ -188,11 +191,11 @@ const resumen = {
   largos50_post_min: +(R.largos.filter((x) => !x.entrada).length / total).toFixed(1), max_post: Math.max(0, ...msPost.map(Math.round)), post_gt120: msPost.filter((x) => x > 120).length,
   popCausa: R.pops.reduce((a, x) => { const k = (x.causa ?? '?') + (x.way == null ? '' : x.way === x.seguida ? ':suyo' : ':otro'); a[k] = (a[k] ?? 0) + 1; return a }, {}),
   popFase: R.pops.reduce((a, x) => ((a[x.phase ?? '?'] = (a[x.phase ?? '?'] ?? 0) + 1), a), {}),
-  bruscas_min: +((R.bruscas ?? []).length / total).toFixed(1), bruscasTop: Object.entries((R.bruscas ?? []).reduce((a, x) => ((a[x.geo + '|' + x.mat] = (a[x.geo + '|' + x.mat] ?? 0) + 1), a), {})).sort((x, y) => y[1] - x[1]).slice(0, 6),
+  bruscas_min: +((R.bruscas ?? []).length / total).toFixed(1), bruscasPiezas_min: +((R.bruscas ?? []).filter((x) => x.rad <= 60).length / total).toFixed(1), bruscasTop: Object.entries((R.bruscas ?? []).reduce((a, x) => ((a[x.geo + '|' + x.mat] = (a[x.geo + '|' + x.mat] ?? 0) + 1), a), {})).sort((x, y) => y[1] - x[1]).slice(0, 6),
   pops_min: +(R.pops.length / total).toFixed(1), popEventos_min: +(new Set(R.pops.map((x) => x.t)).size / total).toFixed(1), popTop: Object.entries(R.pops.reduce((a, x) => ((a[x.geo + '|' + x.mat] = (a[x.geo + '|' + x.mat] ?? 0) + 1), a), {})).sort((x, y) => y[1] - x[1]).slice(0, 8), cambios: R.cambios, mem: R.mem, errores: errs.length,
 }
 console.log(JSON.stringify(resumen))
-if (salida) writeFileSync(salida, JSON.stringify({ resumen, largos: R.largos, pops: R.pops }, null, 1))
+if (salida) writeFileSync(salida, JSON.stringify({ resumen, largos: R.largos, pops: R.pops, bruscas: R.bruscas }, null, 1))
 } finally {
   clearTimeout(__guardia)
   await b.close().catch(() => {})
