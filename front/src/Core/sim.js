@@ -376,7 +376,8 @@ export class Sim {
   }
 
   // Utilidad anticipada de recorrer `route` de `way` y visitar `nextDest` al llegar.
-  planUtility(b, way, route, nextDest, peers, halfFactor = 1) {
+  // `ruido` false: el término aleatorio se sustituye por su media y NO consume la RNG (solo para predecir, ver probWays).
+  planUtility(b, way, route, nextDest, peers, halfFactor = 1, ruido = true) {
     const g = b.genome; const t = g.traits
     const obs = route.segments.slice(1, -1)
     const avgSpeedK = obs.reduce((s, o) => s + (o.speedK ?? 1), 0) / Math.max(1, obs.length)
@@ -405,7 +406,7 @@ export class Sim {
     const sp = route.profile?.speed
     const moodScore = (t.animo - 0.5) * (sp === 'rapida' ? 0.65 : sp === 'lenta' ? -0.4 : 0.35)
     const geneScore = g.ways[way.idx] * 0.45 + g.routes[route.idx] * 0.45 + (nextDest ? g.prefs[nextDest.idx] * 0.45 : 0)
-    const noise = this.rng() * (0.16 + t.curiosidad * 0.28)
+    const noise = (ruido ? this.rng() : 0.5) * (0.16 + t.curiosidad * 0.28)
 
     const total = circuitP + destE + destP + survival + riskScore + curiosityScore + socialScore + moodScore + geneScore + noise
 
@@ -420,6 +421,27 @@ export class Sim {
     else if (sp === 'rapida') razon = 'me apetece velocidad'
 
     return { total, razon }
+  }
+
+  // Caminos que salen de `node` ordenados de más a menos probable para `b` (misma utilidad que goWay con el ruido en
+  // su media). No consume la RNG ni toca a la ballita: la elección real sigue ocurriendo en goWay, al salir del nodo,
+  // y puede diferir (energía, puntos y compañeras cambian hasta ese instante). Solo sirve para precargar en orden.
+  probWays(b, node = b.node) {
+    const ways = this.world.waysFrom[node] ?? []
+    if (ways.length < 2) return ways.map((w) => w.idx)
+    const peers = this.peerCounts(b)
+    const sc = new Map()
+    for (const way of ways) {
+      let best = -Infinity
+      for (const route of way.routes) {
+        for (const nextDest of this.world.nodes[way.to].destinos) {
+          const u = this.planUtility(b, way, route, nextDest, peers, 1, false).total
+          if (u > best) best = u
+        }
+      }
+      sc.set(way.idx, best)
+    }
+    return ways.map((w) => w.idx).sort((x, y) => sc.get(y) - sc.get(x))
   }
 
   goWay(b) {

@@ -520,3 +520,16 @@ test('cada kind deja a la ballita en el camino destino, con su trayectoria', () 
   }
   assert.ok(seen.size >= 7)
 })
+test('probWays: ordena los caminos del nodo sin consumir la RNG ni cambiar la elección', () => {
+  const mk = () => new Sim({ rng: mulberry32(7) })
+  const a = mk(); const b = mk()
+  for (let i = 0; i < 600; i++) {
+    a.tick(0.05); b.tick(0.05)
+    for (const x of a.ballitas) if (x.phase !== 'dying' && x.phase !== 'gone') {
+      const o = x.phase === 'travel' ? a.probWays(x, x.way.to) : a.probWays(x)
+      const n = x.phase === 'travel' ? x.way.to : x.node
+      assert.deepEqual([...o].sort((p, q) => p - q), a.world.waysFrom[n].map((w) => w.idx).sort((p, q) => p - q))
+    }
+  }
+  assert.deepEqual(a.ballitas.map((x) => [x.id, x.phase, x.way?.idx ?? null, +x.e.toFixed(6)]), b.ballitas.map((x) => [x.id, x.phase, x.way?.idx ?? null, +x.e.toFixed(6)]))
+})
