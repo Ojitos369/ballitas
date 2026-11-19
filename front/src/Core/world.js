@@ -1321,8 +1321,10 @@ function bezierPts(P0, T0, P1, T1, kf = 0.42) {
 
 // Radio mínimo (u) de espiral y sacacorchos (GEO2): por debajo, los carriles de la fila (18.2 u entre vecinos) suben con
 // pendientes muy distintas y dejan de leerse como una sola calzada (tramo:libre lateral)
-// (barrido en 2 semillas, lateral de tramo:libre: sin mínimo 228, 70 u -> 70, 100 u -> 21, 130 u -> 32)
-const HELI_RMIN = +(globalThis.process?.env?.HELI_RMIN ?? 21 * TK)
+// Barrido en 10 semillas (369-378), tramo:libre lateral / mundos fallidos: sin mínimo 1 514 / 0; 60 u -> 793 / 0;
+// 75 u -> 482 / 1 (semilla 377: dos caminos distintos solapados 23 u); 88 u -> 138 / 1; 100 u -> 285 / 1 y rutas:libre con
+// 9 pares. Se toma 60 u: el mayor radio con los 10 mundos válidos (un camino sin hueco es peor que carriles a 6.5 u).
+const HELI_RMIN = +(globalThis.process?.env?.HELI_RMIN ?? 60)
 // [radio, factor de vueltas]: al agrandar el radio se quitan vueltas en la misma proporción (misma longitud de cinta y
 // mismos triángulos; sin esto la cinta del mundo crecía un 8.8 %) y las vueltas quedan más abiertas
 const heliR = (r0) => (r0 >= HELI_RMIN ? [r0, 1] : [HELI_RMIN, r0 / HELI_RMIN])
