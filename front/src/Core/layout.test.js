@@ -48,8 +48,9 @@ for (const seed of [1, 369]) {
 }
 
 // Pieza SEP (tools/separacion.mjs): fuera de uniones y puertos, ningún par de cintas de caminos distintos ni de rutas
-// distintas de un mismo camino invade el gálibo o queda a menos de AIRE_LAT. Es la parte de la meta que ya se cumple en
-// estas semillas; las clases dentro de una ruta y de un tramo aún no llegan a 0 (front/_capturas/REPORTE_SEP.md).
+// distintas de un mismo camino invade el gálibo o queda a menos de AIRE_LAT (0 pares). Dentro de un tramo: gálibo 0 y
+// aire lateral acotado; dentro de una ruta: acotado. Las clases que aún no llegan a 0 están en
+// front/_capturas/REPORTE_SEP.md (sesión 6).
 for (const seed of [1, 369]) {
   test(`separación visible: 0 pares de caminos o rutas distintas en falta fuera de uniones (semilla ${seed})`, async () => {
     const { medir } = await import('../../tools/separacion.mjs')
@@ -59,6 +60,15 @@ for (const seed of [1, 369]) {
       assert.equal(c?.pares.size ?? 0, 0, `semilla ${seed}, ${k}: ${c?.pares.size} pares (gálibo ${c?.galibo} ${c?.atH}; lateral ${c?.lateral} ${c?.atD})`)
     }
     assert.ok(m.fundido > 0, 'el medidor separa el fundido coplanar')
+    // Carriles de un mismo tramo fuera de uniones (sesión 6: fila radial en espiral y sacacorchos): ninguna vuelta invade
+    // el gálibo de otra. El aire lateral aún NO llega a 0 casos (quedan decenas de muestras en la rampa de apertura de
+    // las hélices, a >= 7 u; antes eran ~2 100 por semilla a 5 u): se acota para que no retroceda.
+    const t = m.clases['tramo:libre']
+    assert.equal(t?.galibo ?? 0, 0, `semilla ${seed}, tramo:libre: gálibo ${t?.galibo} (${t?.minH} ${t?.atH})`)
+    assert.ok((t?.lateral ?? 0) <= 80 && (t?.minD ?? Infinity) >= 6.5, `semilla ${seed}, tramo:libre: lateral ${t?.lateral} (mín ${t?.minD} ${t?.atD})`)
+    // Tramos consecutivos de una misma ruta (el empalme entre dos tramos): tampoco es 0 todavía; cota de no retroceso.
+    const r = m.clases['ruta:libre']
+    assert.ok((r?.galibo ?? 0) <= 120 && (r?.lateral ?? 0) <= 60, `semilla ${seed}, ruta:libre: gálibo ${r?.galibo} (${r?.atH}); lateral ${r?.lateral} (${r?.atD})`)
   })
 }
 

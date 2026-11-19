@@ -1,0 +1,28 @@
+{
+ "desk": {
+  "fps": {
+   "fps": 52.9,
+   "tris": 958951,
+   "fase": "travel"
+  },
+  "tomas": [],
+  "nErr": 2,
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+ },
+ "movil": {
+  "fps": {
+   "fps": 82,
+   "tris": 656035,
+   "fase": "travel"
+  },
+  "tomas": [],
+  "nErr": 2,
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+ }
+}

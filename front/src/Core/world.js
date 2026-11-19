@@ -2560,7 +2560,7 @@ function relaxRibbons(world) {
     left = hits.length / 3
     if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0, S })
     let deep = 0; for (let q = 2; q < hits.length; q += 3) if (hits[q] < RIBBON_CLEAR + RELAX_DONE) deep++
-    if (!deep) break // lo que queda ya pasa la medida con holgura: no se gastan más pasadas en el margen
+    if (!deep || globalThis.process?.env?.NO_RELAX) break // lo que queda ya pasa la medida con holgura: no se gastan más pasadas en el margen
     F.fill(0); cnt.fill(0)
     for (const g of live) { g.F.fill(0); g.c.fill(0) }
     for (let q = 0; q < hits.length; q += 3) {

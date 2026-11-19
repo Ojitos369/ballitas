@@ -1,0 +1,79 @@
+{
+ "desk": {
+  "fps": {
+   "fps": 44.6,
+   "tris": 1306274,
+   "fase": "travel"
+  },
+  "tomas": [
+   {
+    "img": "desk_bifurcacion_caida.jpg",
+    "id": 2,
+    "phase": "travel",
+    "kind": "caida",
+    "u": null
+   },
+   {
+    "img": "desk_bifurcacion2_caida.jpg",
+    "id": 2,
+    "phase": "travel",
+    "kind": "caida",
+    "u": null
+   },
+   {
+    "img": "desk_helice_sacacorchos.jpg",
+    "id": 2,
+    "phase": "travel",
+    "kind": "sacacorchos",
+    "u": null
+   }
+  ],
+  "nErr": 2,
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+ },
+ "movil": {
+  "fps": {
+   "fps": 48.9,
+   "tris": 1242549,
+   "fase": "travel"
+  },
+  "tomas": [
+   {
+    "img": "movil_bifurcacion_caida.jpg",
+    "id": 1,
+    "phase": "travel",
+    "kind": "caida",
+    "u": null
+   },
+   {
+    "img": "movil_bifurcacion2_caida.jpg",
+    "id": 1,
+    "phase": "travel",
+    "kind": "caida",
+    "u": null
+   },
+   {
+    "img": "movil_helice_sacacorchos.jpg",
+    "id": 10,
+    "phase": "travel",
+    "kind": "sacacorchos",
+    "u": null
+   },
+   {
+    "img": "movil_helice2_sacacorchos.jpg",
+    "id": 10,
+    "phase": "travel",
+    "kind": "sacacorchos",
+    "u": null
+   }
+  ],
+  "nErr": 2,
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+ }
+}

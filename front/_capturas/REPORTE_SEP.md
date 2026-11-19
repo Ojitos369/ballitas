@@ -169,3 +169,62 @@ Las variaciones de tiempo se midieron en ejecuciones individuales y con carga va
 No se completaron los pasos 1–6: no hay optimización verificada, abanico nuevo, meta de `tramo:libre`, ampliación de la prueba, `pnpm test` completo, build, inspección de navegador ni merge final. No se modificaron topes de pruebas ni se hicieron commits porque ningún paso pasó sus criterios. El HEAD sigue en `19599b0`; la única diferencia de trabajo es este reporte.
 
 Conocimiento consultado: separacion_visible_en_marco_local
+
+## Sesión 6 (2026-11-19)
+
+**Resultado: `pnpm test` 80 de 80 en verde (antes 2 fallos); reconstrucción con elecciones precalculadas de 2.7-2.9 s a ~2.0 s; `rutas:libre` 0 en 10 semillas; `tramo:libre` lateral −97 %. NO se llega a 0 en todas las clases `:libre` ni al −80 % de `rutas:union` con la versión final; FPS frente a main no concluyente.** Sin push ni deploy.
+
+### Qué cambió (`front/src/Core/world.js`)
+1. **Coste de la relajación.** La rejilla espacial usaba un `Map` con claves de celda de más de 31 bits (números en el montón): ~150 ns por consulta, 278 ms para solo 1.85 M de comparaciones. Ahora `sampleGrid` es una tabla hash de arreglos tipados con sondeo lineal, `gatherPairs` recorre celda contra sus 13 vecinas «hacia delante» y la rejilla de muestras movidas solo recorre los tramos vivos. Mismo resultado geométrico (semilla 3 seguía a 13.97 u con solo este cambio). Relajación semilla 369: 1 710 ms → 789 ms.
+2. **Abanico de rutas** (`FAN_ANG`, `abanicoDeRutas`, `seg.fan`). (a) Cada ruta sale de fork/cross/merge (y llega a la siguiente unión) con el rumbo girado `(puesto − (n−1)/2)·FAN_ANG·ANCHO_K` (0.30 rad entre vecinas): los ejes se separan en proporción al arco, no al cuadrado. (b) La apertura de la fila de cada tramo de ruta se **mide**: solo se abre lo que deja la distancia al eje de la ruta vecina más cercana (`tope = (d − FAN_NEED) / (2·BRAID_A)`); se elige por punta el retardo y la rampa (×1, ×1.5, ×2) más cortos bajo ese tope, en todos los tramos de la ruta y no solo el de la unión. Si las dos rampas se pisan y la fila no llega a abrirse 0.8, el tramo va entero en calzada única (1-2 tramos por mundo). `braidDelay` y `braidRamps` leen `seg.fan`, así que zona cerrada, fundido coplanar y reparto de eventos salen solos. (c) Firme liso donde los carriles van fundidos o a medio abrir (antes cada carril conservaba su relieve y asomaba sobre el vecino).
+3. **Espiral y sacacorchos en fila radial** (`HELI_KINDS`): los carriles van sobre el radio de la hélice (rampa helicoidal) en vez de en una banda paralela al eje, que no cabía y se pellizcaba en cada vuelta. Sin relajación la geometría es exacta: radios 12 / 38 / 64 / 90 / 116 u, 26.0 u entre carriles en toda la vuelta.
+4. Interruptores de diagnóstico (solo Node): `NO_FAN`, `NO_HELI`, `NO_RELAX`. Herramientas nuevas: `tools/perfil_relax.mjs`, `tools/diag_abanico.mjs`, `tools/diag_choques.mjs`; sonda `_capturas/sep6.mjs`.
+
+### Mediciones (`node tools/separacion.mjs 10 369`, gálibo / lateral)
+| Clase | Sesión 4 | Solo abanico | Final (abanico + fila radial) |
+|---|---|---|---|
+| ways:libre | 0 pares | 0 pares | **0 pares** |
+| rutas:libre | 4 pares en 2 semillas | 0 pares | **0 pares en 10 de 10** |
+| tramo:libre | 70 / 21 850 (mín 5.0 u) | 30 / 21 750 | 174 (mín 16.0) / **573** (mín 2.4) |
+| ruta:libre | 226 / 148 | 248 / 88 | 315 / 123 |
+| rutas:union | 7 004 / 2 655 | 676 / 1 044 (−82 %) | 1 754 / 1 802 (**−63 %**) |
+| ruta:union | 1 168 / 405 | 871 / 201 | 566 / 264 |
+| tramo:union | 736 / 18 034 | 448 / 16 910 | 1 692 / 14 769 |
+| ways:union | 3 352 / 2 507 | 3 270 / 2 085 | 3 252 / 2 066 |
+
+- El contador `union` (solapes no coplanares dentro de la zona de unión) de `rutas:union` es 288 760 en 10 semillas; en las semillas 1 y 369 subió de ~21-22 mil a ~26-29 mil por semilla con el abanico (las rutas van más tiempo en calzada única y salen con rumbos distintos). No baja.
+- La fila radial empeora el gálibo de `tramo:*` y `rutas:union` respecto a «solo abanico». Causa medida (semilla 376, `w17 espiral/r0`): **no es la fila**, es un choque previo entre dos tramos de la misma ruta (el rizo atraviesa la espiral siguiente, 5.4 u); la relajación empuja el haz ~75 u y deforma la rampa. La búsqueda de huecos no comprueba tramos de una misma ruta entre sí. Con la fila radial los choques iniciales de esa semilla bajan de 398 a 184.
+- En 8 de 10 semillas `tramo:libre` queda en gálibo 0 y lateral 17-47 muestras a ≥ 7.5 u (rampa de apertura de las hélices, donde las normales de los carriles no son paralelas y no cuenta como fundido).
+- Generación: media 6.24 s en esta tanda (con otras cargas en el equipo), 0 mundos fallidos; no se midió main en la misma tanda.
+
+### Pruebas
+- `pnpm test`: **80 de 80** (dos pasadas completas). «elecciones precalculadas»: 1 967 / 2 036 / 2 067 ms sola; 2 093 y 2 155 ms dentro de la batería (tope de la prueba sin tocar).
+- Semilla 3 en verde: la relajación converge (10 pasadas, 0 restantes).
+- `layout.test.js` (semillas 1 y 369): además de 0 pares en `ways:libre` y `rutas:libre`, ahora exige gálibo 0 en `tramo:libre` y **acota** (no exige 0) el lateral de `tramo:libre` (≤ 80 muestras, ≥ 6.5 u) y `ruta:libre` (gálibo ≤ 120, lateral ≤ 60). La meta «todas las clases `:libre` a 0» no se pudo afirmar.
+- Build de producción correcto.
+
+### Navegador (build de producción, puerto 4301, Edge, `?stats=1`)
+FPS medio de 30 s en POV, main (41b9cf8, build en directorio temporal) y rama en la misma sesión de trabajo:
+| | Tanda 1 main | Tanda 1 rama | Tanda 2 main | Tanda 2 rama |
+|---|---|---|---|---|
+| Escritorio 1400×900 | 52.9 (959 mil tri) | 44.6 (1.31 M tri) | 61.6 (800 mil) | 58.7 (684 mil) |
+| Móvil 412×915 | 82.0 (656 mil) | 48.9 (1.24 M) | 65.0 (837 mil) | 73.8 (784 mil) |
+
+**No concluyente**: la diferencia va de −40 % a +14 % según la ballita y el tramo que toca (los triángulos en pantalla cambian al doble entre tandas). La meta «no más de 10 % por debajo de main» no queda demostrada ni refutada; hace falta una sonda que siga la misma ruta en ambos builds.
+
+Capturas en `front/_capturas/sep6/rama/` (todas abiertas):
+- `desk_libre.jpg`: el mapa cabe entero, sin niebla sobre los caminos.
+- `movil_helice2_sacacorchos.jpg`: calzada limpia, la cinta vecina va separada. `movil_helice_sacacorchos.jpg`: calzada muy inclinada con otra cinta pasando por encima.
+- `desk_helice_sacacorchos.jpg`: junto al eje del sacacorchos se ven fragmentos de cinta muy retorcidos (los carriles interiores giran sobre sí mismos); **se ve peor que lo que dice el medidor** y hay que revisarlo a ojo.
+- `*_bifurcacion*_caida.jpg`: la ballita iba en un tramo aéreo tras la salida; **no muestran la bifurcación**. La unión no quedó validada en pantalla.
+- Consola: los mismos 2 errores «500» al cargar un recurso, también en main.
+
+### No cumplido / pendiente
+1. Meta de 0 casos en todas las clases `:libre` (quedan `tramo:libre` y `ruta:libre`).
+2. `rutas:union` −80 %: se cumple con solo el abanico (−82 %), no con la versión final (−63 %).
+3. Choques entre tramos de una misma ruta (rizo contra espiral, sacacorchos contra embudo): la búsqueda no los evita y la relajación deforma las hélices.
+4. Carriles interiores de la rampa helicoidal: aspecto retorcido junto al eje; valorar un radio mínimo o menos carriles en hélices delgadas.
+5. Captura real de una bifurcación en POV y A/B de FPS sobre la misma ruta.
+6. `ways:union` (zona de puerto de los nodos) no se tocó.
+
+Conocimiento consultado: separacion_visible_en_marco_local

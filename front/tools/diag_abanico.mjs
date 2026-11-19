@@ -1,4 +1,4 @@
-﻿import { buildWorld } from '../src/Core/world.js'
+import { buildWorld } from '../src/Core/world.js'
 for (const seed of process.argv[2].split(',').map(Number)) {
   const w = buildWorld(seed); let n = 0, fan = 0, full = 0, half = 0; const ej = []
   for (const s of w.segments) { if (s.route < 0 || s.air) continue; n++; if (!s.fan) continue; fan++
