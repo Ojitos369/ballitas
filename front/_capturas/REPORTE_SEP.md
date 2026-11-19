@@ -149,3 +149,23 @@ Capturas en `front/_capturas/sep4/` (abiertas y revisadas: vista libre de escrit
 4. A/B de rendimiento en navegador contra main.
 
 Conocimiento consultado: separacion_visible_en_marco_local
+## Sesión 5 (2026-11-19)
+
+**Resultado: no se alcanzaron las metas; rama sin cambios de código ni commit nuevo.** Se leyó el diagnóstico de las sesiones 3 y 4 y `conocimiento_separacion.md`. Las pruebas de optimización se descartaron y `front/src/Core/world.js` quedó restaurado al HEAD de inicio (`19599b0`).
+
+### Experimentos y resultados
+
+| Intento | Resultado |
+|---|---|
+| Medición inicial de `elecciones precalculadas` | 2 828 ms; pasó el límite existente de 3 000 ms, pero no la meta solicitada de 2 400 ms. |
+| Radio de suavizado más corto | 2 776 ms; no alcanzó la meta y empeoró la semilla 3 (carriles de espiral con huelgo −0.80 u). Descartado. |
+| Empuje aumentado | 3 428 ms; falló el tope de prueba y la semilla 3 quedó a 12.84 u. Descartado. |
+| Acumulación dispersa de la campana | 3 154 ms; falló el tope de prueba. La semilla 3 volvió a 13.96 u (4 pares reportados por `chequeo_sep`). Descartado. |
+
+Las variaciones de tiempo se midieron en ejecuciones individuales y con carga variable; no prueban una mejora. `node tools/separacion.mjs 10 369` alcanzó a imprimir semillas 369 y 370 antes de exceder la ventana de esta sesión: no se usan como comparación completa ni como resultado de 10 semillas.
+
+### Pendiente
+
+No se completaron los pasos 1–6: no hay optimización verificada, abanico nuevo, meta de `tramo:libre`, ampliación de la prueba, `pnpm test` completo, build, inspección de navegador ni merge final. No se modificaron topes de pruebas ni se hicieron commits porque ningún paso pasó sus criterios. El HEAD sigue en `19599b0`; la única diferencia de trabajo es este reporte.
+
+Conocimiento consultado: separacion_visible_en_marco_local
