@@ -1,4 +1,4 @@
-﻿// Sonda de paisaje por tema (hielo, volcan). uso: node paisaje_tema.mjs url carpeta etiqueta desk|mob [temas=hielo,volcan]
+// Sonda de paisaje por tema (hielo, volcan). uso: node paisaje_tema.mjs url carpeta etiqueta desk|mob [temas=hielo,volcan]
 import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39c74d688ef56/66ad59e0-d323-4be2-8707-8e648cba3105/scratchpad/pw/node_modules/playwright-core/index.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
 const [url, dir, tag, vp = 'desk', temasArg = 'hielo,volcan'] = process.argv.slice(2)
@@ -8,6 +8,8 @@ const ctxOpts = vp === 'mob'
   ? { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true }
   : { viewport: { width: 1400, height: 900 } }
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--window-size=1400,1000', '--ignore-gpu-blocklist', '--disable-frame-rate-limit'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const ctx = await b.newContext(ctxOpts)
 const p = await ctx.newPage()
 const errs = []
@@ -71,7 +73,7 @@ async function tomas(t, vista, n) {
 }
 await velBtn('Velocidad por ocho')
 const t0 = Date.now()
-while (temas.some((t) => !done[t]) && Date.now() - t0 < 900000) {
+while (temas.some((t) => !done[t]) && Date.now() - t0 < 540000) {
   const n = await p.evaluate(() => document.querySelectorAll('.punto').length)
   for (let i = 0; i < n; i++) {
     await click('.punto', i); await p.waitForTimeout(700)
@@ -94,7 +96,7 @@ while (temas.some((t) => !done[t]) && Date.now() - t0 < 900000) {
 }
 writeFileSync(`${dir}/${tag}_${vp}.json`, JSON.stringify({ done, res, errs }, null, 1))
 console.log('errores', errs.length, errs.slice(0, 3))
-await b.close()
-
-
-
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

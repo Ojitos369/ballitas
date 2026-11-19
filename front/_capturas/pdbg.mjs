@@ -3,6 +3,8 @@
 import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39c74d688ef56/66ad59e0-d323-4be2-8707-8e648cba3105/scratchpad/pw/node_modules/playwright-core/index.mjs'
 const [url = 'http://127.0.0.1:4413/?stats=1', tema = 'volcan', espera = '6000'] = process.argv.slice(2)
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--window-size=1400,900', '--ignore-gpu-blocklist'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const p = await b.newPage({ viewport: { width: 1400, height: 900 } })
 await p.goto(url)
 await p.waitForFunction(() => window.__ballitasDebug?.gl, null, { timeout: 60000 })
@@ -20,4 +22,7 @@ const r = await p.evaluate((w) => {
   return { sel: w, cam: d.camera.position.toArray().map((x) => +x.toFixed(1)), modo: d.cam.modo, tema: temas[w], lay, otros: Object.fromEntries(Object.entries(temas).map(([k, v]) => [k, [v.theme, v.show, v.det?.toFixed?.(2), v.overview, v.near, v.done, (v.counts ?? []).join('/')].join(' ')])) }
 }, w)
 console.log(JSON.stringify(r, null, 1))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}
