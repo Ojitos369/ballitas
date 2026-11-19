@@ -1428,11 +1428,11 @@ const MAX_ACTIVE_VIDA = 2
 // Siguiendo a una ballita: su camino + los dos siguientes (el planeado primero) quedan montados ocultos y compilados.
 // 4: en el planeta, los 4 caminos que salen (el orden de prefetchWays es el de probabilidad); en viaje, el actual y
 // los 3 más probables del nodo siguiente. Los ocultos no actualizan matrices ni animaciones.
-const MAX_ACTIVE_VIDA_PRE = 4
+const MAX_ACTIVE_VIDA_PRE = 3 // 4 bajó los FPS (cada montado arrastra su exterior cercano, ver nearDesired)
 const MAX_ACTIVE_NEAR = 3
 const PRECARGA_ENTRADA_MS = 6 // por cuadro, si falta el camino que la cámara ya mira
 const PRECARGA_CUADRO_MS = 3 // por cuadro (suelo), para los caminos que vienen
-const PRECARGA_TECHO_MS = 8 // techo por cuadro con la ballita en la pista
+const PRECARGA_TECHO_MS = 5 // techo por cuadro con la ballita en la pista
 const PRECARGA_TECHO_PLANETA_MS = 12 // techo por cuadro con la ballita en el planeta
 const PRECARGA_SEG_MS = 400 // tope por segundo (sin vsync siempre «sobraría» cuadro)
 const FONDO_CUADRO_MS = 1.5 // por cuadro, el resto del mundo, solo si el cuadro deja margen
