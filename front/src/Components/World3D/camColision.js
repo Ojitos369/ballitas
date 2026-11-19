@@ -8,7 +8,8 @@ const OFF = 65536
 const K = 131072
 const key = (ix, iy, iz) => ((ix + OFF) * K + (iy + OFF)) * K + (iz + OFF)
 const MAX_CELLS_TRI = 96 // un triángulo que pisa más celdas va a la lista `big` (se prueba siempre)
-const TRIS_POR_CELDA = 14
+const TRIS_POR_CELDA = 24
+const CELDA_MIN = 0.5 // celdas menores multiplican las consultas al Map sin ahorrar pruebas de triángulo
 
 // Rejilla vacía para una geometría: pos = Float32Array xyz (o atributo con .array), idx = índices o null.
 export function crearRejilla(pos, idx) {
@@ -38,7 +39,7 @@ function elegirCelda(g) {
   }
   const media = m ? area / m : 1
   const c = Math.sqrt(Math.max(1e-6, media * TRIS_POR_CELDA))
-  return Math.min(8, Math.max(0.25, c))
+  return Math.min(8, Math.max(CELDA_MIN, c))
 }
 
 // rango de celdas del triángulo (AABB); devuelve el número de celdas
@@ -92,13 +93,14 @@ export function construir(g, maxTris = Infinity) {
   return true
 }
 
-// Möller–Trumbore a dos caras: t del rayo o Infinity
-function rayTri(v, ox, oy, oz, dx, dy, dz) {
+// Möller–Trumbore: t del rayo o Infinity. lado 0 = dos caras; 1 = solo caras de frente al rayo (n·d < 0,
+// con n = (b-a)×(c-a)); -1 = solo de espaldas
+function rayTri(v, ox, oy, oz, dx, dy, dz, lado = 0) {
   const e1x = v[3] - v[0]; const e1y = v[4] - v[1]; const e1z = v[5] - v[2]
   const e2x = v[6] - v[0]; const e2y = v[7] - v[1]; const e2z = v[8] - v[2]
   const px = dy * e2z - dz * e2y; const py = dz * e2x - dx * e2z; const pz = dx * e2y - dy * e2x
   const det = e1x * px + e1y * py + e1z * pz
-  if (Math.abs(det) < 1e-12) return Infinity
+  if (Math.abs(det) < 1e-12 || det * lado < 0) return Infinity
   const id = 1 / det
   const sx = ox - v[0]; const sy = oy - v[1]; const sz = oz - v[2]
   const u = (sx * px + sy * py + sz * pz) * id
@@ -110,12 +112,12 @@ function rayTri(v, ox, oy, oz, dx, dy, dz) {
   return t >= 0 ? t : Infinity
 }
 
-function probarCelda(g, c, ox, oy, oz, dx, dy, dz, best) {
+function probarCelda(g, c, ox, oy, oz, dx, dy, dz, best, lado) {
   for (let i = g.ofs[c], e = g.ofs[c + 1]; i < e; i++) {
     const t = g.items[i]
     if (g.stamp[t] === g.sid) continue
     g.stamp[t] = g.sid
-    const h = rayTri(tri(g, t), ox, oy, oz, dx, dy, dz)
+    const h = rayTri(tri(g, t), ox, oy, oz, dx, dy, dz, lado)
     if (h < best) best = h
   }
   return best
@@ -123,11 +125,11 @@ function probarCelda(g, c, ox, oy, oz, dx, dy, dz, best) {
 function nuevoSello(g) { if (++g.sid > 0xfffffff0) { g.stamp.fill(0); g.sid = 1 } }
 
 // Primer impacto del segmento o + d·t, t∈[0, tMax] (d sin normalizar). Devuelve t o Infinity.
-export function rayoRejilla(g, ox, oy, oz, dx, dy, dz, tMax = 1) {
+export function rayoRejilla(g, ox, oy, oz, dx, dy, dz, tMax = 1, lado = 0) {
   if (!g.done) return Infinity
   nuevoSello(g)
   let best = Infinity
-  for (const t of g.big) { const h = rayTri(tri(g, t), ox, oy, oz, dx, dy, dz); if (h < best) best = h }
+  for (const t of g.big) { const h = rayTri(tri(g, t), ox, oy, oz, dx, dy, dz, lado); if (h < best) best = h }
   const s = g.inv
   let x = Math.floor(ox * s); let y = Math.floor(oy * s); let z = Math.floor(oz * s)
   const sx = dx > 0 ? 1 : dx < 0 ? -1 : 0; const sy = dy > 0 ? 1 : dy < 0 ? -1 : 0; const sz = dz > 0 ? 1 : dz < 0 ? -1 : 0
@@ -137,7 +139,7 @@ export function rayoRejilla(g, ox, oy, oz, dx, dy, dz, tMax = 1) {
   let tmz = sz ? ((z + (sz > 0 ? 1 : 0)) * g.cell - oz) / dz : Infinity
   for (let paso = 0; paso < 512; paso++) {
     const c = g.map.get(key(x, y, z))
-    if (c !== undefined) best = probarCelda(g, c, ox, oy, oz, dx, dy, dz, best)
+    if (c !== undefined) best = probarCelda(g, c, ox, oy, oz, dx, dy, dz, best, lado)
     const salida = Math.min(tmx, tmy, tmz)
     if (best <= salida || salida > tMax) break
     if (tmx === salida) { x += sx; tmx += tdx } else if (tmy === salida) { y += sy; tmy += tdy } else { z += sz; tmz += tdz }
