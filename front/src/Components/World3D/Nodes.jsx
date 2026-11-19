@@ -1600,6 +1600,8 @@ function describirFoco(world, b, n) {
 }
 
 const ROTULO_MARGEN = [84, 96, 170] // px: lejos del HUD superior y de la ficha
+// opacidad del rótulo del destino: se funde cuando la ballita ya está encima (tapaba su cara al llegar al puerto)
+const rotuloOp = { value: 0 }
 function DestinoFoco({ world }) {
   const grp = useRef()
   const ring = useRef()
@@ -1630,12 +1632,14 @@ function DestinoFoco({ world }) {
     const t = clock.elapsedTime
     if (ring.current) ring.current.scale.setScalar(sc * (1 + 0.04 * Math.sin(t * 2.2)))
     focoRingMat.opacity = k * (fase === 'at' ? 0.22 : 0.38 + 0.1 * Math.sin(t * 2.2))
+    const dd = FOCO.pos.value.distanceTo(FOCO.dest.value)
+    rotuloOp.value = fase === 'at' ? 0 : k * THREE.MathUtils.smoothstep(dd, 2.2, 4.5)
   })
   return (
     <group ref={grp} visible={false}>
       <mesh ref={ring} geometry={focoRingGeo} material={focoRingMat} position={[0, 0.12, 0]} raycast={() => null} renderOrder={2} />
       {info && (
-        <WorldHtml center position={[0, info.alto, 0]} zIndexRange={[8, 6]} opacity={FOCO.k} clamp={ROTULO_MARGEN}>
+        <WorldHtml center position={[0, info.alto, 0]} zIndexRange={[8, 6]} opacity={rotuloOp} clamp={ROTULO_MARGEN}>
           <div className="tag destino-foco" style={{ borderColor: info.color }}>
             <b>{info.titulo}</b>
             {info.detalle && <span className="ef">{info.detalle}</span>}
