@@ -2575,7 +2575,7 @@ export function structureIntrusions(S, items, { maxList = 200, envolvente = fals
 const RELAX_IT = 60
 const RELAX_MARGIN = JOINT_SEP - RIBBON_CLEAR // (u) se separa un poco más de RIBBON_CLEAR: el dibujo interpola entre vértices
 const RELAX_DONE = 0.3 * TK // (u) se para cuando ningún par fuera de uniones queda a menos de RIBBON_CLEAR + esto
-const RELAX_PIN = 4 * TK // (u) rampa de anclaje en cada punta
+const RELAX_PIN = 12 * TK // (4·TK: las cintas empujadas volvían a su punta en 19 u y quebraban 47-72° en salida/llegada; con 12·TK, < 5°) (u) rampa de anclaje en cada punta
 const RELAX_SPRING = 0.004
 const RELAX_SIG = 6 // (vértices, ~1.5 u cada uno) ancho de la campana con que se reparte cada empuje
 const RELAX_K = 18
