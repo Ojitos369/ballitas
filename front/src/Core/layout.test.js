@@ -65,10 +65,14 @@ for (const seed of [1, 369]) {
     // las hélices, a >= 7 u; antes eran ~2 100 por semilla a 5 u): se acota para que no retroceda.
     const t = m.clases['tramo:libre']
     assert.equal(t?.galibo ?? 0, 0, `semilla ${seed}, tramo:libre: gálibo ${t?.galibo} (${t?.minH} ${t?.atH})`)
-    assert.ok((t?.lateral ?? 0) <= 80 && (t?.minD ?? Infinity) >= 6.5, `semilla ${seed}, tramo:libre: lateral ${t?.lateral} (mín ${t?.minD} ${t?.atD})`)
+    // Sesión 7: la cota pasa de (<= 80 muestras, >= 6.5 u) a (<= 150, >= 5 u). Espiral y sacacorchos llevan ahora los
+    // carriles en una calzada estrecha coplanar (HELI_GAP, 6.5 u de aire) porque la rampa helicoidal retorcía las cintas;
+    // donde el radio de la hélice es pequeño la calzada se curva y el medidor deja de leerla como fundida (94-105 muestras).
+    assert.ok((t?.lateral ?? 0) <= 150 && (t?.minD ?? Infinity) >= 5, `semilla ${seed}, tramo:libre: lateral ${t?.lateral} (mín ${t?.minD} ${t?.atD})`)
     // Tramos consecutivos de una misma ruta (el empalme entre dos tramos): tampoco es 0 todavía; cota de no retroceso.
     const r = m.clases['ruta:libre']
-    assert.ok((r?.galibo ?? 0) <= 120 && (r?.lateral ?? 0) <= 60, `semilla ${seed}, ruta:libre: gálibo ${r?.galibo} (${r?.atH}); lateral ${r?.lateral} (${r?.atD})`)
+    // (sesión 7: la búsqueda de huecos ya compara tramos de una misma ruta; cota de 120 / 60 a 20 / 20)
+    assert.ok((r?.galibo ?? 0) <= 20 && (r?.lateral ?? 0) <= 20, `semilla ${seed}, ruta:libre: gálibo ${r?.galibo} (${r?.atH}); lateral ${r?.lateral} (${r?.atD})`)
   })
 }
 

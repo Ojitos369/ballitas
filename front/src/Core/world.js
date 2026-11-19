@@ -958,7 +958,7 @@ function buildBraid(s) {
     // giro real: 0 (mod 2π) en las puntas; el resto se deshace dentro de la zona cerrada de cada punta (FILA_TWIST)
     roll = new Float32Array(N + 1); const [za, zb] = braidDelay(s); const r0 = ang[0]; const r1 = ang[N] - TAU * Math.round(ang[N] / TAU)
     for (let i = 0; i <= N; i++) { const x = (i / N) * s.length; roll[i] = ang[i] - r0 * (1 - smooth01(x / za)) - r1 * (1 - smooth01((s.length - x) / zb)) }
-    const gapF = HELI_KINDS.has(s.kind) ? +(globalThis.process?.env?.HELI_GAP || HELI_GAP) : FILA_GAP
+    const heliK = HELI_KINDS.has(s.kind); const gapF = heliK ?+(globalThis.process?.env?.HELI_GAP || HELI_GAP) : FILA_GAP
     // posiciones: fila a lo largo de T × up REAL (con el giro ya atenuado por la apertura: coplanar también en las
     // rampas) más la cizalla a lo largo de T que la alinea con el eje de la hélice
     for (let i = 0; i <= N; i++) {
@@ -966,7 +966,10 @@ function buildBraid(s) {
       row.crossVectors(d, T).normalize() // T × up, con up = -d
       // traslación pura a lo largo de B (con su parte a lo largo de T): los carriles son copias desplazadas del eje y no se
       // pellizcan en las curvas cerradas; se escala para que la separación perpendicular al avance sea FILA_GAP
-      const bt = B[i].dot(T); row.addScaledVector(T, (bt / Math.sqrt(1 - bt * bt)) * env[i])
+      // (hélices, sesión 7: SIN cizalla. La fila va perpendicular al avance dentro del plano de la calzada: los carriles
+      // son paralelos sobre la misma superficie, coplanares de verdad. Con la cizalla, donde `fit` recorta B, quedaban
+      // escalonados hasta 16 u; tramo:libre lateral 3 878 -> 94 en la semilla 369. SHEAR=1 la repone para diagnóstico.)
+      const bt = B[i].dot(T); if (!heliK || globalThis.process?.env?.SHEAR) row.addScaledVector(T, (bt / Math.sqrt(1 - bt * bt)) * env[i])
       rad[i] = ((nl - 1) / 2) * gapF * env[i]
       for (let j = 0; j < nl; j++) {
         const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * gapF * env[i]
@@ -1438,6 +1441,7 @@ function sampleWayPoints(way, steps = 14) {
 // `only` (mitad 0/1): sólo pares en que al menos un punto es de esa mitad.
 // Celda ROUTE_CELL: todo par a menos de ROUTE_CELL se mide; más lejos la holgura ya pasa de ROUTE_CELL - 2·ext - 1.5·radio (> ROUTE_MARGIN).
 const ROUTE_CELL = 20 * TK * AK
+const SELF_ARC = 40 * TK * AK // (u de recorrido) por debajo, dos tramos de una misma ruta aún se están separando de su punta común
 function routeSlack(pts, only = -1) {
   // borde de la unión medido 6 u antes: allí las rutas convergen y el muestreo grueso (~5 u) se saltaba el punto más cercano
   const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN - 6 * TK * AK)
@@ -1450,7 +1454,11 @@ function routeSlack(pts, only = -1) {
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
       const bucket = grid.get(cellKey(x + dx, y + dy, z + dz)); if (!bucket) continue
       for (const o of bucket) {
-        if (only >= 0 ? o.route === q.route : o.route <= q.route) continue
+        if (o.route === q.route) {
+          // misma ruta (sesión 7): tramos DISTINTOS a más de SELF_ARC de recorrido (un rizo contra la espiral siguiente);
+          // los vecinos comparten punta y un tramo consigo mismo (rizo, hélice) se cruza por diseño
+          if (only < 0 || q.g == null || o.g == null || (o.m === q.m && o.h === q.h) || Math.abs(o.g - q.g) < SELF_ARC) continue
+        } else if (only < 0 && o.route < q.route) continue
         const r = q.ext + o.ext + MIN_GAP_K * Math.max(q.tube, o.tube); const d2 = q.p.distanceToSquared(o.p)
         const lim = r + min
         if (lim > 0 && d2 < lim * lim) min = Math.sqrt(d2) - r
@@ -1751,7 +1759,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
     }
   }
   // muestras de las rutas de cada mitad (u por cuerda acumulada: no depende de la tabla de longitudes del candidato)
-  const halfPts = [[], []]
+  const halfPts = [[], []]; const arcEnd = [[], []]
   const sampleHalf = (h) => {
     const out = []
     plans.forEach(({ halves }, r) => curves[r][h].forEach((cv, m) => {
@@ -1761,11 +1769,13 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       const n = clamp(Math.ceil(L0 / (5 * TK * AK)), 8, 200); const ps = []; const accs = []; let acc = 0; let prev = null
       for (let k = 0; k <= n; k++) { const p = cv.getPoint(k / n); if (prev) acc += p.distanceTo(prev); prev = p; ps.push(p); accs.push(acc) }
       const pseudo = { length: acc, kind: halves[h][m], radius: P.radius }
+      const g0 = m ? arcEnd[h][r] : h ? arcEnd[0][r] || 0 : 0 // recorrido acumulado de la ruta hasta el inicio de este tramo
       for (let k = 0; k <= n; k++) {
         const p = ps[k]
         const hubD = Math.min(p.distanceTo(hubs[0]), p.distanceTo(hubs[1]), p.distanceTo(hubs[2]))
-        out.push({ p, h, route: r, hubD, ext: routeExtent(pseudo, accs[k] / acc), tube: P.radius })
+        out.push({ p, h, m, g: g0 + accs[k], route: r, hubD, ext: routeExtent(pseudo, accs[k] / acc), tube: P.radius })
       }
+      arcEnd[h][r] = g0 + acc
     }))
     halfPts[h] = out
   }
