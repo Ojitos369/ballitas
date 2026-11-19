@@ -912,7 +912,12 @@ function buildBraid(s) {
   }
   const wsh = Math.max(2, Math.ceil((6 * TK) / stp)); const shift = new Float32Array(N + 1)
   for (let i = 0; i <= N; i++) { let m = 0; for (let j = Math.max(0, i - wsh); j <= Math.min(N, i + wsh); j++) if (Math.abs(shRaw[j]) > Math.abs(m)) m = shRaw[j]; shift[i] = m }
-  for (let p = 0; p < 2; p++) for (let i = 1; i < N; i++) shift[i] = (shift[i - 1] + shift[i] + shift[i + 1]) / 3
+  // pendiente lateral acotada (SHIFT_SLOPE): un haz que se corre en oblicuo acerca sus carriles (PITCH_MIN·cos)
+  const dS = SHIFT_SLOPE * stp
+  // con signo: también donde la curva cambia de lado (sacacorchos) el haz cruza despacio en vez de saltar
+  for (let i = 1; i <= N; i++) shift[i] = clamp(shift[i], shift[i - 1] - dS, shift[i - 1] + dS)
+  for (let i = N - 1; i >= 0; i--) shift[i] = clamp(shift[i], shift[i + 1] - dS, shift[i + 1] + dS)
+  for (let i = 1; i <= N; i++) shift[i] = clamp(shift[i], shift[i - 1] - dS, shift[i - 1] + dS)
   const rk = new Float32Array(N + 1); for (let i = 0; i <= N; i++) rk[i] = Math.min(abre[i], clamp((cap[i] - W0) / (W1 - W0), 0, 1))
   const wk = Math.max(2, Math.ceil((10 * TK) / (s.length / N))); const rollK = new Float32Array(N + 1)
   for (let i = 0; i <= N; i++) { let m = 1; for (let j = Math.max(0, i - wk); j <= Math.min(N, i + wk); j++) m = Math.min(m, rk[j]); rollK[i] = m }
@@ -932,7 +937,7 @@ function buildBraid(s) {
     for (let k = 1; k < nL; k++) xs[k] = xs[k - 1] + Math.max(PITCH_L, ROLL_GAP * Math.min(1, 1.5 * Math.max(sig[k - 1], -sig[k], 0)))
     const mid = (xs[0] + xs[nL - 1]) / 2
     // junto a la punta los carriles contiguos se juntan sobre el eje (una sola calzada que se ensancha, coplanar)
-    const tipK = smooth01(env[i] / TIP_E); const a = abre[i]
+    const tipK = smooth01(env[i] / TIP_E); const a = smooth01(abre[i]) // sin pendiente al llegar a contiguos ni a separados
     let half = 0
     for (let k = 0; k < nL; k++) {
       const xc = (k - (nL - 1) / 2) * PITCH_MIN
@@ -943,7 +948,7 @@ function buildBraid(s) {
     rad[i] = half
   }
   s._estado = { sep: nSep, cont: nCont, rampa: rampMax, sinSitio, n: N + 1 }
-  s._braid = { N, P, env, rad, full, rollK, abre, spin: s._braid.spin, len: [], curves: [] }
+  s._braid = { N, P, env, rad, full, rollK, abre, shift, C, spin: s._braid.spin, len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -2010,6 +2015,7 @@ export const PITCH_L = 2 * RIBBON_HALF + AIRE_LAT + 1.5 * TK
 const ROLL_GAP = GALIBO_H + RIBBON_HALF + 2 * TK
 export const PITCH_MIN = 2 * RIBBON_HALF // carriles contiguos del mismo tramo: borde con borde, sin solape
 const RAMPA_MIN = 4 * TK // rampa separados <-> contiguos (u de arco, entre 3 y 6 TK)
+const SHIFT_SLOPE = 0.15 // pendiente lateral máxima del desplazamiento del haz (cos = 0.989)
 const TIP_E = 0.2 // apertura bajo la cual los contiguos se juntan sobre el eje en la punta
 export const QUILLA = 0.75 // quilla de la cinta bajo el firme (pista.jsx profile: 0.48 · k, k <= 1.55)
 export const COPLANAR_DOT = 0.98
