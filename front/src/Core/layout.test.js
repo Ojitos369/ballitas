@@ -47,6 +47,21 @@ for (const seed of [1, 369]) {
   })
 }
 
+// Pieza SEP (tools/separacion.mjs): fuera de uniones y puertos, ningún par de cintas de caminos distintos ni de rutas
+// distintas de un mismo camino invade el gálibo o queda a menos de AIRE_LAT. Es la parte de la meta que ya se cumple en
+// estas semillas; las clases dentro de una ruta y de un tramo aún no llegan a 0 (front/_capturas/REPORTE_SEP.md).
+for (const seed of [1, 369]) {
+  test(`separación visible: 0 pares de caminos o rutas distintas en falta fuera de uniones (semilla ${seed})`, async () => {
+    const { medir } = await import('../../tools/separacion.mjs')
+    const m = medir(mundo(seed))
+    for (const k of ['ways:libre', 'rutas:libre']) {
+      const c = m.clases[k]
+      assert.equal(c?.pares.size ?? 0, 0, `semilla ${seed}, ${k}: ${c?.pares.size} pares (gálibo ${c?.galibo} ${c?.atH}; lateral ${c?.lateral} ${c?.atD})`)
+    }
+    assert.ok(m.fundido > 0, 'el medidor separa el fundido coplanar')
+  })
+}
+
 test('contrato world.colision: lejos libre, centro de cinta ocupado salvo que se ignore', () => {
   const w = mundo(369); const col = w.colision
   assert.ok(col && typeof col.libre === 'function' && typeof col.cercano === 'function')

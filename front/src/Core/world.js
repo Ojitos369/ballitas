@@ -866,7 +866,7 @@ function buildBraid(s) {
     center.toArray(C, i * 3); ref.toArray(R, i * 3); side.toArray(S, i * 3); tangent.toArray(Tn, i * 3)
   }
   const step = s.length / N
-  const cap = braidCap(C, N, step)
+  // (braidCap ya no se calcula: la fila no se estrecha con él y costaba ~6 % de la generación)
   const rad = new Float32Array(N + 1); const nl = lanes.length; const ringR = ringRadius(nl)
   // fila (calzada fundida) según el tipo de tramo; en los demás el anillo se estrecha con cap donde no cabe
   let fila = FILA_KINDS.has(s.kind) && !s.air
