@@ -42,9 +42,10 @@ const encadenar = (prev, fn) => (shader, renderer) => {
  * - `metal`: factor de metalicidad dentro del planeta (sin mapa de entorno, el metal se veía negro).
  * Con k = 0 el resultado es idéntico al material original.
  */
-export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal = 1, xray = true, relleno = 0.7 } = {}) {
+export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal = 1, xray = true, relleno = 0.7, plano = 0 } = {}) {
   if (!mat || mat.userData._foco) return mat
   mat.userData._foco = true
+  const planoU = { value: plano }
   const liftU = { value: new THREE.Vector4() }
   if (lift) {
     const c = new THREE.Color(lift[0])
@@ -54,7 +55,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
   const params = { value: new THREE.Vector4(desat, oscurece, metal, mat.isMeshStandardMaterial ? relleno : 0) }
   const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
   mat.onBeforeCompile = encadenar(mat.onBeforeCompile, (sh) => {
-    Object.assign(sh.uniforms, { uFocoK: FOCO.k, uFocoPos: FOCO.pos, uFocoDest: FOCO.dest, uFocoR: FOCO.r, uFocoOjo: FOCO.ojo, uFocoLift: liftU, uFocoPar: params })
+    Object.assign(sh.uniforms, { uFocoK: FOCO.k, uFocoPos: FOCO.pos, uFocoDest: FOCO.dest, uFocoR: FOCO.r, uFocoOjo: FOCO.ojo, uFocoLift: liftU, uFocoPar: params, uFocoPlano: planoU })
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vFocoW;')
       .replace('#include <project_vertex>', `#include <project_vertex>
@@ -73,6 +74,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
         uniform vec4 uFocoLift;
         uniform vec4 uFocoPar;
         uniform vec3 uFocoOjo;
+        uniform float uFocoPlano;
         float _focoIgn(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }`)
       // Visión despejada: lo que queda en el cono cámara → ballita se disuelve por trama (edificio del
       // destino en la estancia, casco del puerto, pilares). Solo con k > 0.
@@ -90,6 +92,9 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
         }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         diffuseColor.rgb = mix(diffuseColor.rgb, uFocoLift.rgb, uFocoLift.a * uFocoK);`)
+      // plano: dentro del planeta se aplana el mapa de normales (en piezas torneadas sus UV radiales pintaban rayos)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        normal = normalize(mix(normal, nonPerturbedNormal, uFocoPlano * uFocoK));`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
         metalnessFactor *= mix(1.0, uFocoPar.z, uFocoK);`)
       .replace('#include <opaque_fragment>', `outgoingLight = max(outgoingLight, diffuseColor.rgb * uFocoPar.w * uFocoK);
