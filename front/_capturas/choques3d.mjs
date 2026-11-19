@@ -457,6 +457,8 @@ const browser = await chromium.launch({
   headless: false,
   args: ['--window-size=1420,960', '--ignore-gpu-blocklist'],
 })
+const __guardia = setTimeout(() => { browser.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 
 const desktop = await runMode(browser, 'desktop', { viewport: { width: 1400, height: 900 } }, targetSamples)
 console.log('DESKTOP:', JSON.stringify({ ...desktop, cases: desktop.cases.length }))
@@ -470,4 +472,7 @@ const mobile = await runMode(browser, 'movil', {
 console.log('MOVIL:', JSON.stringify({ ...mobile, cases: mobile.cases.length }))
 
 writeFileSync(`${outDir}/reporte_choques3d.json`, JSON.stringify({ url, desktop, mobile }, null, 2))
-await browser.close()
+} finally {
+  clearTimeout(__guardia)
+  await browser.close().catch(() => {})
+}
