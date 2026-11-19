@@ -480,6 +480,9 @@ export const FILA_GAP = ROW_GAP // (antes RIBBON_CLEAR + TK = 20 u: 8.5 u de air
 export const FILA_W = (5 - 1) * FILA_GAP + 2 * RIBBON_HALF
 // (espiral y sacacorchos se quedan en anillo: en su zona delgada la fila se doblaba sobre sí misma; ver REPORTE_SEP)
 const FILA_KINDS = new Set(['rizo', 'embudo', 'espiral', 'sacacorchos', 'horquilla'])
+const HELI_KINDS = new Set(['espiral', 'sacacorchos']) // fila radial (rampa helicoidal), ver buildBraid
+const HELI_MINR = 1.2 * TK // (u) radio mínimo de la hélice para tomar su rumbo radial
+const HELI_TURN = 0.03 // (rad/u) giro máximo de la fila radial
 const BRAID_PAD = 3.7 * TK // (texto previo: holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
 const BRAID_OPEN = 16 * TK * AK + (8.5 + 14) * TK * (AK - 1) // + (NODE_R + GRID_LEN)·(ANCHO_K − 1): la zona de puerto (PORT_ZONE) crece en proporción aunque el nodo y la parrilla no // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
 const BRAID_RAMP = 18 * TK * AK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
@@ -498,6 +501,7 @@ export function braidEnv(seg, u, hubs = true) {
 // (con OPEN_RAMP, 52 u, la fila se abría antes que su envolvente y asomaba hasta 22 u sobre los caminos vecinos del nodo)
 // y los vecinos pasan de fundidos a JOINT_SEP en ~78 u, dentro de JOINT_MAX.
 export function braidRamps(seg, hubs = true) {
+  if (hubs && seg.fan) return [seg.fan.ra, seg.fan.rb]
   const L = seg.length; const [a, b] = braidDelay(seg, hubs)
   const r = Math.max(4 * TK, Math.min(hubs ? OPEN_RAMP : BRAID_RAMP, (L - a - b) * 0.3))
   if (!hubs || (seg.kind !== 'salida' && seg.kind !== 'llegada')) return [r, r]
@@ -517,6 +521,7 @@ const FILA_TURN = 0.008 // (rad/u) giro máximo de la dirección de la fila a lo
 export function braidDelay(seg, hubs = true) {
   if (!hubs) return [seg.kind === 'salida' ? GRID_LEN + 2 * TK + BRAID_OPEN : 0, seg.kind === 'llegada' ? FINISH_LEN + 2 * TK + BRAID_OPEN : 0]
   const m = seg.fila ? FILA_TWIST : 0 // la fila gira hasta su normal mientras los carriles aún van juntos (una sola cinta)
+  if (seg.fan) return [Math.max(m, seg.fan.a), Math.max(m, seg.fan.b)] // apertura medida contra las rutas vecinas (abanicoDeRutas)
   return [Math.max(m, seg.kind === 'salida' ? NODE_OPEN : seg.hubA ? HUB_OPEN : 0), Math.max(m, seg.kind === 'llegada' ? NODE_OPEN : seg.hubB ? HUB_OPEN : 0)]
 }
 // Radio del envolvente de la trenza alrededor del eje (para separar pistas distintas; la búsqueda de huecos no cuenta
@@ -798,7 +803,10 @@ function buildSurface(s, rng) {
         if (x > p - up && x <= p) h += kh * smooth01((x - p + up) / up)
         else if (x > p && x < p + KICK_DROP) h += kh * (1 - (x - p) / KICK_DROP)
       }
-      arr[i] = clamp(h, 0, hMax) * smooth01(x / (6 * TK)) * smooth01((L - x) / (6 * TK))
+      // donde los carriles van fundidos o a medio abrir (a menos de ~RIBBON_CLEAR del vecino) el firme es liso: la calzada
+      // única es coplanar (con relieve propio, un carril asomaba sobre el de al lado)
+      const e = s._braid ? lerpArr(s._braid.env, x / L) : 1; const liso = smooth01((e - 0.55) / 0.25)
+      arr[i] = clamp(RELIEF_BASE + (h - RELIEF_BASE) * liso, 0, hMax) * smooth01(x / (6 * TK)) * smooth01((L - x) / (6 * TK))
     }
     s._relief.h.set(lane.id, arr)
   }
@@ -899,7 +907,27 @@ function buildBraid(s) {
       tg.copy(a); if (tg.lengthSq() > 1e-12) tg.normalize(); if (tg.dot(v) < 0) tg.negate()
       return tg.multiplyScalar(k).addScaledVector(wv, 1 - k).normalize()
     }
-    for (let i = 0; i <= N; i++) {
+    // HELICOIDE (espiral y sacacorchos): la fila va a lo largo del RADIO de la hélice (del eje = cuerda del tramo hacia
+    // el carril central), como una rampa helicoidal: todos los carriles están sobre la misma recta que pasa por el eje,
+    // así el hueco entre vecinos es FILA_GAP en toda la vuelta y las vueltas quedan separadas por el paso (PITCH). La
+    // fila paralela al eje (banda de cilindro) no cabe: con el avance a más de SH_MAX del eje se recortaba y los
+    // carriles se pellizcaban en cada vuelta (aire 5 u de 11.7).
+    const heli = !globalThis.process?.env?.NO_HELI && HELI_KINDS.has(s.kind)
+    if (heli) {
+      const A0 = V(C, 0); const c = V(C, N).sub(A0); const cl = c.length()
+      if (cl > 1e-6) c.divideScalar(cl)
+      const rad0 = []; let first = -1
+      for (let i = 0; i <= N; i++) { const p = V(C, i).sub(A0); p.addScaledVector(c, -p.dot(c)); const l = p.length(); if (l > HELI_MINR) { rad0.push(p.divideScalar(l)); if (first < 0) first = i } else rad0.push(null) }
+      if (first < 0) { for (let i = 0; i <= N; i++) B.push(fit(V(R, i), V(Tn, i))) } else {
+        // junto a las puntas el radio nace de cero (rumbo sin definir): se arrastra el más cercano y el giro va a ritmo limitado
+        const lim = HELI_TURN * step; let prev = rad0[first].clone()
+        const out = new Array(N + 1)
+        for (let i = first; i <= N; i++) { const t = rad0[i] || prev; const an = Math.acos(clamp(t.dot(prev), -1, 1)); prev = an > lim ? prev.clone().lerp(t, lim / an).normalize() : t.clone(); out[i] = prev }
+        for (let i = first - 1; i >= 0; i--) out[i] = out[first]
+        for (let i = 0; i <= N; i++) { const T = V(Tn, i); const b = fit(out[i].clone(), T); B.push(b); vote += v.crossVectors(b, T).y }
+        if (Math.abs(vote) < 1e-6) vote = 1 // la calzada mira hacia arriba (B × T con Y positiva) en la mayor parte del tramo
+      }
+    } else for (let i = 0; i <= N; i++) {
       const T = V(Tn, i)
       if (i === 0) { v.copy(V(R, 0)); const j = avg.findIndex((a, q) => a.length() > EPS && avgT[q].length() < 0.65); if (j >= 0) v.copy(avg[j]).normalize(); v.copy(target(0)) }
       else {
@@ -1371,6 +1399,7 @@ export const SPREAD_K = 1.3 // separación lateral entre rutas de un mismo senti
 const SPREAD_STEPS = [1, 1.4, 1.9]
 const PERMS = { 2: [[0, 1], [1, 0]], 3: [[0, 1, 2], [2, 1, 0], [1, 0, 2], [0, 2, 1], [1, 2, 0], [2, 0, 1]] }
 const ROUTE_MARGIN = 1.5 * TK * AK // × ANCHO_K: los pasos de muestreo de la búsqueda crecieron en esa proporción (semilla 27: faltaban 1.42 u) // (u) el muestreo de la búsqueda (cada ~5 u) es más grueso que el de tools/overlap.mjs
+const FAN_ANG = 0.2 // (rad, × ANCHO_K) giro del rumbo entre rutas vecinas al salir de una unión fork/cross/merge
 const FAN_D = 105 * TK * AK // distancia (u) del hub a los puntos de paso Q0/Q1: las rutas se abren en abanico en ese tramo
 
 // Par en zona de puerto: uno de los dos puntos está a menos de PORT_ZONE de un nodo al que también llega (o del que sale) el otro camino.
@@ -1774,6 +1803,10 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       // las paradas intermedias tampoco se hunden por dentro de la esfera
       for (const Q of [Q0, Q1]) if (Q.length() < SPHERE_R * 0.53) Q.setLength(SPHERE_R * 0.53)
       const Tbase = [Q1.clone().sub(A).normalize(), B.clone().sub(Q0).normalize()]
+      // abanico: cada ruta sale de la unión (y llega a la siguiente) girada hacia su lado de la fila, FAN_ANG·ANCHO_K entre
+      // vecinas: los ejes se separan en proporción al arco desde la propia unión (con el mismo rumbo solo lo hacían al cuadrado)
+      const fk = perm[r] - (P.n - 1) / 2
+      const fanT = (T, k) => { if (!k) return T; const s = side.clone().addScaledVector(T, -side.dot(T)); if (s.lengthSq() < 1e-6) return T; s.normalize(); const a = k * FAN_ANG * AK; return T.clone().multiplyScalar(Math.cos(a)).addScaledVector(s, Math.sin(a)).normalize() }
       const pts = [A, Q0, Q1, B]
       const cs = [null, null, null]
       for (let pass = 0; pass < 3; pass++) {
@@ -1782,8 +1815,8 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
           const needPrev = m > 0 && !ownsStart(kinds[m]) && KINDS[kinds[m - 1]].air
           const needNext = m < 2 && ownsStart(kinds[m + 1])
           if ((needPrev && !cs[m - 1]) || (needNext && !cs[m + 1])) continue
-          const Ta = m === 0 ? hubT[h] : ownsStart(kinds[m]) ? null : (KINDS[kinds[m - 1]].air ? cs[m - 1].getTangent(1) : Tbase[m - 1])
-          const Tb = m === 2 ? hubT[h + 1] : ownsStart(kinds[m + 1]) ? cs[m + 1].getTangent(0) : Tbase[m]
+          const Ta = m === 0 ? fanT(hubT[h], fk) : ownsStart(kinds[m]) ? null : (KINDS[kinds[m - 1]].air ? cs[m - 1].getTangent(1) : Tbase[m - 1])
+          const Tb = m === 2 ? fanT(hubT[h + 1], -fk) : ownsStart(kinds[m + 1]) ? cs[m + 1].getTangent(0) : Tbase[m]
           // semilla propia por way, ruta y tramo: cada camino traza sus curvas a su manera
           const trk = { role, rng: mulberry32(7700 + salt * 1009 + circuit.idx * 97 + (from < to ? 0 : 53) + r * 11 + h * 5 + m) }
           cs[m] = shape(kinds[m], pts[m], pts[m + 1], P, Ta, Tb, null, trk)
@@ -1837,6 +1870,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       sampleChain(own.slice(0, 3), true); sampleChain(own.slice(3, 6), true)
     }
     sampleChain([landing], false)
+    abanicoDeRutas(way)
     buildLanes(way)
     pOut.wayOut = way; pIn.wayIn = way
     const tOut = a.terminals.find((t) => t.kind === 'out' && t.to === to)
@@ -1851,6 +1885,75 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   return way
 }
 
+
+// ───────────────────────── abanico de rutas (apertura medida) ─────────────────────────
+// Las rutas de un camino nacen y mueren en un mismo punto (fork/cross/merge) y se abren en abanico. Cada una es una
+// fila de carriles de hasta 2·BRAID_A de ancho: si la fila se abre con una rampa fija (HUB_OPEN + OPEN_RAMP, ~80 u)
+// mientras los ejes de las rutas aún no se han separado, los carriles de una ruta se meten entre los de la vecina (y la
+// relajación no puede deshacerlo: no hay sitio). Aquí la apertura de cada tramo de ruta se MIDE: en cada punto la fila
+// solo puede abrirse lo que deja la distancia real al eje de la ruta vecina más cercana,
+//   tope(x) = (d(x) − FAN_NEED) / (2·BRAID_A)   (dos semifilas + dos cintas + un ancho de aire + margen)
+// y se elige por punta el retardo y la rampa más cortos cuya apertura smooth01 queda bajo ese tope. Vale para todos los
+// tramos de la ruta (no solo el que toca la unión: el siguiente volvería a juntarlas). Si en ninguna parte de su mitad
+// hay sitio, esa punta no se abre (calzada única). El resultado va en seg.fan = { a, ra, b, rb } y lo leen braidDelay y
+// braidRamps: zona cerrada, fundido coplanar, giro de la fila y reparto de eventos salen de ahí sin más cambios.
+const FAN_STEP = 3 * TK
+const FAN_NEED = 2 * RIBBON_HALF + 2 * RIBBON_HALF + 2.5 * TK + FAN_STEP / 2 // cintas de borde + aire lateral (AIRE_LAT) + margen + medio paso de muestreo
+// rampas cortas: con una rampa larga los carriles pasan mucho arco ni fundidos ni separados (a menos de RIBBON_CLEAR más allá de JOINT_MAX)
+const FAN_RAMPS = [1, 1.5, 2]
+const FAN_MIN = 0.8 // apertura mínima útil: por debajo los carriles vecinos quedan a menos de RIBBON_CLEAR + margen
+function abanicoDeRutas(way) {
+  if (globalThis.process?.env?.NO_FAN) return
+  const segs = way.segments.filter((s) => s.route >= 0 && !s.air)
+  const P = new THREE.Vector3()
+  const sam = segs.map((s) => {
+    const n = Math.max(4, Math.ceil(s.length / FAN_STEP)); const xs = new Float64Array((n + 1) * 3)
+    for (let i = 0; i <= n; i++) { s.curve.getPointAt(i / n, P); xs[i * 3] = P.x; xs[i * 3 + 1] = P.y; xs[i * 3 + 2] = P.z }
+    // esfera envolvente: descarta de golpe los tramos lejanos
+    let cx = 0; let cy = 0; let cz = 0; for (let i = 0; i <= n; i++) { cx += xs[i * 3]; cy += xs[i * 3 + 1]; cz += xs[i * 3 + 2] }
+    cx /= n + 1; cy /= n + 1; cz /= n + 1; let r = 0
+    for (let i = 0; i <= n; i++) r = Math.max(r, Math.hypot(xs[i * 3] - cx, xs[i * 3 + 1] - cy, xs[i * 3 + 2] - cz))
+    return { s, n, xs, cx, cy, cz, r }
+  })
+  const FULL = FAN_NEED + 2 * BRAID_A // a esta distancia la fila ya cabe abierta del todo
+  for (const A of sam) {
+    const { s, n, xs } = A; const cap = new Float32Array(n + 1).fill(1)
+    for (const B of sam) {
+      if (B.s.route === s.route) continue
+      if (Math.hypot(A.cx - B.cx, A.cy - B.cy, A.cz - B.cz) > A.r + B.r + FULL) continue
+      for (let i = 0; i <= n; i++) {
+        const x = xs[i * 3]; const y = xs[i * 3 + 1]; const z = xs[i * 3 + 2]; let d2 = Infinity
+        for (let j = 0; j <= B.n; j++) { const e = (x - B.xs[j * 3]) ** 2 + (y - B.xs[j * 3 + 1]) ** 2 + (z - B.xs[j * 3 + 2]) ** 2; if (e < d2) d2 = e }
+        const c = (Math.sqrt(d2) - FAN_NEED) / (2 * BRAID_A); if (c < cap[i]) cap[i] = Math.max(0, c)
+      }
+    }
+    let libre = true; for (let i = 0; i <= n; i++) if (cap[i] < 1) { libre = false; break }
+    if (libre) continue // sin vecinas cerca: apertura de siempre
+    const L = s.length; const dx = L / n; const [a0, b0] = braidDelay(s); const [r0a, r0b] = braidRamps(s)
+    // punta e (0: inicio, 1: fin): menor (retardo + media rampa) con smooth01((x − a) / r) <= tope en su mitad del tramo
+    const fit = (e, a0, r0) => {
+      const h = Math.floor(n / 2); let best = null
+      for (const k of FAN_RAMPS) {
+        const r = r0 * k
+        for (let a = a0; a <= L / 2; a += FAN_STEP) {
+          if (best && a + r / 2 >= best.a + best.r / 2) break
+          let ok = true
+          for (let i = 0; i <= h; i++) { const q = e ? n - i : i; if (cap[q] < 1 && smooth01((i * dx - a) / r) > cap[q] + 0.01) { ok = false; break } }
+          if (ok) { best = { a, r }; break }
+        }
+      }
+      return best || { a: L, r: r0 } // no cabe en su mitad: esa punta se queda en calzada única
+    }
+    const fa = fit(0, a0, r0a); const fb = fit(1, b0, r0b)
+    // las dos rampas se pisan: si la fila no llega a abrirse lo bastante para que sus carriles se separen (RIBBON_CLEAR),
+    // el tramo entero va en calzada única (fundido coplanar, firme liso) en vez de a medio abrir
+    if (fa.a + fa.r + fb.a + fb.r > L) {
+      let pico = 0; for (let i = 0; i <= n; i++) pico = Math.max(pico, smooth01((i * dx - fa.a) / fa.r) * smooth01((L - fb.a - i * dx) / fb.r))
+      if (pico < FAN_MIN) { fa.a = L; fb.a = L }
+    }
+    if (fa.a > a0 || fa.r > r0a || fb.a > b0 || fb.r > r0b) s.fan = { a: fa.a, ra: fa.r, b: fb.a, rb: fb.r }
+  }
+}
 
 // ───────────────────────── colisión de cintas visibles ─────────────────────────
 // Cada carril se ve como una cinta (calzada + bordillo + berma, pista.jsx) de semiancho RIBBON_HALF, centrada en la
@@ -1935,23 +2038,79 @@ function testPair(S, i, j, L2, out) {
   if (d2 >= L2) return
   const key = ri * 65536 + rj; let l = out.get(key); if (!l) out.set(key, l = []); l.push(i, j, Math.sqrt(d2))
 }
-// Rejilla de celdas de lado `lim` con las muestras que pasan `keep`.
-function sampleGrid(S, lim, keep) {
-  const { X, Y: Yy, Z } = S; const cell = (v) => Math.floor(v / lim); const grid = new Map()
-  for (let i = 0; i < X.length; i++) { if (!keep(i)) continue; const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
-  return grid
+// Rejilla de celdas de lado `lim` con las muestras que pasan `keep` (o las de la lista `ids`). Tabla hash de arreglos
+// tipados con sondeo lineal: las claves de celda no caben en 31 bits y un Map con ellas (números de coma flotante en el
+// montón) costaba ~150 ns por consulta (278 ms de 1.85 M de comparaciones en la primera pasada de la relajación).
+// { lim, n (celdas), off/items (muestras de la celda c: items[off[c] .. off[c + 1])), cx, cy, cz, find(x, y, z) -> c | -1 }.
+function sampleGrid(S, lim, keep, ids = null) {
+  const { X, Y: Yy, Z } = S; const N = ids ? ids.length : X.length; const inv = 1 / lim
+  let size = 1024; while (size < N) size <<= 1 // como mucho una celda por muestra: carga <= 0.5 tras doblar
+  size <<= 1; const mask = size - 1
+  const tab = new Int32Array(size).fill(-1); const of = new Int32Array(N)
+  let cx = new Int32Array(1024); let cy = new Int32Array(1024); let cz = new Int32Array(1024); let cnt = new Int32Array(1024); let n = 0
+  let lx = 0; let ly = 0; let lz = 0; let lc = -1
+  for (let q = 0; q < N; q++) {
+    const i = ids ? ids[q] : q
+    if (keep && !keep(i)) { of[q] = -1; continue }
+    const x = Math.floor(X[i] * inv); const y = Math.floor(Yy[i] * inv); const z = Math.floor(Z[i] * inv)
+    if (lc >= 0 && x === lx && y === ly && z === lz) { of[q] = lc; cnt[lc]++; continue } // muestras consecutivas: misma celda
+    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask; let c
+    for (;;) {
+      c = tab[h]
+      if (c < 0) {
+        if (n === cx.length) { const g = (a) => { const b = new Int32Array(n * 2); b.set(a); return b }; cx = g(cx); cy = g(cy); cz = g(cz); cnt = g(cnt) }
+        c = n++; tab[h] = c; cx[c] = x; cy[c] = y; cz[c] = z; break
+      }
+      if (cx[c] === x && cy[c] === y && cz[c] === z) break
+      h = (h + 1) & mask
+    }
+    of[q] = c; cnt[c]++; lx = x; ly = y; lz = z; lc = c
+  }
+  const off = new Int32Array(n + 1); for (let c = 0; c < n; c++) off[c + 1] = off[c] + cnt[c]
+  const items = new Int32Array(off[n]); const fill = off.slice(0, n)
+  for (let q = 0; q < N; q++) { const c = of[q]; if (c >= 0) items[fill[c]++] = ids ? ids[q] : q }
+  const find = (x, y, z) => {
+    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask
+    for (;;) { const c = tab[h]; if (c < 0) return -1; if (cx[c] === x && cy[c] === y && cz[c] === z) return c; h = (h + 1) & mask }
+  }
+  return { lim, inv, n, off, items, cx, cy, cz, find }
 }
 // Visita las muestras de las 27 celdas alrededor de la muestra i.
-function nearCells(S, grid, lim, i, fn) {
-  const x = Math.floor(S.X[i] / lim); const y = Math.floor(S.Y[i] / lim); const z = Math.floor(S.Z[i] / lim)
+function nearCells(S, grid, i, fn) {
+  const { inv, off, items } = grid
+  const x = Math.floor(S.X[i] * inv); const y = Math.floor(S.Y[i] * inv); const z = Math.floor(S.Z[i] * inv)
   for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-    const b = grid.get(cellKey(x + dx, y + dy, z + dz)); if (b) for (const j of b) fn(j)
+    const c = grid.find(x + dx, y + dy, z + dz); if (c < 0) continue
+    for (let q = off[c], e = off[c + 1]; q < e; q++) fn(items[q])
   }
 }
-// Todos los pares de muestras a menos de `lim`.
-function gatherPairs(S, lim) {
-  const sh = S.shadow; const grid = sampleGrid(S, lim, (i) => !(sh && sh[i])); const out = new Map(); const L2 = lim * lim
-  for (const b of grid.values()) for (const i of b) nearCells(S, grid, lim, i, (j) => { if (j > i) testPair(S, i, j, L2, out) })
+// Todos los pares de muestras a menos de `lim`. Recorre celda a celda: cada celda contra sí misma y contra sus 13 vecinas
+// «hacia delante» (cada par de celdas una sola vez; 14 consultas por celda en vez de 27 por muestra). `grid` opcional:
+// rejilla ya hecha con el mismo `lim` y filtro.
+const FWD_CELLS = (() => { const o = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) if (dx > 0 || (dx === 0 && (dy > 0 || (dy === 0 && dz > 0)))) o.push(dx, dy, dz); return o })()
+function gatherPairs(S, lim, grid = null) {
+  const sh = S.shadow; const out = new Map(); const L2 = lim * lim
+  const { ribs, X, Y: Yy, Z, R } = S
+  grid ||= sampleGrid(S, lim, sh ? (i) => !sh[i] : null)
+  const { off, items } = grid
+  // misma prueba que testPair, en línea y con el descarte por distancia primero (es el que casi siempre corta)
+  const par = (a, b) => {
+    const d2 = (X[a] - X[b]) ** 2 + (Yy[a] - Yy[b]) ** 2 + (Z[a] - Z[b]) ** 2
+    if (d2 >= L2) return
+    const i = a < b ? a : b; const j = a < b ? b : a; const ri = R[i]; const rj = R[j]; const A = ribs[ri]; const B = ribs[rj]
+    if (ri === rj && (j - i) * A.ds < RIB_SELF) return
+    if (A.seg === B.seg && ((i - A.start < A.closed[0] && j - B.start < B.closed[0]) || (A.start + A.n - i < A.closed[1] && B.start + B.n - j < B.closed[1]))) return
+    const key = ri * 65536 + rj; let l = out.get(key); if (!l) out.set(key, l = []); l.push(i, j, Math.sqrt(d2))
+  }
+  for (let c = 0; c < grid.n; c++) {
+    const b0 = off[c]; const b1 = off[c + 1]
+    for (let p = b0; p < b1; p++) { const i = items[p]; for (let q = p + 1; q < b1; q++) par(i, items[q]) }
+    for (let f = 0; f < 39; f += 3) {
+      const d = grid.find(grid.cx[c] + FWD_CELLS[f], grid.cy[c] + FWD_CELLS[f + 1], grid.cz[c] + FWD_CELLS[f + 2]); if (d < 0) continue
+      const d0 = off[d]; const d1 = off[d + 1]
+      for (let p = b0; p < b1; p++) { const i = items[p]; for (let q = d0; q < d1; q++) par(i, items[q]) }
+    }
+  }
   return out
 }
 
@@ -2333,6 +2492,7 @@ const RELAX_EPS = 0.03 * TK // (u) una muestra desplazada menos que esto desde s
 function relaxRibbons(world) {
   const t0 = performance.now()
   const S = braidRibbons(world); const { ribs, X, Y: Yy, Z, R } = S; const N = X.length
+  const TT = { braid: performance.now() - t0, pre: 0, g0: 0, carry: 0, movgrid: 0, gather: 0, judge: 0, force: 0, push: 0 }; let tq = performance.now(); const lap = (k) => { const n = performance.now(); TT[k] += n - tq; tq = n }
   // tramos: desplazamiento común del haz (G) y lista de sus cintas; la zona cerrada la representa el primer carril
   const segs = new Map(); const shadow = S.shadow = new Uint8Array(N)
   for (const r of ribs) {
@@ -2367,10 +2527,13 @@ function relaxRibbons(world) {
   // distancia recalculada (un par nuevo entre dos limpias se pierde a lo sumo por 2·RELAX_EPS, dentro de RELAX_MARGIN).
   const moved = new Uint8Array(N); const dirty = new Uint8Array(N); let prev = null
   const LX = Float64Array.from(X); const LY = Float64Array.from(Yy); const LZ = Float64Array.from(Z); const E2 = RELAX_EPS * RELAX_EPS
+  // muestras (no fundidas) de los tramos que se mueven: la rejilla de las movidas solo las recorre a ellas
+  const liveIds = []
+  const wake = (g) => { g.on = true; live.add(g); for (const x of g.ribs) { act[x.idx] = 1; for (let i = 0; i <= x.n; i++) if (!shadow[x.start + i]) liveIds.push(x.start + i) } }
   let it = 0; let left = 0
   for (; it < RELAX_IT; it++) {
     let pairs
-    if (!it) pairs = gatherPairs(S, hitD)
+    if (!it) { lap('pre'); pairs = gatherPairs(S, hitD, still); lap('g0') }
     else {
       pairs = new Map()
       for (const [k, l] of prev) {
@@ -2383,15 +2546,17 @@ function relaxRibbons(world) {
         }
         if (a) pairs.set(k, a)
       }
-      const mov = sampleGrid(S, hitD, (i) => moved[i] && !shadow[i])
-      for (const b of mov.values()) for (const i of b) {
-        if (!dirty[i]) continue
-        nearCells(S, mov, hitD, i, (j) => { if (j > i || !dirty[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
-        nearCells(S, still, hitD, i, (j) => { if (!moved[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
+      lap('carry')
+      const mov = sampleGrid(S, hitD, (i) => moved[i], liveIds)
+      lap('movgrid')
+      for (let q = 0; q < mov.items.length; q++) {
+        const i = mov.items[q]; if (!dirty[i]) continue
+        nearCells(S, mov, i, (j) => { if (j > i || !dirty[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
+        nearCells(S, still, i, (j) => { if (!moved[j]) testPair(S, Math.min(i, j), Math.max(i, j), L2, pairs) })
       }
     }
-    prev = pairs
-    const { hits } = judgePairs(S, pairs, hitD)
+    prev = pairs; lap('gather')
+    const { hits } = judgePairs(S, pairs, hitD); lap('judge')
     left = hits.length / 3
     if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0, S })
     let deep = 0; for (let q = 2; q < hits.length; q += 3) if (hits[q] < RIBBON_CLEAR + RELAX_DONE) deep++
@@ -2411,13 +2576,14 @@ function relaxRibbons(world) {
           let ex = X[c] - X[o]; let ey = Yy[c] - Yy[o]; let ez = Z[c] - Z[o]; const el = Math.hypot(ex, ey, ez)
           if (el > 0.3 * TK) { ex /= el; ey /= el; ez /= el } else { ex = sg * nx; ey = sg * ny; ez = sg * nz }
           g.F[i * 3] += ex * m; g.F[i * 3 + 1] += ey * m; g.F[i * 3 + 2] += ez * m; g.c[i]++
-          if (!g.on) { g.on = true; live.add(g); for (const x of g.ribs) act[x.idx] = 1 }
+          if (!g.on) wake(g)
         } else {
           F[s * 3] += sg * nx * m; F[s * 3 + 1] += sg * ny * m; F[s * 3 + 2] += sg * nz * m; cnt[s]++
-          if (!r.g.on) { r.g.on = true; live.add(r.g); for (const x of r.g.ribs) act[x.idx] = 1 }
+          if (!r.g.on) wake(r.g)
         }
       }
     }
+    lap('force')
     for (const g of live) {
       push(g.D, g.F, g.c, 0, 0, g.n, g.ds)
 
@@ -2436,6 +2602,7 @@ function relaxRibbons(world) {
         }
       }
     }
+    lap('push')
   }
   // se fija el desplazamiento en la trenza: laneFrame, la sim y la pista lo leen de ahí
   for (const g of live) {
@@ -2443,7 +2610,7 @@ function relaxRibbons(world) {
     const seg = g.ribs[0].seg; seg._braid.len = []; seg._braid.curves = []
     for (const sw of seg.switches || []) delete sw._arc
   }
-  world.relax = { it, left, segs: live.size, ms: Math.round(performance.now() - t0) }
+  world.relax = { it, left, segs: live.size, ms: Math.round(performance.now() - t0) }; world.relaxT = Object.fromEntries(Object.entries(TT).map(([k, v]) => [k, Math.round(v)])); world.relaxT.N = N; world.relaxT.pares = [...prev.values()].reduce((a, l) => a + l.length / 3, 0); world.relaxT.listas = prev.size
   return S
 }
 // ───────────────────────── contrato world.colision ─────────────────────────
