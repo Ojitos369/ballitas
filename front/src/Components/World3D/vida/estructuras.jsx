@@ -7,18 +7,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { TRACK_K } from '../../../Core/world.js'
-import { colisionDe, colocar, mundoDe, nuevoLocal } from '../colisionObjetos.js'
+import { colisionDe, mundoDe } from '../colisionObjetos.js'
 import { triplanarMaterial } from '../triplanar.js'
-import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq, mulberry32 } from './base.jsx'
-import { basisQuat } from './dyn.js'
+import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
+import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
 import { precargarModelos, useModelo } from './modelos.js'
 import { CURB, TERR, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
-
-const Y_AXIS = new THREE.Vector3(0, 1, 0)
-const X_AXIS = new THREE.Vector3(1, 0, 0)
-const TAU = Math.PI * 2
-const Q_YAW = new THREE.Quaternion()
-const Q_ROTX = new THREE.Quaternion()
 
 const SEG_ACTIVE_DIST = 98 // distancia real a la curva del tramo para activarlo (solo 1-2 tramos activos)
 const TALL_CULL_DIST = 96
@@ -28,112 +22,6 @@ const OVERVIEW_DIST_SQ = 36 * 36 // > 36 u del tramo más cercano = vista genera
 const POOL_CAP = 128
 const ARCH_CAP = 48
 const MOVE_RECOMPACT_SQ = 20 // recompila instancias visibles solo al moverse >= 4.5 u
-
-// ═══════════════════════════ CATÁLOGO POR TEMA (4 piezas clave + arco + ribera) ═══════════════════════════
-const THEME_STRUCTS = {
-  bosque: {
-    ribbon: { mode: 'hedge', c1: '#2c4a26', c2: '#6f9a45', c3: '#7a6a3e', h: 2.3, w: 9.0, glow: 0.0 },
-    arch: { kind: 'bosque', step: 38, sx: 1.08, sy: 8.2 },
-    props: [
-      { model: 'tronco_hueco', step: 32, ax: [0.45, 0.95], scale: [2.8, 4.0], foot: 0.45, rad: 1.05, rotX: Math.PI / 2, yOff: 0.45, cat: 'terreno' },
-      { model: 'hongo_gigante', step: 24, ax: [0.4, 0.95], scale: [2.6, 4.2], foot: 0.48, rad: 1.0, cat: 'terreno' },
-      { model: 'bosque_casita', step: 44, ax: [0.7, 1.35], scale: [4.2, 5.8], foot: 0.5, rad: 1.45, cat: 'fachada', faceRoad: true },
-    ],
-  },
-  mar: {
-    ribbon: { mode: 'reef', c1: '#5a4a6e', c2: '#d9c08a', c3: '#c95f86', h: 1.2, w: 7.8, glow: 0.06 },
-    arch: { kind: 'mar', step: 42, sx: 1.08, sy: 8.0 },
-    props: [
-      { model: 'ciudad/mar_torre', step: 40, ax: [0.75, 1.5], scale: [8.8, 13.5], foot: 0.44, rad: 1.75, tints: ['#e8f8ff', '#b8ecff'], cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'coral', step: 12, ax: [0.4, 1.25], scale: [3.8, 6.8], foot: 0.44, rad: 1.2, tints: ['#ff6f91', '#ff9671', '#ffc75f', '#4dd0e1', '#ff7eb9'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'alga_larga', step: 14, ax: [0.4, 1.1], scale: [4.6, 8.2], foot: 0.25, rad: 0.85, tints: ['#28b899', '#45d9aa', '#1f9488'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'concha_gigante', step: 24, ax: [0.4, 0.95], scale: [2.4, 3.8], foot: 0.5, rad: 1.0, cat: 'terreno', faceRoad: true },
-      { model: 'mar_boya', step: 28, ax: [0.45, 0.95], scale: [2.8, 4.2], foot: 0.38, rad: 0.85, cat: 'techo' },
-    ],
-  },
-  desierto: {
-    ribbon: { mode: 'dune', c1: '#c48d48', c2: '#ecc37a', h: 2.75, w: 10.2, glow: 0.04 },
-    arch: { kind: 'desierto', step: 46, sx: 1.1, sy: 8.2 },
-    props: [
-      { model: 'saguaro_grande', step: 14, ax: [0.45, 1.25], scale: [3.8, 6.4], foot: 0.42, rad: 1.05, cat: 'terreno', tall: true, bothSides: true },
-      { model: 'pyramid', step: 42, ax: [0.95, 1.9], scale: [8.2, 13.4], foot: 0.52, rad: 2.05, tints: ['#d4a55c', '#c78c48', '#e0b872'], cat: 'terreno', tall: true },
-      { model: 'ciudad/desierto_torre', step: 38, ax: [0.75, 1.45], scale: [6.5, 10.2], foot: 0.44, rad: 1.55, cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'desierto_oasis', step: 36, ax: [0.6, 1.25], scale: [4.4, 6.4], foot: 0.48, rad: 1.4, cat: 'terreno' },
-    ],
-  },
-  hielo: {
-    ribbon: { mode: 'ice', c1: '#6eb4de', c2: '#e2f6ff', h: 3.3, w: 7.4, glow: 0.18 },
-    arch: { kind: 'hielo', step: 40, sx: 1.08, sy: 8.2 },
-    props: [
-      { model: 'ice_spire', step: 13, ax: [0.5, 1.4], scale: [6.4, 12.2], foot: 0.38, rad: 1.4, tints: ['#b8ebff', '#8cd4fa', '#e4f8ff'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'estalagmita_hielo', step: 14, ax: [0.45, 1.15], scale: [4.2, 7.6], foot: 0.34, rad: 1.1, cat: 'terreno', tall: true, bothSides: true },
-      { model: 'hielo_iglu', step: 34, ax: [0.55, 1.15], scale: [3.5, 5.0], foot: 0.5, rad: 1.3, cat: 'fachada', faceRoad: true },
-      { model: 'ciudad/hielo_torre', step: 42, ax: [0.75, 1.45], scale: [7.5, 11.6], foot: 0.44, rad: 1.65, cat: 'fachada', faceRoad: true, tall: true },
-    ],
-  },
-  volcan: {
-    ribbon: { mode: 'lava', c1: '#ff3b08', c2: '#ffaa22', h: 0.72, w: 6.8, glow: 1.0 },
-    arch: { kind: 'volcan', step: 44, sx: 1.08, sy: 8.0 },
-    props: [
-      { model: 'volcan_erupcion', step: 30, ax: [1.15, 2.1], scale: [7.4, 12.0], foot: 0.58, rad: 2.0, tints: ['#785046', '#8f5a4a'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'rock', step: 13, ax: [1.05, 1.95], scale: [3.6, 6.4], foot: 0.48, rad: 1.3, tints: ['#6b4b44', '#7d564c', '#573b36'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'geiser', step: 26, ax: [0.65, 1.3], scale: [3.4, 5.2], foot: 0.48, rad: 1.15, tints: ['#855c50', '#9c6855'], cat: 'terreno', tall: true },
-      { model: 'volcan_farol', step: 18, ax: [0.35, 0.75], scale: [2.6, 3.6], foot: 0.22, rad: 0.65, cat: 'techo' },
-      { model: 'volcan_altar', step: 34, ax: [0.55, 1.1], scale: [3.0, 4.4], foot: 0.48, rad: 1.1, cat: 'terreno', faceRoad: true },
-    ],
-  },
-  cristal: {
-    ribbon: { mode: 'canyon', c1: '#48388a', c2: '#9a7dff', h: 3.1, w: 7.8, glow: 0.22 },
-    arch: { kind: 'cristal', step: 42, sx: 1.08, sy: 8.1 },
-    props: [
-      { model: 'crystal', step: 12, ax: [0.45, 1.4], scale: [6.2, 12.2], foot: 0.38, rad: 1.35, tints: ['#7df9ff', '#ff7de9', '#b894ff', '#7dffb2'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'cristal_prisma', step: 15, ax: [0.45, 1.25], scale: [4.8, 8.8], foot: 0.4, rad: 1.15, cat: 'terreno', tall: true, bothSides: true },
-      { model: 'geoda', step: 22, ax: [0.4, 0.95], scale: [2.6, 4.2], foot: 0.5, rad: 0.95, cat: 'terreno', faceRoad: true },
-      { model: 'ciudad/cristal_torre', step: 40, ax: [0.7, 1.4], scale: [7.6, 12.4], foot: 0.44, rad: 1.6, cat: 'fachada', faceRoad: true, tall: true },
-    ],
-  },
-  nubes: {
-    ribbon: { mode: 'cloud', c1: '#dce6ff', c2: '#ffffff', h: 1.65, w: 8.2, glow: 0.14 },
-    arch: { kind: 'nubes', step: 44, sx: 1.1, sy: 8.0 },
-    props: [
-      { model: 'isla_nube', step: 22, ax: [1.05, 2.1], scale: [6.2, 10.0], foot: 0.5, rad: 1.85, yOff: [-2.4, 0.9], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'cloud', step: 14, ax: [0.85, 1.9], scale: [4.4, 7.6], foot: 0.5, rad: 1.5, yOff: [-2.0, 0.4], tints: ['#ffffff', '#eef4ff', '#fff7e0'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'nubes_globo', step: 22, ax: [0.65, 1.4], scale: [3.8, 6.0], foot: 0.34, rad: 1.0, yOff: [3.0, 6.6], cat: 'techo', tall: true },
-      { model: 'nubes_casita', step: 38, ax: [0.7, 1.3], scale: [3.8, 5.4], foot: 0.5, rad: 1.35, cat: 'fachada', faceRoad: true },
-    ],
-  },
-  neon: {
-    ribbon: { mode: 'cyber', c1: '#161b36', c2: '#2d3b70', h: 0.45, w: 7.6, glow: 0.16 },
-    arch: { kind: 'neon', step: 36, sx: 1.08, sy: 8.2 },
-    props: [
-      { model: 'ciudad/neon_rascacielos', step: 17, ax: [0.85, 1.75], scale: [9.4, 15.8], foot: 0.49, rad: 2.2, yOff: -0.25, tints: ['#ffffff', '#d8f4ff', '#ffd8fa'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
-      { model: 'ciudad/neon_torre', step: 20, ax: [0.75, 1.55], scale: [7.8, 13.2], foot: 0.44, rad: 1.85, yOff: -0.2, tints: ['#eef7ff', '#ffe6fb'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
-      { model: 'ciudad/neon_comercio', step: 24, ax: [0.65, 1.25], scale: [5.0, 7.4], foot: 0.52, rad: 1.45, cat: 'fachada', faceRoad: true },
-      { model: 'neon_kiosco', step: 20, ax: [0.45, 0.9], scale: [2.6, 3.8], foot: 0.5, rad: 0.95, cat: 'fachada', faceRoad: true },
-    ],
-  },
-  jardin: {
-    ribbon: { mode: 'hedge', c1: '#2f7a32', c2: '#7be063', h: 1.35, w: 5.8, glow: 0.05 },
-    arch: { kind: 'jardin', step: 34, sx: 1.08, sy: 7.6 },
-    props: [
-      { model: 'jardin_gazebo', step: 26, ax: [0.6, 1.2], scale: [4.0, 5.8], foot: 0.36, rad: 1.25, cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'fuente_jardin', step: 30, ax: [0.55, 1.1], scale: [3.2, 4.6], foot: 0.5, rad: 1.2, cat: 'terreno' },
-      { model: 'jardin_flor', step: 12, ax: [0.35, 0.85], scale: [2.2, 3.6], foot: 0.34, rad: 0.72, cat: 'terreno', bothSides: true },
-      { model: 'tree', step: 16, ax: [0.65, 1.5], scale: [6.2, 10.4], foot: 0.52, rad: 1.6, tints: ['#4fa84b', '#ff8fb8', '#ffb3d9', '#67bd5b'], cat: 'terreno', tall: true, bothSides: true },
-    ],
-  },
-  sombrio: {
-    ribbon: { mode: 'crypt', c1: '#281f3d', c2: '#503b75', h: 1.05, w: 6.4, glow: 0.1 },
-    arch: { kind: 'sombrio', step: 44, sx: 1.08, sy: 8.0 },
-    props: [
-      { model: 'proc:dead_tree', step: 14, ax: [0.55, 1.35], scale: [7.2, 11.8], foot: 0.32, rad: 1.35, tints: ['#3e3054', '#4e3c69', '#322645'], cat: 'terreno', tall: true, bothSides: true },
-      { model: 'tomb', step: 22, ax: [0.65, 1.35], scale: [5.4, 8.6], foot: 0.48, rad: 1.55, tints: ['#786899', '#5e4f7d', '#8e7cb0'], cat: 'fachada', faceRoad: true, tall: true, bothSides: true },
-      { model: 'ciudad/sombrio_torre', step: 34, ax: [0.75, 1.55], scale: [7.8, 12.2], foot: 0.44, rad: 1.75, tints: ['#8574a8', '#68588a'], cat: 'fachada', faceRoad: true, tall: true },
-      { model: 'lapida', step: 13, ax: [0.4, 0.9], scale: [2.2, 3.6], foot: 0.34, rad: 0.75, cat: 'terreno', faceRoad: true, bothSides: true },
-      { model: 'sombrio_farol', step: 16, ax: [0.35, 0.75], scale: [2.8, 3.8], foot: 0.2, rad: 0.65, cat: 'techo' },
-    ],
-  },
-}
 
 // ═══════════════════════════ ARCOS / TÚNELES TEMÁTICOS ═══════════════════════════
 const archGeoCache = new Map()
@@ -452,15 +340,11 @@ function* buildSegRibbonGeo(way, seg, si, world, spec) {
 }
 
 const segDataCache = new WeakMap()
-const F0 = {}
-const F1 = {}
-const _cand = new THREE.Vector3()
-const _pL = new THREE.Vector3()
-const _pR = new THREE.Vector3()
 
 const SEG_PASO_MS = 3 // presupuesto por cuadro del propio componente para un tramo cercano aún sin datos
 const segGens = new WeakMap() // seg -> generador a medias (la precarga y el propio componente lo comparten)
 const NUNCA = () => false
+const SIEMPRE = () => true
 /** Avanza los datos del tramo hasta que `agotado()` diga basta; true cuando quedaron en caché. */
 function segStructPaso(way, seg, si, agotado) {
   if (segDataCache.has(seg)) return true
@@ -481,140 +365,11 @@ function getSegStructData(way, seg, si) {
 function* segStructGen(way, seg, si) {
   const themeId = way.theme?.id
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
-  const rng = mulberry32(4219 + way.idx * 313 + si * 977)
   const world = mundoDe(way)
-  const col = world ? colisionDe(world) : null
-  const local = nuevoLocal()
-
   const ribbonGeo = yield* buildSegRibbonGeo(way, seg, si, world, spec.ribbon)
-  const arches = []
-  const byModel = new Map()
-  for (const p of spec.props) byModel.set(p.model, [])
-
-  const L = Math.max(seg.length ?? 1, 1)
-  const lanes = lanesOf(seg)
-  const busyList = seg.switches ?? []
-  const archSpec = spec.arch
-
-  if (archSpec) {
-    for (let s = 16; s < L - 12; s += archSpec.step * (0.85 + rng() * 0.3)) {
-      yield
-      const u = s / L
-      for (let li = 0; li < lanes.length; li++) {
-        const lane = lanes[li]
-        if (busyList.some((w) => (w.from === lane.id || w.to === lane.id) && Math.abs(w.u * L - s) < 7.5)) continue
-        const f = surfFrame(seg, lane.id, u, F0)
-        const hw = halfWidth(lane)
-        const E = hw + CURB
-        // Si hay varios carriles agrupados, abarcar todo el paquete desde lane 0
-        if (li === 0 && lanes.length > 1) {
-          let minLat = -(E + TERR * 0.65)
-          let maxLat = E + TERR * 0.65
-          let anyBundled = false
-          for (let j = 1; j < lanes.length; j++) {
-            const fj = surfFrame(seg, lanes[j].id, u, F1)
-            const diff = _pL.copy(fj.pos).sub(f.pos)
-            if (diff.lengthSq() < (E * 5.2) ** 2) {
-              anyBundled = true
-              const lat = diff.dot(f.side)
-              const Ej = halfWidth(lanes[j]) + CURB + TERR * 0.65
-              minLat = Math.min(minLat, lat - Ej)
-              maxLat = Math.max(maxLat, lat + Ej)
-            }
-          }
-          if (anyBundled) {
-            const midLat = (minLat + maxLat) * 0.5
-            const span = maxLat - minLat
-            _pL.copy(f.pos).addScaledVector(f.side, minLat)
-            _pR.copy(f.pos).addScaledVector(f.side, maxLat)
-            const aSeed = way.idx * 1009 + si * 131 + Math.round(s)
-            const okL = colocar(world, { pos: _pL, seed: aSeed + 1 }, 0.75, { way: way.idx }, 0, local)
-            const okR = okL && colocar(world, { pos: _pR, seed: aSeed + 2 }, 0.75, { way: way.idx }, 0, local)
-            if (okL && okR) {
-              arches.push({
-                pos: f.pos.clone().addScaledVector(f.side, midLat).addScaledVector(f.up, -0.14),
-                quat: basisQuat(f.up, f.tangent),
-                scale: [span * (archSpec.sx ?? 1), (archSpec.sy ?? 8.2) * (0.95 + rng() * 0.14), 2.8 + rng() * 0.8],
-              })
-            }
-            continue
-          }
-        } else if (li > 0) {
-          const f0 = surfFrame(seg, lanes[0].id, u, F1)
-          if (f.pos.distanceToSquared(f0.pos) < (E * 5.2) ** 2) continue
-        }
-
-        const spanHalf = E + TERR * 0.72
-        _pL.copy(f.pos).addScaledVector(f.side, -spanHalf)
-        _pR.copy(f.pos).addScaledVector(f.side, spanHalf)
-        if (!outerClear(col, way.idx, seg, lane, u, _pL, 0.75, local) ||
-            !outerClear(col, way.idx, seg, lane, u, _pR, 0.75, local)) continue
-        const aSeed = way.idx * 1009 + si * 131 + lane.id * 29 + Math.round(s)
-        if (!colocar(world, { pos: _pL, seed: aSeed + 1 }, 0.75, { way: way.idx }, 0, local)) continue
-        if (!colocar(world, { pos: _pR, seed: aSeed + 2 }, 0.75, { way: way.idx }, 0, local)) continue
-
-        arches.push({
-          pos: f.pos.clone().addScaledVector(f.up, -0.12),
-          quat: basisQuat(f.up, f.tangent),
-          scale: [spanHalf * 2 * (archSpec.sx ?? 1), (archSpec.sy ?? 7.4) * (0.94 + rng() * 0.14), 2.6 + rng() * 0.8],
-        })
-      }
-    }
-  }
-
-  for (const lane of lanes) {
-    const hw = halfWidth(lane)
-    const E = hw + CURB
-    const widthRatio = Math.max(1, hw / 2.45)
-
-    for (const pSpec of spec.props) {
-      const step = pSpec.step * (0.85 + rng() * 0.35)
-      const list = byModel.get(pSpec.model)
-      const tintColors = pSpec.tints ? pSpec.tints.map((h) => new THREE.Color(h)) : null
-      for (let s = 6 + rng() * step * 0.6; s < L - 5; s += step) {
-        yield
-        if (busyList.some((w) => (w.from === lane.id || w.to === lane.id) && Math.abs(w.u * L - s) < 5.5)) continue
-        const u = s / L
-        const f = surfFrame(seg, lane.id, u, F0)
-
-        const firstSign = rng() < 0.5 ? -1 : 1
-        const tryBoth = !!pSpec.bothSides && rng() < 0.68
-        for (const sgn of [firstSign, -firstSign]) {
-          const sc = (pSpec.scale[0] + rng() * (pSpec.scale[1] - pSpec.scale[0])) * widthRatio
-          const footR = sc * (pSpec.foot ?? 0.48)
-          const minAx = E + TERR * pSpec.ax[0] + footR
-          const maxAx = E + TERR * pSpec.ax[1] + footR
-          const ax = minAx + rng() * (maxAx - minAx)
-          const clearR = Math.max(pSpec.rad, footR * 0.92)
-          const yBase = Array.isArray(pSpec.yOff)
-            ? pSpec.yOff[0] + rng() * (pSpec.yOff[1] - pSpec.yOff[0])
-            : (pSpec.yOff ?? -0.12)
-          _cand.copy(f.pos).addScaledVector(f.side, sgn * ax).addScaledVector(f.up, yBase)
-          if (!outerClear(col, way.idx, seg, lane, u, _cand, clearR, local)) continue
-          const p = colocar(world, { pos: _cand, seed: way.idx * 104729 + si * 997 + lane.id * 53 + Math.round(s * 17) + (sgn > 0 ? 7 : 0) }, Math.max(pSpec.rad, footR * 0.72), { way: way.idx }, 0, local)
-          if (!p) continue
-
-          const quat = basisQuat(f.up, f.tangent)
-          if (pSpec.faceRoad) {
-            Q_YAW.setFromAxisAngle(Y_AXIS, (sgn > 0 ? -Math.PI / 2 : Math.PI / 2) + (rng() - 0.5) * 0.28)
-          } else {
-            Q_YAW.setFromAxisAngle(Y_AXIS, rng() * TAU)
-          }
-          quat.multiply(Q_YAW)
-          if (pSpec.rotX) quat.multiply(Q_ROTX.setFromAxisAngle(X_AXIS, pSpec.rotX))
-
-          list.push({
-            pos: p,
-            quat,
-            scale: sc,
-            color: tintColors ? tintColors[Math.floor(rng() * tintColors.length)] : null,
-          })
-          if (!tryBoth) break
-        }
-      }
-    }
-  }
-
+  // colocación por porciones (una muestra por paso): cede igual que la cinta
+  while (!placeSegPaso(way, seg, si, SIEMPRE)) yield
+  const { arches, byModel } = placeSegArchesAndProps(way, seg, si)
   return { ribbonGeo, arches, byModel }
 }
 

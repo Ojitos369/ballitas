@@ -3,7 +3,7 @@
 import { startTransition, useEffect, useState } from 'react'
 
 // Orden de cálculo: primero lo barato y cercano a la pista; estructuras y paisaje (por tramos) al final.
-export const ETAPAS_NOMBRES = ['pista', 'modelos', 'anillos', 'eventos', 'uniones', 'criaturas', 'decor', 'kart', 'estructuras', 'paisaje']
+export const ETAPAS_NOMBRES = ['pista', 'modelos', 'prisma', 'anillos', 'eventos', 'uniones', 'criaturas', 'decor', 'kart', 'estructuras', 'paisaje']
 const IDX = Object.fromEntries(ETAPAS_NOMBRES.map((n, i) => [n, i]))
 
 const estado = new WeakMap() // way -> índice de la siguiente etapa por calcular

@@ -1868,6 +1868,290 @@ export function ribbonHits(world, S = ribbonSamples(world)) {
   return { ...judgePairs(S, gatherPairs(S, JOINT_SEP + 0.6 * TK), RIBBON_CLEAR), S }
 }
 
+// ───────────────────────── espacio visible entre cintas (medidor en el marco local) ─────────────────────────
+// Lo que ve la cámara de seguimiento, medido en el marco real de cada carril (laneFrame: up/side/tangent con relieve,
+// giro y peralte). Para cada muestra de la cinta A y cada trozo cercano de la cinta B (rectángulo de semiancho
+// RIBBON_HALF, largo de su paso y grosor de quilla QUILLA, expresado en los ejes de A):
+//   galibo : B entra en el prisma libre sobre la calzada de A (ancho CALZADA_HALF·2, alto GALIBO_H a lo largo de up).
+//   lateral: el aire entre los bordes visibles (bermas incluidas) de A y B es menor que AIRE_LAT.
+//   union  : en la zona de unión (prefijo contiguo desde una punta común) dos cintas sólo pueden solaparse si son
+//            coplanares (normales con dot >= COPLANAR_DOT y desnivel <= COPLANAR_Y): se leen como una calzada que se
+//            ensancha o bifurca. Mientras se separan sin solaparse (aire < AIRE_LAT) quedan exentas; el largo de esa
+//            zona se reporta (unionSep). Un solape no coplanar dentro de la unión es choque.
+// La prueba es asimétrica (B sobre A no es A sobre B): se evalúan los dos sentidos. Una cinta contra sí misma cuenta a
+// más de RIB_SELF de arco (rizos, hélices).
+export const GALIBO_H = 6 * TK
+export const AIRE_LAT = 2 * RIBBON_HALF
+export const CALZADA_HALF = LANE_W / 2 + RIBBON_CURB
+export const QUILLA = 0.75 // quilla de la cinta bajo el firme (pista.jsx profile: 0.48 · k, k <= 1.55)
+export const COPLANAR_DOT = 0.98
+export const COPLANAR_Y = 0.25
+const CLR_STEP = 1 * TK
+const CLR_LIM = GALIBO_H + 2 * RIBBON_HALF + QUILLA + 2 * CLR_STEP
+
+// Muestras densas con marco: { ribs[], X,Y,Z, UX..,SX..,TX.., H (semipaso), R }.
+export function clearanceSamples(world) {
+  const ribs = []; const F = {}; const cols = { X: [], Y: [], Z: [], UX: [], UY: [], UZ: [], SX: [], SY: [], SZ: [], TX: [], TY: [], TZ: [], R: [] }
+  for (const [way, seg, id] of ribbonsOf(world)) {
+    const L = laneLength(seg, id); const n = Math.max(4, Math.ceil(Math.max(seg.length, L) / CLR_STEP))
+    const r = { idx: ribs.length, way, seg, lane: id, start: cols.X.length, n, ds: L / n, ends: [] }
+    for (let i = 0; i <= n; i++) {
+      const f = laneFrame(seg, id, i / n, F); const p = f.surface
+      cols.X.push(p.x); cols.Y.push(p.y); cols.Z.push(p.z)
+      cols.UX.push(f.up.x); cols.UY.push(f.up.y); cols.UZ.push(f.up.z)
+      cols.SX.push(f.side.x); cols.SY.push(f.side.y); cols.SZ.push(f.side.z)
+      cols.TX.push(f.tangent.x); cols.TY.push(f.tangent.y); cols.TZ.push(f.tangent.z)
+      cols.R.push(r.idx)
+      if (i === 0 || i === n) r.ends.push(ribbonEndKey(world, p.x, p.y, p.z))
+    }
+    ribs.push(r)
+  }
+  const S = { ribs }
+  for (const k in cols) S[k] = k === 'R' ? Int32Array.from(cols.R) : Float64Array.from(cols[k])
+  return S
+}
+
+// Relación de la muestra j (trozo de B) vista desde la muestra i (marco de A). Devuelve en `o`: gal (B en el prisma de
+// A), dist (aire entre bordes, u; 0 si se solapan), over (las cintas se solapan), cop (coplanares), abreast (B a la
+// altura de i a lo largo de A). hA/hB: semipaso a lo largo de cada cinta.
+function relate(S, i, j, hA, hB, o) {
+  const H = RIBBON_HALF; const q = QUILLA / 2
+  const ux = S.UX[i]; const uy = S.UY[i]; const uz = S.UZ[i]; const sx = S.SX[i]; const sy = S.SY[i]; const sz = S.SZ[i]
+  const tx = S.TX[i]; const ty = S.TY[i]; const tz = S.TZ[i]
+  const bux = S.UX[j]; const buy = S.UY[j]; const buz = S.UZ[j]
+  // centro del trozo de B (a media quilla bajo su firme), en ejes de A
+  const dx = S.X[j] - bux * q - S.X[i]; const dy = S.Y[j] - buy * q - S.Y[i]; const dz = S.Z[j] - buz * q - S.Z[i]
+  const cx = dx * sx + dy * sy + dz * sz; const cy = dx * ux + dy * uy + dz * uz; const cz = dx * tx + dy * ty + dz * tz
+  const bsx = S.SX[j]; const bsy = S.SY[j]; const bsz = S.SZ[j]; const btx = S.TX[j]; const bty = S.TY[j]; const btz = S.TZ[j]
+  // semiextensión del trozo de B a lo largo de cada eje de A (caja orientada -> caja en ejes de A)
+  const ext = (ax, ay, az) => H * Math.abs(bsx * ax + bsy * ay + bsz * az) + hB * Math.abs(btx * ax + bty * ay + btz * az) + q * Math.abs(bux * ax + buy * ay + buz * az)
+  const ex = ext(sx, sy, sz); const ey = ext(ux, uy, uz); const ez = ext(tx, ty, tz)
+  o.abreast = Math.abs(cz) - ez <= hA
+  o.gal = o.abreast && Math.abs(cx) - ex < CALZADA_HALF && cy - ey < GALIBO_H && cy + ey > 0
+  // cinta de A: x en ±H, y en [-QUILLA, 0.03]
+  const gx = Math.abs(cx) - ex - H; const gy = cy >= 0 ? cy - ey - 0.03 : -cy - ey - QUILLA
+  o.over = gx < 0 && gy < 0
+  o.dist = Math.hypot(Math.max(gx, 0), Math.max(gy, 0))
+  const dot = ux * bux + uy * buy + uz * buz
+  o.cop = dot >= COPLANAR_DOT && Math.abs(cy + q) <= COPLANAR_Y
+  return o
+}
+
+// Medidor de espacio entre cintas (ver arriba). { galibo, lateral, union: { n, worst, at }, unionSep (u máx. de una zona
+// de unión sin aire), hits: [{ cat, a, b, ... }] (los primeros), S }. worst: galibo -> mínima altura libre sobre la
+// calzada; lateral -> mínimo aire entre bordes.
+export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 400 } = {}) {
+  const { ribs, X, Y: Yy, Z, R } = S; const N = X.length; const lim = CLR_LIM; const L2 = lim * lim
+  const cell = (v) => Math.floor(v / lim); const grid = new Map()
+  for (let i = 0; i < N; i++) { const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
+  const half = (i) => { const r = ribs[R[i]]; return r.ds * 0.5 + 0.05 }
+  // pares por par de cintas: [i, j, flags] con flags bit0 gal(A<-B) bit1 gal(B<-A) bit2 over bit3 cop; dist aparte
+  const pairs = new Map(); const o1 = {}; const o2 = {}
+  for (let i = 0; i < N; i++) {
+    const x = cell(X[i]); const y = cell(Yy[i]); const z = cell(Z[i]); const ri = R[i]; const A = ribs[ri]
+    for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) for (let ddz = -1; ddz <= 1; ddz++) {
+      const b = grid.get(cellKey(x + ddx, y + ddy, z + ddz)); if (!b) continue
+      for (const j of b) {
+        if (j <= i) continue
+        const rj = R[j]
+        if (ri === rj && (j - i) * A.ds < RIB_SELF) continue
+        const d2 = (X[i] - X[j]) ** 2 + (Yy[i] - Yy[j]) ** 2 + (Z[i] - Z[j]) ** 2; if (d2 >= L2) continue
+        const hA = half(i); const hB = half(j)
+        relate(S, i, j, hA, hB, o1); relate(S, j, i, hB, hA, o2)
+        if (!o1.abreast && !o2.abreast) continue
+        const dist = Math.min(o1.abreast ? o1.dist : Infinity, o2.abreast ? o2.dist : Infinity)
+        const gal = (o1.gal ? 1 : 0) | (o2.gal ? 2 : 0)
+        if (!gal && dist >= AIRE_LAT) continue
+        const key = ri * 65536 + rj; let l = pairs.get(key); if (!l) pairs.set(key, l = [])
+        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0), dist)
+      }
+    }
+  }
+  const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', hits: [], S }
+  const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
+  const cap = JOINT_MAX
+  for (const l of pairs.values()) {
+    const A = ribs[R[l[0]]]; const B = ribs[R[l[1]]]
+    // zonas de unión: puntas comunes; prefijo contiguo (desde la punta) de muestras con algún par cercano
+    let zones = null
+    if (A !== B) {
+      for (let ea = 0; ea < 2; ea++) for (let eb = 0; eb < 2; eb++) if (A.ends[ea] === B.ends[eb]) (zones ||= []).push([ea, eb])
+      if (zones) {
+        const inA = new Set(); const inB = new Set()
+        for (let k = 0; k < l.length; k += 4) { inA.add(l[k] - A.start); inB.add(l[k + 1] - B.start) }
+        const pre = (set, r, e) => { let c = 0; while (c <= r.n && c * r.ds < cap && (set.has(e ? r.n - c : c) || set.has(e ? r.n - c - 1 : c + 1))) c++; return c }
+        zones = zones.map(([ea, eb]) => [ea, pre(inA, A, ea), eb, pre(inB, B, eb)])
+      }
+    }
+    for (let k = 0; k < l.length; k += 4) {
+      const i = l[k]; const j = l[k + 1]; const fl = l[k + 2]; const dist = l[k + 3]
+      const ia = i - A.start; const ib = j - B.start
+      const z = zones && zones.find(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)
+      if (z) {
+        const s = Math.max((z[0] ? A.n - ia : ia) * A.ds, (z[2] ? B.n - ib : ib) * B.ds)
+        if ((fl & 7) && !(fl & 8)) {
+          out.union.n++
+          if (s > out.union.worst) Object.assign(out.union, { worst: s, at: `${tag(i)} vs ${tag(j)}` })
+          if (out.hits.length < maxList) out.hits.push({ cat: 'union', a: i, b: j, s })
+        } else if (s > out.unionSep) { out.unionSep = s; out.unionSepAt = `${tag(i)} vs ${tag(j)}` }
+        continue
+      }
+      if (fl & 3) {
+        out.galibo.n++
+        // altura libre aproximada: distancia vertical del firme de A al punto más bajo de B (o al revés)
+        const ii = fl & 1 ? i : j; const jj = fl & 1 ? j : i
+        const hy = (X[jj] - X[ii]) * S.UX[ii] + (Yy[jj] - Yy[ii]) * S.UY[ii] + (Z[jj] - Z[ii]) * S.UZ[ii]
+        if (hy < out.galibo.worst) Object.assign(out.galibo, { worst: hy, at: `${tag(ii)} bajo ${tag(jj)}` })
+        if (out.hits.length < maxList) out.hits.push({ cat: 'galibo', a: ii, b: jj, h: hy })
+      } else if (dist < AIRE_LAT) {
+        out.lateral.n++
+        if (dist < out.lateral.worst) Object.assign(out.lateral, { worst: dist, at: `${tag(i)} vs ${tag(j)}` })
+        if (out.hits.length < maxList) out.hits.push({ cat: 'lateral', a: i, b: j, d: dist })
+      }
+    }
+  }
+  return out
+}
+
+// Estructuras (esferas { center, r, way, seg, lane }) que invaden el prisma de gálibo o cortan la calzada de una cinta
+// AJENA a su carril. { n, worst (máx. penetración, u), at, list }.
+// Rejilla de muestras con marco para consultas de estructuras (celda CLR_LIM).
+function clearanceGrid(S) {
+  const { X, Y: Yy, Z } = S; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim); const grid = new Map()
+  for (let i = 0; i < X.length; i++) { const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
+  return grid
+}
+// Penetración máxima (u) de una esfera (c, r) en el prisma [±CALZADA_HALF] x [-QUILLA, GALIBO_H] de cualquier cinta que no
+// sea la suya (own = { way (objeto o índice), seg, lane }). { p, i } con i = -1 si no invade.
+function prismInvasion(S, grid, c, r, own) {
+  const { ribs, X, Y: Yy, Z, R } = S; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim)
+  const rings = Math.ceil((r + lim) / lim); const ow = own?.way?.idx ?? own?.way
+  const x0 = cell(c.x); const y0 = cell(c.y); const z0 = cell(c.z); let worst = 0; let wi = -1
+  for (let dx = -rings; dx <= rings; dx++) for (let dy = -rings; dy <= rings; dy++) for (let dz = -rings; dz <= rings; dz++) {
+    const b = grid.get(cellKey(x0 + dx, y0 + dy, z0 + dz)); if (!b) continue
+    for (const i of b) {
+      const rb = ribs[R[i]]
+      // propia: su carril; lane '*' = todos los carriles del tramo (arco sobre el haz); seg '*' = todo el camino (pórtico de unión)
+      if (own && rb.way.idx === ow && (own.seg === '*' || rb.seg === own.seg) && (own.lane === '*' || rb.lane === own.lane)) continue
+      const ex = c.x - X[i]; const ey = c.y - Yy[i]; const ez = c.z - Z[i]
+      const cz = ex * S.TX[i] + ey * S.TY[i] + ez * S.TZ[i]; if (Math.abs(cz) > r + rb.ds * 0.5) continue
+      const cx = Math.abs(ex * S.SX[i] + ey * S.SY[i] + ez * S.SZ[i]); const cy = ex * S.UX[i] + ey * S.UY[i] + ez * S.UZ[i]
+      const p = Math.min(CALZADA_HALF - (cx - r), (cy + r) + QUILLA, GALIBO_H - (cy - r))
+      if (p > worst) { worst = p; wi = i }
+    }
+  }
+  return { p: worst, i: wi }
+}
+// Consulta para la colocación de estructuras (vida/colocacion.js): true si la esfera (c, r) de una pieza de `own` no
+// invade el gálibo ni la calzada de otra cinta. Rejilla PEREZOSA por camino: las muestras de un camino solo se calculan
+// cuando una consulta cae cerca de su caja (o cuando la etapa «prisma» de la precarga lo adelanta por porciones con
+// prismaPaso). Mismo veredicto que la rejilla global: una muestra solo puede invadir si está a menos de
+// 3r + CALZADA_HALF + GALIBO_H + QUILLA + paso de la esfera, y todo camino cuya caja corta esa esfera ya está preparado.
+const PRISMA_PAD = 3 * TK // (u) holgura de la caja estimada (vértices de la trenza) sobre las muestras reales
+const CLR_CACHE = new WeakMap()
+export const PRISMA_STATS = { sincronos: 0, msSincrono: 0, maxSincrono: 0, fueraCaja: 0, muestras: 0 }
+function prismaCache(world) {
+  let k = CLR_CACHE.get(world)
+  if (k) return k
+  const S = { ribs: [], X: [], Y: [], Z: [], UX: [], UY: [], UZ: [], SX: [], SY: [], SZ: [], TX: [], TY: [], TZ: [], R: [] }
+  // unidades = tramos con cintas; caja de cada una a partir de los vértices de su trenza (barato: sin laneFrame)
+  const units = []; const porSeg = new Map()
+  for (const way of world.ways) for (const seg of way.segments) {
+    if (seg.air || !seg.lanes) continue
+    const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]
+    const add = (x, y, z, m) => { b[0] = Math.min(b[0], x - m); b[1] = Math.min(b[1], y - m); b[2] = Math.min(b[2], z - m); b[3] = Math.max(b[3], x + m); b[4] = Math.max(b[4], y + m); b[5] = Math.max(b[5], z + m) }
+    const br = seg._braid
+    if (br) { for (const P of Object.values(br.P)) if (P) for (let i = 0; i < P.length; i += 3) add(P[i], P[i + 1], P[i + 2], PRISMA_PAD) }
+    else for (let i = 0; i <= 32; i++) { const p = seg.curve.getPointAt(i / 32); add(p.x, p.y, p.z, PRISMA_PAD + 4 * (seg.radius ?? TK)) }
+    porSeg.set(seg, units.length); units.push({ way, seg, b })
+  }
+  k = { S, grid: new Map(), units, porSeg, hechos: new Uint8Array(units.length), gens: new Map() }
+  CLR_CACHE.set(world, k)
+  return k
+}
+// Generador: añade las muestras de la unidad (tramo) `ui` a la rejilla, una cinta (carril) por porción.
+function* prismaUnitGen(k, ui) {
+  const { way, seg, b } = k.units[ui]; const S = k.S; const F = {}; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim)
+  for (const l of seg.lanes) {
+    const id = l.id; const L = laneLength(seg, id); const n = Math.max(4, Math.ceil(Math.max(seg.length, L) / CLR_STEP))
+    const r = { idx: S.ribs.length, way, seg, lane: id, start: S.X.length, n, ds: L / n }
+    for (let i = 0; i <= n; i++) {
+      const f = laneFrame(seg, id, i / n, F); const p = f.surface; const j = S.X.length
+      S.X.push(p.x); S.Y.push(p.y); S.Z.push(p.z)
+      S.UX.push(f.up.x); S.UY.push(f.up.y); S.UZ.push(f.up.z)
+      S.SX.push(f.side.x); S.SY.push(f.side.y); S.SZ.push(f.side.z)
+      S.TX.push(f.tangent.x); S.TY.push(f.tangent.y); S.TZ.push(f.tangent.z)
+      S.R.push(r.idx)
+      if (p.x < b[0] || p.y < b[1] || p.z < b[2] || p.x > b[3] || p.y > b[4] || p.z > b[5]) PRISMA_STATS.fueraCaja++
+      const key = cellKey(cell(p.x), cell(p.y), cell(p.z)); let bk = k.grid.get(key); if (!bk) k.grid.set(key, bk = []); bk.push(j)
+    }
+    S.ribs.push(r); PRISMA_STATS.muestras += n + 1
+    yield
+  }
+}
+function prismaUnitPaso(k, ui, agotado) {
+  if (k.hechos[ui]) return true
+  let g = k.gens.get(ui)
+  if (!g) { g = prismaUnitGen(k, ui); k.gens.set(ui, g) }
+  for (;;) {
+    if (g.next().done) { k.gens.delete(ui); k.hechos[ui] = 1; return true }
+    if (agotado()) return false
+  }
+}
+const cajaCorta = (b, x0, y0, z0, x1, y1, z1) => b[0] <= x1 && b[3] >= x0 && b[1] <= y1 && b[4] >= y0 && b[2] <= z1 && b[5] >= z0
+const PRISMA_ALCANCE = 15 * TK // (u) alcance de una consulta típica (pieza + gálibo); las mayores se completan en el acto
+/** Etapa «prisma» de la precarga: prepara por porciones las cintas de todo tramo cuya caja corta la de algún tramo de
+ *  `way` crecida en PRISMA_ALCANCE; true cuando están todas. */
+export function prismaPaso(world, way, agotado) {
+  const k = prismaCache(world); const m = PRISMA_ALCANCE
+  for (const seg of way.segments) {
+    const ua = k.porSeg.get(seg); if (ua == null) continue
+    const a = k.units[ua].b
+    for (let ui = 0; ui < k.units.length; ui++) {
+      if (k.hechos[ui] || !cajaCorta(k.units[ui].b, a[0] - m, a[1] - m, a[2] - m, a[3] + m, a[4] + m, a[5] + m)) continue
+      if (!prismaUnitPaso(k, ui, agotado)) return false
+      if (agotado()) return false
+    }
+  }
+  return true
+}
+const NUNCA_P = () => false
+export function prismaLibre(world, c, r, own) {
+  const k = prismaCache(world)
+  const d = 3 * r + CALZADA_HALF + GALIBO_H + QUILLA + 2 * CLR_STEP + PRISMA_PAD
+  for (let ui = 0; ui < k.units.length; ui++) {
+    if (k.hechos[ui] || !cajaCorta(k.units[ui].b, c.x - d, c.y - d, c.z - d, c.x + d, c.y + d, c.z + d)) continue
+    const t0 = performance.now(); prismaUnitPaso(k, ui, NUNCA_P); const dt = performance.now() - t0
+    PRISMA_STATS.sincronos++; PRISMA_STATS.msSincrono += dt; PRISMA_STATS.maxSincrono = Math.max(PRISMA_STATS.maxSincrono, dt)
+  }
+  return prismInvasion(k.S, k.grid, c, r, own).i < 0
+}/** Diagnóstico: cinta invadida por la esfera (o null). */
+export function prismaQuien(world, c, r, own) {
+  prismaLibre(world, c, r, own); const k = prismaCache(world); const { i, p } = prismInvasion(k.S, k.grid, c, r, own)
+  return i < 0 ? null : { rib: k.S.ribs[k.S.R[i]], p }
+}
+export const clearanceGridDe = (S) => clearanceGrid(S)
+/** Solo pruebas: veredicto con la rejilla global de todo el mundo (referencia para la perezosa). */
+export function prismaLibreGlobal(world, c, r, own, S = clearanceSamples(world), grid = clearanceGrid(S)) {
+  return prismInvasion(S, grid, c, r, own).i < 0
+}
+export function structureIntrusions(S, items, { maxList = 200, envolvente = false } = {}) {
+  const { ribs, R } = S; const grid = clearanceGrid(S)
+  const out = { n: 0, worst: 0, at: '', list: [] }
+  const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
+  for (const it of items) {
+    // piezas con volumen detallado (arcos: cadena de esferas sobre la U): invade si invade alguna parte
+    let worst = 0; let wi = -1
+    for (const q of (envolvente || !it.partes) ? [{ c: it.center, r: it.r }] : it.partes) { const v = prismInvasion(S, grid, q.c, q.r, it); if (v.i >= 0 && (wi < 0 || v.p > worst)) { worst = v.p; wi = v.i } }
+    if (wi >= 0) {
+      out.n++
+      if (worst > out.worst) Object.assign(out, { worst, at: `${it.kind} w${it.way?.idx ?? it.way} L${it.lane} en ${tag(wi)}` })
+      if (out.list.length < maxList) out.list.push({ kind: it.kind, item: it, i: wi, p: worst })
+    }
+  }
+  return out
+}
+
 // Repulsión: cada par de muestras en choque empuja sus cintas en direcciones opuestas, sobre los vértices de la trenza.
 // Entre tramos distintos se mueve el haz entero (todos los carriles del tramo a la vez: no se aprietan contra sus
 // hermanos); entre carriles del mismo tramo, o una cinta consigo misma, sólo esos carriles. Cada desplazamiento se suaviza

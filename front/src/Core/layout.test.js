@@ -59,3 +59,38 @@ test('contrato world.colision: lejos libre, centro de cinta ocupado salvo que se
   assert.equal(col.libre(p, 0, { way: r.way, seg: r.seg, lane: r.lane }), true)
   assert.equal(col.libre(p, 0, { way: r.way.idx, si: r.way.segments.indexOf(r.seg), lane: r.lane }), true)
 })
+
+// M4: ninguna estructura (anillo, arco, pórtico, túnel o arco del kit) invade el gálibo ni la calzada de una cinta ajena.
+// Se mide la misma colocación que dibujan los .jsx (vida/colocacion.js). M1-M3 (galibo, lateral, union) los reporta
+// tools/overlap.mjs con sus cifras; aún no llegan a 0 (ver front/_capturas/REPORTE.md).
+for (const seed of [1, 369]) {
+  test(`estructuras sin invadir el gálibo de otras cintas (semilla ${seed})`, async () => {
+    const { ribbonClearance, structureIntrusions, clearanceSamples } = await import('./world.js')
+    const { colocarTodoMundo } = await import('../Components/World3D/vida/colocacion.js')
+    const w = mundo(seed); const items = colocarTodoMundo(w)
+    const est = structureIntrusions(clearanceSamples(w), items)
+    assert.equal(est.n, 0, `semilla ${seed}: ${est.n}/${items.length} piezas invaden (pen máx ${est.worst.toFixed(1)}u ${est.at})`)
+    assert.ok(typeof ribbonClearance === 'function')
+  })
+}
+
+// La rejilla perezosa del prisma (por camino, etapa «prisma» de la precarga) da el mismo veredicto que la global, y la
+// colocación mueve o encoge antes de quitar: se quita a lo sumo el 15 % de las piezas candidatas.
+test('prisma perezoso = global; quitadas <= 15 % (semilla 1)', async () => {
+  const W = await import('./world.js')
+  const C = await import('../Components/World3D/vida/colocacion.js')
+  const w = mundo(1); C.reiniciarStats(); const items = C.colocarTodoMundo(w)
+  const S = W.clearanceSamples(w); const G = W.clearanceGridDe(S); let diff = 0; let pos = 0
+  for (let i = 0; i < items.length; i += 7) {
+    const it = items[i]
+    for (const k of [1, 2.5]) {
+      const a = W.prismaLibre(w, it.center, it.r * k, it); const b = W.prismaLibreGlobal(w, it.center, it.r * k, it, S, G)
+      if (a !== b) diff++; if (!b) pos++
+    }
+  }
+  assert.equal(diff, 0); assert.ok(pos > 0)
+  assert.equal(W.PRISMA_STATS.fueraCaja, 0)
+  let cand = 0; let quit = 0; for (const k in C.STATS) { cand += C.STATS[k].cand; quit += C.STATS[k].quitada }
+  // si otra prueba ya colocó este mundo (colocación en caché), los contadores quedan a 0 y no hay nada que medir aquí
+  assert.ok(cand === 0 || quit / cand <= 0.15, `quitadas ${quit}/${cand}`)
+})
