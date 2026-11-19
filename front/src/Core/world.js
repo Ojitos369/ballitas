@@ -1475,6 +1475,7 @@ const PORT_X_SCORE = 0.6 * TK + 0.01 // = CLEAR de placeWay + un pelo: admisible
 const PORT_X_TRIES = 2 // intentos de reparto (world.attempt) en que la regla está activa
 const PORT_WF = {}
 const NO_PORT_X = !!globalThis.process?.env?.NO_PORT_X // diagnóstico (Node)
+const NO_PORT_PODA = !!globalThis.process?.env?.NO_PORT_PODA // diagnóstico (Node): apaga la poda (el mundo debe salir idéntico)
 const portCross = (a, b) => {
   const dx = b.p.x - a.p.x; const dy = b.p.y - a.p.y; const dz = b.p.z - a.p.z; const d2 = dx * dx + dy * dy + dz * dz
   if (d2 > PORT_X_H * PORT_X_H + PORT_X_LAT * PORT_X_LAT) return false
@@ -1484,10 +1485,11 @@ const portCross = (a, b) => {
   }
   return false
 }
-function sampleWayPoints(way, steps = 14) {
+function sampleWayPoints(way, steps = 14, soloPuerto = false) {
   const pts = []
   // arranque (head) o remate (tail) de cada mitad de ruta: ahí las rutas confluyen en la unión
   for (const s of way.segments) {
+    if (soloPuerto && s.kind !== 'salida' && s.kind !== 'llegada') continue // poda de cruces en puerto: solo las rectas de parrilla/meta
     // fino (28): un punto cada ~1.5 u para no saltarse cruces entre tubos; grueso (14): descarte rápido
     const n = steps === 28 ? Math.max(12, Math.ceil(s.length / (1.5 * TK * AK))) : steps
     for (let k = 0; k <= n; k++) {
@@ -1649,6 +1651,18 @@ function placeWay(world, circuit, from, to, placed) {
     return w
   }
   let bestRes = null
+  const portCrossWay = (cand) => {
+    const grid = placed.grid; if (!grid) return false
+    for (const pt of sampleWayPoints(cand, 28, true)) {
+      if (!pt.up) continue
+      const x = Math.floor(pt.p.x / SPATIAL_CELL); const y = Math.floor(pt.p.y / SPATIAL_CELL); const z = Math.floor(pt.p.z / SPATIAL_CELL)
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const bucket = grid.get(cellKey(x + dx, y + dy, z + dz)); if (!bucket) continue
+        for (const q of bucket) if (q.up && inPort(pt, q) && portCross(pt, q)) return true
+      }
+    }
+    return false
+  }
   // Evalúa un candidato y anota el mejor. La malla gruesa sólo sobreestima el huelgo: sirve de cota para saltarse la fina.
   // Cota rápida sin construir el camino: sus tres uniones son puntos por los que pasan todas sus rutas.
   const P = PARAMS[circuit.theme.id]; const hubR = Math.max(P.radius, BRAID_PAD) // envolvente en una punta de tramo (trenza cerrada)
@@ -1672,8 +1686,14 @@ function placeWay(world, circuit, from, to, placed) {
   const tryCand = (theta, bowExtra, salt) => {
     if (hubBound(theta, bowExtra) <= bestScore) { rej('poda:cota_uniones'); return false } // ponytail: cota heurística (minNode puede sesgarla), basta para podar
     // criba gruesa sin búsqueda de fila de rutas (sólo cota para podar); la fina mide el camino exacto que se colocaría
-    const coarse = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt, false), 14, bestScore)
+    const cw = buildWay(world, circuit, from, to, theta, bowExtra, false, salt, false)
+    const coarse = evalCand(cw, 14, bestScore)
     if (!coarse || scoreOf(coarse) <= bestScore) { if (coarse) rejRes('gruesa', coarse); return false }
+    // Poda exacta del cruce en puerto (GEO2, coste): la salida y la llegada no dependen de la fila de rutas, así que el
+    // cruce se mide ya en el candidato grueso con el muestreo fino de esos dos tramos. Si cruza, la medida fina daría
+    // como mucho PORT_X_SCORE: cuando el mejor ya lo iguala no puede ganarle y se ahorra construir el camino con su
+    // búsqueda de fila (era el 1.36 × de la generación: 8.7 s frente a 6.4 s de main en 10 semillas).
+    if (!NO_PORT_PODA && bestScore >= PORT_X_SCORE && (world.attempt || 0) < PORT_X_TRIES && portCrossWay(cw)) { rej('poda:cruce_en_puerto'); return false }
     const res = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt), 28, bestScore)
     if (!res) return false
     const score = scoreOf(res)
