@@ -43,6 +43,37 @@ Separación (`node tools/separacion.mjs 10 369`, gálibo / lateral):
 | ruta:union | 889 / 146 | 892 / 148 |
 | tramo:union | 540 / 6 660 | 429 / 6 646 |
 
+Triángulos de la cinta, todo el mundo (`node tools/diezmo.mjs 1 369`): 6 252 720 → 3 942 792 (**−36.9 %**).
+
+## Pruebas y build
+- `pnpm test`: **81 de 81** (80 anteriores + la de cuñas), con todo el cambio incluido. Una pasada anterior (solo recorte, equipo cargado con dos medidores en paralelo) falló el tope de 3 000 ms de `sim.test.js:446` con 3 276 ms; en la pasada final pasó.
+- `npx vite build` correcto. `git merge main`: «Already up to date» (main no avanzó), así que no hizo falta repetir pruebas.
+
+## Navegador (build de producción, puerto 4301, Edge, `_capturas/geo.mjs`, semilla 369)
+30 s en POV siguiendo la ballita 1 (mismo método que `sep7.mjs`); main = 16a8379 compilado en el scratchpad. Tanda 1: rama primero; tanda 2: main primero (orden invertido a propósito).
+| | FPS | Triángulos | Heap (MB) | Tramos |
+|---|---|---|---|---|
+| Escritorio, tanda 1, rama | 41.4 | 565 mil | 346 | salida, embudo (w13) |
+| Escritorio, tanda 1, main | 53.4 | 834 mil | 433 | salida, horquilla, pantano (w4) |
+| Escritorio, tanda 2, main | 58.8 | 715 mil | 423 | salida, caída, géiser (w10) |
+| Escritorio, tanda 2, rama | 58.3 | 559 mil | 386 | salida (w3) |
+| Móvil, tanda 1, rama | 46.4 | 689 mil | 408 | salida, cañón, portal, caída, espiral (w12) |
+| Móvil, tanda 1, main | 55.7 | 765 mil | 470 | salida, caída, portal, cañón, trampolín (w2) |
+| Móvil, tanda 2, main | 54.9 | 642 mil | 461 | salida, rampa, pantano (w16) |
+| Móvil, tanda 2, rama | 61.7 | 753 mil | 446 | salida, cañón, portal (w15) |
+
+- **FPS: meta ≥ −5 % NO demostrada.** Tanda 1 (rama primero): −22 % escritorio, −17 % móvil. Tanda 2 (rama después): −1 % y +12 %. Medias: escritorio 49.9 / 56.1 (−11 %), móvil 54.1 / 55.3 (−2 %). El que corre primero sale peor en la tanda 1 y había otras piezas trabajando en el equipo; además la ballita 1 toma un camino distinto en cada carga. No distingo «la rama es más lenta al arrancar» de «carga del equipo». Sospecha sin medir: la consulta de vecinos del recorte alarga la precarga de pistas en los huecos libres del primer minuto (`bermaLibres` no se reparte entre cuadros).
+- **Triángulos:** rama 641 mil de media / main de hoy 739 mil (**−13 %**); frente al main anterior de la sesión 7 (687 mil): **−7 %** (meta ≤ +10 %: cumplida en estas tandas, con rutas distintas). **Heap:** 396 / 447 MB (−11 %); frente al main anterior (396 MB): igual.
+- Consola: sin `pageerror` en las 8 corridas.
+- Candado: mi sonda heredó de `sep7.mjs` un tope de 40 esperas (20 min); al agotarse tomó el candado aunque seguía reciente (13:53). Comprobé que en ese momento el único navegador de sonda abierto era el mío. Las dos tandas cerraron su navegador y su preview y borraron el candado.
+
+Capturas en `front/_capturas/geo/` (rama; 16 tomadas, abiertas 4):
+- `desk_apertura2_espiral_w18_a.jpg`: espiral con los 5 carriles en paralelo, cada uno con sus bordillos y la berma verde repartida entre vecinos; ninguna cuña sobre el firme. Las vueltas lejanas se ven poligonales (paso de 7 u, igual que antes).
+- `desk_apertura2_espiral_w18_b.jpg`: calzada única limpia, bordillos continuos, decoración en la berma exterior.
+- `movil_apertura3_rizo_w12_a.jpg`: rizo con los 5 carriles subiendo en paralelo, separados y sin terreno sobre el firme.
+- `movil_apertura1_pantano_w2_a.jpg`: calzada limpia con bordillos; sin cuñas.
+- No abiertas: las otras 12 (6 son de tramos aéreos —caída, erupción, trampolín— que no tienen fila). La meta «4 aperturas en escritorio y 4 en móvil» queda en **1 de escritorio y 2 de móvil vistas**; no se repitió el Camino del Mar de la captura original.
+
 ## No cumplido
 - **Paso 2 (`ways:union` ≤ 3 252): no investigado.** Sigue en 4 389.
 - **Paso 3 (`tramo:libre` gálibo 0 y lateral ≤ 500; `ruta:libre` gálibo 0): no abordado.** Las hélices de radio pequeño siguen igual.

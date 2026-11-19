@@ -1,0 +1,188 @@
+[
+ {
+  "tanda": 1,
+  "nombre": "rama",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 58.8,
+  "tris": 714951,
+  "heapMB": 423,
+  "enViaje": 1,
+  "tramos": "salida>caida>geiser",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "geiser",
+   "way": 10
+  },
+  "errs": [],
+  "tomas": [
+   {
+    "img": "desk_apertura1_trampolin_w10",
+    "pov": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "trampolin",
+     "way": 10
+    }
+   },
+   {
+    "img": "desk_apertura2_espiral_w10",
+    "pov": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 10
+    }
+   },
+   {
+    "img": "desk_apertura3_pantano_w17",
+    "pov": {
+     "id": 2,
+     "phase": "travel",
+     "kind": "pantano",
+     "way": 17
+    }
+   },
+   {
+    "img": "desk_apertura4_sacacorchos_w15",
+    "pov": {
+     "id": 7,
+     "phase": "travel",
+     "kind": "sacacorchos",
+     "way": 15
+    }
+   }
+  ]
+ },
+ {
+  "tanda": 1,
+  "nombre": "rama",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 54.9,
+  "tris": 642052,
+  "heapMB": 461,
+  "enViaje": 1,
+  "tramos": "salida>rampa>pantano",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "pantano",
+   "way": 16
+  },
+  "errs": [],
+  "tomas": [
+   {
+    "img": "movil_apertura1_portal_w5",
+    "pov": {
+     "id": 8,
+     "phase": "travel",
+     "kind": "portal",
+     "way": 5
+    }
+   },
+   {
+    "img": "movil_apertura2_embudo_w5",
+    "pov": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "embudo",
+     "way": 5
+    }
+   },
+   {
+    "img": "movil_apertura3_trampolin_w17",
+    "pov": {
+     "id": 6,
+     "phase": "travel",
+     "kind": "trampolin",
+     "way": 17
+    }
+   },
+   {
+    "img": "movil_apertura4_embudo_w11",
+    "pov": {
+     "id": 7,
+     "phase": "travel",
+     "kind": "embudo",
+     "way": 11
+    }
+   }
+  ]
+ },
+ {
+  "tanda": 1,
+  "nombre": "main",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 58.3,
+  "tris": 559155,
+  "heapMB": 386,
+  "enViaje": 0.85,
+  "tramos": "salida",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "salida",
+   "way": 3
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 1,
+  "nombre": "main",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 61.7,
+  "tris": 752563,
+  "heapMB": 446,
+  "enViaje": 0.99,
+  "tramos": "salida>canon>portal",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "portal",
+   "way": 15
+  },
+  "errs": [],
+  "tomas": []
+ }
+]
