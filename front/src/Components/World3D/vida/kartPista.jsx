@@ -106,8 +106,29 @@ function capStride(arr, max) {
 const kartDataCache = new WeakMap()
 const WAY_KART_RANGE = 620 * TRACK_K
 
+const kartGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+const NUNCA = () => false
+
+/** Avanza las piezas kart de `way` hasta que `agotado()` diga basta; true cuando quedaron en caché. Mismo orden
+ *  y mismas semillas que de un tirón: solo se reparte entre cuadros/huecos libres. */
+export function kartPaso(way, agotado) {
+  if (kartDataCache.has(way)) return true
+  let g = kartGens.get(way)
+  if (!g) { g = kartGen(way); kartGens.set(way, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { kartGens.delete(way); kartDataCache.set(way, r.value); return true }
+    if (agotado()) return false
+  }
+}
+
 function buildKartPistaData(way) {
-  if (kartDataCache.has(way)) return kartDataCache.get(way)
+  kartPaso(way, NUNCA)
+  return kartDataCache.get(way)
+}
+
+// Los `yield` van al final de cada muestra: los marcos compartidos F0/F1/F2 no se usan a medias entre reanudaciones.
+function* kartGen(way) {
   const world = mundoDe(way)
   const local = nuevoLocal()
   const P = pal(way.theme.id)
@@ -188,6 +209,7 @@ function buildKartPistaData(way) {
         tunnelPicked = { seg, lane: lane0, s0 }
         break
       }
+      yield
     }
   }
   if (tunnelPicked) {
@@ -211,8 +233,9 @@ function buildKartPistaData(way) {
   // 4) Pianos (bordillo) en curvas cerradas y barreras en el borde exterior de curvas
   const pianoCands = []
   const barrierCands = []
-  segs.forEach((seg, si) => {
-    if (seg.air) return
+  for (let si = 0; si < segs.length; si++) {
+    const seg = segs[si]
+    if (seg.air) continue
     const L = seg.length
     const lanes = lanesOf(seg)
     for (const lane of lanes) {
@@ -247,9 +270,10 @@ function buildKartPistaData(way) {
           const quat = basisQuat(fUp, f.tangent).multiply(outSide > 0 ? Q_YN90 : Q_Y90)
           barrierCands.push({ k, o, fSide, fUp, E, want, seed, quat, si, laneId: lane.id })
         }
+        yield
       }
     }
-  })
+  }
 
   // Repartir pianos y barreras por todas las curvas cerradas (en grupos contiguos de curva, sin acumular en una sola)
   const pianoPicked = capStride(pianoCands, MAX_PIANOS)
@@ -273,9 +297,7 @@ function buildKartPistaData(way) {
     barreras.push({ pos: p, quat: c.quat, scale: [1.5, 1.0, 0.55], color: barrierTint })
   }
 
-  const out = { arcos, startLines, finishLines, tuneles, bordillos, barreras }
-  kartDataCache.set(way, out)
-  return out
+  return { arcos, startLines, finishLines, tuneles, bordillos, barreras }
 }
 
 function KitInstanced({ nombre, items, receiveShadow = false }) {

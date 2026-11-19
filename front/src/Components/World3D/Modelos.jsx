@@ -174,6 +174,15 @@ function extraerKit(gltf, nombre) {
   return { geometry, material }
 }
 
+// Preparador de piezas (lo registra el precalentado de Paths): compila, sube texturas y enlaza los materiales de la
+// pieza fuera del cuadro. La pieza solo se entrega (caché y useKit) tras prepararse: si no, la capa que ya estaba
+// a la vista la dibujaba con el programa sin enlazar (un cuadro de ~300 ms al llegar el GLB).
+let preparador = null
+export function fijarPreparadorKit(fn) {
+  preparador = fn
+  return () => { if (preparador === fn) preparador = null }
+}
+
 /** Carga asíncrona (sin Suspense) de una pieza de `public/models/kit/<nombre>.glb` con caché de módulo. */
 export function cargarKit(nombre) {
   if (!nombre) return Promise.resolve(null)
@@ -182,9 +191,12 @@ export function cargarKit(nombre) {
   const p = loader.loadAsync(BASE_KIT + nombre + '.glb')
     .then((gltf) => {
       const res = extraerKit(gltf, nombre)
-      kitCache.set(nombre, res)
-      kitPending.delete(nombre)
-      return res
+      const prep = res && preparador ? Promise.resolve(preparador(nombre, res)).catch(() => {}) : null
+      return Promise.resolve(prep).then(() => {
+        kitCache.set(nombre, res)
+        kitPending.delete(nombre)
+        return res
+      })
     })
     .catch((e) => {
       console.warn('kit', nombre, e)
