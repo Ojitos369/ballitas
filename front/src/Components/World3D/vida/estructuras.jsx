@@ -8,6 +8,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe } from '../colisionObjetos.js'
+import { kBorde } from '../InstanceCuller.jsx'
 import { triplanarMaterial } from '../triplanar.js'
 import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
 import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
@@ -547,7 +548,7 @@ export default function Estructuras({ way, detail, focused, time }) {
     if (archMesh) {
       let ac = 0
       const rSq = (overview ? 105 : ARCH_CULL_DIST) ** 2
-      archMesh.userData.recorte = overview ? 105 : ARCH_CULL_DIST // InstanceCuller las hace crecer desde ese borde
+      const rA = overview ? 105 : ARCH_CULL_DIST // los arcos crecen desde ese borde (kBorde)
       for (let s = 0; s < nearData.length && ac < ARCH_CAP; s++) {
         const list = nearData[s].arches
         for (let i = 0; i < list.length && ac < ARCH_CAP; i += (overview ? 2 : 1)) {
@@ -555,7 +556,8 @@ export default function Estructuras({ way, detail, focused, time }) {
           deltaTmp.copy(it.pos).sub(cam)
           const d2 = deltaTmp.lengthSq()
           if (d2 > rSq || (!overview && d2 > 400 && deltaTmp.dot(camFwdTmp) < -16)) continue
-          tmpS.set(it.scale[0], it.scale[1], it.scale[2])
+          const kb = kBorde(d2, rA)
+          tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
           archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
         }
       }
@@ -572,7 +574,7 @@ export default function Estructuras({ way, detail, focused, time }) {
       }
       const stride = overview ? 2 : 1
       const effRangeSq = overview ? 96 * 96 : rangeSq
-      mesh.userData.recorte = Math.sqrt(effRangeSq) // InstanceCuller: la pieza mide 0 en el borde y crece al acercarse
+      const rP = Math.sqrt(effRangeSq) // la pieza mide 0 en el borde y crece al acercarse (kBorde)
       let count = 0
       let tinted = false
       for (let s = 0; s < nearData.length && count < POOL_CAP; s++) {
@@ -583,7 +585,7 @@ export default function Estructuras({ way, detail, focused, time }) {
           deltaTmp.copy(it.pos).sub(cam)
           const d2 = deltaTmp.lengthSq()
           if (d2 > effRangeSq || (!overview && d2 > 400 && deltaTmp.dot(camFwdTmp) < -16)) continue
-          tmpS.setScalar(it.scale)
+          tmpS.setScalar(it.scale * kBorde(d2, rP))
           mesh.setMatrixAt(count, tmpM.compose(it.pos, it.quat, tmpS))
           if (it.color) { mesh.setColorAt(count, it.color); tinted = true }
           else if (tinted) mesh.setColorAt(count, white)

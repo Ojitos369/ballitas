@@ -117,7 +117,7 @@ for (let k = 0; k < nBall; k++) {
       // tamaÃƒÂ±o incluye su factor de borde y de revelado; en main el factor es 1.
       R.bruscas = R.bruscas ?? []
       const prevB = new WeakMap(); let lista = []; let nf = 0
-      const AP = window.__aparece; const V = new T.Vector3(); const Mi = new T.Matrix4(); const Sc = new T.Vector3()
+      const AP = window.__aparece && !window.__aparece.off ? window.__aparece : null; const V = new T.Vector3(); const Mi = new T.Matrix4(); const Sc = new T.Vector3()
       const altoPx = (rad, dist) => { const f = cam0().fov * Math.PI / 180; return (2 * rad) / (2 * Math.max(dist, 0.5) * Math.tan(f / 2)) * d.gl.domElement.clientHeight }
       const cam0 = () => d.camera
       const medir = (o) => {

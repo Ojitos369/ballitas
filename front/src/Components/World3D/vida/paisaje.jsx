@@ -10,6 +10,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32 } from './base.jsx'
+import { kBorde } from '../InstanceCuller.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, bermY, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 
@@ -1033,7 +1034,6 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     spec.layers.forEach((ly, li) => {
       const mesh = meshes[li]
       const r2 = ly.range * ly.range
-      mesh.userData.recorte = ly.range // InstanceCuller: la pieza mide 0 en el borde y crece al acercarse
       let n = 0
       for (const { seg } of overview ? [] : nearRef.current) {
         const sd = segCache.get(seg)
@@ -1044,7 +1044,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
           tmp.d.copy(it.pos).sub(cam)
           const d2 = tmp.d.lengthSq()
           if (d2 > r2 || (d2 > 400 && tmp.d.dot(tmp.f) < -16)) continue
-          tmp.s.setScalar(it.scale)
+          tmp.s.setScalar(it.scale * kBorde(d2, ly.range)) // crece desde el borde de recorte
           mesh.setMatrixAt(n, tmp.m.compose(it.pos, it.quat, tmp.s))
           mesh.setColorAt(n, it.color)
           n++
