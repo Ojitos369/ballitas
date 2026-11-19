@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 const [url, dir, vpName = 'desk', zoomArg = 'espalda', nArg = '6', secsArg = '300'] = process.argv.slice(2)
 mkdirSync(dir, { recursive: true })
 const VPS = {
-  desk: { viewport: { width: 1400, height: 900 } },
+  desk: { viewport: { width: 1280, height: 720 } },
   movil: { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true },
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -30,20 +30,22 @@ try {
   await sleep(1500)
   // muestreador por cuadro
   await p.evaluate(() => {
-    const P = window.__povProbe = { f: [], ev: [], prevPl: null }
-    const tick = () => {
+    const P = window.__povProbe = { f: [], ev: [], prevPl: null, prevT: null }
+    const tick = (rafT) => {
       const c = window.__ballitasDebug?.cam
       const s = c?.selected
       if (s && s.phase !== 'gone') {
         const enPl = s.phase !== 'travel' && Number.isInteger(s.node)
         const pos = (enPl && c.bp ? c.bp : s.pos).clone()
         const dist = c.camera.position.distanceTo(s.pos)
+        c.camera.updateMatrixWorld(true)
         const v = pos.project(c.camera)
         const enCuadro = v.z > -1 && v.z < 1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1
         const t = performance.now()
         if (P.prevPl !== null && P.prevPl !== enPl) P.ev.push({ t, tipo: enPl ? 'entrada' : 'salida', fase: s.phase })
         P.prevPl = enPl
-        P.f.push([t, enPl ? 1 : 0, enCuadro ? 1 : 0, dist < 0.6 ? 1 : 0, c.modo, +dist.toFixed(2), +v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(3), s.phase, +(window.__ballitasPov?.zoom ?? -1).toFixed(2)])
+        P.f.push([t, enPl ? 1 : 0, enCuadro ? 1 : 0, dist < 0.6 ? 1 : 0, c.modo, +dist.toFixed(2), +v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(3), s.phase, +(window.__ballitasPov?.zoom ?? -1).toFixed(2), P.prevT == null ? 0 : +(rafT - P.prevT).toFixed(2)])
+        P.prevT = rafT
       }
       requestAnimationFrame(tick)
     }
@@ -101,9 +103,9 @@ try {
   await sleep(3200) // ventana completa tras el último cambio
   const { f, ev } = await p.evaluate(() => ({ f: window.__povProbe.f, ev: window.__povProbe.ev }))
   const ventana = (e) => f.filter((x) => x[0] >= e.t && x[0] <= e.t + 3000)
-  const pct = (fr, k = (x) => x[2] || x[3]) => fr.length ? +(100 * fr.filter(k).length / fr.length).toFixed(1) : null
-  out.eventos = ev.map((e) => { const fr = ventana(e); return { tipo: e.tipo, fase: e.fase, cuadros: fr.length, enCuadroPct: pct(fr), modos: [...new Set(fr.map((x) => x[4]))].join('>'), fuera: fr.filter((x) => !(x[2] || x[3])).map((x) => [Math.round(x[0] - e.t), x[4], x[9], x[5], x[6], x[7], x[8], x[10]]) } })
-  out.fueraCarretera = f.filter((x) => !x[1] && !(x[2] || x[3])).slice(0, 60).map((x) => [Math.round(x[0]), x[4], x[9], x[5], x[6], x[7], x[8], x[10]])
+  const pct = (fr, k = (x) => x[2]) => fr.length ? +(100 * fr.filter(k).length / fr.length).toFixed(1) : null
+  out.eventos = ev.map((e) => { const fr = ventana(e); return { tipo: e.tipo, fase: e.fase, cuadros: fr.length, enCuadroPct: pct(fr), peorCuadroMs: +Math.max(0, ...fr.map((x) => x[11] || 0)).toFixed(2), modos: [...new Set(fr.map((x) => x[4]))].join('>'), fuera: fr.filter((x) => !x[2]).map((x) => [Math.round(x[0] - e.t), x[4], x[9], x[5], x[6], x[7], x[8], x[10]]) } })
+  out.fueraCarretera = f.filter((x) => !x[1] && !x[2]).slice(0, 60).map((x) => [Math.round(x[0]), x[4], x[9], x[5], x[6], x[7], x[8], x[10]])
   out.total = { cuadros: f.length, enCuadroPct: pct(f), carretera: pct(f.filter((x) => !x[1])), planeta: pct(f.filter((x) => x[1])) }
   const bb = out.burbuja
   out.burbujaResumen = bb.length ? { n: bb.length, altoMaxPct: Math.max(...bb.map((x) => x.altoPct)), solapes: bb.filter((x) => x.solape).length, tapaCentro: bb.filter((x) => x.centro).length } : { n: 0 }

@@ -1293,7 +1293,9 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
       const zv = povZoomView(st.zs)
       povView.body = zv.body
       povView.espalda = zv.espalda
-      targetFov = zv.fov
+      // En móvil vertical el campo horizontal es muy estrecho: abrir un poco la espalda mantiene
+      // a la ballita dentro del cuadro cuando el camino la desplaza lateralmente en una transición.
+      targetFov = zv.fov + (zv.back > 0 && camera.aspect < 0.7 ? 10 : 0)
       targetNear = NEAR_POV
 
       // rumbo filtrado: la mirada no tiembla con el vaivén del carril ni con los mecanismos.
@@ -1386,13 +1388,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
       }
       // en tercera persona la cámara va rígida a la ballita (con retraso se quedaba a metros a alta velocidad); sólo la mirada es lenta
       let kPos = Math.max(1 - Math.exp(-18 * h), Math.min(1, fija * 6))
+      // la cámara acompaña el desplazamiento de la ballita y solo suaviza el resto: a la salida del puerto
+      // (acelera mucho) con el lerp solo se quedaba metros atrás y la ballita salía de cuadro
+      if (povTransPrev.current.hasPrev) camera.position.add(povTransD.copy(selected.pos).sub(povTransPrev.current.p))
       if (trans) {
         // vuelta del planeta a la carretera: la cámara se desliza desde la de seguimiento (salvo salto: corte)
-        if (camera.position.distanceTo(povEye) > POV_TRANS_CORTE) povTrans.current = 1
+        if (camera.position.distanceTo(povEye) > POV_TRANS_CORTE) { povTrans.current = 1; camera.position.copy(povEye) }
         else {
-          // la cámara acompaña el desplazamiento de la ballita (a la salida del puerto acelera mucho) y solo
-          // interpola el resto: no se queda atrás
-          if (povTransPrev.current.hasPrev) camera.position.add(povTransD.copy(selected.pos).sub(povTransPrev.current.p))
           povTrans.current = Math.min(1, povTrans.current + h / POV_TRANS_S)
           const s = povTrans.current * povTrans.current * (3 - 2 * povTrans.current)
           kPos = Math.max(1 - Math.exp(-5 * h), s * s)
@@ -1418,6 +1420,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
         const dn = colCercano(cs, camera.position, CAM_RADIO_MIN, colN)
         if (dn < CAM_RADIO_MIN) camera.position.addScaledVector(colN, CAM_RADIO_MIN - dn)
         colCoste(camExtra.current, performance.now() - t0, t0)
+      }
+      // En la espalda, tras mover y resolver colisiones, reorienta la cámara hacia el cuerpo.
+      // La pose anterior al movimiento dejaba a la ballita fuera del campo durante curvas cerradas.
+      if (zv.back > 0.05 && Math.abs(totalYaw) < 1e-3 && Math.abs(totalPitch) < 1e-3 && Math.abs(totalRoll) < 1e-3) {
+        povMat.lookAt(camera.position, selected.pos, povUp.current)
+        camera.quaternion.setFromRotationMatrix(povMat)
+        povQuat.current.copy(camera.quaternion)
       }
       c.target.copy(povEye).addScaledVector(povFwd, 2)
       hasPrevPos.current = false
