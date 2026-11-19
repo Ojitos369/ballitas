@@ -21,7 +21,7 @@ import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
 import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
-import Precompilado, { enlazarPendientes, precompilar, precompilarSombra } from './Precompilado.jsx'
+import Precompilado, { enlazarPendientes, precompilar, precompilarSombra, primerDibujo } from './Precompilado.jsx'
 import { clampYaw, decayOffset, povZoomView, povView, POV_ZOOM_EYE, rayEnterSphere } from './povLook.js'
 import { getNodeCameraEnvelopes } from './Nodes.jsx'
 import { resolveNodeBiome } from './mundos/biomas.js'
@@ -1408,7 +1408,10 @@ function PostFX({ dofOn, selected, highQuality }) {
         gl.capabilities.getMaxAnisotropy() // consulta síncrona a la GPU (>100 ms con la cola llena); se cachea aquí
         // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
         // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
+        // y el primer dibujo oculto de cada programa (detalle cercano de planetas y ciudades, oculto en el mapa): sin
+        // él, la primera llegada a un nodo pagaba la traducción nativa de ANGLE dentro del cuadro (cuadros de 1-2 s)
         Promise.all([precompilar(gl, scene, camera, scene), precompilarSombra(gl, camera, scene)]).then(() => enlazarPendientes(gl))
+          .then(() => primerDibujo(gl, scene, scene, camera))
         if (window.__enlace) window.__enlace.calentado = Math.round(performance.now())
       }), 1500)
     })
