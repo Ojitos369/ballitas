@@ -149,6 +149,11 @@ const FOLLOW_ROT_W = 3 // suavizado (slerp por tiempo) de la mirada al seguir
 const FOLLOW_ZONA = 0.26 // la ballita puede desviarse hasta este tanto de la media pantalla (tercio central = 0.33)
 const occQuat = new THREE.Quaternion()
 const ENTRADA_S = 1.1 // duración de la transición al empezar a seguir
+const POV_TRANS_S = 0.9 // planeta → carretera: la cámara de seguimiento se desliza al POV en este tiempo
+const POV_TRANS_CORTE = 14 // si la ballita saltó más lejos (puerto, portal), corte en vez de cruzar el mundo
+const povTransQ = new THREE.Quaternion()
+const povTransM = new THREE.Matrix4()
+const povTransD = new THREE.Vector3()
 const rotGoal = new THREE.Quaternion()
 const REL_DEFAULT = { yaw: 0, pitch: 0.42, dist: SEGUIR_DIST }
 const springA = new THREE.Vector3()
@@ -888,7 +893,7 @@ function NebulaDome({ r }) {
 
 
 // Órbita libre siempre. Al seguir, el objetivo se ancla a la ballita y la cámara se desplaza con ella.
-function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
+function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = false, onPlaneta, cine, suspend = false, povControlRef, pointerLockedRef, gyroActiveRef, horizonRef, onCanvasReady }) {
   const followUp = useRef(new THREE.Vector3(0, 1, 0))
   const followRef = useRef({ rel: { ...REL_DEFAULT }, off: new THREE.Vector3(), offV: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, 1), side: new THREE.Vector3(1, 0, 0), lastOff: new THREE.Vector3(), hasLast: false, anchor: new THREE.Vector3(), hasAnchor: false, recenter: false, posUp: new THREE.Vector3(0, 1, 0), hasPosUp: false, stepAvg: 0, seg: null, prevSeg: null, enterT: 0, startTarget: new THREE.Vector3(), startPos: new THREE.Vector3(), quat: new THREE.Quaternion(), userRel: false, uYaw: 0, uPitch: 0, idle: 0, drag: false, clear: 1, clearGoal: 1, glide: new THREE.Vector3(), cambioT: 0, prevEn: false, prevRad: new THREE.Vector3(), hasRad: false, nodeBlend: 0, nodeEnv: null, nodeEnvIdx: null })
   const controls = useRef()
@@ -914,7 +919,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
   const povInit = useRef(false)
   const povDragging = useRef(false)
   const keysRef = useRef(new Set())
-  const povActive = Boolean(pov && selected && selected.phase !== 'gone')
+  // POV único: en carretera, cámara POV; en planeta, la de seguimiento. Los gestos siguen al estado de React
+  // (enPlaneta, avisado por cuadro); la cámara decide en el propio cuadro (sin un cuadro de retraso).
+  const povActive = Boolean(pov && selected && selected.phase !== 'gone' && !enPlaneta)
+  const planetaRef = useRef(false)
+  const povZoomMem = useRef({ sel: null, zoom: null }) // zoom del POV que se recupera al volver a la carretera
+  const povTrans = useRef(1) // 0→1: transición seguimiento→POV al salir de un planeta
+  const povTransPrev = useRef({ p: new THREE.Vector3(), hasPrev: false })
 
   useEffect(() => {
     onCanvasReady?.(gl.domElement)
@@ -1117,7 +1128,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
 
   // Gestos de Seguir (OrbitControls apagado): arrastrar orbita acotado y vuelve solo, rueda/pellizco/+/- zoom con límites,
   // doble clic o R recentran.
-  const followActive = Boolean(follow && !pov && selected && selected.phase !== 'gone' && !suspend)
+  const followActive = Boolean(((follow && !pov) || (pov && enPlaneta)) && selected && selected.phase !== 'gone' && !suspend)
   useEffect(() => {
     if (!followActive) return undefined
     const dom = gl.domElement
@@ -1209,6 +1220,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
     const c = controls.current
     const h = Math.min(dt, 0.1)
     OCC.w = 0
+    // POV único: ¿la ballita está en un planeta? (misma regla que enNodo de Seguir) → cámara de seguimiento
+    const vivo = Boolean(selected && selected.phase !== 'gone')
+    const enPl = Boolean(vivo && selected.phase !== 'travel' && Number.isInteger(selected.node))
+    if (enPl !== planetaRef.current) { planetaRef.current = enPl; onPlaneta?.(enPl) }
+    const povCarretera = Boolean(pov && vivo && !enPl)
+    const seguirAhora = Boolean(vivo && ((follow && !pov) || (pov && enPl)))
+    if (!pov) povZoomMem.current.sel = null
     if (suspend) { vuelta.current = true; return }
     if (vuelta.current) { // al salir del camino: se vuelve a la vista general con transición
       vuelta.current = false; hasPrevPos.current = false; modo.current = 'volviendo'
@@ -1218,19 +1236,27 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
 
     let targetFov = FOV
     let targetNear = NEAR_DEFAULT
-    if (!povActive && typeof window !== 'undefined' && window.__ballitasPov?.active) {
+    if (!povCarretera && typeof window !== 'undefined' && window.__ballitasPov?.active) {
       window.__ballitasPov.active = false
     }
-    if (povActive && selected?.phase !== 'gone') {
+    if (povCarretera) {
       const st = povControlRef.current
       if (modo.current !== 'pov' || ultima.current !== selected) {
+        // al salir de un planeta (venía siguiendo a la misma ballita) se vuelve al POV con transición y con su zoom
+        const desdeSeguir = ultima.current === selected && (modo.current === 'entrando' || modo.current === 'siguiendo')
         modo.current = 'pov'
         ultima.current = selected
         povInit.current = false
         Object.assign(st, createPovState())
+        const mem = povZoomMem.current
+        if (mem.sel === selected && mem.zoom != null) st.zoom = st.zs = mem.zoom
+        povTrans.current = desdeSeguir ? 0 : 1
+        povTransPrev.current.hasPrev = false
         povDragging.current = false
         keysRef.current.clear()
       }
+      povZoomMem.current.sel = selected
+      povZoomMem.current.zoom = st.zoom
 
       if (st.centerRequested) {
         st.centering = true
@@ -1266,7 +1292,10 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       st.zs += (st.zoom - st.zs) * (1 - Math.exp(-9 * h))
       const zv = povZoomView(st.zs)
       povView.body = zv.body
-      targetFov = zv.fov
+      povView.espalda = zv.espalda
+      // En móvil vertical el campo horizontal es muy estrecho: abrir un poco la espalda mantiene
+      // a la ballita dentro del cuadro cuando el camino la desplaza lateralmente en una transición.
+      targetFov = zv.fov + (zv.back > 0 && camera.aspect < 0.7 ? 10 : 0)
       targetNear = NEAR_POV
 
       // rumbo filtrado: la mirada no tiembla con el vaivén del carril ni con los mecanismos.
@@ -1339,7 +1368,15 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         || gyroActiveRef.current
       // cámara semifija a la espalda (más lenta) → rígida en los ojos
       const fija = zv.back / 2.2
-      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : 8 - 4.5 * fija) * h))
+      const trans = povTrans.current < 1
+      if (trans && camera.position.distanceTo(selected.pos) > 0.6) {
+        // mientras se desliza desde el planeta la cámara mira a la ballita (nunca queda fuera de cuadro)
+        // y la mirada pasa a la del POV a medida que llega
+        const s = povTrans.current * povTrans.current * (3 - 2 * povTrans.current)
+        povTransQ.setFromRotationMatrix(povTransM.lookAt(camera.position, selected.pos, povUp.current))
+        povTransQ.slerp(povTargetQuat, s * s)
+        povQuat.current.slerp(povTransQ, 1 - Math.exp(-10 * h))
+      } else povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : trans ? 6 : 8 - 4.5 * fija) * h))
       camera.quaternion.copy(povQuat.current)
 
       const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
@@ -1350,7 +1387,23 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         povEye.addScaledVector(povLookDirTmp, -zv.back).addScaledVector(povUp.current, zv.up)
       }
       // en tercera persona la cámara va rígida a la ballita (con retraso se quedaba a metros a alta velocidad); sólo la mirada es lenta
-      camera.position.lerp(povEye, Math.max(1 - Math.exp(-18 * h), Math.min(1, fija * 6)))
+      let kPos = Math.max(1 - Math.exp(-18 * h), Math.min(1, fija * 6))
+      // la cámara acompaña el desplazamiento de la ballita y solo suaviza el resto: a la salida del puerto
+      // (acelera mucho) con el lerp solo se quedaba metros atrás y la ballita salía de cuadro
+      if (povTransPrev.current.hasPrev) camera.position.add(povTransD.copy(selected.pos).sub(povTransPrev.current.p))
+      if (trans) {
+        // vuelta del planeta a la carretera: la cámara se desliza desde la de seguimiento (salvo salto: corte)
+        if (camera.position.distanceTo(povEye) > POV_TRANS_CORTE) { povTrans.current = 1; camera.position.copy(povEye) }
+        else {
+          povTrans.current = Math.min(1, povTrans.current + h / POV_TRANS_S)
+          const s = povTrans.current * povTrans.current * (3 - 2 * povTrans.current)
+          kPos = Math.max(1 - Math.exp(-5 * h), s * s)
+        }
+      }
+      camera.position.lerp(povEye, kPos)
+      povTransPrev.current.p.copy(selected.pos); povTransPrev.current.hasPrev = true
+      // en la transición hacia los ojos el cuerpo se ve hasta que la cámara llega a él (no desaparece de golpe a lo lejos)
+      if (povTrans.current < 1 && camera.position.distanceTo(selected.pos) > 0.6) povView.body = true
       if (zv.back > 0.05) {
         // a la espalda: la cámara no atraviesa pistas, losas ni pilares (mismo colisionador que Seguir)
         const t0 = performance.now()
@@ -1367,6 +1420,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         const dn = colCercano(cs, camera.position, CAM_RADIO_MIN, colN)
         if (dn < CAM_RADIO_MIN) camera.position.addScaledVector(colN, CAM_RADIO_MIN - dn)
         colCoste(camExtra.current, performance.now() - t0, t0)
+      }
+      // En la espalda, tras mover y resolver colisiones, reorienta la cámara hacia el cuerpo.
+      // La pose anterior al movimiento dejaba a la ballita fuera del campo durante curvas cerradas.
+      if (zv.back > 0.05 && Math.abs(totalYaw) < 1e-3 && Math.abs(totalPitch) < 1e-3 && Math.abs(totalRoll) < 1e-3) {
+        povMat.lookAt(camera.position, selected.pos, povUp.current)
+        camera.quaternion.setFromRotationMatrix(povMat)
+        povQuat.current.copy(camera.quaternion)
       }
       c.target.copy(povEye).addScaledVector(povFwd, 2)
       hasPrevPos.current = false
@@ -1389,7 +1449,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         t.horizon = Boolean(horizonRef.current)
         t.camUp = [povUp.current.x, povUp.current.y, povUp.current.z]
       }
-    } else if (follow && selected && selected.phase !== 'gone') {
+    } else if (seguirAhora) {
       // Seguir: la cámara vive en coordenadas relativas a la ballita (rel: yaw/pitch/dist en su marco suavizado).
       // Si el usuario orbita o hace zoom, se adopta ese ángulo y se conserva; sólo R (o el botón) lo recentra.
       const fs = followRef.current
@@ -1398,6 +1458,16 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       const liftSt = liftOf.get(selected)
       if (liftSt && liftSt.v > 1e-4) bp.addScaledVector(liftSt.dir, liftSt.v)
       if ((modo.current !== 'entrando' && modo.current !== 'siguiendo') || ultima.current !== selected) {
+        // al entrar a un planeta desde el POV en ojos la cámara está dentro de la ballita: la entrada arranca
+        // un poco detrás de ella (si no, el primer cuadro mira hacia atrás y la vista da medio giro)
+        if (modo.current === 'pov' && ultima.current === selected && camera.position.distanceTo(bp) < 1.2 && selected.dir) {
+          camera.position.copy(bp).addScaledVector(selected.dir, -1.2).addScaledVector(selected.up ?? Y_AXIS, 0.45)
+          camera.lookAt(bp)
+        } else if (modo.current === 'pov' && ultima.current === selected) {
+          // la ballita saltó al llegar al planeta y quedó fuera de cuadro: la entrada arranca mirándola
+          povTransD.copy(bp).project(camera)
+          if (povTransD.z > 1 || Math.abs(povTransD.x) > 0.9 || Math.abs(povTransD.y) > 0.9) camera.lookAt(bp)
+        }
         modo.current = 'entrando'
         hasPrevPos.current = false
         fs.hasLast = false
@@ -1936,8 +2006,13 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
   const supOn = supIdx != null && Boolean(sim.world.nodes[supIdx])
   const mundo = useMemo(() => medirMundo(sim.world.nodes), [sim])
   const { center, r } = mundo
-  const povActive = Boolean(pov && selected && selected.phase !== 'gone')
-  const dofOn = Boolean(follow && selected && selected.phase !== 'gone')
+  // Un solo «POV»: en carretera la cámara de la ballita (povActive); dentro de un planeta, la de seguimiento
+  // (followEf). CameraRig decide por cuadro y avisa aquí del cambio para gestos, panel y bocadillos.
+  const [selEnPlaneta, setSelEnPlaneta] = useState(false)
+  const povUnico = Boolean(pov && selected && selected.phase !== 'gone')
+  const povActive = povUnico && !selEnPlaneta
+  const followEf = Boolean(follow || (povUnico && selEnPlaneta))
+  const dofOn = Boolean(followEf && selected && selected.phase !== 'gone')
   const cameraWay = activeWay ?? (vista !== 'camino' && selected && selected.phase !== 'gone' ? (selected.seg?.way ?? selected.way ?? null) : null)
   const focusWay = activeWay?.idx ?? null
   const camino = vista === 'camino'
@@ -1973,7 +2048,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  const cameraOnBall = Boolean((povActive || follow) && selected && selected.phase !== 'gone')
+  const cameraOnBall = Boolean((povUnico || follow) && selected && selected.phase !== 'gone')
   const [dpr, setDpr] = useState(1)
   const [lowPerf, setLowPerf] = useState(false)
   const highQualityFx = cameraOnBall && !lowPerf
@@ -2200,7 +2275,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       // En producción no se lee el log de cada programa: getProgramInfoLog espera la compilación en el primer
       // uso (~130 ms al entrar a Camino) aunque el enlace paralelo (KHR_parallel_shader_compile) siga en curso.
       onCreated={({ gl }) => { gl.debug.checkShaderErrors = import.meta.env.DEV }}
-      onPointerMissed={() => { if (!povActive && !camino) onSelect(null) }}
+      onPointerMissed={() => { if (!povUnico && !camino) onSelect(null) }}
     >
       <PerformanceMonitor
         ms={120}
@@ -2268,8 +2343,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
             b={b}
             sim={sim}
             selected={selected === b}
-            pov={pov && selected === b}
-            follow={follow && selected === b}
+            pov={povActive && selected === b}
+            follow={followEf && selected === b}
             povMode={povActive}
             worldRadius={r}
             onSelect={povActive ? NOOP : onSelect}
@@ -2285,6 +2360,8 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
         selected={selected}
         follow={follow}
         pov={pov}
+        enPlaneta={selEnPlaneta}
+        onPlaneta={setSelEnPlaneta}
         cine={cine}
         suspend={caminoOn || supOn}
         povControlRef={povControlRef}
