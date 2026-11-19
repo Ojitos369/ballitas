@@ -475,20 +475,14 @@ export function braidDelay(seg, hubs = true) {
 // HUB_OPEN, así sus elecciones no cambian y el envolvente queda del lado holgado).
 export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + BRAID_PAD)
 
-// Fracción de apertura con la que los carriles ya tienen aire entre sí: por debajo van planos (sin giro ni relieve).
-const FLAT_E0 = 0.55
-const flatEnv = (e) => smooth01((e - FLAT_E0) / (1 - FLAT_E0))
 // Giro propio (rad) del camino alrededor de su avance; 0 (mod 2π) en las puntas.
 function rollAt(seg, lane, u) {
   if (!lane || lane.roll === 'plano' || !seg._braid) return 0
-  const br = seg._braid
-  // gira sólo cuando ya va separado de sus vecinos (unión coplanar) y donde cabe su hueco de gálibo (rollK)
-  const e = flatEnv(braidEnv(seg, u)) * (br.rollK ? lerpArr(br.rollK, u) : 1)
+  const e = braidEnv(seg, u)
   if (lane.roll === 'cabeza') return Math.PI * e
   if (lane.roll === 'lado_der') return (Math.PI / 2) * e
   if (lane.roll === 'lado_izq') return (-Math.PI / 2) * e
-  if (br.spin === false) return 0
-  const [a, b] = br.full
+  const [a, b] = seg._braid.full
   return (lane.roll === 'tirabuzon' ? 1 : -1) * TAU * smooth01((clamp(u, 0, 1) - a) / (b - a))
 }
 export const laneRoll = (seg, laneId, u) => rollAt(seg, laneOf(seg, laneId), u)
@@ -506,17 +500,14 @@ export function laneAngle(seg, laneId, u) {
 // Altura del relieve del carril (unidades de mundo, de la pared hacia el eje) en `u`. 0 en los extremos.
 export function laneRelief(seg, laneId, u) {
   const arr = seg._relief?.h.get(laneOf(seg, laneId)?.id)
-  // sin relieve propio mientras los carriles van contiguos (calzada común coplanar)
-  const ab = seg._braid?.abre
-  return arr ? lerpArr(arr, u) * (ab ? lerpArr(ab, u) : 1) : 0
+  return arr ? lerpArr(arr, u) : 0
 }
 // Pendiente del relieve: d(altura)/d(longitud de arco).
 export function reliefSlope(seg, laneId, u) {
   const r = seg._relief; const arr = r?.h.get(laneOf(seg, laneId)?.id)
   if (!arr) return 0
   const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * r.n; const i = Math.min(r.n - 1, Math.floor(f))
-  const ab = seg._braid?.abre
-  return (((arr[i + 1] - arr[i]) * r.n) / seg.length) * (ab ? lerpArr(ab, u) : 1)
+  return ((arr[i + 1] - arr[i]) * r.n) / seg.length
 }
 // Curvatura del eje en `u`: k (1/u) y `out`, ángulo (convención de carriles) que apunta hacia fuera de la curva.
 export function segmentCurvature(seg, u) {
@@ -691,15 +682,7 @@ const KICK_DROP = 0.9 * TK // largo (u) de la caída tras la cresta de una rampa
 
 // Curvatura suavizada, peralte y relieve de un tramo de tubo. Usa los marcos ya cacheados.
 function buildSurface(s, rng) {
-  s._relief = null
-  if (s.air) { s._curv = s._bank = null; return }
-  if (!s._bank) buildBank(s)
-  const role = s.route >= 0 ? ROLES[s.route] : 'shared'
-  buildRelief(s, rng, role)
-}
-// Curvatura y peralte del eje (sólo dependen del eje: la cinta plana de carriles los usa antes de construirse).
-function buildBank(s) {
-  s._curv = s._bank = null
+  s._curv = s._bank = s._relief = null
   if (s.air) return
   ensureFrames(s)
   const { n, T, D } = s._fr; const ds = s.length / n
@@ -740,8 +723,6 @@ function buildBank(s) {
   }
   pinMag()
   s._bank = { x: bx, y: by }
-}
-function buildRelief(s, rng, role) {
   // relieve por carril: lomas, badenes, rampa antes de cada mecanismo y saltos en la ruta espectacular
   const R = RELIEF[role]; const L = s.length; const hMax = 0.45 * (s.radius - BALL_R)
   const nr = clamp(Math.ceil(L / (0.5 * TK)), 32, 8000) // tramos largos (mapa grande) siguen muestreados a ~0.5 u (× TK)
@@ -766,8 +747,7 @@ function buildRelief(s, rng, role) {
         if (x > p - up && x <= p) h += kh * smooth01((x - p + up) / up)
         else if (x > p && x < p + KICK_DROP) h += kh * (1 - (x - p) / KICK_DROP)
       }
-      // nulo donde la cinta aún va pegada a sus vecinas (unión coplanar: misma calzada que se ensancha)
-      arr[i] = clamp(h, 0, hMax) * smooth01(x / (6 * TK)) * smooth01((L - x) / (6 * TK)) * flatEnv(braidEnv(s, i / nr))
+      arr[i] = clamp(h, 0, hMax) * smooth01(x / (6 * TK)) * smooth01((L - x) / (6 * TK))
     }
     s._relief.h.set(lane.id, arr)
   }
@@ -814,141 +794,38 @@ function braidCap(C, N, step) {
   return out
 }
 
-// Cota del semiancho de la cinta plana de carriles (u) por muestra del eje. Sólo cuenta lo que pasa en el PLANO de la
-// cinta: otra vuelta del mismo tramo (hélice, rizo) que queda a menos del gálibo a lo largo de la normal obliga a dejarle
-// aire lateral; la curvatura dentro del plano no deja que el carril interior se pliegue. Una vuelta apilada a más del
-// gálibo (hélice) no limita el ancho.
-function ribbonCap(C, SD, UP, N, step, nLanes) {
-  const W0 = ((nLanes - 1) * ROLL_GAP) / 2; const reach = 2 * W0 + 2 * RIBBON_HALF + AIRE_LAT
-  const CELL = Math.max(13 * TK, reach / 2); const grid = new Map(); const key = (x, y, z) => `${x},${y},${z}`
-  for (let i = 0; i <= N; i++) {
-    const k = key(Math.floor(C[i * 3] / CELL), Math.floor(C[i * 3 + 1] / CELL), Math.floor(C[i * 3 + 2] / CELL)); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i)
-  }
-  const cap = new Float32Array(N + 1).fill(Infinity); const minJ = Math.ceil(LANE_SELF / step); const B_OK = GALIBO_H + RIBBON_HALF + TK
-  for (let i = 0; i <= N; i++) {
-    const x = Math.floor(C[i * 3] / CELL); const y = Math.floor(C[i * 3 + 1] / CELL); const z = Math.floor(C[i * 3 + 2] / CELL)
-    const sx = SD[i * 3]; const sy = SD[i * 3 + 1]; const sz = SD[i * 3 + 2]; const ux = UP[i * 3]; const uy = UP[i * 3 + 1]; const uz = UP[i * 3 + 2]
-    let m = Infinity
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-      const b = grid.get(key(x + dx, y + dy, z + dz)); if (!b) continue
-      for (const j of b) {
-        if (Math.abs(j - i) < minJ) continue
-        const ex = C[j * 3] - C[i * 3]; const ey = C[j * 3 + 1] - C[i * 3 + 1]; const ez = C[j * 3 + 2] - C[i * 3 + 2]
-        if (Math.abs(ex * ux + ey * uy + ez * uz) >= B_OK) continue
-        const a = Math.abs(ex * sx + ey * sy + ez * sz); const h = ex * ux + ey * uy + ez * uz
-        // sólo lo que queda al través (a lo largo del avance, a menos de un paso de muestreo y de media cinta)
-        if (ex * ex + ey * ey + ez * ez - a * a - h * h > (step + RIBBON_HALF) ** 2) continue
-        if (a < reach) m = Math.min(m, (a - 2 * RIBBON_HALF - AIRE_LAT) / 2)
-      }
-    }
-    cap[i] = Math.max(0, m)
-  }
-  // curvatura dentro del plano: el borde interior no pasa del 0.9 del radio
-  for (let i = 1; i < N; i++) {
-    const ax = C[i * 3] - C[i * 3 - 3]; const ay = C[i * 3 + 1] - C[i * 3 - 2]; const az = C[i * 3 + 2] - C[i * 3 - 1]
-    const bx = C[i * 3 + 3] - C[i * 3]; const by = C[i * 3 + 4] - C[i * 3 + 1]; const bz = C[i * 3 + 5] - C[i * 3 + 2]
-    const la = Math.hypot(ax, ay, az); const lb = Math.hypot(bx, by, bz)
-    if (la < 1e-6 || lb < 1e-6) continue
-    const kx = bx / lb - ax / la; const ky = by / lb - ay / la; const kz = bz / lb - az / la
-    const kl = Math.abs(kx * SD[i * 3] + ky * SD[i * 3 + 1] + kz * SD[i * 3 + 2]) / ((la + lb) / 2)
-    if (kl > 1e-6) cap[i] = Math.min(cap[i], 0.9 / kl - RIBBON_HALF)
-  }
-  const w = Math.max(2, Math.ceil((6 * TK) / step)); const lo = new Float32Array(N + 1); const out = new Float32Array(N + 1)
-  for (let i = 0; i <= N; i++) { let m = Infinity; for (let j = Math.max(0, i - w); j <= Math.min(N, i + w); j++) m = Math.min(m, cap[j]); lo[i] = Math.max(0, m) }
-  for (let i = 0; i <= N; i++) { let t = 0; let n = 0; for (let j = Math.max(0, i - w); j <= Math.min(N, i + w); j++) { t += Math.min(lo[j], 1e3 * TK); n++ } out[i] = t / n }
-  return out
-}
-
 // Carriles y mecanismos de un way (rng propio: no altera la generación de las rutas).
 function buildBraid(s) {
   const N = clamp(Math.ceil(s.length / (1.5 * TK)), 48, 1200)
   const lanes = s.lanes; const P = lanes.map(() => new Float32Array((N + 1) * 3)); const env = new Float32Array(N + 1)
   const tangent = new THREE.Vector3(); const ref = new THREE.Vector3(); const priorRef = new THREE.Vector3(); const side = new THREE.Vector3(); const center = new THREE.Vector3()
-  const C = new Float32Array((N + 1) * 3); const SD = new Float32Array((N + 1) * 3); const UP = new Float32Array((N + 1) * 3)
-  buildBank(s)
-  const pf = {}
+  const C = new Float32Array((N + 1) * 3); const R = new Float32Array((N + 1) * 3); const S = new Float32Array((N + 1) * 3)
   for (let i = 0; i <= N; i++) {
-    const u = i / N
-    // plano de la cinta: el del eje con el peralte del conjunto (el mismo que el carril plano)
-    const bk = s._bank; let a0 = 0
-    if (bk) { const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y); if (m > 1e-6) a0 = m * Math.sin(angDiff(0, Math.atan2(y, x))) }
-    const f = wallFrame(s, a0, u, 0, pf)
+    const u = i / N; const f = wallFrame(s, 0, u, 0, {})
+    center.copy(f.axis); segmentTangent(s, u, tangent)
+    if (i) ref.copy(priorRef).addScaledVector(tangent, -priorRef.dot(tangent))
+    else ref.crossVectors(tangent, Y)
+    if (ref.lengthSq() < 1e-8) ref.set(1, 0, 0).addScaledVector(tangent, -tangent.x)
+    ref.normalize(); side.crossVectors(tangent, ref).normalize()
+    priorRef.copy(ref)
     env[i] = braidEnv(s, u)
-    f.axis.toArray(C, i * 3); f.side.toArray(SD, i * 3); f.up.toArray(UP, i * 3)
+    center.toArray(C, i * 3); ref.toArray(R, i * 3); side.toArray(S, i * 3)
   }
-  const cap = ribbonCap(C, SD, UP, N, s.length / N, lanes.length)
+  const cap = braidCap(C, N, s.length / N)
   const rad = new Float32Array(N + 1)
-  const [da, db] = braidDelay(s)
-  const full = [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)]
-  // donde la cota (hélices, codos) no deja sitio al hueco de gálibo de un carril girado, el giro se atenúa (rollK):
-  // mejor un carril plano con aire que uno de lado contra su vecino
-  const nL0 = lanes.length; const W0 = ((nL0 - 1) * PITCH_L) / 2; const W1 = ((nL0 - 1) * ROLL_GAP) / 2
-  // Dos estados legales entre carriles vecinos del tramo, nada intermedio sostenido: SEPARADOS (paso >= PITCH_L, aire
-  // lateral completo) o CONTIGUOS (paso PITCH_MIN, borde con borde y coplanares: una calzada ancha de varios carriles).
-  // abre[i] = 1 separados, 0 contiguos; la rampa entre ambos dura entre RAMPA_MIN y RAMPA_MAX de arco y es la misma
-  // para todos los carriles (siguen coplanares). Sólo en la punta (tipK) se juntan sobre el eje, planos y coplanares.
-  const stp = s.length / N; const Hc = ((nL0 - 1) * PITCH_MIN) / 2
-  const abre = new Float32Array(N + 1); let sinSitio = 0
-  for (let i = 0; i <= N; i++) {
-    const cabe = W0 > Hc ? (cap[i] - Hc) / (W0 - Hc) : 1
-    if (cap[i] < Hc) sinSitio++
-    abre[i] = Math.min(env[i], cabe) >= 0.5 ? 1 : 0
-  }
-  const dA = stp / RAMPA_MIN
-  for (let i = 1; i <= N; i++) abre[i] = Math.min(abre[i], abre[i - 1] + dA)
-  for (let i = N - 1; i >= 0; i--) abre[i] = Math.min(abre[i], abre[i + 1] + dA)
-  let nSep = 0; let nCont = 0; let ramp = 0; let rampMax = 0
-  for (let i = 0; i <= N; i++) {
-    if (abre[i] >= 1) { nSep++; ramp = 0 } else if (abre[i] <= 0) { nCont++; ramp = 0 } else { ramp += stp; rampMax = Math.max(rampMax, ramp) }
-  }
-  // sin sitio ni para los contiguos (codo cerrado: el carril interior se plegaría): el haz entero se corre hacia fuera de
-  // la curva lo que falte, en bloque (sigue coplanar y contiguo); desplazamiento suavizado como la cota
-  const shRaw = new Float32Array(N + 1)
-  for (let i = 1; i < N; i++) {
-    const need = Hc + abre[i] * (W0 - Hc) - cap[i]; if (need <= 0) continue
-    const kx = C[i * 3 + 3] - 2 * C[i * 3] + C[i * 3 - 3]; const ky = C[i * 3 + 4] - 2 * C[i * 3 + 1] + C[i * 3 - 2]; const kz = C[i * 3 + 5] - 2 * C[i * 3 + 2] + C[i * 3 - 1]
-    const kd = kx * SD[i * 3] + ky * SD[i * 3 + 1] + kz * SD[i * 3 + 2]
-    shRaw[i] = (kd > 0 ? -1 : 1) * Math.min(need, Hc)
-  }
-  const wsh = Math.max(2, Math.ceil((6 * TK) / stp)); const shift = new Float32Array(N + 1)
-  for (let i = 0; i <= N; i++) { let m = 0; for (let j = Math.max(0, i - wsh); j <= Math.min(N, i + wsh); j++) if (Math.abs(shRaw[j]) > Math.abs(m)) m = shRaw[j]; shift[i] = m }
-  // pendiente lateral acotada (SHIFT_SLOPE): un haz que se corre en oblicuo acerca sus carriles (PITCH_MIN·cos)
-  const dS = SHIFT_SLOPE * stp
-  // con signo: también donde la curva cambia de lado (sacacorchos) el haz cruza despacio en vez de saltar
-  for (let i = 1; i <= N; i++) shift[i] = clamp(shift[i], shift[i - 1] - dS, shift[i - 1] + dS)
-  for (let i = N - 1; i >= 0; i--) shift[i] = clamp(shift[i], shift[i + 1] - dS, shift[i + 1] + dS)
-  for (let i = 1; i <= N; i++) shift[i] = clamp(shift[i], shift[i - 1] - dS, shift[i - 1] + dS)
-  const rk = new Float32Array(N + 1); for (let i = 0; i <= N; i++) rk[i] = Math.min(abre[i], clamp((cap[i] - W0) / (W1 - W0), 0, 1))
-  const wk = Math.max(2, Math.ceil((10 * TK) / (s.length / N))); const rollK = new Float32Array(N + 1)
-  for (let i = 0; i <= N; i++) { let m = 1; for (let j = Math.max(0, i - wk); j <= Math.min(N, i + wk); j++) m = Math.min(m, rk[j]); rollK[i] = m }
-  const [fi0, fi1] = [Math.floor(full[0] * N), Math.ceil(full[1] * N)]; let kMin = 1; for (let i = fi0; i <= fi1; i++) kMin = Math.min(kMin, rollK[i])
-  s._braid = { full, rollK, spin: kMin >= 0.999 } // rollAt los necesita
-  // Cinta plana de carriles: todos en el plano del tramo (peralte del conjunto), uno junto a otro, sin pasar nadie por
-  // encima de nadie. Orden lateral: el central (plano) en medio, los demás alternando a cada lado.
-  const slot = []; for (const l of lanes) { if (l.id % 2) slot.push(l.id); else slot.unshift(l.id) }
-  const nL = slot.length; const xs = new Float64Array(nL); const sig = new Float64Array(nL)
-  const lf = {}; const sd = new THREE.Vector3()
+  for (let i = 0; i <= N; i++) rad[i] = Math.max(0, Math.min(BRAID_A * env[i], cap[i]))
   for (let i = 0; i <= N; i++) {
     const u = i / N
-    sd.fromArray(SD, i * 3)
-    // un carril girado (de lado, de cabeza, tirabuzón) apunta su «arriba» hacia un vecino: ese hueco crece hasta el gálibo
-    for (let k = 0; k < nL; k++) sig[k] = wallFrame(s, laneAngle(s, slot[k], u), u, 0, lf).up.dot(sd)
-    xs[0] = 0
-    for (let k = 1; k < nL; k++) xs[k] = xs[k - 1] + Math.max(PITCH_L, ROLL_GAP * Math.min(1, 1.5 * Math.max(sig[k - 1], -sig[k], 0)))
-    const mid = (xs[0] + xs[nL - 1]) / 2
-    // junto a la punta los carriles contiguos se juntan sobre el eje (una sola calzada que se ensancha, coplanar)
-    const tipK = smooth01(env[i] / TIP_E); const a = smooth01(abre[i]) // sin pendiente al llegar a contiguos ni a separados
-    let half = 0
-    for (let k = 0; k < nL; k++) {
-      const xc = (k - (nL - 1) / 2) * PITCH_MIN
-      const off = tipK * (xc + a * (xs[k] - mid - xc) + shift[i]); half = Math.max(half, Math.abs(off))
-      const id = slot[k]; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
-      dst[i * 3] = C[i * 3] + sd.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + sd.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + sd.z * off
+    for (let j = 0; j < lanes.length; j++) {
+      const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
+      const ringCount = Math.max(1, lanes.length - 1)
+      const theta = id === 0 ? 0 : ((id - 1) * TAU / ringCount + u * TAU)
+      const radius = id === 0 ? 0 : rad[i]
+      for (let k = 0; k < 3; k++) dst[i * 3 + k] = C[i * 3 + k] + R[i * 3 + k] * Math.cos(theta) * radius + S[i * 3 + k] * Math.sin(theta) * radius
     }
-    rad[i] = half
   }
-  s._estado = { sep: nSep, cont: nCont, rampa: rampMax, sinSitio, n: N + 1 }
-  s._braid = { N, P, env, rad, full, rollK, abre, shift, C, spin: s._braid.spin, len: [], curves: [] }
+  const [da, db] = braidDelay(s)
+  s._braid = { N, P, env, rad, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -1013,7 +890,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 9
+export const WORLD_GEN = 8
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1979,9 +1856,6 @@ function judgePairs(S, pairs, hitD) {
         }
         continue
       }
-      // calzada común: carriles contiguos del mismo tramo, borde con borde y coplanares (mismo giro), en cualquier u
-      if (A.seg === B.seg && A !== B && d < hitD && (d >= PITCH_MIN - 0.3 || braidEnv(A.seg, ia / A.n) < TIP_E + 0.05) &&
-        Math.abs(angDiff(laneAngle(A.seg, A.lane, ia / A.n), laneAngle(B.seg, B.lane, ib / B.n))) < 0.2) continue
       slack = Math.min(slack, d - RIBBON_CLEAR)
       if (d < hitD) hits.push(l[k], l[k + 1], d)
     }
@@ -2009,14 +1883,6 @@ export function ribbonHits(world, S = ribbonSamples(world)) {
 export const GALIBO_H = 6 * TK
 export const AIRE_LAT = 2 * RIBBON_HALF
 export const CALZADA_HALF = LANE_W / 2 + RIBBON_CURB
-// Cinta plana de carriles (buildBraid): paso lateral entre ejes vecinos = una cinta + un ancho de cinta de aire (M1);
-// si un carril gira su «arriba» hacia el vecino, el hueco crece hasta dejarle el gálibo completo (M2).
-export const PITCH_L = 2 * RIBBON_HALF + AIRE_LAT + 1.5 * TK
-const ROLL_GAP = GALIBO_H + RIBBON_HALF + 2 * TK
-export const PITCH_MIN = 2 * RIBBON_HALF // carriles contiguos del mismo tramo: borde con borde, sin solape
-const RAMPA_MIN = 4 * TK // rampa separados <-> contiguos (u de arco, entre 3 y 6 TK)
-const SHIFT_SLOPE = 0.15 // pendiente lateral máxima del desplazamiento del haz (cos = 0.989)
-const TIP_E = 0.2 // apertura bajo la cual los contiguos se juntan sobre el eje en la punta
 export const QUILLA = 0.75 // quilla de la cinta bajo el firme (pista.jsx profile: 0.48 · k, k <= 1.55)
 export const COPLANAR_DOT = 0.98
 export const COPLANAR_Y = 0.25
@@ -2068,7 +1934,6 @@ function relate(S, i, j, hA, hB, o) {
   o.dist = Math.hypot(Math.max(gx, 0), Math.max(gy, 0))
   const dot = ux * bux + uy * buy + uz * buz
   o.cop = dot >= COPLANAR_DOT && Math.abs(cy + q) <= COPLANAR_Y
-  o.cx = Math.abs(cx)
   return o
 }
 
@@ -2098,13 +1963,11 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
         const gal = (o1.gal ? 1 : 0) | (o2.gal ? 2 : 0)
         if (!gal && dist >= AIRE_LAT) continue
         const key = ri * 65536 + rj; let l = pairs.get(key); if (!l) pairs.set(key, l = [])
-        // calzada común: carriles contiguos y coplanares del mismo tramo (borde con borde), en cualquier u
-        const cal = ri !== rj && A.seg === ribs[rj].seg && o1.cop && o2.cop && Math.min(o1.cx, o2.cx) >= PITCH_MIN - 0.3 ? 16 : 0
-        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0) | cal, dist)
+        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0), dist)
       }
     }
   }
-  const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', calzada: 0, hits: [], S }
+  const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', hits: [], S }
   const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
   const cap = JOINT_MAX
   for (const l of pairs.values()) {
@@ -2123,7 +1986,6 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
     for (let k = 0; k < l.length; k += 4) {
       const i = l[k]; const j = l[k + 1]; const fl = l[k + 2]; const dist = l[k + 3]
       const ia = i - A.start; const ib = j - B.start
-      if (fl & 16) { out.calzada++; continue }
       const z = zones && zones.find(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)
       if (z) {
         const s = Math.max((z[0] ? A.n - ia : ia) * A.ds, (z[2] ? B.n - ib : ib) * B.ds)
@@ -2283,21 +2145,17 @@ function relaxRibbons(world) {
     const { hits } = judgePairs(S, pairs, hitD)
     left = hits.length / 3
     if (globalThis.__RELAX_DBG) globalThis.__RELAX_DBG.push({ it, left, hits: hits.slice(0, 3000), t: performance.now() - t0, S })
-    // carriles del mismo tramo a la misma altura del avance: su paso lo fija buildBraid (separados o contiguos), la
-    // relajación no los separa uno a uno (cuerpo rígido); otra vuelta del mismo tramo (rizo, hélice) sí empuja el haz
-    const rigid = (a, b) => { const A = ribs[R[a]]; const B = ribs[R[b]]; return A.seg === B.seg && Math.abs((a - A.start) - (b - B.start)) * A.g.ds < RIB_SELF }
-    let deep = 0; for (let q = 2; q < hits.length; q += 3) if (hits[q] < RIBBON_CLEAR + RELAX_DONE && !rigid(hits[q - 2], hits[q - 1])) deep++
+    let deep = 0; for (let q = 2; q < hits.length; q += 3) if (hits[q] < RIBBON_CLEAR + RELAX_DONE) deep++
     if (!deep) break // lo que queda ya pasa la medida con holgura: no se gastan más pasadas en el margen
     F.fill(0); cnt.fill(0)
     for (const g of live) { g.F.fill(0); g.c.fill(0) }
     for (let q = 0; q < hits.length; q += 3) {
       const a = hits[q]; const b = hits[q + 1]; const d = hits[q + 2]; const m = (hitD - d) * RELAX_PUSH
       const A = ribs[R[a]]; const B = ribs[R[b]]
-      if (rigid(a, b)) continue
       let nx = X[a] - X[b]; let ny = Yy[a] - Yy[b]; let nz = Z[a] - Z[b]
       if (d > 1e-3) { nx /= d; ny /= d; nz /= d } else { const o = (a - A.start) * 3; nx = A.O[o]; ny = A.O[o + 1]; nz = A.O[o + 2]; const l = Math.hypot(nx, ny, nz); if (l > 1e-6) { nx /= l; ny /= l; nz /= l } else { nx = 0; ny = 1; nz = 0 } }
       for (const [r, s, sg, o] of [[A, a, 1, b], [B, b, -1, a]]) {
-        if (true) {
+        if (A.seg !== B.seg) {
           // el haz se aparta desde la muestra ajena hacia su propio eje (carril central): si la otra cinta lo atraviesa
           // por dentro, sus carriles empujarían en sentidos opuestos y se anularían
           const g = r.g; const i = s - r.start; const c = g.ribs[0].start + i

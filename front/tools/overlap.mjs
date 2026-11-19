@@ -113,9 +113,7 @@ export async function measureClearance(world, { estructuras = true } = {}) {
     const items = COLOC.colocarTodoMundo(world)
     est = { ...W.structureIntrusions(c.S, items), items: items.length }
   }
-  const es = { sep: 0, cont: 0, rampa: 0, sinSitio: 0, n: 0 }
-  for (const w of world.ways ?? []) for (const s of w.segments ?? []) if (s._estado) { const e = s._estado; es.sep += e.sep; es.cont += e.cont; es.sinSitio += e.sinSitio; es.n += e.n; es.rampa = Math.max(es.rampa, e.rampa) }
-  return { galibo: c.galibo, lateral: c.lateral, union: c.union, unionSep: c.unionSep, unionSepAt: c.unionSepAt, calzada: c.calzada, estados: es, estructuras: est, samples: c.S.X.length }
+  return { galibo: c.galibo, lateral: c.lateral, union: c.union, unionSep: c.unionSep, unionSepAt: c.unionSepAt, estructuras: est, samples: c.S.X.length }
 }
 export const clearanceOk = (m) => !m.galibo.n && !m.lateral.n && !m.union.n && !m.estructuras.n
 
@@ -134,7 +132,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const c = await measureClearance(w)
     for (const k in nw) if (c[k].n) nw[k]++
     wv.galibo = Math.min(wv.galibo, c.galibo.worst); wv.lateral = Math.min(wv.lateral, c.lateral.worst); wv.union = Math.max(wv.union, c.union.worst); wv.estructuras = Math.max(wv.estructuras, c.estructuras.worst); wv.sep = Math.max(wv.sep, c.unionSep)
-    console.log(`seed ${seed} ESPACIO: galibo ${c.galibo.n} (min ${c.galibo.worst.toFixed(1)}u ${c.galibo.at}) | lateral ${c.lateral.n} (min ${c.lateral.worst.toFixed(1)}u ${c.lateral.at}) | union ${c.union.n} (hasta ${c.union.worst.toFixed(1)}u ${c.union.at}) sep ${c.unionSep.toFixed(1)}u | estructuras ${c.estructuras.n}/${c.estructuras.items} (pen ${c.estructuras.worst.toFixed(1)}u ${c.estructuras.at}) | calzada común ${c.calzada} pares | estados trenza: separados ${c.estados.sep}, contiguos ${c.estados.cont}, sin sitio ${c.estados.sinSitio} de ${c.estados.n} (rampa máx ${c.estados.rampa.toFixed(1)}u) | muestras ${c.samples}`)
+    console.log(`seed ${seed} ESPACIO: galibo ${c.galibo.n} (min ${c.galibo.worst.toFixed(1)}u ${c.galibo.at}) | lateral ${c.lateral.n} (min ${c.lateral.worst.toFixed(1)}u ${c.lateral.at}) | union ${c.union.n} (hasta ${c.union.worst.toFixed(1)}u ${c.union.at}) sep ${c.unionSep.toFixed(1)}u | estructuras ${c.estructuras.n}/${c.estructuras.items} (pen ${c.estructuras.worst.toFixed(1)}u ${c.estructuras.at}) | muestras ${c.samples}`)
     const ok = KEYS.every((k) => m[k].slack >= 0) && clearanceOk(c); maxJoint = Math.max(maxJoint, m.cintas.joint); for (const k in maxBy) maxBy[k] = Math.max(maxBy[k], m.cintas.jointBy[k] ?? 0)
     if (!ok) bad++
     for (const k of Object.keys(worst)) { worst[k] = Math.min(worst[k], m[k].gap); worstS[k] = Math.min(worstS[k], m[k].slack) }
