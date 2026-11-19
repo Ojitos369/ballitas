@@ -498,7 +498,7 @@ export function braidEnv(seg, u, hubs = true) {
 // fork/cross/merge, rampa OPEN_RAMP): así las cintas que nacen juntas se separan antes de JOINT_MAX. hubs = false da el
 // envolvente de la búsqueda de huecos (braidRadius, routeExtent), que conserva la apertura tardía de siempre
 // (parrilla/meta + BRAID_OPEN): las elecciones del reparto no cambian y el envolvente queda del lado holgado.
-const NODE_OPEN = 8 * TK
+const NODE_OPEN = (14 + 2) * TK + 16 * TK * 1.52 + (8.5 + 14) * TK * 0.52 // = GRID_LEN + 2·TK + BRAID_OPEN: dentro de la zona de puerto los carriles van fundidos en una sola calzada (antes 8·TK: se abrían entre las salidas vecinas del nodo, a 0.8 u de otro camino)
 const HUB_OPEN = 6 * TK
 const OPEN_RAMP = 11 * TK // (16·TK con el anillo) la fila se abre de lado y tarda más en separar vecinos: rampa más corta
 const FILA_TWIST = 8 * TK
