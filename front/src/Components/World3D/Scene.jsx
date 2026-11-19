@@ -237,8 +237,8 @@ const occSize = new THREE.Vector2()
 // 100-200 mil triángulos por camino) y riberas, estructuras, uniones, kit, edificios y pilares no contaban.
 // Ahora: lista de colisionadores cercanos refrescada cada COL_REFRESH s (mallas y, en InstancedMesh, cada instancia
 // cercana), cada geometría indexada una vez en una rejilla (camColision.js) construida por partes con presupuesto.
-const COL_REFRESH = 1
-const COL_BUILD_MS = 0.3 // presupuesto por cuadro para indexar geometría nueva (el grueso va en tiempo ocioso)
+const COL_REFRESH = 0.5
+const COL_BUILD_MS = 0.6 // presupuesto por cuadro para indexar geometría nueva (el grueso va en tiempo ocioso)
 const COL_PRECARGA = /^(pista|estructuras|puertas)/ // grandes y estáticas: se indexan en tiempo ocioso desde el inicio
 // fuera: marcas del suelo, brillos, fauna animada (cardúmenes) y aros finos que la pista atraviesa (los cubre el disco OCC)
 const COL_EXCLUIR = /^(eventos|anillos|criaturas|kart|paisaje:(bubbles|motes|ray|school)|kit:anillo|uniones:(routeArrow|groundChevron|dividerGlow|portGlow))/
