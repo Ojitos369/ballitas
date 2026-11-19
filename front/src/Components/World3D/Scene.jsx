@@ -278,50 +278,77 @@ function colInstancias(cs, o, t) {
     const geo = o.geometry
     if (!geo.boundingSphere) geo.computeBoundingSphere()
     const n = o.count
-    c = { t, n, mw: o.matrixWorld.clone(), cen: new Float32Array(n * 3), rad: new Float32Array(n) }
+    c = { t, n, mw: o.matrixWorld.clone(), cen: new Float32Array(n * 3), rad: new Float32Array(n), rmax: 0, cubos: new Map() }
     for (let i = 0; i < n; i++) {
       o.getMatrixAt(i, colM4); colM4.premultiply(o.matrixWorld)
       colSph.copy(geo.boundingSphere).applyMatrix4(colM4)
       c.cen[i * 3] = colSph.center.x; c.cen[i * 3 + 1] = colSph.center.y; c.cen[i * 3 + 2] = colSph.center.z; c.rad[i] = colSph.radius
+      if (colSph.radius < 0.45) continue // piezas diminutas: nunca colisionan
+      if (colSph.radius > c.rmax) c.rmax = colSph.radius
+      // cubetas espaciales de COL_CUBO u: el refresco solo mira las cercanas
+      const k = cuboKey(Math.floor(colSph.center.x / COL_CUBO), Math.floor(colSph.center.y / COL_CUBO), Math.floor(colSph.center.z / COL_CUBO))
+      let a = c.cubos.get(k)
+      if (!a) c.cubos.set(k, (a = []))
+      a.push(i)
     }
     cs.inst.set(o, c)
   }
   return c
 }
+const COL_CUBO = 24
+const cuboKey = (x, y, z) => ((x + 4096) * 8192 + (y + 4096)) * 8192 + (z + 4096)
 // Refresca la lista de colisionadores alrededor de `bp` cada COL_REFRESH s. R ya incluye lo que la ballita recorre
 // hasta el siguiente refresco. Las piezas pequeñas pegadas a la ballita (ella misma) no cuentan.
 function colRefrescar(cs, scene, bp, R, t) {
   if (t - cs.t < COL_REFRESH && cs.centro.distanceTo(bp) < R * 0.6) return
   cs.t = t; cs.centro.copy(bp); cs.cols.length = 0
-  scene.traverseVisible((o) => {
-    if (!colSolido(o)) return
+  // la lista de objetos sólidos visibles se rehace cada 3 s; entre medias solo se filtra por distancia
+  if (!cs.objs || t - cs.objsT > 3) {
+    cs.objsT = t; cs.objs = []
+    scene.traverseVisible((o) => { if (colSolido(o)) cs.objs.push(o) })
+  }
+  for (const o of cs.objs) {
+    if (!o.visible || !o.parent) continue
     const geo = o.geometry
     if (!geo.boundingSphere) geo.computeBoundingSphere()
-    if (!geo.boundingSphere) return
+    if (!geo.boundingSphere) continue
     if (o.isInstancedMesh) {
       const ins = colInstancias(cs, o, t)
+      if (!ins.cubos.size) continue
       let g = null
-      for (let i = 0; i < ins.n; i++) {
+      const alc = R + ins.rmax
+      const x0 = Math.floor((bp.x - alc) / COL_CUBO), x1 = Math.floor((bp.x + alc) / COL_CUBO)
+      const y0 = Math.floor((bp.y - alc) / COL_CUBO), y1 = Math.floor((bp.y + alc) / COL_CUBO)
+      const z0 = Math.floor((bp.z - alc) / COL_CUBO), z1 = Math.floor((bp.z + alc) / COL_CUBO)
+      const recorrer = (i) => {
         const r = ins.rad[i]
-        if (r < 0.45) continue
         const dx = ins.cen[i * 3] - bp.x; const dy = ins.cen[i * 3 + 1] - bp.y; const dz = ins.cen[i * 3 + 2] - bp.z
         const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
-        if (d > r + R || (r < 1.5 && d < 1.1)) continue
-        if (!g) { g = colGrid(cs, geo); if (!g) return }
+        if (d > r + R || (r < 1.5 && d < 1.1)) return true
+        if (!g) { g = colGrid(cs, geo); if (!g) return false }
         o.getMatrixAt(i, colM4); colM4.premultiply(o.matrixWorld)
         cs.cols.push({ g, o: null, mw: colM4.clone(), inv: colM4.clone().invert(), s: colM4.getMaxScaleOnAxis(), c: new THREE.Vector3(ins.cen[i * 3], ins.cen[i * 3 + 1], ins.cen[i * 3 + 2]), r })
+        return true
       }
-      return
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > ins.cubos.size) {
+        for (const a of ins.cubos.values()) for (const i of a) if (!recorrer(i)) break
+      } else {
+        fuera: for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) {
+          const a = ins.cubos.get(cuboKey(x, y, z))
+          if (a) for (const i of a) if (!recorrer(i)) break fuera
+        }
+      }
+      continue
     }
     colSph.copy(geo.boundingSphere).applyMatrix4(o.matrixWorld)
     const r = colSph.radius
-    if (r > 15000 || r < 0.5) return
+    if (r > 15000 || r < 0.5) continue
     const d = colSph.center.distanceTo(bp)
-    if (d > r + R || (r < 1.5 && d < 1.1)) return // lejos, o una pieza de la propia ballita
+    if (d > r + R || (r < 1.5 && d < 1.1)) continue // lejos, o una pieza de la propia ballita
     const g = colGrid(cs, geo)
-    if (!g) return
+    if (!g) continue
     cs.cols.push({ g, o, inv: o.matrixWorld.clone().invert(), s: o.matrixWorld.getMaxScaleOnAxis(), c: colSph.center.clone(), r, mw: o.matrixWorld.clone() })
-  })
+  }
 }
 // indexa geometría pendiente sin pasar de `ms` (en el cuadro: poco; en tiempo ocioso: lo que quede libre)
 function colConstruir(cs, ms = COL_BUILD_MS) {
