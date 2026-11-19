@@ -31,7 +31,8 @@ Protocolo: build de producción con preview `4303`; sonda cuadro a cuadro durant
 - `movil_pov_ojos_sin_bocadillo.jpg`: vista de ojos sin bocadillo.
 
 ## Validación
-- `npx vite build`: correcto (advertencia existente de bundle >500 kB).
-- `pnpm test` previo a merge: 76/77; falló solo `sim.test.js:446` por 3389 ms frente al tope de 3000 ms. Repetición aislada: pasó en 2808.7 ms. Se repetirá la suite después de integrar `main`.
-- Hash final: pendiente de la integración y validación pos-merge.
+- `npx vite build` tras merge: correcto (advertencia de bundle >500 kB).
+- `pnpm test` previo a merge: 76/77; falló solo `sim.test.js:446` por 3389 ms frente al tope de 3000 ms. Repetición aislada: pasó en 2808.7 ms. Tras integrar `main`: 78/78 pasaron (268.2 s).
+- Hash del commit de integración validado: `c1eddb8da8bfd511f20cbebdd2359b774ec70281`.
+
 
