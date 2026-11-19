@@ -1005,7 +1005,7 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
   const relPos = useMemo(() => d.dir.clone().multiplyScalar(surfaceR), [d, surfaceR])
   const destScale = useMemo(() => (surfaceR / 7.5) * 0.78, [surfaceR])
   const mats = useMemo(() => ({
-    pad: conFoco(getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })), { lift: ['#a39e92', 0.55], metal: 0.25, plano: 1 }),
+    pad: conFoco(getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })), { lift: [gain ? '#b8a77e' : '#8fae9c', 0.7], metal: 0.15, plano: 1, adoquin: 4.5 }), // plaza adoquinada con el tono del destino (el disco liso llenaba media pantalla)
     icon: conFoco(getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })), { desat: 0.7, oscurece: 0.55 }),
     halo: conFoco(getCachedMat(`dHalo:${color}`, () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })), { desat: 0.7, oscurece: 0.7 }),
     body: conFoco(getCachedMat(`dBody:${bodyColor}`, () => new THREE.MeshStandardMaterial({ color: bodyColor, map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.52, metalness: 0.35 })), { lift: [gain ? '#d2aa52' : '#69a88a', 0.5], metal: 0.3 }),

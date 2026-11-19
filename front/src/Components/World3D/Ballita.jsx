@@ -7,6 +7,7 @@ import { actualizarDialogoVivo, obtenerGlobo } from '../../Core/dialogos.js'
 import { BALL_R, laneFrame, laneRelief, wallFrame } from '../../Core/world.js'
 import { terminalPulse } from './Nodes.jsx'
 import WorldHtml from './WorldHtml.jsx'
+import { nodoEnFoco } from './mundos/foco.js'
 import {
   buildSkin,
   createClayBodyMaterial,
@@ -133,6 +134,8 @@ function getSharedMats() {
 }
 
 const BUBBLE_WRAP = { pointerEvents: 'none' }
+// dentro de un planeta (seguida en fase de planeta) solo habla la seguida: los bocadillos ajenos tapaban a otras ballitas
+const OP_OTRA = { get value() { return nodoEnFoco() >= 0 ? 0 : 1 } }
 
 export function bodyColor(g) {
   return new THREE.Color().setHSL(g.hue, 0.75, 0.6)
@@ -836,7 +839,7 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
       {/* solo el diálogo, encima de la cabeza: nombre y ánimo ya están en la ficha y tapaban a la ballita */}
       {talking && ((selected && follow) || nearCam) && !pov && (
         // Tamaño fijo en pantalla (≥ 11 px reales, máx. 2 líneas): con distanceFactor quedaba una píldora de 8 px ilegible.
-        <WorldHtml position={[0, r * 2.4 + 0.35, 0]} center zIndexRange={[20, 10]} style={BUBBLE_WRAP}>
+        <WorldHtml position={[0, 0, 0]} sobre={r * 1.05} center zIndexRange={[20, 10]} style={BUBBLE_WRAP} className="globo-wrap" opacity={selected ? undefined : OP_OTRA}>
           <div className={`bubble globo${selected ? '' : ' otra'}`} style={{ borderColor: color.getStyle() }}>
             <span>{liveThought.emoji} {liveThought.text}</span>
           </div>

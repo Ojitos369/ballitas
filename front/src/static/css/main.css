@@ -223,4 +223,9 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 
 /* Bocadillo legible: tamaño fijo en pantalla, máximo dos líneas */
 .bubble.globo { display: block; max-width: 190px; width: max-content; padding: 3px 9px; border-width: 2px; border-radius: 10px; font-size: 12px; line-height: 1.3; white-space: normal; text-align: center; opacity: 0.94; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* pico pequeño hacia la ballita (WorldHtml `sobre` pone data-lado: arr = bocadillo encima, izq/der = a un lado) */
+.globo-wrap::after { content: ''; position: absolute; width: 8px; height: 8px; background: #fff; transform: rotate(45deg); opacity: 0.94; display: none; }
+[data-lado='arr'] > .globo-wrap::after { display: block; left: calc(50% - 4px); bottom: -4px; }
+[data-lado='izq'] > .globo-wrap::after { display: block; left: -4px; top: calc(50% - 4px); }
+[data-lado='der'] > .globo-wrap::after { display: block; right: -4px; top: calc(50% - 4px); }
 .bubble.globo.otra { font-size: 11px; max-width: 150px; opacity: 0.8; }

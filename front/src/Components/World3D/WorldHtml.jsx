@@ -22,6 +22,7 @@ export default function WorldHtml({
   zIndexRange = [16777271, 0],
   opacity, // opcional: { value } leído cada cuadro (fundidos sin renders de React); < 0.02 la oculta
   clamp, // opcional: [margenX, margenArriba, margenAbajo] en px; mantiene el rótulo dentro de la pantalla
+  sobre, // opcional: radio (unidades locales) del objeto en el ancla; el contenido se coloca por encima de su disco proyectado
   style,
   className,
   children,
@@ -109,6 +110,28 @@ export default function WorldHtml({
       const borde = ys > y + 1 ? 'arr' : ys < y - 1 ? 'aba' : xs > x + 1 ? 'izq' : xs < x - 1 ? 'der' : ''
       if (el.dataset.borde !== borde) el.dataset.borde = borde
       x = xs; y = ys
+    }
+
+    if (sobre) {
+      // bocadillo anclado por encima de la cabeza EN PÍXELES: borde inferior ≥ 6 px sobre el disco proyectado
+      // de la ballita (radio `sobre` en unidades locales); si no cabe arriba, a un lado. Nunca encima de la cara.
+      const hijo = el.firstElementChild
+      const t = performance.now()
+      if (hijo && (!medida.current.t || t - medida.current.t > 500)) medida.current = { t, w: hijo.offsetWidth, h: hijo.offsetHeight }
+      const { w, h } = medida.current
+      const vFov = (camera.fov * Math.PI) / 180
+      const rPx = (sobre * obj.matrixWorld.getMaxScaleOnAxis()) / Math.max(dist * Math.tan(vFov / 2), 1e-4) * size.height * 0.5
+      const techo = 64 // HUD superior
+      let lado = 'arr'
+      let yy = y - rPx - 6 - h / 2 - 5 // 5 px del pico
+      if (yy - h / 2 < techo) {
+        lado = x < size.width / 2 ? 'izq' : 'der'
+        yy = Math.max(techo + h / 2, y - rPx * 0.6)
+        x += (lado === 'izq' ? 1 : -1) * (rPx + 10 + w / 2)
+      }
+      x = Math.min(size.width - 6 - w / 2, Math.max(6 + w / 2, x))
+      y = yy
+      if (el.dataset.lado !== lado) el.dataset.lado = lado
     }
 
     let scale = 1

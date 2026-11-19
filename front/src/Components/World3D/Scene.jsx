@@ -110,15 +110,17 @@ const nodeEnvC = new THREE.Vector3()
 const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
 const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
 const NODE_ARM_MIN = 2.2 // brazo mínimo real en un planeta (más cerca, la ballita o una pieza llenaba la pantalla)
-const NODE_PITCH_VERT = 0.3 // cabeceo extra en planeta con pantalla vertical (~50° sobre el plano tangente en total)
+const NODE_PITCH_VERT = -0.22 // cabeceo extra en planeta con pantalla vertical: tres cuartos (~19° en total), deja ver horizonte y ciudad; lo que se interpone se disuelve por trama (foco.js)
 // en planeta la ballita ocupaba ~20 % del alto en vertical: el campo de visión se abre (la colisión no lo recorta)
 // y el brazo crece un poco, para que entren la calle por delante y el destino
 const NODE_FOV_VERT = 16 // grados extra de FOV en planeta con pantalla vertical
 const NODE_FOV_HORIZ = 6 // y con pantalla horizontal
-const NODE_DIST_K = 0.75 // brazo extra (fracción) en planeta (con +40 % en escritorio la ballita ocupaba 20-30 % del alto)
-const NODE_PITCH_HORIZ = 0.22 // cabeceo extra en planeta con pantalla horizontal (baja, los edificios del destino llenaban el cuadro)
-const NODE_DIST_K_VERT = 0.45 // y extra adicional con pantalla vertical (medido: con +30 % la ballita aún ocupaba ~20 % del alto)
-const NODE_SUBIR = 0.75// cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
+const NODE_DIST_K = 2.2 // (S5: ballita al 8-12 % del alto en escritorio; antes 0.75 → 16-26 %) brazo extra (fracción) en planeta (con +40 % en escritorio la ballita ocupaba 20-30 % del alto)
+const NODE_PITCH_HORIZ = -0.08 // cabeceo extra en planeta con pantalla horizontal (tres cuartos, ~27° en total)
+const NODE_DIST_K_VERT = -1.0 // (S5: el vertical queda en 1 + 1.2 como antes) y extra adicional con pantalla vertical (medido: con +30 % la ballita aún ocupaba ~20 % del alto)
+const NODE_DISUELVE = true // en planeta las estructuras entre cámara y ballita se disuelven (foco.js): no acortan el brazo ni suben la cámara
+const NODE_MIRA_ALTO = 0.45 // mirada elevada (fracción del brazo) en planeta con pantalla vertical
+const NODE_SUBIR = 0.18 // cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -1533,7 +1535,8 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       if (fs.glide.lengthSq() < 1e-4) fs.glide.set(0, 0, 0)
       // la cámara mira un poco por delante de la ballita (hacia donde va el camino), no a ella
       lookAhead.copy(fs.anchor).addScaledVector(fs.fwd, fs.rel.dist * (selected.phase === 'travel' ? 0.5 : 0.25))
-      if (enNodo) lookAhead.addScaledVector(nodeRadial, 0.5 * fs.nodeBlend)
+      // en planeta la mirada va por encima de la ballita: queda hacia el 60 % del alto y el tercio superior muestra horizonte y ciudad
+      if (enNodo) lookAhead.addScaledVector(nodeRadial, (0.5 + NODE_MIRA_ALTO * fs.rel.dist * (camExtra.current.vert ?? 0)) * fs.nodeBlend)
       // más campo de visión a más velocidad (sensación de carrera)
       targetFov = FOV + THREE.MathUtils.clamp(vel * (cine ? 0.6 : 0.45), 0, cine ? 14 : 9)
 
@@ -1608,7 +1611,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
           tMin = Math.min(tMin, ce.tLadoA ?? 1, ce.tLadoB ?? 1)
           if (tMin < 1) fs.clearGoal = THREE.MathUtils.clamp((tMin * rayLength - 0.4) / rayLength, Math.min(1, (enNodo ? NODE_ARM_MIN : 0.35) / rayLength), 1)
         }
-        if (enNodo && fs.nodeEnv && rayLength > 0.8) {
+        if (enNodo && fs.nodeEnv && rayLength > 0.8 && !NODE_DISUELVE) {
           // estructuras del planeta: si una se interpone, el brazo se acorta (sin saltar por encima); la que contiene a la ballita no cuenta
           let tMin = 1
           for (const env of fs.nodeEnv.envelopes) {

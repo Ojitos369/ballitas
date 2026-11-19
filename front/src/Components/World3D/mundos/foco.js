@@ -46,6 +46,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
   if (!mat || mat.userData._foco) return mat
   mat.userData._foco = true
   const planoU = { value: plano }
+  const adqU = { value: typeof adoquin === 'number' ? adoquin : 1.7 } // piezas por unidad de mundo
   const liftU = { value: new THREE.Vector4() }
   if (lift) {
     const c = new THREE.Color(lift[0])
@@ -55,7 +56,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
   const params = { value: new THREE.Vector4(desat, oscurece, metal, mat.isMeshStandardMaterial ? relleno : 0) }
   const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
   mat.onBeforeCompile = encadenar(mat.onBeforeCompile, (sh) => {
-    Object.assign(sh.uniforms, { uFocoK: FOCO.k, uFocoPos: FOCO.pos, uFocoDest: FOCO.dest, uFocoR: FOCO.r, uFocoOjo: FOCO.ojo, uFocoLift: liftU, uFocoPar: params, uFocoPlano: planoU })
+    Object.assign(sh.uniforms, { uFocoK: FOCO.k, uFocoPos: FOCO.pos, uFocoDest: FOCO.dest, uFocoR: FOCO.r, uFocoOjo: FOCO.ojo, uFocoLift: liftU, uFocoPar: params, uFocoPlano: planoU, uFocoAdq: adqU })
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vFocoW;')
       .replace('#include <project_vertex>', `#include <project_vertex>
@@ -75,6 +76,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
         uniform vec4 uFocoPar;
         uniform vec3 uFocoOjo;
         uniform float uFocoPlano;
+        uniform float uFocoAdq;
         float _focoIgn(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }`)
       // Visión despejada: lo que queda en el cono cámara → ballita se disuelve por trama (edificio del
       // destino en la estancia, casco del puerto, pilares). Solo con k > 0.
@@ -94,7 +96,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
         diffuseColor.rgb = mix(diffuseColor.rgb, uFocoLift.rgb, uFocoLift.a * uFocoK);
         ${adoquin ? `if (uFocoK > 0.001) {
           // adoquinado a escala de ballita en coordenadas de mundo: tono por pieza (±10 %) y junta oscura
-          vec3 _q = vFocoW * 1.7;
+          vec3 _q = vFocoW * uFocoAdq;
           vec3 _c = floor(_q);
           vec3 _f = abs(fract(_q) - 0.5);
           float _j = smoothstep(0.44, 0.5, max(_f.x, max(_f.y, _f.z))) * 0.6;
