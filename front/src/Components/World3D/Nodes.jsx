@@ -1244,6 +1244,10 @@ function Planet({ node, world, tex }) {
     vertexColors: true,
     roughness: 0.9,
     metalness: 0.0,
+    // Luz propia: rasante y en la cara nocturna la calle salía negra (medido en r2 y calle_ab2). Solo se ve
+    // con foco (k > 0.02), así que el mapa y la vista camino no cambian.
+    emissive: new THREE.Color(biome.roadColor).lerp(new THREE.Color('#d6d0c3'), 0.72),
+    emissiveIntensity: 0.32,
   }), { desat: 0.4, oscurece: 0.3, xray: false, relleno: 0.85 }), [biome.roadColor])
   const lineMat = useMemo(() => new THREE.MeshStandardMaterial({
     color: '#2a3048',
