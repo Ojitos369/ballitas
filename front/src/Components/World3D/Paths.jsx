@@ -13,8 +13,9 @@ import { precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
 import { fijarPreparadorKit } from './Modelos.jsx'
 import Precompilado, { enlazarPendientes, precompilar, primerDibujo } from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
-import Neon from './Neon.jsx'
-import Fauna from './Fauna.jsx'
+import Neon, { makeNeonMaterial } from './Neon.jsx'
+import Fauna, { faunaWarmup } from './Fauna.jsx'
+import { criaturasWarmup } from './vida/criaturas.jsx'
 import { registrarMundo } from './colisionObjetos.js'
 import Ecosistema, { ecoMaterial, withObjLight } from './Ecosistema.jsx'
 
@@ -1390,7 +1391,10 @@ function Way({ way, world = null, focused, detailActive = false, nearActive = fa
 function Precalentar() {
   const { group, mats } = useMemo(() => {
     const mats = createWayMaterials('neon', { value: 1 }, { value: 1 })
-    return { mats, group: pistaWarmup([mats.extMetal, mats.extFlora, mats.extFloraGlow, mats.extRuins, ecoMaterial(SHARED_TIME)]) }
+    // neón, fauna y criaturas: sus programas propios se compilaban al entrar (medido con el diff de claves)
+    const vivos = [makeNeonMaterial(SHARED_TIME, false), makeNeonMaterial(SHARED_TIME, true), makeNeonMaterial(SHARED_TIME, true, true), ...faunaWarmup(SHARED_TIME)]
+    mats.__vivos = vivos
+    return { mats, group: pistaWarmup([mats.extMetal, mats.extFlora, mats.extFloraGlow, mats.extRuins, ecoMaterial(SHARED_TIME), ...vivos, ...criaturasWarmup()]) }
   }, [])
   useEffect(() => () => disposeMats(mats), [mats])
   // Piezas del kit GLB (kart, decoración, eventos, anillos): cada una trae sus materiales y texturas. Al llegar

@@ -454,7 +454,11 @@ export function pistaWarmup(extra = []) {
   tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   tiny.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
+  // Tres variantes por material (malla simple, instanciada sin y con color por instancia): cada una es otra clave de
+  // programa, y la vida usa las tres según la capa (medido: anillos, criaturas y estructuras compilaban al entrar).
   for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...estructurasWarmup(), ...paisajeWarmup(), ...extra]) {
+    g.add(new THREE.Mesh(tiny, mat))
+    g.add(new THREE.InstancedMesh(tiny, mat, 1))
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
