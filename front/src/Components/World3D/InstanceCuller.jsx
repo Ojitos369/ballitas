@@ -60,7 +60,6 @@ export default function InstanceCuller({ active, radius = 60 }) {
     const restore = []
     const R2 = radius * radius
     const revela = new Map() // malla -> t0 (solo mientras crece)
-    const visto = new WeakMap() // malla -> visible en el cuadro anterior
     let tAcc = 0
 
     const collect = () => {
@@ -73,10 +72,10 @@ export default function InstanceCuller({ active, radius = 60 }) {
     // Revelado: detecta el paso de oculta/vacía a dibujarse (una lectura de la cadena de padres por malla)
     const vigila = (mesh, now) => {
       const vis = mesh.count > 0 && !!mesh.parent && visible(mesh)
-      const antes = visto.get(mesh)
-      visto.set(mesh, vis)
+      const u = mesh.userData; const antes = u.__vis
+      u.__vis = vis // en la malla: más barato que un WeakMap por cuadro
       if (vis && antes === false) revela.set(mesh, now)
-      else if (!vis && revela.has(mesh)) revela.delete(mesh)
+      else if (!vis && revela.size && revela.has(mesh)) revela.delete(mesh)
       return vis
     }
 
@@ -107,10 +106,11 @@ export default function InstanceCuller({ active, radius = 60 }) {
       else if (revela.size) { for (const mesh of revela.keys()) if (mesh.userData.noCull) subeTodo(mesh); revela.clear() }
       for (const mesh of list) {
         const n = mesh.count
-        let rev = 1
+        let rev = 1; let vis = true
         if (on) {
-          if (!vigila(mesh, now) && n >= MIN_COUNT) continue
-          const r0 = revela.get(mesh)
+          vis = vigila(mesh, now)
+          if (!vis && n >= MIN_COUNT) continue
+          const r0 = revela.size ? revela.get(mesh) : undefined
           if (r0 !== undefined) { rev = Math.min(1, (now - r0) / REVELA_MS); if (rev >= 1) revela.delete(mesh) }
         }
         if (n < MIN_COUNT) {
@@ -120,7 +120,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
           else if (s?.revSitio) { subeTodo(mesh); s.revSitio = false }
           continue
         }
-        if (!mesh.parent || !visible(mesh)) continue
+        if (!on && (!mesh.parent || !visible(mesh))) continue
         const attrs = instAttrs(mesh)
         let s = state.get(mesh)
         if (!s) { s = { vers: [], n: -1, cam: [Infinity, 0, 0], near: 0, idx: null, backup: [], gpuCompact: false }; state.set(mesh, s) }
