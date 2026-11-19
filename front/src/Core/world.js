@@ -1472,6 +1472,7 @@ const PORT_X_LAT = 2 * RIBBON_HALF + 1.5 * TK * AK / 2 // dos semicintas + medio
 const PORT_X_MIN = 1.5 * TK // por debajo las dos calzadas van a la par (no una sobre otra)
 const PORT_X_H = 6 * TK + 0.75 + 1 * TK // GALIBO_H + QUILLA + margen
 const PORT_X_SCORE = 0.6 * TK + 0.01 // = CLEAR de placeWay + un pelo: admisible, pero por debajo de TARGET_LOW
+const PORT_X_TRIES = 2 // intentos de reparto (world.attempt) en que la regla está activa
 const PORT_WF = {}
 const NO_PORT_X = !!globalThis.process?.env?.NO_PORT_X // diagnóstico (Node)
 const portCross = (a, b) => {
@@ -1617,7 +1618,9 @@ function placeWay(world, circuit, from, to, placed) {
             // ...salvo que una calzada pase por encima de la otra a menos del gálibo (GEO2): el candidato queda con la
             // holgura mínima admisible (CLEAR): cualquier otro sin cruce le gana y solo se toma si no hay ninguno (como
             // rechazo duro dejaba mundos sin hueco: la vuelta de un circuito cruza a veces su ida en todos los candidatos)
-            if (pt.up && q.up && minTube > PORT_X_SCORE && portCross(pt, q)) {
+            // (solo en los PORT_X_TRIES primeros intentos de reparto: en semillas difíciles la regla agotaba los huecos
+            // y el mundo quedaba fallido, semilla 27; los reintentos la sueltan y se comportan como antes)
+            if (pt.up && q.up && (world.attempt || 0) < PORT_X_TRIES && minTube > PORT_X_SCORE && portCross(pt, q)) {
               rej('cruce_en_puerto'); minTube = PORT_X_SCORE; minAt = ['puerto:' + pt.kind, q.kind, pt.c === q.c]
               if (minTube <= floor) return { minTube, minNode, minHub, minAt }
             }
