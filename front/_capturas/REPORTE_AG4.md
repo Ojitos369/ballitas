@@ -35,3 +35,26 @@
 - VEREDICTO: la rama EMPEORA en escritorio (−20 % FPS, +42 % pops). Causa más probable: con MAX_ACTIVE_VIDA_PRE 4, cada camino montado se añade también a `nearDesired` (Paths.jsx, «for (const id of nextMounted) nearDesired.add(id)»), así que monta y revela su exterior cercano y su Ecosistema → «oculto:otro» pasa de ~122 a 297 y sube el coste de dibujo; además, el techo de 8 ms por cuadro en la pista. 1e8a81a vuelve a 3 y a 5 ms, SIN MEDIR (no quedó tiempo). NO INTEGRAR sin repetir esta tanda.
 - M1 no se alcanzó: una camino completo cuesta ≈ 5.5 s de CPU (estructuras ≈ 2.2 s y paisaje ≈ 1.5 s); con unos 180-400 ms/s de presupuesto sin bajar los FPS, completar un camino lleva 15-30 s, y las entradas que se miden en 3 min caen casi todas en el arranque en frío (20-27 s tras cargar).
 - No medidos por falta de tiempo: móvil, memoria 300 s y estable.mjs.
+
+## Sesión 2 (01:30-02:25)
+- e38cba7: revertidos a main Paths.jsx, Scene.jsx, vida/base.jsx, estructuras.jsx, paisaje.jsx y precarga.js (montaje y presupuesto de 438191a, 7e81ef7, 3c6b071, 1e8a81a). Sin medir de nuevo antes: la tanda 3 ya daba -20 % FPS y 1e8a81a solo cambiaba dos constantes. Quedan sim.probWays (con prueba) y las sondas.
+- d694eed: aparición gradual SIN programas nuevos: InstanceCuller escala cada instancia en la copia compactada que ya hacía (columnas 0-2 de la matriz × k; la traslación no cambia; sombra y profundidad usan la misma matriz). k = 1 − smoothstep(0.8·D, D, dist) con D = 60 para lo que recorta él y `userData.recorte` para lo que recorta su dueño (estructuras: MED/TALL/ARCH, paisaje: `ly.range`); y además ×(0→1 en 0.4 s) cuando una InstancedMesh pasa de oculta o vacía a dibujarse (LOD, capas que se revelan, montados). Coste: solo las mallas en rampa o con instancias en la franja del borde se recopian.
+- Sonda recorrido.mjs: `bruscas_min` (de no dibujarse a > 14 px de alto en un solo cuadro a < 60 u, cada cuadro, con el factor real de borde y revelado) y `bruscasPiezas_min` (sin las mallas de radio > 60 u: pista, tubos y escena entera que reaparecen al salir del planeta).
+- Paso 4: `placeSegArchesAndProps` ya está troceado en main (generador `placeSegGen` con `yield` por muestra); no se tocó. Paso 5 (orden con probWays en Paths) no se hizo: `prefetchWays` sale de Scene.jsx (prohibido) y Paths no conoce la ballita.
+
+### Tanda final, misma tanda (02:00-02:19), recorrido 2 × 60 s
+| métrica | main esc | rama esc | main móvil | rama móvil |
+|---|---|---|---|---|
+| fps / p1 | 53.2 / 26.7 | 53.8 / 23.8 | 89.2 / 44.4 | 71.0 / 35.8 |
+| cuadros > 100 ms /min | 2.5 | 3 | 1.5 | 3 |
+| max_post (ms) | 77 | 79 | 60 | 199 |
+| pops antiguos /min | 256 | 207 | 281 | 236.5 |
+| bruscas /min | 84 | 27.5 | 76 | 32 |
+| bruscas de piezas (radio ≤ 60) /min | 55 | 3 | 47.5 | 2 |
+| entrada ×2 peor cuadro (ms) | 170 / 43 | 132 / 46 | - | - |
+| tris / calls al entrar | 675-891 k / 231-258 | 554-796 k / 157-272 | - | - |
+- Tanda anterior de la sesión (01:42-01:48, escritorio): main 66 fps, bruscas 78; rama 62.2 fps, bruscas 41. El FPS de escritorio varía ±8 entre corridas de la misma rama.
+- Las bruscas que quedan son mallas no instanciadas enormes (MeshBasic/MeshPhysical sin nombre, pista, tubos; px > 1400, cámara dentro de su esfera) que reaparecen en el cuadro en que la ballita sale del planeta (fase toPort): es el cambio de vista planeta → pista (Scene.jsx / mundos, fuera de mis archivos).
+- Capturas (cerca.mjs, rama): front/_capturas/s2_cerca/c0_t2.jpg y c1_t3.jpg abiertas: pista, arcos, corales, peces y burbujas completos; ninguna pieza encogida cerca de la cámara; 980 k-1.07 M triángulos.
+- VEREDICTO: piezas bruscas -95 % en ambos; escritorio igual en FPS; MÓVIL -20 % FPS y peor cuadro 199 ms en una sola corrida: NO INTEGRAR sin repetir móvil (si se repite, perfilar el coste de las rampas de revelado en InstanceCuller: con 23-57 k instancias, recopiar las mallas que se revelan a la vez puede costar).
+- No medidos por tiempo: estable.mjs, antelacion.mjs (M1 redefinida), memoria 300 s.
