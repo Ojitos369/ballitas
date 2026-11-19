@@ -2,11 +2,12 @@
 // carril (no en todo el ancho) con marcas de carril, la pieza del kit de su tipo, su trayectoria (puntos de la parábola,
 // caída o laberinto, haz del elevador, par de portales enlazados) y el anillo de aterrizaje en el camino destino.
 // Todo instanciado por camino, geometrías y materiales en caché de módulo, un solo useFrame por camino y LOD a detalle bajo.
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
-import { getBallitas, getWayDetail, Instanced, markShared, mergePlainParts, vidaSharedMats } from './base.jsx'
+import { getBallitas, getWayDetail, Instanced, markShared, mergePlainParts, vidaSharedMats, writeInstance } from './base.jsx'
+import { FOCO } from '../mundos/foco.js'
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
 import { halfWidth, pal, surfFrame } from './pista.jsx'
@@ -131,19 +132,19 @@ function* wayGen(way) {
       const seed = Math.floor(sw.u * 1e6) + lane.id * 139 + way.idx * 733
       const iconGeo = G.icon[kind] ?? G.icon.salto
       let iconItems = icons.get(iconGeo); if (!iconItems) icons.set(iconGeo, iconItems = [])
-      iconItems.push({ pos: pos.clone().addScaledVector(F.up, -1.05), quat, scale: 2.1, color: col })
+      iconItems.push({ pos: pos.clone().addScaledVector(F.up, -1.05), quat, scale: 2.1, color: col, sw })
 
       // pieza del tipo, sobre su carril
-      if (kind === 'caida') { holes.push({ pos, quat, scale: [scale, 1, scale * 1.4], color: HOLE_COL }); originRings.push({ pos: pos.clone().addScaledVector(F.up, -0.05), quat, scale: [scale * 1.15, 1, scale * 1.6], color: col }) }
+      if (kind === 'caida') { holes.push({ pos, quat, scale: [scale, 1, scale * 1.4], color: HOLE_COL, sw }); originRings.push({ pos: pos.clone().addScaledVector(F.up, -0.05), quat, scale: [scale * 1.15, 1, scale * 1.6], color: col, sw }) }
       else if (kind === 'laberinto') {
         // entrada del laberinto: dos barreras que forman la puerta del carril
         const qb = quat.clone().multiply(_q.setFromAxisAngle(Y_AXIS, Math.PI / 2))
-        for (const sgn of [-1, 1]) addKit('barrera_lod', { pos: pos.clone().addScaledVector(F.side, sgn * step * 0.45), quat: qb, scale: [scale * 0.7, 1.4, scale * 0.5] })
-        originRings.push({ pos, quat, scale, color: col })
+        for (const sgn of [-1, 1]) addKit('barrera_lod', { pos: pos.clone().addScaledVector(F.side, sgn * step * 0.45), quat: qb, scale: [scale * 0.7, 1.4, scale * 0.5], sw })
+        originRings.push({ pos, quat, scale, color: col, sw })
       } else {
         const k = kitDe(kind, theme)
-        addKit(k, { pos, quat: kind === 'portal' ? quat.clone().multiply(Q_RING) : quat, scale: kind === 'elevador' ? [scale * 1.5, 0.35, scale * 1.5] : kind === 'portal' ? scale * 0.75 : scale })
-        if (kind !== 'portal') originRings.push({ pos, quat, scale, color: col })
+        addKit(k, { pos, quat: kind === 'portal' ? quat.clone().multiply(Q_RING) : quat, scale: kind === 'elevador' ? [scale * 1.5, 0.35, scale * 1.5] : kind === 'portal' ? scale * 0.75 : scale, sw })
+        if (kind !== 'portal') originRings.push({ pos, quat, scale, color: col, sw })
       }
 
       // marcas del carril: chevrones hacia el evento y líneas de carril a sus dos lados
@@ -152,8 +153,8 @@ function* wayGen(way) {
         if (um < 0.01) continue
         surfFrame(seg, lane.id, um, Fp)
         const p = Fp.pos.clone().addScaledVector(Fp.side, lat).addScaledVector(Fp.up, -0.05)
-        chevrons.push({ pos: p, quat: basisQuat(Fp.up, Fp.tangent), scale: scale * 1.2, color: col })
-        for (const sgn of [-1, 1]) dashes.push({ pos: Fp.pos.clone().addScaledVector(Fp.side, lat + (sgn * step) / 2).addScaledVector(Fp.up, -0.05), quat: basisQuat(Fp.up, Fp.tangent), scale: [1, 1, 1.3 * TRACK_K * 0.4], color: markCol })
+        chevrons.push({ pos: p, quat: basisQuat(Fp.up, Fp.tangent), scale: scale * 1.2, color: col, sw })
+        for (const sgn of [-1, 1]) dashes.push({ pos: Fp.pos.clone().addScaledVector(Fp.side, lat + (sgn * step) / 2).addScaledVector(Fp.up, -0.05), quat: basisQuat(Fp.up, Fp.tangent), scale: [1, 1, 1.3 * TRACK_K * 0.4], color: markCol, sw })
       }
 
       // trayectoria: puntos (arco, caída, laberinto), haz (elevador), par de portales enlazados
@@ -168,15 +169,15 @@ function* wayGen(way) {
       const A = WORLD.switchPath(seg, sw, 0, {}).pos.clone(); const B = WORLD.switchPath(seg, sw, 1, {}).pos.clone()
       if (via === 'elevador') {
         _v.set(0, B.y - A.y, 0)
-        beams.push({ pos: A.clone().addScaledVector(F.up, -WORLD.BALL_R), quat: new THREE.Quaternion().setFromUnitVectors(Y_AXIS, _w.copy(_v).normalize()), scale: [2.2, Math.abs(_v.y) + WORLD.BALL_R, 2.2], color: col })
+        beams.push({ pos: A.clone().addScaledVector(F.up, -WORLD.BALL_R), quat: new THREE.Quaternion().setFromUnitVectors(Y_AXIS, _w.copy(_v).normalize()), scale: [2.2, Math.abs(_v.y) + WORLD.BALL_R, 2.2], color: col, sw })
       }
       surfFrame(seg, sw.to, sw.uLand, Fl)
       const qLand = basisQuat(Fl.up, Fl.tangent)
       if (via === 'portal') {
-        addKit('anillo_neon_lod', { pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: scale * 0.75 })
-        swirls.push({ pos: pos.clone().addScaledVector(F.up, -0.5), quat, col })
-        swirls.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.52), quat: qLand, col })
-      } else landRings.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: 1.4, color: col })
+        addKit('anillo_neon_lod', { pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: scale * 0.75, sw })
+        swirls.push({ pos: pos.clone().addScaledVector(F.up, -0.5), quat, col, sw })
+        swirls.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.52), quat: qLand, col, sw })
+      } else landRings.push({ pos: Fl.pos.clone().addScaledVector(Fl.up, -0.06), quat: qLand, scale: 1.4, color: col, sw })
 
       items.push({ seg, si, sw, kind, col, seed, dots, A, B })
       yield
@@ -212,11 +213,48 @@ function sphereOf(points, pad = 4) {
   return sp
 }
 
+// ═══════════════════════════ SOLO EL CARRIL DE LA BALLITA SEGUIDA ═══════════════════════════
+// Con una ballita seguida (Seguir/POV, FOCO.b) solo se dibujan los eventos de su camino (lane) y carril en el camino
+// (way) en el que va; en vuelo, solo el del vuelo. Sin ballita seguida (o fuera de viaje), todos, como antes.
+// sel: null = todos; { key, way, lane, carril, sw }. Nada se monta ni desmonta al cambiar: cada malla tiene sitio
+// para todas sus piezas y solo se reescriben las que tocan (count baja); al pasar de 0 a >0 el InstanceCuller la revela.
+function selDe(way) {
+  const b = FOCO.b
+  if (!b || b.phase !== 'travel') return null
+  if ((b.seg?.way ?? b.way) !== way) return NADA
+  if (b.flight?.sw) return { key: 'f' + b.flight.sw.u + ':' + b.flight.sw.from + ':' + b.flight.sw.carril, sw: b.flight.sw }
+  return { key: b.lane + ':' + b.carril, lane: b.lane, carril: b.carril }
+}
+const NADA = { key: 'nada', nada: true }
+export const muestraSw = (sel, sw) => !sel || !sw || (!sel.nada && (sel.sw ? sel.sw === sw : sw.from === sel.lane && sw.carril === sel.carril))
+// Lo leen las sondas (?stats=1): instancias de eventos dibujadas por camino.
+const EV_DBG = typeof window !== 'undefined' && /[?&]stats=1/.test(window.location?.search ?? '') ? (window.__eventosCarril = window.__eventosCarril ?? { off: false }) : null
+
+function InstancedSel({ geo, mat, items, sel }) {
+  const mesh = useMemo(() => {
+    const m = new THREE.InstancedMesh(geo, mat, Math.max(1, items.length))
+    m.count = 0
+    m.userData.eventos = true
+    return m
+  }, [geo, mat, items])
+  useLayoutEffect(() => {
+    let n = 0
+    for (const it of items) if (muestraSw(sel, it.sw)) writeInstance(mesh, n++, it)
+    mesh.count = n
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    if (n > 0) { if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere(); mesh.computeBoundingSphere?.() }
+  }, [mesh, items, sel])
+  useEffect(() => () => mesh.dispose(), [mesh])
+  if (!items.length) return null
+  return <primitive object={mesh} />
+}
+
 // Pieza del kit instanciada (textura y material del kit, sin animación).
-function KitPieza({ nombre, items }) {
+function KitPieza({ nombre, items, sel }) {
   const kit = useKit(nombre)
   if (!kit || !items.length) return null
-  return <Instanced geo={kit.geometry} mat={kit.material} items={items} />
+  return <InstancedSel geo={kit.geometry} mat={kit.material} items={items} sel={sel} />
 }
 
 // ═══════════════════════════ CAPA VIVA (un solo useFrame por camino) ═══════════════════════════
@@ -232,6 +270,8 @@ export default function Eventos({ way }) {
   const solidRef = useRef()
   const laneMarksRef = useRef()
   const cajaKit = useKit('caja_evento_lod')
+  const [sel, setSel] = useState(() => selDe(way))
+  const selRef = useRef(sel)
 
   // puntos de trayectoria, estela de vuelo y remolinos de portal: tres InstancedMesh vivos
   const live = useMemo(() => {
@@ -249,19 +289,35 @@ export default function Eventos({ way }) {
     swirls.forEach((s, k) => { sw.setMatrixAt(k, T_M.compose(s.pos, s.quat, T_S.setScalar(1))); sw.setColorAt(k, s.col) })
     sw.count = swirls.length; sw.boundingSphere = sphereOf(swirls.map((s) => s.pos), 3)
     for (const m of [dots, trail, sw]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true }
-    return { dots, trail, sw, base, glow: new Float32Array(items.length), flightT: new Float32Array(items.length).fill(-1), lit: new Uint8Array(items.length) }
+    return { dots, trail, sw, base, glow: new Float32Array(items.length), flightT: new Float32Array(items.length).fill(-1), lit: new Uint8Array(items.length), ve: new Uint8Array(items.length).fill(1), veSw: new Uint8Array(swirls.length).fill(1) }
   }, [items, swirls])
+  // al cambiar de carril/camino: puntos de trayectoria y remolinos de los eventos ajenos a escala 0 (sin montar nada)
+  useLayoutEffect(() => {
+    const { dots, base, ve, veSw, lit } = live
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]; const v = muestraSw(sel, it.sw) ? 1 : 0
+      ve[i] = v; lit[i] = 0
+      for (let k = 0; k < it.dots.length; k++) {
+        const d = it.dots[k]
+        T_S.setScalar(v * 0.5); dots.setMatrixAt(base[i] + k, T_M.compose(d.pos, d.quat, T_S)); dots.setColorAt(base[i] + k, T_C.copy(it.col).multiplyScalar(0.45))
+      }
+    }
+    swirls.forEach((s, k) => { veSw[k] = muestraSw(sel, s.sw) ? 1 : 0; live.sw.setMatrixAt(k, T_M.compose(s.pos, s.quat, T_S.setScalar(veSw[k]))) })
+    for (const m of [dots, live.sw]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true }
+  }, [live, items, swirls, sel])
   useEffect(() => () => { live.dots.dispose(); live.trail.dispose(); live.sw.dispose() }, [live])
 
   const cajas = useMemo(() => eventBoxes.map((b) => ({ pos: b.pos, quat: b.quat, scale: b.scale })), [eventBoxes])
 
   useFrame(({ clock }, dt) => {
+    const s0 = EV_DBG?.off ? null : selDe(way)
+    if ((s0?.key ?? null) !== (selRef.current?.key ?? null)) { selRef.current = s0; setSel(s0) }
     const low = detail ? detail.value < 0.3 : false
     if (solidRef.current) solidRef.current.visible = !low
     if (laneMarksRef.current) laneMarksRef.current.visible = !low
     if (low || !items.length) { live.trail.count = 0; return }
     const h = Math.min(dt, 0.1)
-    const { dots, trail, glow, flightT, lit, base } = live
+    const { dots, trail, glow, flightT, lit, base, ve, veSw } = live
     flightT.fill(-1)
     trail.count = 0
     // eventos activos: en vuelo (con su estela) o a punto de tomarse en el carril de la ballita
@@ -269,7 +325,7 @@ export default function Eventos({ way }) {
       if (!b || b.way !== way || b.phase !== 'travel') continue
       if (b.flight?.sw) {
         const i = bySw.get(b.flight.sw)
-        if (i === undefined) continue
+        if (i === undefined || !ve[i]) continue
         flightT[i] = b.flight.t; glow[i] = 1
         for (let k = 0; k < TRAIL && trail.count < 10 * TRAIL; k++) {
           WORLD.switchPath(items[i].seg, items[i].sw, Math.max(0, b.flight.t - k * 0.02), T_F)
@@ -279,7 +335,7 @@ export default function Eventos({ way }) {
       } else if (b.seg) {
         for (const sw of b.seg.switchesByLane?.get(b.lane) ?? []) {
           if (sw.carril !== b.carril || b.segT > sw.u || (sw.u - b.segT) * b.seg.length > 12 * TRACK_K) continue
-          const i = bySw.get(sw); if (i !== undefined) glow[i] = Math.max(glow[i], 0.6)
+          const i = bySw.get(sw); if (i !== undefined && ve[i]) glow[i] = Math.max(glow[i], 0.6)
           break
         }
       }
@@ -288,7 +344,7 @@ export default function Eventos({ way }) {
     // puntos de la trayectoria: sólo los que brillan o acaban de apagarse
     let dirty = false
     for (let i = 0; i < items.length; i++) {
-      if (glow[i] < 0.01 && !lit[i]) continue
+      if ((glow[i] < 0.01 && !lit[i]) || !ve[i]) continue
       const it = items[i]; const g = glow[i]
       for (let k = 0; k < it.dots.length; k++) {
         const d = it.dots[k]
@@ -306,7 +362,7 @@ export default function Eventos({ way }) {
     const t = clock.elapsedTime; const cam = camera.position; let spun = false
     for (let k = 0; k < swirls.length; k++) {
       const s = swirls[k]
-      if (cam.distanceToSquared(s.pos) > (70 * TRACK_K) ** 2) continue
+      if (!veSw[k] || cam.distanceToSquared(s.pos) > (70 * TRACK_K) ** 2) continue
       T_Q.copy(s.quat).multiply(_q.setFromAxisAngle(Z_AXIS, t * 3 + k))
       live.sw.setMatrixAt(k, T_M.compose(s.pos, T_Q, T_S.setScalar(1))); spun = true
     }
@@ -317,20 +373,20 @@ export default function Eventos({ way }) {
   return (
     <group>
       {/* Capa emisiva: siempre visible (también a detalle bajo) para leer de lejos dónde hay eventos */}
-      <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={originRings} />
-      <Instanced geo={G.ring} mat={EMISSIVE_INST_MAT} items={landRings} />
+      <InstancedSel geo={G.ring} mat={EMISSIVE_INST_MAT} items={originRings} sel={sel} />
+      <InstancedSel geo={G.ring} mat={EMISSIVE_INST_MAT} items={landRings} sel={sel} />
       <group ref={laneMarksRef}>
         <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={laneDashes} />
         <Instanced geo={G.sphere} mat={EMISSIVE_INST_MAT} items={laneStarts} />
       </group>
       {/* Capa de detalle: piezas del kit, marcas del carril y trayectorias */}
       <group ref={solidRef}>
-        {kits.map(([nombre, its]) => <KitPieza key={nombre} nombre={nombre} items={its} />)}
-        {icons.map(([geo, its]) => <Instanced key={geo.uuid} geo={geo} mat={EMISSIVE_INST_MAT} items={its} />)}
-        <Instanced geo={G.hole} mat={BODY_INST_MAT} items={holes} />
-        <Instanced geo={G.chevron} mat={EMISSIVE_INST_MAT} items={chevrons} />
-        <Instanced geo={G.dash} mat={EMISSIVE_INST_MAT} items={dashes} />
-        <Instanced geo={G.beam} mat={GLOW_MAT} items={beams} />
+        {kits.map(([nombre, its]) => <KitPieza key={nombre} nombre={nombre} items={its} sel={sel} />)}
+        {icons.map(([geo, its]) => <InstancedSel key={geo.uuid} geo={geo} mat={EMISSIVE_INST_MAT} items={its} sel={sel} />)}
+        <InstancedSel geo={G.hole} mat={BODY_INST_MAT} items={holes} sel={sel} />
+        <InstancedSel geo={G.chevron} mat={EMISSIVE_INST_MAT} items={chevrons} sel={sel} />
+        <InstancedSel geo={G.dash} mat={EMISSIVE_INST_MAT} items={dashes} sel={sel} />
+        <InstancedSel geo={G.beam} mat={GLOW_MAT} items={beams} sel={sel} />
         {cajaKit && cajas.length > 0 && <Instanced geo={cajaKit.geometry} mat={cajaKit.material} items={cajas} />}
         <KitPieza nombre="turbo_placa" items={turboPads} />
         <primitive object={live.dots} />

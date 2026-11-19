@@ -497,6 +497,33 @@ test('carriles: aleatorio al entrar a la ruta y al aterrizar; sólo toma eventos
   assert.ok(landed.size >= 4, `carril de aterrizaje poco variado: ${[...landed]}`)
 })
 
+test('sólo le afecta un evento de su carril y camino, también justo después de aterrizar en otro camino', () => {
+  const sim = new Sim({ rng: mulberry32(23), pop: 1 })
+  const b = sim.ballitas[0]
+  let probados = 0; let tomados = 0
+  for (const way of world.ways) for (const s of way.segments) for (const sw of s.switches ?? []) {
+    // en el mismo punto, desde otro carril del mismo camino o desde otro camino: nunca lo toma
+    for (const [lane, carril] of [[sw.from, (sw.carril + 1) % CARRILES], [sw.to, sw.carril]]) {
+      Object.assign(b, { phase: 'travel', way, seg: s, segT: sw.u, lane, carril, flight: null, sw: null, e: 100, p: 100 })
+      sim.checkSwitches(b, s, Math.max(0, sw.u - 1e-4), sw.u + 1e-4)
+      if (b.flight) assert.ok(b.flight.sw.from === lane && b.flight.sw.carril === carril, `${way.id}: tomó un evento ajeno (${sw.kind})`)
+      probados++
+    }
+  }
+  // tras aterrizar en el camino destino: los eventos que toma en el resto del tramo son de su camino y carril nuevos
+  for (const way of world.ways.slice(0, 4)) for (const s of way.segments) for (const sw of (s.switches ?? []).slice(0, 2)) {
+    Object.assign(b, { phase: 'travel', way, seg: s, segT: sw.u, lane: sw.from, carril: sw.carril, flight: null, sw: null, e: 100, p: 100 })
+    sim.startSwitch(b, s, sw)
+    for (let k = 0; k < 400 && b.flight; k++) sim.travelStep(b, 0.02)
+    const lane = b.lane; const carril = b.carril
+    for (let u = b.segT; u < 1 && !b.flight; u += 0.01) {
+      sim.checkSwitches(b, s, u, Math.min(1, u + 0.01))
+      if (b.flight) { tomados++; assert.ok(b.flight.sw.from === lane && b.flight.sw.carril === carril, 'tras aterrizar tomó un evento de otro carril') }
+    }
+  }
+  assert.ok(probados > 50, `pocos eventos probados: ${probados}`)
+})
+
 test('cada kind deja a la ballita en el camino destino, con su trayectoria', () => {
   const sim = new Sim({ rng: mulberry32(22), pop: 1 })
   const b = sim.ballitas[0]
