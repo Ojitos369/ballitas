@@ -3,7 +3,9 @@
 // Requiere ?stats=1 y window.__precarga.listo/montado (rama). En main no existen: solo cuenta entradas.
 import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39c74d688ef56/66ad59e0-d323-4be2-8707-8e648cba3105/scratchpad/pw/node_modules/playwright-core/index.mjs'
 import { writeFileSync } from 'node:fs'
-const [url, secsA, modo = 'escritorio', salida] = process.argv.slice(2)
+const [url, secsA, modo = 'escritorio', salida, estrategia = 'frio'] = process.argv.slice(2)
+// estrategia 'estable': tras cada entrada sigue a una ballita en viaje a la que le queden >= 25 s para llegar (su
+// precarga empieza al seguirla, como cuando el usuario la sigue un rato); 'frio': la siguiente que esté en un planeta
 const secs = +(secsA ?? 120)
 const movil = modo === 'movil'
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: [movil ? '--window-size=500,1000' : '--window-size=1600,900', '--ignore-gpu-blocklist', '--disable-frame-rate-limit'] })
@@ -15,7 +17,7 @@ await p.goto(url)
 await p.waitForFunction(() => window.__ballitasDebug?.gl, null, { timeout: 60000 })
 await p.waitForTimeout(8000)
 const caminos8s = await p.evaluate(() => window.__precarga?.caminos ?? null)
-await p.evaluate(() => {
+await p.evaluate((estrategia) => {
   const div = document.querySelector('canvas').parentElement
   const k = Object.keys(div).find((x) => x.startsWith('__reactFiber'))
   let f = div[k]; let sim = null
@@ -24,11 +26,13 @@ await p.evaluate(() => {
   let root = div[k]; while (root.return) root = root.return
   const follow = find(root)
   const vivo = (x) => x && x.phase !== 'dying' && x.phase !== 'gone'
-  const E = []; const usados = new Set(); let sel = null; let prevPh = null; let prevWay = null
+  const E = []; const usados = new Set(); let sel = null; let selDesde = 0; let prevPh = null; let prevWay = null
   const elegir = () => {
-    sel = sim.ballitas.find((x) => vivo(x) && !usados.has(x.id) && x.phase !== 'travel') ?? sim.ballitas.find(vivo)
+    sel = estrategia === 'estable'
+      ? sim.ballitas.filter((x) => vivo(x) && x.phase === 'travel' && x.timer >= 25).sort((a, b2) => a.timer - b2.timer)[0] ?? sim.ballitas.find(vivo)
+      : sim.ballitas.find((x) => vivo(x) && !usados.has(x.id) && x.phase !== 'travel') ?? sim.ballitas.find(vivo)
     if (!sel) return
-    usados.add(sel.id); prevPh = sel.phase; prevWay = sel.way?.idx ?? null; follow(sel)
+    usados.add(sel.id); selDesde = performance.now(); prevPh = sel.phase; prevWay = sel.way?.idx ?? null; follow(sel)
   }
   elegir()
   window.__ant = { E }
@@ -41,13 +45,13 @@ await p.evaluate(() => {
     if (sel.phase === 'travel' && prevPh !== 'travel') {
       const listo = P?.listo?.[w]; const montado = P?.montado?.[w]
       const ok = listo != null && montado != null ? Math.max(listo, montado) : null
-      E.push({ tipo: 'entra', t: Math.round(now), way: w, listo, montado, antelacion_s: ok == null ? null : +((now - ok) / 1000).toFixed(2) })
+      E.push({ tipo: 'entra', t: Math.round(now), way: w, listo, montado, seguida_s: +((now - selDesde) / 1000).toFixed(1), antelacion_s: ok == null ? null : +((now - ok) / 1000).toFixed(2) })
       // más entradas por tanda: tras entrar se sigue a otra ballita que aún esté en un planeta (CAMBIA_TRAS_ENTRAR=0 lo desactiva)
       if (window.__cambiaTrasEntrar !== false) { prevPh = sel.phase; elegir(); return }
     }
     prevPh = sel.phase; prevWay = w
   }, 100)
-})
+}, estrategia)
 await p.waitForTimeout(secs * 1000)
 const R = await p.evaluate(() => ({ E: window.__ant.E, caminos: window.__precarga?.caminos ?? null, ms: window.__precarga?.ms ?? null, max: window.__precarga?.max ?? null, presu: window.__precarga?.presu ?? null, total: window.__ballitasDebug ? null : null }))
 const entradas = R.E.filter((x) => x.tipo === 'entra')
