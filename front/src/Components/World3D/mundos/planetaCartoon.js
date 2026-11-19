@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { NODE_R, GRID_LEN, FINISH_LEN, mulberry32 } from '../../../Core/world.js'
+import { FOCO } from './foco.js'
 
 export const PLANET_TYPES = [
   'gaseoso_bandas',
@@ -194,6 +195,9 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uStormPos;
   uniform float uSeaBias;
   uniform float uDistBoost;
+  uniform float uNear;    // 0 mapa/camino … 1 ballita seguida caminando en este planeta
+  uniform float uRadius;  // radio visual: el detalle cercano se mide en unidades de mundo
+  uniform vec3 uFocoPos;  // ballita seguida (compartido con los demás materiales del planeta)
 
   varying vec3 vLocalDir;
   varying vec3 vWorldNormal;
@@ -370,6 +374,28 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
       bumpNdotL = (dune - 0.5) * 0.2;
     }
 
+    // De cerca (ballita en el planeta): materialidad a escala de ballita. Manchas de ~9 u, grano de ~2 u y
+    // poro fino, saturación contenida (el color del bioma deja de ser un plano chillón) y relieve de luz.
+    float nearGrain = 0.0;
+    if (uNear > 0.001) {
+      vec3 wp = pDir * uRadius;
+      float g1 = fbm(wp * 0.075 + uSeedVec * 0.37);
+      float g2 = noise3(wp * 0.42 + uSeedVec.zxy);
+      float g3 = noise3(wp * 1.9 + uSeedVec.yzx);
+      float lum = dot(baseCol, vec3(0.299, 0.587, 0.114));
+      // contraste del bioma comprimido hacia su tono medio (las manchas de color gigantes dejan de gritar)
+      vec3 medio = mix(uCol1, uCol2, 0.5);
+      vec3 det = mix(baseCol, medio, 0.35);
+      float dl = dot(det, vec3(0.299, 0.587, 0.114));
+      det = mix(det, vec3(dl), 0.4);
+      det = mix(det, det * vec3(1.07, 1.0, 0.88), clamp(g1 * 0.9 + 0.45, 0.0, 1.0));
+      det *= 0.8 + 0.3 * g1 + 0.16 * g2 + 0.08 * g3;
+      baseCol = mix(baseCol, det, uNear);
+      nearGrain = g2 * 0.09 + g3 * 0.05;
+      bumpNdotL += nearGrain * uNear;
+      emissiveBoost *= 1.0 - 0.6 * uNear;
+    }
+
     // Sombreado toon de 3 bandas usando la dirección de luz de la escena
     float ndotl = dot(N, L) + bumpNdotL;
     float bShadow = smoothstep(-0.10, -0.02, ndotl);
@@ -396,11 +422,22 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
     float rim = smoothstep(0.44 - 0.14 * uDistBoost, 0.84, 1.0 - ndotv);
     float rimSun = 0.52 + 0.48 * clamp(ndotl * 0.5 + 0.5, 0.0, 1.0);
     rimSun = mix(rimSun, 1.0, uDistBoost);
-    col = mix(col, uAtmoColor * 1.18, rim * rimSun * (0.72 + 0.2 * uDistBoost));
+    // De cerca la cámara mira el suelo rasante: el Fresnel y la tinta de borde pintaban franjas lisas
+    // (blanca y negra) a media pantalla; se apagan y en su lugar hay perspectiva aérea suave.
+    col = mix(col, uAtmoColor * 1.18, rim * rimSun * (0.72 + 0.2 * uDistBoost) * (1.0 - 0.9 * uNear));
 
     // Refuerzo sutil del contorno oscuro en el borde extremo (complementa el casco invertido)
-    float edgeInk = smoothstep(0.15, 0.04, ndotv);
+    float edgeInk = smoothstep(0.15, 0.04, ndotv) * (1.0 - uNear);
     col = mix(col, uOutlineColor, edgeInk * 0.85);
+
+    if (uNear > 0.001) {
+      float camD = distance(cameraPosition, vWorldPos);
+      float aire = smoothstep(18.0, 120.0, camD);
+      col = mix(col, uAtmoColor * 0.42 + col * 0.35, aire * 0.42 * uNear);
+      // barrio: el suelo lejos de la ballita baja un poco, la zona por donde camina queda más clara
+      float lejos = smoothstep(10.0, 55.0, distance(vWorldPos, uFocoPos));
+      col *= 1.0 - 0.2 * lejos * uNear;
+    }
 
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -605,11 +642,14 @@ export function createPlanetCartoonMaterial(config) {
       uStormPos: { value: config.stormPos.clone() },
       uSeaBias: { value: config.seaBias },
       uDistBoost: { value: 0 },
+      uNear: { value: 0 },
+      uRadius: { value: config.visualR },
+      uFocoPos: FOCO.pos,
     },
     vertexShader: PLANET_VERTEX_SHADER,
     fragmentShader: PLANET_FRAGMENT_SHADER,
   })
-  mat.customProgramCacheKey = () => 'planet-cartoon-v2'
+  mat.customProgramCacheKey = () => 'planet-cartoon-v3'
   return mat
 }
 

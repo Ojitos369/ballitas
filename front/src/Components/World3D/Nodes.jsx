@@ -20,6 +20,7 @@ import {
   getPlanetOutlineMaterial,
 } from './mundos/planetaCartoon.js'
 import { registerWorldForVistas, focusWorldNode, escalaMapa } from './Vistas.jsx'
+import { FOCO, conFoco, nodoEnFoco } from './mundos/foco.js'
 
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
@@ -44,6 +45,8 @@ const UP = new THREE.Vector3(0, 1, 0)
 const GOLD = '#ffd54a'
 const GREEN = '#5dffb0'
 
+const EDIF_RETIRO = 1.35 // unidades locales del destino
+const DESTINO_ENCOGE = 0.42 // fracción que encogen los destinos dentro del planeta enfocado
 const txt = (n) => (n > 0 ? '+' : '−') + Math.abs(n)
 
 // Actividad reciente por terminal (`${nodeIdx}:${vertIdx}:${kind}` -> { power, at })
@@ -625,10 +628,12 @@ function makeAtmoMaterial(color, { back = true, rimColor = '#d8f0ff', power, int
 function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
   const local = (p) => p.clone().sub(node.pos)
   const surfScale = surfaceR / 7.5
-  const roadW = Math.max(U * 0.55, surfaceR * 0.036)
-  const roadH = Math.max(0.035, surfaceR * 0.0045)
+  // Solo se dibujan de cerca (planeta de la ballita seguida): una calle de ~2.5 ballitas con bordillo claro.
+  const roadW = Math.max(U * 2.6, surfaceR * 0.05)
+  const roadH = Math.max(0.05, surfaceR * 0.0016)
   const rPos = []
   const rUv = []
+  const rCol = []
   const rIdx = []
   const lPos = []
   const lUv = []
@@ -643,13 +648,16 @@ function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
 
   const addRibbon = (samples, width, height) => {
     const hw = width * 0.5
+    // [x, y, u, tono]: tono 1 = bordillo claro, < 1 = calzada
     const profile = [
-      [-hw * 1.15, -0.02, 0.0],
-      [-hw * 0.96, height * 0.72, 0.09],
-      [-hw * 0.80, height, 0.18],
-      [hw * 0.80, height, 0.82],
-      [hw * 0.96, height * 0.72, 0.91],
-      [hw * 1.15, -0.02, 1.0],
+      [-hw * 1.12, -0.03, 0.0, 0.92],
+      [-hw * 1.0, height * 1.6, 0.06, 1.0],
+      [-hw * 0.9, height * 1.6, 0.12, 1.0],
+      [-hw * 0.88, height, 0.16, 0.6],
+      [hw * 0.88, height, 0.84, 0.6],
+      [hw * 0.9, height * 1.6, 0.88, 1.0],
+      [hw * 1.0, height * 1.6, 0.94, 1.0],
+      [hw * 1.12, -0.03, 1.0, 0.92],
     ]
     const rBase = rPos.length / 3
     const lBase = lPos.length / 3
@@ -669,10 +677,11 @@ function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
 
       const vCoord = arcLen * (0.42 / Math.pow(surfScale, 0.25))
       for (let k = 0; k < profile.length; k++) {
-        const [offX, offY, uCoord] = profile[k]
+        const [offX, offY, uCoord, tono] = profile[k]
         tmpPt.copy(tmpDir).multiplyScalar(surfaceR + offY).addScaledVector(tmpSide, offX)
         rPos.push(tmpPt.x, tmpPt.y, tmpPt.z)
         rUv.push(uCoord, vCoord)
+        rCol.push(tono, tono, tono)
       }
 
       // Cinta central emisiva
@@ -740,6 +749,7 @@ function buildRoadGeometries(node, centroDir = null, surfaceR = NODE_R) {
   const roadGeo = new THREE.BufferGeometry()
   roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(rPos, 3))
   roadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(rUv, 2))
+  roadGeo.setAttribute('color', new THREE.Float32BufferAttribute(rCol, 3))
   roadGeo.setIndex(rIdx)
   roadGeo.computeVertexNormals()
 
@@ -914,23 +924,28 @@ function getCachedMat(key, factory) {
   return m
 }
 
+// Dentro de un planeta (FOCO.k → 1) las estaciones dejan de ser moles casi negras: albedo de luminosidad media
+// y poco metal (sin mapa de entorno el metal se ve negro). Con k = 0 (mapa, camino) quedan exactamente igual.
+const LIFT_CASCO = { lift: ['#a9aebb', 0.58], metal: 0.3 }
+const LIFT_BASE = { lift: ['#8f949f', 0.55], metal: 0.3 }
+const LIFT_PIEZA = { lift: ['#b9bdc6', 0.45], metal: 0.35 }
 function getSharedTerminalMats(tex) {
   return {
-    baseOut: getCachedMat('stBaseOut', () => new THREE.MeshStandardMaterial({ color: '#2a3046', normalMap: tex.hullNormal, roughness: 0.45, metalness: 0.55 })),
-    hullOut: getCachedMat('stHullOut', () => new THREE.MeshStandardMaterial({ color: '#3a4362', map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.38, metalness: 0.5, side: THREE.DoubleSide })),
-    pylonOut: getCachedMat('stPylonOut', () => new THREE.MeshStandardMaterial({ color: '#485378', normalMap: tex.hullNormal, roughness: 0.36, metalness: 0.6 })),
-    collarOut: getCachedMat('stCollarOut', () => new THREE.MeshStandardMaterial({ color: '#58648c', normalMap: tex.hullNormal, roughness: 0.3, metalness: 0.7 })),
-    doorOut: getCachedMat('stDoorOut', () => new THREE.MeshStandardMaterial({ color: '#23283b', normalMap: tex.hullNormal, roughness: 0.34, metalness: 0.72 })),
-    podOut: getCachedMat('stPodOut', () => new THREE.MeshStandardMaterial({ color: '#343d58', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.48, roughness: 0.38, metalness: 0.48 })),
-    ant: getCachedMat('stAnt', () => new THREE.MeshStandardMaterial({ color: '#a8b3d1', metalness: 0.8, roughness: 0.24 })),
-    chimney: getCachedMat('stChimney', () => new THREE.MeshStandardMaterial({ color: '#2c3144', normalMap: tex.hullNormal, roughness: 0.42, metalness: 0.6 })),
-    baseIn: getCachedMat('stBaseIn', () => new THREE.MeshStandardMaterial({ color: '#23283a', normalMap: tex.hullNormal, roughness: 0.48, metalness: 0.5 })),
-    bunkerIn: getCachedMat('stBunkerIn', () => new THREE.MeshStandardMaterial({ color: '#303752', map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.32, roughness: 0.42, metalness: 0.48, side: THREE.DoubleSide })),
-    throatIn: getCachedMat('stThroatIn', () => new THREE.MeshStandardMaterial({ color: '#0d101b', roughness: 0.9, metalness: 0.2, side: THREE.DoubleSide })),
-    pylonIn: getCachedMat('stPylonIn', () => new THREE.MeshStandardMaterial({ color: '#3c4464', normalMap: tex.hullNormal, roughness: 0.38, metalness: 0.56 })),
-    doorIn: getCachedMat('stDoorIn', () => new THREE.MeshStandardMaterial({ color: '#1d2233', normalMap: tex.hullNormal, roughness: 0.34, metalness: 0.7 })),
-    podIn: getCachedMat('stPodIn', () => new THREE.MeshStandardMaterial({ color: '#2e354d', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.38, roughness: 0.44, metalness: 0.42 })),
-    dish: getCachedMat('stDish', () => new THREE.MeshStandardMaterial({ color: '#96a3c7', metalness: 0.75, roughness: 0.25, side: THREE.DoubleSide })),
+    baseOut: conFoco(getCachedMat('stBaseOut', () => new THREE.MeshStandardMaterial({ color: '#2a3046', normalMap: tex.hullNormal, roughness: 0.45, metalness: 0.55 })), LIFT_BASE),
+    hullOut: conFoco(getCachedMat('stHullOut', () => new THREE.MeshStandardMaterial({ color: '#3a4362', map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.38, metalness: 0.5, side: THREE.DoubleSide })), LIFT_CASCO),
+    pylonOut: conFoco(getCachedMat('stPylonOut', () => new THREE.MeshStandardMaterial({ color: '#485378', normalMap: tex.hullNormal, roughness: 0.36, metalness: 0.6 })), LIFT_PIEZA),
+    collarOut: conFoco(getCachedMat('stCollarOut', () => new THREE.MeshStandardMaterial({ color: '#58648c', normalMap: tex.hullNormal, roughness: 0.3, metalness: 0.7 })), LIFT_PIEZA),
+    doorOut: conFoco(getCachedMat('stDoorOut', () => new THREE.MeshStandardMaterial({ color: '#23283b', normalMap: tex.hullNormal, roughness: 0.34, metalness: 0.72 })), { lift: ['#5d6372', 0.45], metal: 0.4 }),
+    podOut: conFoco(getCachedMat('stPodOut', () => new THREE.MeshStandardMaterial({ color: '#343d58', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.48, roughness: 0.38, metalness: 0.48 })), LIFT_CASCO),
+    ant: conFoco(getCachedMat('stAnt', () => new THREE.MeshStandardMaterial({ color: '#a8b3d1', metalness: 0.8, roughness: 0.24 })), { metal: 0.35 }),
+    chimney: conFoco(getCachedMat('stChimney', () => new THREE.MeshStandardMaterial({ color: '#2c3144', normalMap: tex.hullNormal, roughness: 0.42, metalness: 0.6 })), LIFT_BASE),
+    baseIn: conFoco(getCachedMat('stBaseIn', () => new THREE.MeshStandardMaterial({ color: '#23283a', normalMap: tex.hullNormal, roughness: 0.48, metalness: 0.5 })), LIFT_BASE),
+    bunkerIn: conFoco(getCachedMat('stBunkerIn', () => new THREE.MeshStandardMaterial({ color: '#303752', map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.32, roughness: 0.42, metalness: 0.48, side: THREE.DoubleSide })), LIFT_CASCO),
+    throatIn: conFoco(getCachedMat('stThroatIn', () => new THREE.MeshStandardMaterial({ color: '#0d101b', roughness: 0.9, metalness: 0.2, side: THREE.DoubleSide }))),
+    pylonIn: conFoco(getCachedMat('stPylonIn', () => new THREE.MeshStandardMaterial({ color: '#3c4464', normalMap: tex.hullNormal, roughness: 0.38, metalness: 0.56 })), LIFT_PIEZA),
+    doorIn: conFoco(getCachedMat('stDoorIn', () => new THREE.MeshStandardMaterial({ color: '#1d2233', normalMap: tex.hullNormal, roughness: 0.34, metalness: 0.7 })), { lift: ['#5d6372', 0.45], metal: 0.4 }),
+    podIn: conFoco(getCachedMat('stPodIn', () => new THREE.MeshStandardMaterial({ color: '#2e354d', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.38, roughness: 0.44, metalness: 0.42 })), LIFT_CASCO),
+    dish: conFoco(getCachedMat('stDish', () => new THREE.MeshStandardMaterial({ color: '#96a3c7', metalness: 0.75, roughness: 0.25, side: THREE.DoubleSide })), { metal: 0.35 }),
   }
 }
 
@@ -967,6 +982,7 @@ function destinoStyle(name, kind) {
 function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
   const grp = useRef()
   const detailGrp = useRef()
+  const edif = useRef()
   const icon = useRef()
   const hoverRef = useRef(false)
   useCityFade(grp)
@@ -982,29 +998,29 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
   const relPos = useMemo(() => d.dir.clone().multiplyScalar(surfaceR), [d, surfaceR])
   const destScale = useMemo(() => (surfaceR / 7.5) * 0.78, [surfaceR])
   const mats = useMemo(() => ({
-    pad: getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })),
-    icon: getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })),
-    halo: getCachedMat(`dHalo:${color}`, () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })),
-    body: getCachedMat(`dBody:${bodyColor}`, () => new THREE.MeshStandardMaterial({ color: bodyColor, map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.52, metalness: 0.35 })),
-    roof: getCachedMat(`dRoof:${roofColor}:${color}`, () => new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.42, metalness: 0.35, emissive: color, emissiveIntensity: 0.18, side: THREE.DoubleSide })),
-    pole: getCachedMat('dPole', () => new THREE.MeshStandardMaterial({ color: '#cfd5e6', roughness: 0.35, metalness: 0.55 })),
-    wood: getCachedMat('dWood', () => new THREE.MeshStandardMaterial({ color: '#73513a', roughness: 0.72 })),
-    rim: getCachedMat('dRim', () => new THREE.MeshStandardMaterial({ color: '#8fa0cc', roughness: 0.3, metalness: 0.7 })),
-    annex: getCachedMat('dAnnex', () => new THREE.MeshStandardMaterial({ color: '#464e6e', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.38, roughness: 0.5 })),
-    pool: getCachedMat(`dPool:${d.name === 'Hoguera' ? 'fire' : color}`, () => new THREE.MeshStandardMaterial({ color: d.name === 'Hoguera' ? '#ff8243' : '#4be3c4', emissive: d.name === 'Hoguera' ? '#ff6a2b' : color, emissiveIntensity: 0.68, roughness: 0.18 })),
-    canopy: getCachedMat('dCanopy', () => new THREE.MeshStandardMaterial({ color: '#3c7d63', roughness: 0.6, side: THREE.DoubleSide })),
-  }), [color, bodyColor, roofColor, tex, d.name])
+    pad: conFoco(getCachedMat(`dPad:${color}`, () => new THREE.MeshStandardMaterial({ color: '#2a2f44', normalMap: tex.hullNormal, roughness: 0.55, metalness: 0.42, emissive: color, emissiveIntensity: 0.14 })), { lift: ['#a39e92', 0.55], metal: 0.25 }),
+    icon: conFoco(getCachedMat(`dIcon:${color}`, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.65, toneMapped: false })), { desat: 0.7, oscurece: 0.55 }),
+    halo: conFoco(getCachedMat(`dHalo:${color}`, () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })), { desat: 0.7, oscurece: 0.7 }),
+    body: conFoco(getCachedMat(`dBody:${bodyColor}`, () => new THREE.MeshStandardMaterial({ color: bodyColor, map: tex.buildingAlbedo, normalMap: tex.buildingNormal, emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.42, roughness: 0.52, metalness: 0.35 })), { lift: [gain ? '#d2aa52' : '#69a88a', 0.5], metal: 0.3 }),
+    roof: conFoco(getCachedMat(`dRoof:${roofColor}:${color}`, () => new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.42, metalness: 0.35, emissive: color, emissiveIntensity: 0.18, side: THREE.DoubleSide })), { metal: 0.3 }),
+    pole: conFoco(getCachedMat('dPole', () => new THREE.MeshStandardMaterial({ color: '#cfd5e6', roughness: 0.35, metalness: 0.55 })), { metal: 0.3 }),
+    wood: conFoco(getCachedMat('dWood', () => new THREE.MeshStandardMaterial({ color: '#73513a', roughness: 0.72 }))),
+    rim: conFoco(getCachedMat('dRim', () => new THREE.MeshStandardMaterial({ color: '#8fa0cc', roughness: 0.3, metalness: 0.7 })), { metal: 0.35 }),
+    annex: conFoco(getCachedMat('dAnnex', () => new THREE.MeshStandardMaterial({ color: '#464e6e', emissive: '#ffffff', emissiveMap: tex.buildingEmissive, emissiveIntensity: 0.38, roughness: 0.5 })), { lift: ['#a5aab7', 0.5] }),
+    pool: conFoco(getCachedMat(`dPool:${d.name === 'Hoguera' ? 'fire' : color}`, () => new THREE.MeshStandardMaterial({ color: d.name === 'Hoguera' ? '#ff8243' : '#4be3c4', emissive: d.name === 'Hoguera' ? '#ff6a2b' : color, emissiveIntensity: 0.68, roughness: 0.18 }))),
+    canopy: conFoco(getCachedMat('dCanopy', () => new THREE.MeshStandardMaterial({ color: '#3c7d63', roughness: 0.6, side: THREE.DoubleSide }))),
+  }), [color, bodyColor, roofColor, tex, d.name, gain])
 
   useLayoutEffect(() => {
     if (!animRegRef?.current) return undefined
     const list = animRegRef.current.destinos
-    const entry = { detailGrp, icon, baseY, idx: d.idx, hoverRef }
+    const entry = { detailGrp, icon, baseY, idx: d.idx, hoverRef, grp, destScale, edif }
     list.push(entry)
     return () => {
       const i = list.indexOf(entry)
       if (i >= 0) list.splice(i, 1)
     }
-  }, [animRegRef, baseY, d.idx])
+  }, [animRegRef, baseY, d.idx, destScale])
 
   return (
     <group
@@ -1018,6 +1034,7 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
       <group ref={detailGrp}>
         {/* Basamento circular: solo de cerca; de lejos parecía una losa plana pegada al planeta */}
         <mesh geometry={padGeo} material={mats.pad} receiveShadow />
+        <group ref={edif}>
         {style === 'carpa' && (
           <group position={[0, 0.1, 0]}>
             {[-0.45, 0.45].map((px) => [-0.45, 0.45].map((pz) => (
@@ -1069,6 +1086,7 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
             <mesh geometry={cylSmooth} material={mats.rim} position={[0.38, 1.0, -0.25]} scale={[0.05, 0.45, 0.05]} />
           </group>
         )}
+        </group>
       </group>
 
       {/* Icono flotante suave + halo (siempre visible como hito del destino) */}
@@ -1210,30 +1228,35 @@ function Planet({ node, world, tex }) {
   })), [planetCfg.moons, planetVisualR])
   const outlineMat = useMemo(() => getPlanetOutlineMaterial(planetCfg.outlineHex), [planetCfg.outlineHex])
   const atmoOuterMat = useMemo(() => makeAtmoMaterial(biome.atmoBase, { back: true, rimColor: biome.atmoRim, power: biome.atmoPower, intensity: biome.atmoIntensity * 0.72 }), [biome])
-  const farSkylineMat = useMemo(() => new THREE.MeshStandardMaterial({
+  const farSkylineMat = useMemo(() => conFoco(new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.5,
     metalness: 0.25,
     emissive: biome.emissiveColor,
     emissiveIntensity: biome.emissiveIntensity * 1.15,
-  }), [biome])
-  const roadMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: biome.roadColor,
-    map: tex.asphalt,
-    normalMap: tex.asphaltNormal,
-    roughness: 0.72,
-    metalness: 0.14,
-  }), [biome.roadColor, tex])
+  }), { metal: 0.4 }), [biome])
+  // Calle de cerca: pavimento neutro algo más claro que el terreno (se lee como calle, no como zanja) y
+  // bordillo claro por color de vértice; un solo programa para todos los planetas.
+  // Sin mapa de asfalto (casi negro) ni mapa de normales (con los triángulos degenerados de la cinta daba
+  // normales NaN y la calle salía negra): el bordillo por color de vértice da la estructura.
+  const roadMat = useMemo(() => conFoco(new THREE.MeshStandardMaterial({
+    color: new THREE.Color(biome.roadColor).lerp(new THREE.Color('#d6d0c3'), 0.72),
+    vertexColors: true,
+    roughness: 0.9,
+    metalness: 0.0,
+  }), { desat: 0.4, oscurece: 0.3, xray: false, relleno: 0.85 }), [biome.roadColor])
   const lineMat = useMemo(() => new THREE.MeshStandardMaterial({
     color: '#2a3048',
     emissive: biome.cityLight,
     emissiveIntensity: 0.58,
     roughness: 0.4,
   }), [biome.cityLight])
-  const lightsMat = useMemo(() => new THREE.MeshBasicMaterial({
+  const lightsMat = useMemo(() => conFoco(new THREE.MeshBasicMaterial({
     color: biome.cityLight,
     toneMapped: false,
-  }), [biome.cityLight])
+  }), { desat: 0.6, oscurece: 0.6 }), [biome.cityLight])
+  const roadRef = useRef()
+  const labelFade = useMemo(() => ({ value: 1 }), [])
   const labelPos = useMemo(() => [0, surfaceR + 3.4 * (surfaceR / 7.5), 0], [surfaceR])
   const tagStyle = useMemo(() => ({
     borderColor: biome.atmoRim,
@@ -1282,6 +1305,11 @@ function Planet({ node, world, tex }) {
     const dist = camera.position.distanceTo(node.pos)
     const near = dist < LOD_NEAR
     planetMat.uniforms.uDistBoost.value = Math.min(1, Math.max(0, (dist - 120) / 260))
+    // Foco: este planeta es el de la ballita seguida → detalle de suelo y calles; los rótulos de planeta se apagan.
+    const kAqui = FOCO.nodo === node.idx ? FOCO.k.value : 0
+    planetMat.uniforms.uNear.value = kAqui
+    if (roadRef.current) roadRef.current.visible = kAqui > 0.02
+    labelFade.value = 1 - FOCO.k.value
     const showOrbitals = dist < LOD_ORBITALS
     const sphereGeo = showOrbitals ? unitSphereGeo : unitSphereLowGeo
 
@@ -1293,7 +1321,9 @@ function Planet({ node, world, tex }) {
     }
 
     if (cloudsRef.current) {
-      const showClouds = dist < LOD_CLOUDS
+      // De cerca la capa de nubes queda a ~1 u del suelo, entre cámara y ballita: se funde con el foco.
+      cloudMat.uniforms.uOpacity.value = planetCfg.clouds.opacity * (1 - kAqui)
+      const showClouds = dist < LOD_CLOUDS && kAqui < 0.98
       cloudsRef.current.visible = showClouds
       if (showClouds) cloudsRef.current.rotation.y = t * planetCfg.clouds.speed
     }
@@ -1314,6 +1344,11 @@ function Planet({ node, world, tex }) {
     for (let i = 0; i < reg.destinos.length; i++) {
       const d = reg.destinos[i]
       if (d.detailGrp.current) d.detailGrp.current.visible = near
+      // Con la ballita seguida en este planeta los destinos bajan a escala de barrio (~2 ballitas); en el mapa, igual.
+      if (d.grp.current) d.grp.current.scale.setScalar(d.destScale * (1 - DESTINO_ENCOGE * kAqui))
+      // y el edificio se retira detrás del punto de parada: la ballita se queda a su puerta, no dentro de él
+      if (d.edif.current) d.edif.current.position.z = -EDIF_RETIRO * kAqui
+      if (d.icon.current) d.icon.current.position.z = -EDIF_RETIRO * kAqui
       if ((near || d.hoverRef.current) && d.icon.current) {
         d.icon.current.rotation.y = t * 1.5
         d.icon.current.position.y = d.baseY + Math.sin(t * 2 + d.idx) * 0.1
@@ -1452,7 +1487,9 @@ function Planet({ node, world, tex }) {
       {/* Atmósfera exterior escalada al radio visual del planeta */}
       <mesh geometry={unitSphereLowGeo} material={atmoOuterMat} scale={planetVisualR * 1.13} raycast={() => null} />
 
-      {/* Las calles envolventes (cinta de asfalto + línea) se quitaron del exterior: formaban una jaula sobre la esfera */}
+      {/* Las calles envolventes se quitaron del exterior (formaban una jaula sobre la esfera): solo se ven de cerca,
+          en el planeta de la ballita seguida. Montadas desde el inicio (ocultas) para que el precompilado las enlace. */}
+      <mesh ref={roadRef} geometry={city.roadGeo} material={roadMat} visible={false} raycast={() => null} />
 
       {/* Monumento único del bioma como silueta reconocible */}
       <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />
@@ -1469,7 +1506,7 @@ function Planet({ node, world, tex }) {
           surfaceR={surfaceR}
         />
       ))}
-      <WorldHtml center position={labelPos} distanceFactor={20} farScale={0.8} farLift={16} farFrom={350} farTo={600} zIndexRange={[5, 0]}>
+      <WorldHtml center position={labelPos} distanceFactor={20} farScale={0.8} farLift={16} farFrom={350} farTo={600} zIndexRange={[5, 0]} opacity={labelFade}>
         <div className="tag node" style={tagStyle}>
           <span>{biome.emoji} {node.name}</span>
           <span style={subTagStyle}>{biome.title}</span>
@@ -1479,12 +1516,136 @@ function Planet({ node, world, tex }) {
   )
 }
 
+// ───────────────────────── Foco de la vista de planeta ─────────────────────────
+// Puerto de salida hacia `way` (misma regla que Ballita.jsx).
+function vertSalida(node, way) {
+  if (!node || !way) return null
+  if (Array.isArray(node.terminals) && node.terminals.length > 0) {
+    const t = node.terminals.find((x) => x.kind === 'out' && x.way === way) || node.terminals.find((x) => x.kind === 'out' && x.to === way.to)
+    if (t) return t.vert
+  }
+  return node.portTo?.[way.to]?.out ?? null
+}
+
+const _fv = new THREE.Vector3()
+// Un único useFrame: posición visual de la ballita seguida, su destino (o puerto) y k con fundido de ~0.5 s.
+function FocoUpdater({ world }) {
+  useFrame((_, dt) => {
+    const b = FOCO.b
+    const n = nodoEnFoco(b)
+    let meta = 0
+    if (n >= 0) {
+      const node = world.nodes[n]
+      const R = getNodeCameraEnvelopes(node, world).visualRadius
+      _fv.copy(b.pos).sub(node.pos)
+      if (_fv.lengthSq() > 1e-6) {
+        meta = 1
+        FOCO.nodo = n
+        FOCO.pos.value.copy(node.pos).addScaledVector(_fv.normalize(), R)
+        FOCO.ojo.value.copy(FOCO.pos.value).addScaledVector(_fv, 1.1) // NODE_LIFT_EXTRA de Scene: centro de la ballita
+        let dir = null
+        if (b.phase === 'toPort') {
+          const v = vertSalida(node, b.way)
+          if (v != null) dir = node.verts[v].dir
+          FOCO.destKind = dir ? 'puerto' : null
+        } else if (b.dest?.dir) {
+          dir = b.dest.dir
+          FOCO.destKind = b.dest.kind
+        } else FOCO.destKind = null
+        if (dir) FOCO.dest.value.copy(node.pos).addScaledVector(dir, R)
+        else FOCO.dest.value.copy(FOCO.pos.value)
+      }
+    }
+    FOCO.k.value = THREE.MathUtils.damp(FOCO.k.value, meta, 6.5, Math.min(dt, 0.1))
+    if (!meta && FOCO.k.value < 0.004) {
+      FOCO.k.value = 0
+      FOCO.nodo = -1
+      FOCO.destKind = null
+    }
+  })
+  return null
+}
+
+// Baliza sobria del destino actual (o del puerto de salida): aro en el suelo + rótulo con nombre y efecto.
+const focoRingGeo = new THREE.RingGeometry(0.9, 1, 64).rotateX(-Math.PI / 2)
+const focoRingMat = new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })
+const focoQ = new THREE.Quaternion()
+const focoDir = new THREE.Vector3()
+
+function describirFoco(world, b, n) {
+  const node = world.nodes[n]
+  if (b.phase === 'toPort') {
+    const to = b.way ? world.nodes[b.way.to] : null
+    return { titulo: 'Puerto', detalle: to ? `→ ${to.name}` : '', color: to?.color ?? '#9fc3ff', alto: 1.3 * (getNodeCameraEnvelopes(node, world).visualRadius / 7.5) }
+  }
+  const d = b.dest
+  if (!d) return null
+  const gain = d.kind === 'puntos'
+  const efectos = [d.dp ? { t: `⭐ ${txt(d.dp)}`, c: GOLD } : null, d.de ? { t: `⚡ ${txt(d.de)}`, c: GREEN } : null].filter(Boolean)
+  if (!gain) efectos.reverse()
+  return { titulo: d.name, efectos, color: gain ? GOLD : GREEN, alto: 1.75 * (getNodeCameraEnvelopes(node, world).visualRadius / 7.5) * 0.78 * (1 - DESTINO_ENCOGE) }
+}
+
+const ROTULO_MARGEN = [84, 96, 170] // px: lejos del HUD superior y de la ficha
+function DestinoFoco({ world }) {
+  const grp = useRef()
+  const ring = useRef()
+  const keyRef = useRef('')
+  const [info, setInfo] = useState(null)
+  useFrame(({ clock }) => {
+    const g = grp.current
+    if (!g) return
+    const b = FOCO.b
+    const n = FOCO.nodo
+    const k = FOCO.k.value
+    const fase = b && n >= 0 && nodoEnFoco(b) === n ? b.phase : null
+    const key = fase && k > 0.03 ? `${n}:${fase === 'toPort' ? `p${b.way?.to}` : `d${b.dest?.idx}`}` : ''
+    if (key !== keyRef.current) {
+      keyRef.current = key
+      const inf = key ? describirFoco(world, b, n) : null
+      FOCO.etiqueta = key
+      setInfo(inf)
+      if (inf) focoRingMat.color.set(inf.color)
+    }
+    g.visible = key !== ''
+    if (!g.visible) return
+    const node = world.nodes[n]
+    focoDir.copy(FOCO.dest.value).sub(node.pos).normalize()
+    g.position.copy(FOCO.dest.value)
+    g.quaternion.copy(focoQ.setFromUnitVectors(UP, focoDir))
+    const sc = (getNodeCameraEnvelopes(node, world).visualRadius / 7.5) * (keyRef.current.includes(':p') ? 2.4 : 0.95)
+    const t = clock.elapsedTime
+    if (ring.current) ring.current.scale.setScalar(sc * (1 + 0.04 * Math.sin(t * 2.2)))
+    focoRingMat.opacity = k * (fase === 'at' ? 0.22 : 0.38 + 0.1 * Math.sin(t * 2.2))
+  })
+  return (
+    <group ref={grp} visible={false}>
+      <mesh ref={ring} geometry={focoRingGeo} material={focoRingMat} position={[0, 0.12, 0]} raycast={() => null} renderOrder={2} />
+      {info && (
+        <WorldHtml center position={[0, info.alto, 0]} zIndexRange={[8, 6]} opacity={FOCO.k} clamp={ROTULO_MARGEN}>
+          <div className="tag destino-foco" style={{ borderColor: info.color }}>
+            <b>{info.titulo}</b>
+            {info.detalle && <span className="ef">{info.detalle}</span>}
+            {info.efectos?.map((e) => <span key={e.t} className="ef" style={{ color: e.c }}>{e.t}</span>)}
+          </div>
+        </WorldHtml>
+      )}
+    </group>
+  )
+}
+
 export default function Nodes({ world }) {
   const tex = useMemo(getTextures, [])
   useEffect(() => {
     registerWorldForVistas(world)
   }, [world])
-  return world.nodes.map((n) => (
-    <Planet key={n.idx} node={n} world={world} tex={tex} />
-  ))
+  return (
+    <>
+      <FocoUpdater world={world} />
+      {world.nodes.map((n) => (
+        <Planet key={n.idx} node={n} world={world} tex={tex} />
+      ))}
+      <DestinoFoco world={world} />
+    </>
+  )
 }

@@ -6,6 +6,8 @@ import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
 import ViewTabs from '../../Components/Panels/ViewTabs.jsx'
+import Llegada from '../../Components/Panels/Llegada.jsx'
+import { setFocoBallita } from '../../Components/World3D/mundos/foco.js'
 import { StatsHud } from '../../Components/World3D/StatsOverlay.jsx'
 
 function initialStatsOn() {
@@ -56,6 +58,9 @@ function MainScene() {
   const follow = enBallita && punto === 'externa'
   const pov = enBallita && punto === 'interna'
   const activeWay = focusWay == null ? null : sim.world.ways[focusWay]
+  // Foco de la vista de planeta: solo con la ballita seguida (Seguir o POV).
+  const enFoco = (follow || pov) && selected ? selected : null
+  useEffect(() => { setFocoBallita(enFoco) }, [enFoco])
 
   // La sim vive fuera de React: se refresca la UI 5 veces por segundo.
   useEffect(() => {
@@ -138,6 +143,7 @@ function MainScene() {
       <ViewTabs vista={vista} goVista={goVista} sim={sim} way={activeWay} routeIndex={routeIndex} setRouteIndex={(i) => { setRouteIndex(i); setSeek(null) }}
         paused={caminoPaused} setPaused={setCaminoPaused} caminoSpeed={caminoSpeed} setCaminoSpeed={setCaminoSpeed}
         seekTo={(i) => setSeek({ i, k: performance.now() })} onFollow={followBallita} progressRef={progressRef} />
+      {enFoco && <Llegada b={enFoco} world={sim.world} />}
       {selected && vista !== 'camino' && (
         <Detail b={selected} sim={sim} follow={follow} pov={pov}
           onFollow={() => (follow ? setVista('mapa') : followBallita(selected))}

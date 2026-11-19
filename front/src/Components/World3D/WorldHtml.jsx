@@ -20,6 +20,8 @@ export default function WorldHtml({
   farFrom = 300,
   farTo = 500,
   zIndexRange = [16777271, 0],
+  opacity, // opcional: { value } leído cada cuadro (fundidos sin renders de React); < 0.02 la oculta
+  clamp, // opcional: [margenX, margenArriba, margenAbajo] en px; mantiene el rótulo dentro de la pantalla
   style,
   className,
   children,
@@ -27,6 +29,7 @@ export default function WorldHtml({
   const { camera, size, gl } = useThree()
   const group = useRef(null)
   const rootRef = useRef(null)
+  const lastOp = useRef('')
   const [el] = useState(() => document.createElement('div'))
 
   const innerStyle = useMemo(() => ({
@@ -70,7 +73,12 @@ export default function WorldHtml({
     const dist = _delta.length()
     camera.getWorldDirection(_camDir)
 
-    const behind = dist < 1e-4 || _delta.angleTo(_camDir) > Math.PI / 2
+    const op = opacity ? opacity.value : 1
+    const behind = dist < 1e-4 || _delta.angleTo(_camDir) > Math.PI / 2 || op < 0.02
+    if (opacity) {
+      const s = op >= 0.995 ? '' : op.toFixed(2)
+      if (lastOp.current !== s) { lastOp.current = s; el.style.opacity = s }
+    }
     if (behind) {
       if (el.style.display !== 'none') el.style.display = 'none'
       return
@@ -78,8 +86,12 @@ export default function WorldHtml({
     if (el.style.display !== 'block') el.style.display = 'block'
 
     _objPos.project(camera)
-    const x = _objPos.x * (size.width * 0.5) + (size.width * 0.5)
-    const y = -(_objPos.y * (size.height * 0.5)) + (size.height * 0.5)
+    let x = _objPos.x * (size.width * 0.5) + (size.width * 0.5)
+    let y = -(_objPos.y * (size.height * 0.5)) + (size.height * 0.5)
+    if (clamp) {
+      x = Math.min(size.width - clamp[0], Math.max(clamp[0], x))
+      y = Math.min(size.height - clamp[2], Math.max(clamp[1], y))
+    }
 
     let scale = 1
     let lift = 0

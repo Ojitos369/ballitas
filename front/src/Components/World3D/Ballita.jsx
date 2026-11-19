@@ -132,6 +132,8 @@ function getSharedMats() {
   return sharedMats
 }
 
+const BUBBLE_WRAP = { pointerEvents: 'none' }
+
 export function bodyColor(g) {
   return new THREE.Color().setHSL(g.hue, 0.75, 0.6)
 }
@@ -832,9 +834,10 @@ export default function Ballita({ b, sim, selected, pov = false, follow = false,
       <mesh ref={flash} geometry={SHARED_GEO.flash} material={flashMat} visible={false} />
 
       {/* solo el diálogo, encima de la cabeza: nombre y ánimo ya están en la ficha y tapaban a la ballita */}
-      {talking && (selected || nearCam) && !pov && (
-        <WorldHtml position={[0, r * 2.4 + 0.35, 0]} center distanceFactor={2.2} zIndexRange={[20, 10]} style={{ pointerEvents: 'none', maxWidth: 110 }}>
-          <div className="bubble" style={{ borderColor: color.getStyle(), maxWidth: 110, fontSize: 8, borderWidth: 1.5, padding: '1px 5px', borderRadius: 8, opacity: 0.92 }}>
+      {talking && ((selected && follow) || nearCam) && !pov && (
+        // Tamaño fijo en pantalla (≥ 11 px reales, máx. 2 líneas): con distanceFactor quedaba una píldora de 8 px ilegible.
+        <WorldHtml position={[0, r * 2.4 + 0.35, 0]} center zIndexRange={[20, 10]} style={BUBBLE_WRAP}>
+          <div className={`bubble globo${selected ? '' : ' otra'}`} style={{ borderColor: color.getStyle() }}>
             <span>{liveThought.emoji} {liveThought.text}</span>
           </div>
         </WorldHtml>
