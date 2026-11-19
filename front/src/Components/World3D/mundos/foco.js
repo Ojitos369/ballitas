@@ -97,7 +97,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
           vec3 _q = vFocoW * 1.7;
           vec3 _c = floor(_q);
           vec3 _f = abs(fract(_q) - 0.5);
-          float _j = smoothstep(0.43, 0.49, max(_f.x, max(_f.y, _f.z)));
+          float _j = smoothstep(0.44, 0.5, max(_f.x, max(_f.y, _f.z))) * 0.6;
           float _t = fract(sin(dot(_c, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
           float _m = 0.92 + 0.16 * _t;
           diffuseColor.rgb *= mix(1.0, _m * (1.0 - 0.22 * _j), uFocoK);

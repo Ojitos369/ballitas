@@ -386,20 +386,20 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
       // Losas/placas de ~1.6 u (celdas) con tono por pieza tomado de la paleta y juntas por tipo de planeta;
       // variación de tono de baja frecuencia y poro fino, todo a ±18 % de luminancia como mucho.
       vec3 cel = voronoi3(wp * 0.62 + uSeedVec);
-      float junta = 1.0 - smoothstep(0.035, 0.11, cel.z - cel.x);
+      float junta = 1.0 - smoothstep(0.02, 0.07, cel.z - cel.x);
       vec3 pieza = mix(uCol1, uCol2, 0.35 + 0.4 * cel.y);
       pieza = mix(pieza, uCol3, smoothstep(0.55, 1.0, g1 + 0.5) * 0.35);
       vec3 det = mix(baseCol, pieza, 0.55);
       // el color del bioma, contenido pero con saturación propia (luminancia media, no plano chillón ni gris)
       float dl = dot(det, vec3(0.299, 0.587, 0.114));
       det *= clamp(0.46 / max(dl, 0.05), 0.75, 1.9);
-      det = mix(vec3(dot(det, vec3(0.299, 0.587, 0.114))), det, 0.82);
+      det = mix(vec3(dot(det, vec3(0.299, 0.587, 0.114))), det, 0.72);
       det *= 0.9 + 0.12 * g1 + 0.08 * g2 + 0.06 * g3 + 0.06 * (cel.y - 0.5);
       // juntas: grietas cálidas en lava, trazas luminosas en ácido/neón, grietas azules en hielo, sombra en el resto
       vec3 cJunta = det * 0.74;
       float luzJunta = 0.0;
-      if (pType == 3) { cJunta = mix(uCol3, uCol4, 0.5); luzJunta = 0.4; }
-      else if (pType == 5) { cJunta = mix(uCol3, uCol4, 0.5); luzJunta = 0.35; }
+      if (pType == 3) { cJunta = mix(det, uCol3, 0.55); luzJunta = 0.18; }
+      else if (pType == 5) { cJunta = mix(det, uCol3, 0.5); luzJunta = 0.15; }
       else if (pType == 4) { cJunta = mix(uCol0, det, 0.5); }
       else if (pType == 6) { cJunta = mix(uCol3, vec3(1.0), 0.25); luzJunta = 0.2; }
       det = mix(det, cJunta, junta * 0.6);
