@@ -110,7 +110,7 @@ const nodeEnvC = new THREE.Vector3()
 const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
 const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
 const NODE_ARM_MIN = 1.3 // brazo mínimo en un planeta cuando una estructura se interpone
-const NODE_SUBIR = 0.5 // cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
+const NODE_SUBIR = 0.75 // cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -237,8 +237,8 @@ const occSize = new THREE.Vector2()
 // 100-200 mil triángulos por camino) y riberas, estructuras, uniones, kit, edificios y pilares no contaban.
 // Ahora: lista de colisionadores cercanos refrescada cada COL_REFRESH s (mallas y, en InstancedMesh, cada instancia
 // cercana), cada geometría indexada una vez en una rejilla (camColision.js) construida por partes con presupuesto.
-const COL_REFRESH = 0.5
-const COL_BUILD_MS = 0.6 // presupuesto por cuadro para indexar geometría nueva (el grueso va en tiempo ocioso)
+const COL_REFRESH = 1
+const COL_BUILD_MS = 0.3 // presupuesto por cuadro para indexar geometría nueva (el grueso va en tiempo ocioso)
 const COL_PRECARGA = /^(pista|estructuras|puertas)/ // grandes y estáticas: se indexan en tiempo ocioso desde el inicio
 // fuera: marcas del suelo, brillos, fauna animada (cardúmenes) y aros finos que la pista atraviesa (los cubre el disco OCC)
 const COL_EXCLUIR = /^(eventos|anillos|criaturas|kart|paisaje:(bubbles|motes|ray|school)|kit:anillo|uniones:(routeArrow|groundChevron|dividerGlow|portGlow))/
@@ -1545,8 +1545,8 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       }
       fs.clear += (fs.clearGoal - fs.clear) * (1 - Math.exp(-(fs.clearGoal < fs.clear ? FOLLOW_ARM_IN : FOLLOW_ARM_OUT) * h))
       // subida con histéresis: sube rápido mientras algo tapa, baja muy despacio cuando ya no (sin vaivén)
-      const subirGoal = enNodo && !entrando && fs.clearGoal < 0.7 ? 1 : 0
-      ce.subir += (subirGoal - ce.subir) * (1 - Math.exp(-(subirGoal > ce.subir ? 1.6 : 0.25) * h))
+      const subirGoal = enNodo && !entrando && fs.clearGoal < 0.85 ? 1 : 0
+      ce.subir += (subirGoal - ce.subir) * (1 - Math.exp(-(subirGoal > ce.subir ? 2.4 : 0.25) * h))
       const brazo = Math.min(fs.clear, duro)
       if (!entrando && brazo < 0.999) {
         collisionOrigin.copy(bp).addScaledVector(upB, 0.45)
