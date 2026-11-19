@@ -1055,7 +1055,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 9
+export const WORLD_GEN = 10
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1319,10 +1319,17 @@ function bezierPts(P0, T0, P1, T1, kf = 0.42) {
   return pts
 }
 
+// Radio mínimo (u) de espiral y sacacorchos (GEO2): por debajo, los carriles de la fila (18.2 u entre vecinos) suben con
+// pendientes muy distintas y dejan de leerse como una sola calzada (tramo:libre lateral)
+// (barrido en 2 semillas, lateral de tramo:libre: sin mínimo 228, 70 u -> 70, 100 u -> 21, 130 u -> 32)
+const HELI_RMIN = +(globalThis.process?.env?.HELI_RMIN ?? 21 * TK)
+// [radio, factor de vueltas]: al agrandar el radio se quitan vueltas en la misma proporción (misma longitud de cinta y
+// mismos triángulos; sin esto la cinta del mundo crecía un 8.8 %) y las vueltas quedan más abiertas
+const heliR = (r0) => (r0 >= HELI_RMIN ? [r0, 1] : [HELI_RMIN, r0 / HELI_RMIN])
 const SHAPES = {
   // las vueltas guardan un paso mínimo (PITCH): entre dos vueltas caben los carriles de la trenza
-  espiral: (A, B, P) => coil(A, B, Math.min(2 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => 3.2 * WS * AK * P.coil * bump(t), A, undefined, true),
-  sacacorchos: (A, B, P) => coil(A, B, Math.min(3 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => (P.radius * 1.85 + 4.7 * TK) * AK * bump(t), A, undefined, true),
+  espiral: (A, B, P) => { const [R, k] = heliR(3.2 * WS * AK * P.coil); return coil(A, B, Math.max(1, k * Math.min(2 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH))), (t) => R * bump(t), A, undefined, true) },
+  sacacorchos: (A, B, P) => { const [R, k] = heliR((P.radius * 1.85 + 4.7 * TK) * AK); return coil(A, B, Math.max(1, k * Math.min(3 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH))), (t) => R * bump(t), A, undefined, true) },
   // remolino que se cierra: empieza en el borde del cono (A) y acaba en su vértice (B)
   embudo: (A, B, P) => { const R = 4.0 * WS * AK * P.coil; return coil(A, B, Math.min(3, Math.max(1, A.distanceTo(B) / (2 * PITCH))), (t) => R * (1 - t), at(A, basis(A, B).u, -R), (t) => 0.5 * t + 0.5 * t * t) },
   // tiro horizontal: parábola de caída libre
@@ -1355,7 +1362,7 @@ export const FINISH_LEN = 10 * TK // recta final de meta de la llegada
 
 const LINK_K = 1 / (9 * TK) // (rad/u) curvatura admisible del enlace: 6.4° por muestra del medidor (4.7 u)
 const LINK_KS = [0.42, 0.62] // manija de la Bézier, fracción de la cuerda
-const NO_LINK_FIX =!!globalThis.process?.env?.NO_LINK_FIX // diagnóstico (Node)
+export const EMPALME = { off: !!globalThis.process?.env?.NO_LINK_FIX } // interruptor de diagnóstico y de la prueba negativa (layout.test.js)
 function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   const lead = Math.min(2.5 * WS, A.distanceTo(B) * 0.15); const air = KINDS[kind].air
   const cr = (pts) => new THREE.CatmullRomCurve3(pts, false, 'centripetal')
@@ -1393,7 +1400,7 @@ function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   // hélice sigue opuesto). Se MIDE la curvatura del enlace (giro entre cuerdas / paso, rad/u) recortando la forma muestra
   // a muestra (hasta la mitad) y con dos largos de manija; se toma el primer enlace bajo LINK_K o, si ninguno, el mejor.
   let kA = 0.42; let kB = 0.42
-  if (!NO_LINK_FIX && body.length >= 4) {
+  if (!EMPALME.off && body.length >= 4) {
     const va = new THREE.Vector3(); const vb = new THREE.Vector3()
     const curv = (seq) => { let m = 0; for (let i = 1; i < seq.length - 1; i++) { va.subVectors(seq[i], seq[i - 1]); vb.subVectors(seq[i + 1], seq[i]); const l = (va.length() + vb.length()) / 2; if (l > 1e-6) m = Math.max(m, va.angleTo(vb) / l) } return m }
     if (leadB) {
@@ -1503,20 +1510,22 @@ function sampleWayPoints(way, steps = 14) {
 // Celda ROUTE_CELL: todo par a menos de ROUTE_CELL se mide; más lejos la holgura ya pasa de ROUTE_CELL - 2·ext - 1.5·radio (> ROUTE_MARGIN).
 const ROUTE_CELL = 20 * TK * AK
 const SELF_ARC = 40 * TK * AK // (u de recorrido) por debajo, dos tramos de una misma ruta aún se están separando de su punta común
+const NO_FIX_PTS = !!globalThis.process?.env?.NO_FIX_PTS // diagnóstico (Node)
 const NO_SELF = !!globalThis.process?.env?.NO_SELF // diagnóstico (Node): apaga la comparación entre tramos de una misma ruta
 function routeSlack(pts, only = -1) {
   // borde de la unión medido 6 u antes: allí las rutas convergen y el muestreo grueso (~5 u) se saltaba el punto más cercano
-  const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN - 6 * TK * AK)
+  const grid = new Map(); const pool = pts.filter((q) => (q.route >= 0 || q.fix) && q.hubD >= ROUTE_JOIN - 6 * TK * AK)
   const cell = (v) => Math.floor(v / ROUTE_CELL)
   for (const q of pool) { const key = cellKey(cell(q.p.x), cell(q.p.y), cell(q.p.z)); let b = grid.get(key); if (!b) grid.set(key, b = []); b.push(q) }
   let min = ROUTE_CELL
   for (const q of pool) {
+    if (q.fix) continue // salida/llegada: obstáculo fijo, solo se mide contra él
     if (only >= 0 && q.h !== only) continue // con `only`, q recorre esa mitad y o todas
     const x = cell(q.p.x); const y = cell(q.p.y); const z = cell(q.p.z)
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
       const bucket = grid.get(cellKey(x + dx, y + dy, z + dz)); if (!bucket) continue
       for (const o of bucket) {
-        if (o.route === q.route) {
+        if (o.fix) { /* tramo compartido de salida/llegada (GEO2): cuenta como otra ruta */ } else if (o.route === q.route) {
           // misma ruta (sesión 7): tramos DISTINTOS a más de SELF_ARC de recorrido (un rizo contra la espiral siguiente);
           // los vecinos comparten punta y un tramo consigo mismo (rizo, hélice) se cruza por diseño
           if (NO_SELF || only < 0 || q.g == null || o.g == null || (o.m === q.m && o.h === q.h) || Math.abs(o.g - q.g) < SELF_ARC) continue
@@ -1831,6 +1840,18 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
   }
   // muestras de las rutas de cada mitad (u por cuerda acumulada: no depende de la tabla de longitudes del candidato)
   const halfPts = [[], []]; const arcEnd = [[], []]
+  // tramo compartido de salida y de llegada como obstáculo fijo de la fila de rutas (GEO2): un embudo o una hélice de una
+  // ruta se metía en la salida de su propio camino (semilla 371) y nada lo medía (route = -1 quedaba fuera de routeSlack)
+  const landingCurve = shape('llegada', hubs[2], E, P, hubT[2], gIn.clone().negate(), wrapMid(b, nE, hubs[2]))
+  const fixPts = []
+  if (rowSearch && !NO_FIX_PTS) for (const [cv, kind] of [[launch.curve, 'salida'], [landingCurve, 'llegada']]) {
+    let L0 = 0; let q0 = cv.getPoint(0)
+    for (let k = 1; k <= 24; k++) { const q = cv.getPoint(k / 24); L0 += q.distanceTo(q0); q0 = q }
+    const n = clamp(Math.ceil(L0 / (5 * TK * AK)), 8, 200); const ps = []; const accs = []; let acc = 0; let prev = null
+    for (let k = 0; k <= n; k++) { const p = cv.getPoint(k / n); if (prev) acc += p.distanceTo(prev); prev = p; ps.push(p); accs.push(acc) }
+    const pseudo = { length: acc, kind, radius: P.radius }
+    for (let k = 0; k <= n; k++) { const p = ps[k]; fixPts.push({ p, fix: true, route: -1, hubD: Math.min(p.distanceTo(hubs[0]), p.distanceTo(hubs[1]), p.distanceTo(hubs[2])), ext: routeExtent(pseudo, accs[k] / acc), tube: P.radius }) }
+  }
   const sampleHalf = (h) => {
     const out = []
     plans.forEach(({ halves }, r) => curves[r][h].forEach((cv, m) => {
@@ -1857,7 +1878,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
     let best = null; let last = null
     search: for (const mul of SPREAD_STEPS) for (const perm of perms) {
       buildHalf(h, mul, perm); sampleHalf(h); last = { mul, perm }
-      const rs = routeSlack(h ? halfPts[0].concat(halfPts[1]) : halfPts[0], h)
+      const rs = routeSlack(h ? halfPts[0].concat(halfPts[1], fixPts) : halfPts[0].concat(fixPts), h)
       if (rs >= ROUTE_MARGIN) { best = null; break search }
       if (commit) rej('fila_rutas:intento_con_roce')
       if (!best || rs > best.rs) best = { mul, perm, rs }
@@ -1941,7 +1962,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
     })
   })
   launch.hubB = true
-  const landing = seg('llegada', shape('llegada', hubs[2], E, P, hubT[2], gIn.clone().negate(), wrapMid(b, nE, hubs[2])), -1, [])
+  const landing = seg('llegada', landingCurve, -1, [])
   landing.hubA = true
   launch.next = heads[0].map((s) => s.i)
   tails[0].forEach((s) => { s.next = heads[1].map((x) => x.i) })

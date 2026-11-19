@@ -72,7 +72,8 @@ for (const seed of [1, 369]) {
     // Tramos consecutivos de una misma ruta (el empalme entre dos tramos): tampoco es 0 todavía; cota de no retroceso.
     const r = m.clases['ruta:libre']
     // (sesión 7: la búsqueda de huecos ya compara tramos de una misma ruta; cota de 120 / 60 a 20 / 20)
-    assert.ok((r?.galibo ?? 0) <= 20 && (r?.lateral ?? 0) <= 20, `semilla ${seed}, ruta:libre: gálibo ${r?.galibo} (${r?.atH}); lateral ${r?.lateral} (${r?.atD})`)
+    // (GEO2: la salida y la llegada cuentan como obstáculo de la fila de rutas; gálibo exigido a 0, lateral acotado)
+    assert.ok((r?.galibo ?? 0) === 0 && (r?.lateral ?? 0) <= 20,`semilla ${seed}, ruta:libre: gálibo ${r?.galibo} (${r?.atH}); lateral ${r?.lateral} (${r?.atD})`)
   })
 }
 
@@ -86,6 +87,18 @@ test('cuñas: ninguna berma sobre el firme de otra cinta (semilla 369)', async (
   assert.equal(con.n, 0, `cuñas ${con.n}; peor ${con.peor.toFixed(3)} u ${con.at}`)
   W.BERMA.off = true
   try { const sin = cunas(w); assert.ok(sin.n > 1000, `sin recorte la medida debe ver cuñas: ${sin.n}`) } finally { W.BERMA.off = false }
+})
+
+// Pieza GEO2 (tools/torsion.mjs): la punta de espirales, embudos y sacacorchos no quiebra (< 45° entre muestras de 4.7 u).
+// Sin el empalme medido (EMPALME.off) el mismo mundo quiebra > 60° en alguna espiral: la medida lo detecta.
+test('torsión: puntas de espiral, embudo y sacacorchos < 45° (semilla 369)', async () => {
+  const { torsion } = await import('../../tools/torsion.mjs')
+  const W = await import('./world.js')
+  const peor = (t) => Math.max(...['espiral:punta', 'embudo:punta', 'sacacorchos:punta'].map((k) => Math.max(t[k]?.up ?? 0, t[k]?.tan ?? 0)))
+  const t = torsion(mundo(369))
+  assert.ok(peor(t) < 45, `punta ${peor(t).toFixed(1)}°: espiral ${t['espiral:punta']?.atUp}, embudo ${t['embudo:punta']?.atUp}`)
+  W.EMPALME.off = true
+  try { const sin = peor(torsion(buildWorld(369))); assert.ok(sin > 60, `sin el empalme medido la punta debe quebrar: ${sin.toFixed(1)}°`) } finally { W.EMPALME.off = false }
 })
 
 test('contrato world.colision: lejos libre, centro de cinta ocupado salvo que se ignore', () => {
