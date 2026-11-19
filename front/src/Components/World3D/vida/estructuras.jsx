@@ -337,7 +337,9 @@ const F_RIB = {}
 const RIB_N = 9
 const _c3 = new THREE.Color()
 const _ribCheck = new THREE.Vector3()
-function buildSegRibbonGeo(way, seg, si, world, spec) {
+// Generador (planificación, no aspecto): cede cada pocas muestras para repartir un tramo entre cuadros; solo se
+// interrumpe al empezar una muestra, sin marcos ni temporales compartidos a medias.
+function* buildSegRibbonGeo(way, seg, si, world, spec) {
   if (!spec) return null
   const col = world ? colisionDe(world) : null
   const c1 = new THREE.Color(spec.c1)
@@ -369,6 +371,7 @@ function buildSegRibbonGeo(way, seg, si, world, spec) {
     for (const sideSign of [-1, 1]) {
       let stripCount = 0
       for (let i = 0; i <= n; i++) {
+        if (i % 8 === 7) yield
         const u = i / n
         const f = surfFrame(seg, lane.id, u, F_RIB)
         const midLat = edge0 + W * 0.45
@@ -455,8 +458,27 @@ const _cand = new THREE.Vector3()
 const _pL = new THREE.Vector3()
 const _pR = new THREE.Vector3()
 
+const SEG_PASO_MS = 3 // presupuesto por cuadro del propio componente para un tramo cercano aún sin datos
+const segGens = new WeakMap() // seg -> generador a medias (la precarga y el propio componente lo comparten)
+const NUNCA = () => false
+/** Avanza los datos del tramo hasta que `agotado()` diga basta; true cuando quedaron en caché. */
+function segStructPaso(way, seg, si, agotado) {
+  if (segDataCache.has(seg)) return true
+  let g = segGens.get(seg)
+  if (!g) { g = segStructGen(way, seg, si); segGens.set(seg, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { segGens.delete(seg); segDataCache.set(seg, r.value); return true }
+    if (agotado()) return false
+  }
+}
 function getSegStructData(way, seg, si) {
-  if (segDataCache.has(seg)) return segDataCache.get(seg)
+  segStructPaso(way, seg, si, NUNCA)
+  return segDataCache.get(seg)
+}
+
+// Mismo cálculo que de un tirón (mismo rng y orden); los `yield` van al final de cada muestra.
+function* segStructGen(way, seg, si) {
   const themeId = way.theme?.id
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
   const rng = mulberry32(4219 + way.idx * 313 + si * 977)
@@ -464,7 +486,7 @@ function getSegStructData(way, seg, si) {
   const col = world ? colisionDe(world) : null
   const local = nuevoLocal()
 
-  const ribbonGeo = buildSegRibbonGeo(way, seg, si, world, spec.ribbon)
+  const ribbonGeo = yield* buildSegRibbonGeo(way, seg, si, world, spec.ribbon)
   const arches = []
   const byModel = new Map()
   for (const p of spec.props) byModel.set(p.model, [])
@@ -476,6 +498,7 @@ function getSegStructData(way, seg, si) {
 
   if (archSpec) {
     for (let s = 16; s < L - 12; s += archSpec.step * (0.85 + rng() * 0.3)) {
+      yield
       const u = s / L
       for (let li = 0; li < lanes.length; li++) {
         const lane = lanes[li]
@@ -549,6 +572,7 @@ function getSegStructData(way, seg, si) {
       const list = byModel.get(pSpec.model)
       const tintColors = pSpec.tints ? pSpec.tints.map((h) => new THREE.Color(h)) : null
       for (let s = 6 + rng() * step * 0.6; s < L - 5; s += step) {
+        yield
         if (busyList.some((w) => (w.from === lane.id || w.to === lane.id) && Math.abs(w.u * L - s) < 5.5)) continue
         const u = s / L
         const f = surfFrame(seg, lane.id, u, F0)
@@ -591,9 +615,25 @@ function getSegStructData(way, seg, si) {
     }
   }
 
-  const out = { ribbonGeo, arches, byModel }
-  segDataCache.set(seg, out)
-  return out
+  return { ribbonGeo, arches, byModel }
+}
+
+/** Precarga (vida/precarga.js): construye por delante los tramos de `way` (un tramo por paso) hasta que
+ *  `agotado()` diga basta; true cuando están todos. Mismos datos que al acercarse: solo cambia cuándo. */
+export function estructurasPaso(way, agotado) {
+  const segs = way.segments ?? []
+  for (let si = 0; si < segs.length; si++) {
+    const seg = segs[si]
+    if (seg.air || segDataCache.has(seg)) continue
+    if (!segStructPaso(way, seg, si, agotado)) return false
+    if (agotado()) return false
+  }
+  return true
+}
+/** Modelos GLB que usarán las estructuras de `way` (para pedirlos antes de entrar). */
+export function estructurasModelos(way) {
+  const spec = THEME_STRUCTS[way.theme?.id] ?? THEME_STRUCTS.bosque
+  return spec.props.filter((p) => !p.model.startsWith('proc:')).map((p) => p.model)
 }
 
 // ═══════════════════════════ POOL DE INSTANCIAS FIJAS POR MODELO ═══════════════════════════
@@ -707,14 +747,17 @@ export default function Estructuras({ way, detail, focused, time }) {
       segChanged = true
     }
 
-    // 2) Construir como máximo 1 tramo cercano aún no cacheado en este frame (sin picos de CPU)
+    // 2) Avanzar como máximo 1 tramo cercano aún no cacheado en este frame, con presupuesto (un tramo entero
+    //    costaba 150-450 ms de golpe); la precarga (vida/precarga.js) suele tenerlos ya hechos.
     let builtOne = false
+    let tocado = false
     for (let i = 0; i < nearSegsRef.current.length; i++) {
       const { seg, si } = nearSegsRef.current[i]
       if (!segDataCache.has(seg)) {
-        if (builtOne) continue
-        builtOne = true
-        getSegStructData(way, seg, si)
+        if (tocado) continue
+        tocado = true
+        const t0 = performance.now()
+        builtOne = segStructPaso(way, seg, si, () => performance.now() - t0 > SEG_PASO_MS)
       }
     }
     if (builtOne) dirtyPoolRef.current = true

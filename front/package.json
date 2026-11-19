@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test src/Core/sim.test.js src/Core/layout.test.js src/Components/World3D/povLook.test.js src/Components/World3D/ecosistema.test.js src/Components/World3D/colisionObjetos.test.js src/Components/World3D/mundos/superficieGen.test.js"
+    "test": "node --test src/Core/sim.test.js src/Core/layout.test.js src/Components/World3D/povLook.test.js src/Components/World3D/camColision.test.jssrc/Components/World3D/ecosistema.test.js src/Components/World3D/colisionObjetos.test.js src/Components/World3D/mundos/superficieGen.test.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",

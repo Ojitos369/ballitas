@@ -12,7 +12,7 @@ import {
   DepthOfField,
 } from '@react-three/postprocessing'
 import * as THREE from 'three'
-import { NODE_R, mulberry32 } from '../../Core/world.js'
+import { NODE_R, mulberry32, RIBBON_HALF } from '../../Core/world.js'
 import Nodes from './Nodes.jsx'
 import Paths from './Paths.jsx'
 import Ballita from './Ballita.jsx'
@@ -21,8 +21,9 @@ import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
 import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
-import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
+import Precompilado, { enlazarPendientes, precompilar, precompilarSombra, primerDibujo } from './Precompilado.jsx'
 import { clampYaw, decayOffset, povZoomView, povView, POV_ZOOM_EYE, rayEnterSphere } from './povLook.js'
+import { crearRejilla, construir, rayoRejilla, cercanoRejilla } from './camColision.js'
 import { getNodeCameraEnvelopes } from './Nodes.jsx'
 import { resolveNodeBiome } from './mundos/biomas.js'
 import { resolvePlanetConfig } from './mundos/planetaCartoon.js'
@@ -108,7 +109,8 @@ function NodeLift({ b, world, children }) {
 const nodeEnvC = new THREE.Vector3()
 const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
 const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
-const NODE_ARM_MIN = 1.3 // brazo mínimo en un planeta cuando una estructura se interpone
+const NODE_ARM_MIN = 2.2 // brazo mínimo real en un planeta (más cerca, la ballita o una pieza llenaba la pantalla)
+const NODE_SUBIR = 0.75 // cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -116,6 +118,15 @@ const povLookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
 const povLookQuat = new THREE.Quaternion()
 const povLookDirTmp = new THREE.Vector3()
 const upRefVec = new THREE.Vector3()
+const upGoalV = new THREE.Vector3()
+const fwdP = new THREE.Vector3()
+const rollT = new THREE.Vector3()
+const colSide = new THREE.Vector3()
+const colN = new THREE.Vector3()
+const colO2 = new THREE.Vector3()
+const colC2 = new THREE.Vector3()
+const CAM_RADIO = 0.6 // la cámara se mantiene a esta distancia de cualquier superficie sólida
+const CAM_RADIO_MIN = 0.36 // nunca más cerca que esto (el plano near es 0.15)
 const rollMat = new THREE.Matrix4()
 const viewDir = new THREE.Vector3()
 const POV_FWD_RATE = 5 // filtro del rumbo en POV
@@ -220,6 +231,320 @@ if (!THREE.ShaderChunk.clipping_planes_fragment.includes('uOccBall')) {
 }
 const occNdc = new THREE.Vector3()
 const occSize = new THREE.Vector2()
+
+// ── Colisión de la cámara contra todo lo sólido cercano ─────────────────────────────────────────────────────────
+// Antes solo se lanzaba un rayo contra las mallas `pista:*` cada 3 cuadros (~27 ms por rayo: una sola malla de
+// 100-200 mil triángulos por camino) y riberas, estructuras, uniones, kit, edificios y pilares no contaban.
+// Ahora: lista de colisionadores cercanos refrescada cada COL_REFRESH s (mallas y, en InstancedMesh, cada instancia
+// cercana), cada geometría indexada una vez en una rejilla (camColision.js) construida por partes con presupuesto.
+const COL_REFRESH = 0.5
+const COL_REF_MS = 0.25 // presupuesto por cuadro del refresco de la lista (se reparte entre cuadros)
+const COL_TRIS_MAX = 20000 // geometrías mayores (pistas) no se indexan: van por world.colision
+const COL_IDX_R = 60 // solo se indexa lo que queda a menos de esto de la ballita
+// fuera: marcas del suelo, brillos, fauna animada (cardúmenes) y aros finos que la pista atraviesa (los cubre el disco OCC)
+const COL_EXCLUIR = /^(eventos|anillos|criaturas|kart|paisaje:(bubbles|motes|ray|school)|kit:anillo|uniones:(routeArrow|groundChevron|dividerGlow|portGlow))/
+const colM4 = new THREE.Matrix4()
+const colSph = new THREE.Sphere()
+const colA = new THREE.Vector3()
+const colB = new THREE.Vector3()
+const colP = new THREE.Vector3()
+const colOut = [0, 0, 0]
+function colSolido(o) {
+  if (!o.isMesh || o.isSkinnedMesh || o.userData?.noCameraCollision) return false
+  const m = Array.isArray(o.material) ? o.material[0] : o.material
+  if (!m || m.visible === false || m.side === THREE.BackSide) return false // cielos y atmósferas se ven por dentro
+  if (m.blending === THREE.AdditiveBlending || (m.transparent && m.opacity < 0.5) || m.depthWrite === false) return false
+  return !COL_EXCLUIR.test(o.geometry?.name || '')
+}
+function crearColisionador() {
+  return { grids: new WeakMap(), cola: [], cols: [], t: -1e9, centro: new THREE.Vector3(1e9, 0, 0), inst: new WeakMap(), instPend: new Set(), objs: null, objsT: -1e9, pila: null, rf: null, ballita: new THREE.Vector3(1e9, 0, 0) }
+}
+function colGrid(cs, geo) {
+  let g = cs.grids.get(geo)
+  if (g === undefined) {
+    const pos = geo.attributes?.position
+    const tris = pos ? (geo.index ? geo.index.count : pos.count) / 3 : 0
+    // las pistas (100-250 mil triángulos) no se indexan: su forma es analítica (world.colision, ver colPistas)
+    g = pos && tris <= COL_TRIS_MAX && pos.itemSize === 3 && !pos.isInterleavedBufferAttribute ? crearRejilla(pos.array, geo.index ? geo.index.array : null) : null
+    cs.grids.set(geo, g)
+    if (g) g.geo = geo
+    if (g) g.etq = `${geo.name || '-'}#${g.n}`
+    if (g && !g.done) { cs.cola.push(g); cs.cola.sort((a, b) => a.n - b.n) } // las pequeñas (edificios, pilares) primero
+  }
+  return g && g.done ? g : null
+}
+// centros/radios en mundo de cada instancia (se calculan en tiempo ocioso: colInstanciasCalc). No se usa
+// instanceMatrix.version: InstanceCuller compacta y restaura el búfer en cada render y la versión cambia sin que
+// cambien las matrices lógicas; se recalcula si cambia el número de instancias o la matriz de la malla, y como
+// mucho cada 20 s (instancias animadas, que son pequeñas).
+function colInstancias(cs, o, t) {
+  const c = cs.inst.get(o)
+  if (!c || c.n !== o.count || t - c.t > 20 || !c.mw.equals(o.matrixWorld)) cs.instPend.add(o)
+  return c && c.n === o.count ? c : null
+}
+function colInstanciasCalc(cs, o, t) {
+  const geo = o.geometry
+  if (!geo.boundingSphere) geo.computeBoundingSphere()
+  const n = o.count
+  const c = { t, n, mw: o.matrixWorld.clone(), cen: new Float32Array(n * 3), rad: new Float32Array(n), rmax: 0, cubos: new Map() }
+  for (let i = 0; i < n; i++) {
+    o.getMatrixAt(i, colM4); colM4.premultiply(o.matrixWorld)
+    colSph.copy(geo.boundingSphere).applyMatrix4(colM4)
+    c.cen[i * 3] = colSph.center.x; c.cen[i * 3 + 1] = colSph.center.y; c.cen[i * 3 + 2] = colSph.center.z; c.rad[i] = colSph.radius
+    if (colSph.radius < 0.45) continue // piezas diminutas: nunca colisionan
+    if (colSph.radius > c.rmax) c.rmax = colSph.radius
+    // cubetas espaciales de COL_CUBO u: el refresco solo mira las cercanas
+    const k = cuboKey(Math.floor(colSph.center.x / COL_CUBO), Math.floor(colSph.center.y / COL_CUBO), Math.floor(colSph.center.z / COL_CUBO))
+    let a = c.cubos.get(k)
+    if (!a) c.cubos.set(k, (a = []))
+    a.push(i)
+  }
+  cs.inst.set(o, c)
+}
+const COL_CUBO = 24
+const cuboKey = (x, y, z) => ((x + 4096) * 8192 + (y + 4096)) * 8192 + (z + 4096)
+// Tiempo ocioso: recorrido incremental de la escena (lista de sólidos cada 3 s), instancias pendientes e indexado.
+// Nada de esto corre dentro del cuadro.
+function colOcio(cs, scene, fin) {
+  const ahora = performance.now()
+  if (!cs.pila && ahora - cs.objsT > 3000) { cs.pila = [scene]; cs.objsNuevo = [] }
+  while (cs.pila && cs.pila.length && performance.now() < fin) {
+    for (let k = 0; k < 300 && cs.pila.length; k++) {
+      const o = cs.pila.pop()
+      if (!o.visible) continue
+      if (colSolido(o)) cs.objsNuevo.push(o)
+      const ch = o.children
+      for (let j = 0; j < ch.length; j++) cs.pila.push(ch[j])
+    }
+  }
+  if (cs.pila && !cs.pila.length) { cs.objs = cs.objsNuevo; cs.objsNuevo = null; cs.pila = null; cs.objsT = performance.now() }
+  for (const o of cs.instPend) {
+    if (performance.now() > fin) break
+    cs.instPend.delete(o)
+    if (o.parent) colInstanciasCalc(cs, o, performance.now() / 1000)
+  }
+  // indexado: solo lo encolado por el refresco (cercano); lo que la ballita dejó atrás (> COL_IDX_R) sale de la cola
+  colIndexar(cs, fin - 0.3, 1500)
+}
+const COL_IDX_MS = 0.12 // indexado dentro del cuadro (solo si queda cola)
+function colIndexar(cs, fin, trozo = 300) {
+  while (cs.cola.length && performance.now() < fin) {
+    const g = cs.cola[0]
+    if (construir(g, trozo)) { cs.cola.shift(); (cs.hechas ??= []).push(g.etq); if (cs.hechas.length > 64) cs.hechas.shift() }
+  }
+}
+// Refresca la lista de colisionadores alrededor de `bp` cada COL_REFRESH s, repartido en varios cuadros con
+// presupuesto COL_REF_MS (antes recorría la escena en un cuadro: picos de 10-13 ms). R ya incluye lo que la ballita
+// recorre hasta el siguiente refresco. Las piezas pequeñas pegadas a la ballita (ella misma) no cuentan.
+function colRefrescar(cs, bp, R, t) {
+  let rf = cs.rf
+  if (!rf) {
+    if ((t - cs.t < COL_REFRESH && cs.centro.distanceTo(bp) < R * 0.6) || !cs.objs) return
+    cs.t = t
+    rf = cs.rf = { i: 0, objs: cs.objs, bp: bp.clone(), R, list: [] }
+    // la cola de indexado conserva solo lo que sigue cerca
+    if (cs.ballita.distanceTo(bp) > COL_IDX_R) { cs.ballita.copy(bp); cs.cola = cs.cola.filter((g) => g.fase > 0 || (cs.grids.delete(g.geo), false)) }
+  }
+  const t0 = performance.now()
+  const objs = rf.objs
+  while (rf.i < objs.length) {
+    colFiltrar(cs, objs[rf.i++], rf.bp, rf.R, rf.list)
+    if ((rf.i & 15) === 0 && performance.now() - t0 > COL_REF_MS) return
+  }
+  cs.cols = rf.list; cs.centro.copy(rf.bp); cs.rf = null
+}
+function colFiltrar(cs, o, bp, R, list) {
+  if (!o.visible || !o.parent) return
+  const geo = o.geometry
+  if (!geo.boundingSphere) geo.computeBoundingSphere()
+  if (!geo.boundingSphere) return
+  if (o.isInstancedMesh) {
+    const ins = colInstancias(cs, o, cs.t)
+    if (!ins || !ins.cubos.size) return
+    let g = null
+    const alc = R + ins.rmax
+    const x0 = Math.floor((bp.x - alc) / COL_CUBO), x1 = Math.floor((bp.x + alc) / COL_CUBO)
+    const y0 = Math.floor((bp.y - alc) / COL_CUBO), y1 = Math.floor((bp.y + alc) / COL_CUBO)
+    const z0 = Math.floor((bp.z - alc) / COL_CUBO), z1 = Math.floor((bp.z + alc) / COL_CUBO)
+    const recorrer = (i) => {
+      const r = ins.rad[i]
+      const dx = ins.cen[i * 3] - bp.x; const dy = ins.cen[i * 3 + 1] - bp.y; const dz = ins.cen[i * 3 + 2] - bp.z
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      if (d > r + R || (r < 1.5 && d < 1.1)) return true
+      if (!g) { g = colGrid(cs, geo); if (!g) return false }
+      o.getMatrixAt(i, colM4); colM4.premultiply(o.matrixWorld)
+      list.push({ g, o: null, mw: colM4.clone(), inv: colM4.clone().invert(), s: colM4.getMaxScaleOnAxis(), c: new THREE.Vector3(ins.cen[i * 3], ins.cen[i * 3 + 1], ins.cen[i * 3 + 2]), r })
+      return true
+    }
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > ins.cubos.size) {
+      for (const a of ins.cubos.values()) for (const i of a) if (!recorrer(i)) return
+    } else {
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) {
+        const a = ins.cubos.get(cuboKey(x, y, z))
+        if (a) for (const i of a) if (!recorrer(i)) return
+      }
+    }
+    return
+  }
+  colSph.copy(geo.boundingSphere).applyMatrix4(o.matrixWorld)
+  const r = colSph.radius
+  if (r > 15000 || r < 0.5) return
+  const d = colSph.center.distanceTo(bp)
+  if (d > r + R || (r < 1.5 && d < 1.1)) return // lejos, o una pieza de la propia ballita
+  if (d > r + COL_IDX_R && !cs.grids.has(geo)) return
+  const g = colGrid(cs, geo)
+  if (!g) return
+  list.push({ g, o, inv: o.matrixWorld.clone().invert(), s: o.matrixWorld.getMaxScaleOnAxis(), c: colSph.center.clone(), r, mw: o.matrixWorld.clone() })
+}
+// Pistas (analíticas, world.colision): primera fracción del segmento a→b que entra en la losa de otra cinta
+// (a menos de COL_PISTA_D de su línea de superficie). La cinta que pisa la ballita se ignora (la cubre el suelo propio).
+const colIgnoraObj = { way: null, si: -1, lane: null }
+function colIgnora(b) {
+  const seg = b.phase === 'travel' ? b.seg : null
+  if (!seg?.way) return null
+  colIgnoraObj.way = seg.way; colIgnoraObj.si = seg.way.segments.indexOf(seg); colIgnoraObj.lane = b.lane ?? null
+  return colIgnoraObj
+}
+// coste por cuadro de la colisión: media y pico de la ventana de los últimos 5 s (se publican en cam.info)
+// partes: refresco, rayos, cercanía, indexado (pico de cada una en la ventana)
+function colCoste(ce, ms, ahora, ...partes) {
+  const v = (ce.colV ??= { t: ahora, s: 0, n: 0, max: 0, media: 0, pico: 0, pm: [0, 0, 0, 0], picos: [0, 0, 0, 0] })
+  v.s += ms; v.n++; if (ms > v.max) v.max = ms
+  for (let i = 0; i < partes.length; i++) if (partes[i] > v.pm[i]) v.pm[i] = partes[i]
+  ce.msEma += (ms - ce.msEma) * 0.05
+  if (ahora - v.t > 5000) { v.media = v.s / v.n; v.pico = v.max; v.picos = v.pm.map((x) => +x.toFixed(2)); v.pm = [0, 0, 0, 0]; v.t = ahora; v.s = 0; v.n = 0; v.max = 0 }
+}
+const COL_PISTA_D = 0.55
+const COL_PISTA_R = COL_PISTA_D - RIBBON_HALF
+const colQ = new THREE.Vector3()
+function colPistas(world, a, b, ignora) {
+  const cl = world?.colision
+  if (!cl) return 1
+  for (let k = 1; k <= 4; k++) {
+    colQ.copy(a).lerp(b, k / 4)
+    if (!cl.libre(colQ, COL_PISTA_R, ignora)) return (k - 1) / 4
+  }
+  return 1
+}
+function colLocal(col) {
+  if (col.o && !col.mw.equals(col.o.matrixWorld)) { col.mw.copy(col.o.matrixWorld); col.inv.copy(col.mw).invert(); col.c.copy(col.o.geometry.boundingSphere.center).applyMatrix4(col.mw) }
+}
+// Primera fracción t∈[0,1] del segmento a→b que toca algo sólido (1 si nada).
+function colSegmento(cs, a, b) {
+  let best = 1
+  colP.copy(b).sub(a)
+  const l2 = colP.lengthSq()
+  for (const col of cs.cols) {
+    colLocal(col)
+    // descarte por esfera: distancia del centro al segmento
+    let u = l2 > 0 ? colA.copy(col.c).sub(a).dot(colP) / l2 : 0
+    u = u < 0 ? 0 : u > best ? best : u
+    if (colA.copy(a).addScaledVector(colP, u).distanceToSquared(col.c) > col.r * col.r) continue
+    colA.copy(a).applyMatrix4(col.inv); colB.copy(b).applyMatrix4(col.inv)
+    const t = rayoRejilla(col.g, colA.x, colA.y, colA.z, colB.x - colA.x, colB.y - colA.y, colB.z - colA.z, best)
+    if (t < best) { best = t; cs.golpe = col }
+  }
+  return best
+}
+// Superficie más cercana a p dentro de r: deja en `out` la dirección de salida y devuelve la distancia (Infinity si nada).
+function colCercano(cs, p, r, out) {
+  let best = Infinity
+  for (const col of cs.cols) {
+    if (col.c.distanceToSquared(p) > (col.r + r) * (col.r + r)) continue
+    colLocal(col)
+    colA.copy(p).applyMatrix4(col.inv)
+    const d = cercanoRejilla(col.g, colA.x, colA.y, colA.z, r / col.s, colOut) * col.s
+    if (d < best) {
+      best = d
+      colB.set(colOut[0], colOut[1], colOut[2]).applyMatrix4(col.mw)
+      out.copy(p).sub(colB)
+    }
+  }
+  if (best < Infinity) { if (out.lengthSq() > 1e-10) out.normalize(); else out.set(0, 1, 0) }
+  return best
+}
+
+// ── Encuadre consciente de la interfaz ──────────────────────────────────────────────────────────────────────────
+// Punto de pantalla (NDC) donde se coloca la ballita: algo por debajo del centro (se ve el camino delante) y por
+// encima de los paneles que la taparían (tarjeta de detalle, fila de círculos, joystick del POV...).
+const PANELES_UI = 'aside.tarjeta, nav.puntos, .pov-panel, .pov-joy-wrap, .vista-esquina, .camino-panel, .lista-panel'
+const ENCUADRE_Y = -0.2
+function encuadreUI(dom, out, mbx, mby) {
+  out.x = 0; out.y = ENCUADRE_Y
+  if (typeof document === 'undefined' || !dom) return out
+  const cr = dom.getBoundingClientRect()
+  if (cr.width < 2 || cr.height < 2) return out
+  const rects = []
+  for (const el of document.querySelectorAll(PANELES_UI)) {
+    const r = el.getBoundingClientRect()
+    if (r.width < 2 || r.height < 2) continue
+    // a NDC del lienzo
+    rects.push({ x0: (r.left - cr.left) / cr.width * 2 - 1, x1: (r.right - cr.left) / cr.width * 2 - 1, y0: 1 - (r.bottom - cr.top) / cr.height * 2, y1: 1 - (r.top - cr.top) / cr.height * 2 })
+  }
+  // hasta 3 pasadas: cada panel que pise la caja de la ballita la empuja hacia arriba (si está abajo) o abajo
+  for (let it = 0; it < 3; it++) {
+    let movio = false
+    for (const r of rects) {
+      if (r.x1 < out.x - mbx || r.x0 > out.x + mbx || r.y1 < out.y - mby || r.y0 > out.y + mby) continue
+      const cy = (r.y0 + r.y1) / 2
+      if (cy < 0) out.y = r.y1 + mby + 0.03
+      else out.y = r.y0 - mby - 0.03
+      movio = true
+    }
+    if (!movio) break
+  }
+  out.y = THREE.MathUtils.clamp(out.y, -0.45, 0.5)
+  return out
+}
+const encuadreDir = new THREE.Vector3()
+const encuadreQ = new THREE.Quaternion()
+const Z_NEG = new THREE.Vector3(0, 0, -1)
+// Rotación local que lleva el centro de la vista a que la dirección de la ballita caiga en (nx, ny) NDC.
+function giroEncuadre(nx, ny, fov, aspect) {
+  const t = Math.tan(THREE.MathUtils.degToRad(fov / 2))
+  encuadreDir.set(nx * t * aspect, ny * t, -1).normalize()
+  return encuadreQ.setFromUnitVectors(encuadreDir, Z_NEG)
+}
+
+// ── Horizonte acotado ───────────────────────────────────────────────────────────────────────────────────────────
+// "Arriba" de la vista: se gira desde la referencia (Y del mundo) hacia el arriba de la ballita como mucho maxA.
+// Así el horizonte apenas se inclina en peraltes y carriles de pared, y en vuelo queda recto.
+const limEje = new THREE.Vector3()
+function arribaAcotado(out, ref, up, fwd, maxA) {
+  out.copy(ref)
+  if (!up || maxA <= 0) return out
+  const c = THREE.MathUtils.clamp(ref.dot(up), -1, 1)
+  const a = Math.acos(c)
+  if (a < 1e-4) return out
+  limEje.crossVectors(ref, up)
+  if (limEje.lengthSq() < 1e-6) { limEje.copy(fwd); if (limEje.lengthSq() < 1e-6) return out }
+  limEje.normalize()
+  return out.applyAxisAngle(limEje, Math.min(a, maxA))
+}
+const ROLL_MAX_CAMINO = THREE.MathUtils.degToRad(12)
+const ROLL_MAX_PARED = THREE.MathUtils.degToRad(28) // pared, techo, espiral
+const ROLL_HOLGURA = THREE.MathUtils.degToRad(8) // margen del tope duro sobre el objetivo (deja respirar al suavizado)
+const ROLL_LIM_PLANETA = THREE.MathUtils.degToRad(15)
+const rollF = new THREE.Vector3()
+const rollU = new THREE.Vector3()
+const rollR = new THREE.Vector3()
+const rollQ = new THREE.Quaternion()
+const rollC = new THREE.Vector3()
+// Tope duro del alabeo de `q`: si su "arriba" se separa de `ref` (proyectada en el plano de la vista) más de `lim`,
+// se gira alrededor de la mirada lo justo para volver al límite. Mirada casi paralela a ref: sin tope (no definido).
+function topeAlabeo(q, ref, lim) {
+  if (lim == null) return
+  rollF.set(0, 0, -1).applyQuaternion(q)
+  rollR.copy(ref).addScaledVector(rollF, -ref.dot(rollF))
+  const L = rollR.length()
+  if (L < 0.3) return
+  rollR.divideScalar(L)
+  rollU.set(0, 1, 0).applyQuaternion(q)
+  const ang = Math.atan2(rollC.crossVectors(rollU, rollR).dot(rollF), rollU.dot(rollR)) // de U a R, alrededor de F
+  if (Math.abs(ang) <= lim) return
+  const giro = ang - Math.sign(ang) * lim
+  q.premultiply(rollQ.setFromAxisAngle(rollF, giro))
+}
 
 const KEY_TO_ACTION = {
   arrowleft: 'left',
@@ -561,11 +886,10 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
-  const collisionRay = useMemo(() => new THREE.Raycaster(), [])
-  const collisionHits = useMemo(() => [], [])
   const delta = useMemo(() => new THREE.Vector3(), [])
-  const collisionMeshes = useRef([])
-  const collisionFrame = useRef(0)
+  const colis = useRef(null)
+  if (!colis.current) colis.current = crearColisionador()
+  const camExtra = useRef({ viewUp: new THREE.Vector3(0, 1, 0), push: new THREE.Vector3(), enc: { x: 0, y: ENCUADRE_Y }, encGoal: { x: 0, y: ENCUADRE_Y }, encT: -1e9, rollRef: new THREE.Vector3(0, 1, 0), rollLim: null, subir: 0, msEma: 0, msMax: 0, buildEma: 0, pRef: 0, pSeg: 0, pNear: 0 })
   const modo = useRef('libre') // libre | entrando | siguiendo | pov | volviendo
   const ultima = useRef(null)
   const userActive = useRef(false)
@@ -585,6 +909,24 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
   useEffect(() => {
     onCanvasReady?.(gl.domElement)
   }, [gl, onCanvasReady])
+
+  // Indexado de colisión en tiempo ocioso: pistas, riberas y puertas (estáticas, 20-190 mil triángulos cada una)
+  // se encolan a los pocos segundos y la cola avanza solo cuando el hilo principal está libre.
+  useEffect(() => {
+    const cs = colis.current
+    const ric = typeof window !== 'undefined' && window.requestIdleCallback
+    let id = 0
+    let vivo = true
+    const paso = (deadline) => {
+      if (!vivo) return
+      // sin hueco (timeout vencido): un paso mínimo de 1 ms para no quedarse sin lista nunca
+      const libre = deadline && !deadline.didTimeout ? Math.min(6, deadline.timeRemaining() - 0.5) : 1
+      if (libre > 0.3) colOcio(cs, scene, performance.now() + libre)
+      id = ric ? window.requestIdleCallback(paso, { timeout: 500 }) : setTimeout(() => paso(null), 60)
+    }
+    id = ric ? window.requestIdleCallback(paso, { timeout: 500 }) : setTimeout(() => paso(null), 300)
+    return () => { vivo = false; if (ric) window.cancelIdleCallback(id); else clearTimeout(id) }
+  }, [scene])
 
   // Recentrar (tecla R o evento 'ballitas:recentrar' del botón): vuelve detrás de la ballita / mirada al frente.
   useEffect(() => {
@@ -999,6 +1341,23 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       }
       // en tercera persona la cámara va rígida a la ballita (con retraso se quedaba a metros a alta velocidad); sólo la mirada es lenta
       camera.position.lerp(povEye, Math.max(1 - Math.exp(-18 * h), Math.min(1, fija * 6)))
+      if (zv.back > 0.05) {
+        // a la espalda: la cámara no atraviesa pistas, losas ni pilares (mismo colisionador que Seguir)
+        const t0 = performance.now()
+        const cs = colis.current
+        colRefrescar(cs, selected.pos, 4 + Math.abs(selected.speed ?? 0) * COL_REFRESH, t0 / 1000)
+        const upP = selected.up && selected.up.lengthSq() > 0.5 ? selected.up : Y_AXIS
+        collisionOrigin.copy(selected.pos).addScaledVector(upP, 0.3)
+        delta.copy(camera.position).sub(collisionOrigin)
+        const len = delta.length()
+        if (len > 0.3) {
+          const tHit = Math.min(colSegmento(cs, collisionOrigin, camera.position), colPistas(world, collisionOrigin, camera.position, colIgnora(selected)))
+          if (tHit < 1) camera.position.copy(collisionOrigin).addScaledVector(delta, Math.max(0.05, (tHit * len - 0.2) / len))
+        }
+        const dn = colCercano(cs, camera.position, CAM_RADIO_MIN, colN)
+        if (dn < CAM_RADIO_MIN) camera.position.addScaledVector(colN, CAM_RADIO_MIN - dn)
+        colCoste(camExtra.current, performance.now() - t0, t0)
+      }
       c.target.copy(povEye).addScaledVector(povFwd, 2)
       hasPrevPos.current = false
 
@@ -1091,6 +1450,22 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         if (followUp.current.lengthSq() < 1e-6) followUp.current.copy(upGoal)
         followUp.current.normalize()
       }
+      // "arriba" de la VISTA (alabeo), aparte del de colocación: en camino se inclina como mucho ROLL_MAX_* hacia
+      // el de la ballita (nada en vuelo ni cambio de carril); con H desactivado sigue a la ballita como antes.
+      const ce = camExtra.current
+      // ce.rollRef / ce.rollLim: tope duro del alabeo final (respecto a Y o a la radial del planeta); null = libre
+      if (enNodo) { upGoalV.copy(nodeRadial); ce.rollRef.copy(nodeRadial); ce.rollLim = ROLL_LIM_PLANETA }
+      else if (selected.phase === 'travel' && selected.up && selected.up.lengthSq() > 1e-4) {
+        const libre = horizonRef?.current === false
+        const aire = Boolean(selected.seg?.air || selected.airborne || selected.flight)
+        const maxA = libre ? Math.PI : aire ? 0 : selected.up.y < 0.6 ? ROLL_MAX_PARED : ROLL_MAX_CAMINO
+        arribaAcotado(upGoalV, Y_AXIS, selected.up, fs.fwd, maxA)
+        ce.rollRef.copy(Y_AXIS); ce.rollLim = libre ? null : maxA + ROLL_HOLGURA
+      } else { upGoalV.copy(followUp.current); ce.rollRef.copy(followUp.current); ce.rollLim = ROLL_LIM_PLANETA }
+      if (entrando || !(ce.viewUp.lengthSq() > 0.5)) ce.viewUp.copy(upGoalV)
+      else ce.viewUp.lerp(upGoalV, 1 - Math.exp(-WALL_UP_RATE * h))
+      if (ce.viewUp.lengthSq() < 1e-6) ce.viewUp.copy(upGoalV)
+      ce.viewUp.normalize()
       sideVec.crossVectors(fs.fwd, followUp.current)
       if (sideVec.lengthSq() > 1e-3) fs.side.copy(sideVec.normalize()) // en tramos verticales se conserva el lateral previo
       upRefVec.crossVectors(fs.side, fs.fwd).normalize()
@@ -1121,10 +1496,17 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       else fs.posUp.lerp(upGoalPos, 1 - Math.exp(-WALL_UP_RATE * h))
       if (fs.posUp.lengthSq() < 1e-4) fs.posUp.copy(upGoalPos)
       fs.posUp.normalize(); fs.hasPosUp = true
-      posSide.crossVectors(fs.fwd, fs.posUp)
+      // rumbo de COLOCACIÓN aplanado: en saltos, caídas y bajadas el rumbo apunta hacia abajo y "detrás" quedaba
+      // encima de la ballita (mirada casi vertical, horizonte girado). En rizos se conserva (la pista es vertical).
+      const rizo = /rizo|sacacorchos/.test(selected.seg?.kind ?? '')
+      const aplanar = enNodo || selected.phase !== 'travel' || rizo || horizonRef?.current === false ? 0 : selected.seg?.air || selected.airborne || selected.flight ? 0.85 : 0.5
+      fwdP.copy(fs.fwd); fwdP.y *= 1 - aplanar
+      if (fwdP.lengthSq() < 1e-4) fwdP.copy(fs.fwd)
+      fwdP.normalize()
+      posSide.crossVectors(fwdP, fs.posUp)
       if (posSide.lengthSq() < 1e-4) posSide.copy(fs.side)
       posSide.normalize()
-      posUpO.crossVectors(posSide, fs.fwd).normalize()
+      posUpO.crossVectors(posSide, fwdP).normalize()
 
       // El arrastre (ver efecto de gestos) deja un desvío uYaw/uPitch; sin tocar ~1.5 s vuelve suave detrás.
       fs.idle = fs.drag ? 0 : fs.idle + h
@@ -1149,7 +1531,8 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
 
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
       const yaw = fs.rel.yaw + fs.uYaw + sway
-      const pitch = fs.rel.pitch + NODE_PITCH_PLUS * (fs.nodeBlend ?? 0) + fs.uPitch + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0)
+      // en un planeta, si una estructura acorta el brazo, la cámara sube por encima (rodea) en vez de pegarse a la ballita
+      const pitch = Math.min(1.3, fs.rel.pitch + NODE_PITCH_PLUS * (fs.nodeBlend ?? 0) + fs.uPitch + NODE_SUBIR * camExtra.current.subir + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0))
       const dist = fs.rel.dist * distK
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal
@@ -1157,7 +1540,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         posRiel(desiredOff, selected, fs.prevSeg, Math.cos(pitch) * dist, Math.sin(pitch) * dist, followUp.current)
         desiredOff.sub(lookAhead)
       } else {
-        desiredOff.copy(fs.fwd).multiplyScalar(-Math.cos(pitch) * Math.cos(yaw))
+        desiredOff.copy(fwdP).multiplyScalar(-Math.cos(pitch) * Math.cos(yaw))
           .addScaledVector(posSide, Math.cos(pitch) * Math.sin(yaw))
           .addScaledVector(posUpO, Math.sin(pitch))
           .multiplyScalar(dist)
@@ -1177,16 +1560,42 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         camera.position.copy(fs.anchor).add(fs.off).add(fs.glide)
       }
 
-      // Colisión de cámara contra la escena: recorta el brazo antes de atravesar una pista, berma u objeto.
-      // Si algo se interpone entre la ballita y la cámara, el brazo se acorta (rápido) y luego vuelve a crecer (lento): sin saltos.
-      if (!entrando && ++collisionFrame.current % 3 === 0) {
-        if (!collisionMeshes.current.length) {
-          scene.traverse((o) => { if (o.isMesh && o.geometry?.name?.startsWith('pista:')) collisionMeshes.current.push(o) })
-        }
-        collisionOrigin.copy(bp).addScaledVector(enNodo ? nodeRadial : selected.up ?? Y_AXIS, 0.45)
+      // Colisión de cámara contra todo lo sólido cercano (pistas, riberas, estructuras, uniones, kit, edificios, pilares):
+      // si algo se interpone entre la ballita y la cámara, el brazo se acorta (rápido) y vuelve a crecer (lento).
+      // Si el impacto está pegado a la cámara (a punto de entrar en una losa o bajo la calzada) se acorta en el acto.
+      const colT0 = performance.now()
+      const cs = colis.current
+      colRefrescar(cs, bp, dist + 3 + Math.abs(vel) * COL_REFRESH, colT0 / 1000)
+      const colT1 = performance.now()
+      ce.pRef += (colT1 - colT0 - ce.pRef) * 0.05
+      const upB =enNodo ? nodeRadial : selected.up && selected.up.lengthSq() > 0.5 ? selected.up : Y_AXIS
+      let duro = 1
+      if (!entrando) {
+        collisionOrigin.copy(bp).addScaledVector(upB, 0.45)
         delta.copy(camera.position).sub(collisionOrigin)
         const rayLength = delta.length()
         fs.clearGoal = 1
+        if (rayLength > 0.5) {
+          // barrido aproximado de una esfera de ~0.3 u: rayo central y dos laterales
+          let tMin = colSegmento(cs, collisionOrigin, camera.position)
+          if (!enNodo) tMin = Math.min(tMin, colPistas(world, collisionOrigin, camera.position, colIgnora(selected)))
+          // en un planeta el brazo nunca baja de NODE_ARM_MIN: lo que se interponga se rodea por arriba (subir) o se disuelve (OCC)
+          const minT = enNodo ? Math.min(1, NODE_ARM_MIN / rayLength) : 0.02
+          if (tMin < 1 && (1 - tMin) * rayLength < 0.9) duro = Math.max(minT, (tMin * rayLength - 0.25) / rayLength)
+          colSide.crossVectors(delta, upB)
+          if (colSide.lengthSq() < 1e-6) colSide.copy(fs.side)
+          colSide.normalize()
+          // rayos laterales: uno cada dos cuadros, alternando lado (cada resultado se recuerda hasta renovarse)
+          if ((ce.cuadro = (ce.cuadro ?? 0) + 1) % 2 === 0) {
+            const lado = (ce.lado = -(ce.lado || 0.3))
+            colO2.copy(collisionOrigin).addScaledVector(colSide, lado * 0.5)
+            colC2.copy(camera.position).addScaledVector(colSide, lado)
+            const tLado = colSegmento(cs, colO2, colC2)
+            if (lado > 0) ce.tLadoA = tLado; else ce.tLadoB = tLado
+          }
+          tMin = Math.min(tMin, ce.tLadoA ?? 1, ce.tLadoB ?? 1)
+          if (tMin < 1) fs.clearGoal = THREE.MathUtils.clamp((tMin * rayLength - 0.4) / rayLength, Math.min(1, (enNodo ? NODE_ARM_MIN : 0.35) / rayLength), 1)
+        }
         if (enNodo && fs.nodeEnv && rayLength > 0.8) {
           // estructuras del planeta: si una se interpone, el brazo se acorta (sin saltar por encima); la que contiene a la ballita no cuenta
           let tMin = 1
@@ -1195,24 +1604,44 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
             if (nodeEnvC.distanceToSquared(collisionOrigin) < env.radius * env.radius) continue
             tMin = Math.min(tMin, rayEnterSphere(collisionOrigin, camera.position, nodeEnvC, env.radius))
           }
-          if (tMin < 1) fs.clearGoal = THREE.MathUtils.clamp(tMin - 0.05, Math.min(1, NODE_ARM_MIN / rayLength), 1)
-        }
-        if (!enNodo && rayLength > 0.8 && collisionMeshes.current.length) {
-          collisionRay.set(collisionOrigin, delta.normalize())
-          collisionRay.camera = camera
-          collisionRay.near = 0.3
-          collisionRay.far = rayLength + 0.5
-          collisionHits.length = 0
-          collisionRay.intersectObjects(collisionMeshes.current, false, collisionHits)
-          const hit = collisionHits.find((x) => x.object.visible && !x.object.userData?.noCameraCollision)
-          if (hit) fs.clearGoal = THREE.MathUtils.clamp((hit.distance - 0.4) / rayLength, 0.3, 1)
+          if (tMin < 1) fs.clearGoal = Math.min(fs.clearGoal, THREE.MathUtils.clamp(tMin - 0.05, Math.min(1, NODE_ARM_MIN / rayLength), 1))
         }
       }
       fs.clear += (fs.clearGoal - fs.clear) * (1 - Math.exp(-(fs.clearGoal < fs.clear ? FOLLOW_ARM_IN : FOLLOW_ARM_OUT) * h))
-      if (!entrando && fs.clear < 0.999) {
-        collisionOrigin.copy(bp).addScaledVector(selected.up ?? Y_AXIS, 0.45)
-        camera.position.sub(collisionOrigin).multiplyScalar(fs.clear).add(collisionOrigin)
+      // subida con histéresis: sube rápido mientras algo tapa, baja muy despacio cuando ya no (sin vaivén)
+      const subirGoal = enNodo && !entrando && fs.clearGoal < 0.85 ? 1 : 0
+      ce.subir += (subirGoal - ce.subir) * (1 - Math.exp(-(subirGoal > ce.subir ? 2.4 : 0.25) * h))
+      const brazo = Math.min(fs.clear, duro)
+      if (!entrando && brazo < 0.999) {
+        collisionOrigin.copy(bp).addScaledVector(upB, 0.45)
+        camera.position.sub(collisionOrigin).multiplyScalar(brazo).add(collisionOrigin)
       }
+      const colT2 = performance.now()
+      ce.pSeg += (colT2 - colT1 - ce.pSeg) * 0.05
+      if (!entrando) {
+        // por encima de la calzada que pisa la ballita (arrastrar hacia abajo o un peralte no la hunden)
+        if (selected.phase === 'travel' && !selected.flight) {
+          const alto = sideVec.copy(camera.position).sub(bp).dot(upB)
+          if (alto < 0.5) camera.position.addScaledVector(upB, 0.5 - alto)
+        }
+        // fuera de cualquier superficie: empuje con resorte hasta CAM_RADIO y tope duro en CAM_RADIO_MIN
+        const dn = colCercano(cs, camera.position, CAM_RADIO, colN)
+        colA.copy(colN).multiplyScalar(dn < CAM_RADIO ? CAM_RADIO - dn : 0)
+        ce.push.lerp(colA, 1 - Math.exp(-14 * h))
+        camera.position.add(ce.push)
+        if (dn < CAM_RADIO || ce.push.lengthSq() > 1e-4) {
+          const dn2 = colCercano(cs, camera.position, CAM_RADIO_MIN, colN)
+          if (dn2 < CAM_RADIO_MIN) camera.position.addScaledVector(colN, CAM_RADIO_MIN - dn2)
+        }
+      } else ce.push.set(0, 0, 0)
+      // indexado: el grueso va en tiempo ocioso; con el hilo saturado (planetas) un poco en el cuadro para no dejar
+      // estructuras cercanas sin colisión
+      const colT3 = performance.now()
+      if (cs.cola.length) colIndexar(cs, colT3 + COL_IDX_MS)
+      const colMs = performance.now() - colT0
+      ce.pNear += (colT3 - colT2 - ce.pNear) * 0.05
+      colCoste(ce, colMs, colT0, colT1 - colT0, colT2 - colT1, colT3 - colT2, colMs - (colT3 - colT0))
+      ce.msMax = Math.max(ce.msMax * 0.995, colMs)
       // Evita que la cámara se meta dentro de la esfera de un planeta (en el planeta seguido, su radio visual real).
       for (let i = 0; !enTubo && i < nodes.length; i++) {
         const np = nodes[i].pos
@@ -1230,27 +1659,57 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
         const alto = sideVec.copy(camera.position).sub(bp).dot(nodeRadial)
         if (window.__ballitasDebug) fs.info = { rb: +bp.distanceTo(nodoSel.pos).toFixed(2), vr: +(fs.nodeEnv?.visualRadius ?? 0).toFixed(2), camR: +camera.position.distanceTo(nodoSel.pos).toFixed(2), alto: +alto.toFixed(2), arm: +fs.clear.toFixed(2) }
         if (alto < 0.8) camera.position.addScaledVector(nodeRadial, 0.8 - alto)
+        // brazo mínimo real: nunca a menos de NODE_ARM_MIN de la ballita; si no cabe, sube sobre la normal del planeta
+        if (!entrando) {
+          sideVec.copy(camera.position).sub(bp)
+          const dc = sideVec.length()
+          if (dc < NODE_ARM_MIN) {
+            const altoN = sideVec.dot(nodeRadial)
+            const horiz = Math.sqrt(Math.max(0, dc * dc - altoN * altoN))
+            const nuevoAlto = Math.sqrt(Math.max(0, NODE_ARM_MIN * NODE_ARM_MIN - horiz * horiz))
+            camera.position.addScaledVector(nodeRadial, nuevoAlto - altoN)
+          }
+        }
       }
 
       // Orientación: mira exacto a la ballita (siempre centrada). El "arriba" de la cámara se transporta del cuadro
       // anterior (sin giro propio) y se endereza poco a poco hacia followUp (Y del mundo, normal del planeta o pared
       // con H), con más fuerza cuanto mejor definido esté: lookAt con Y fija daba medio giro al pasar por la vertical.
       // se mira a la ballita (no al objetivo, que en la entrada aún viaja desde la vista anterior y la dejaba fuera de cuadro)
-      viewDir.copy(lookAhead).sub(camera.position)
+      // encuadre: la ballita va al punto libre de la interfaz (se relee cada 0.5 s y se mueve suave)
+      const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+      const aspecto = camera.aspect || 1
+      const nowS = colT0 / 1000
+      if (nowS - ce.encT > 0.5) {
+        ce.encT = nowS
+        const rb = 0.75 / (Math.max(0.5, camera.position.distanceTo(bp)) * tanH) // radio aparente de la ballita (NDC)
+        encuadreUI(gl.domElement, ce.encGoal, Math.min(0.5, rb / aspecto + 0.08), Math.min(0.5, rb + 0.08))
+      }
+      const kEnc = entrando ? 1 : 1 - Math.exp(-2.5 * h)
+      ce.enc.x += (ce.encGoal.x - ce.enc.x) * kEnc; ce.enc.y += (ce.encGoal.y - ce.enc.y) * kEnc
+      viewDir.copy(bp).sub(camera.position)
       if (viewDir.lengthSq() > 1e-8) {
         viewDir.normalize()
         upRefVec.set(0, 1, 0).applyQuaternion(fs.quat)
         upRefVec.addScaledVector(viewDir, -upRefVec.dot(viewDir))
-        sideVec.copy(followUp.current).addScaledVector(viewDir, -followUp.current.dot(viewDir))
+        sideVec.copy(ce.viewUp).addScaledVector(viewDir, -ce.viewUp.dot(viewDir))
+        // mirada casi vertical: el "arriba" proyectado se degenera; el rumbo hace de arriba en pantalla
+        const casiVertical = 1 - THREE.MathUtils.smoothstep(sideVec.length(), 0.25, 0.55)
+        if (casiVertical > 0) { rollT.copy(fwdP).addScaledVector(viewDir, -fwdP.dot(viewDir)); sideVec.addScaledVector(rollT, casiVertical) }
         const fuerza = sideVec.length()
         if (corte || entrando || upRefVec.lengthSq() < 1e-6) { if (fuerza > 1e-3) upRefVec.copy(sideVec) }
-        else if (fuerza > 1e-3) upRefVec.normalize().lerp(sideVec.divideScalar(fuerza), (1 - Math.exp(-FOLLOW_ROLL_W * h)) * fuerza)
+        else if (fuerza > 1e-3) {
+          // giro alrededor de la mirada hacia el objetivo (ángulo con signo: sin degenerar a 180°, sin medio giro)
+          upRefVec.normalize(); sideVec.divideScalar(fuerza)
+          const ang = Math.atan2(rollT.crossVectors(upRefVec, sideVec).dot(viewDir), upRefVec.dot(sideVec))
+          upRefVec.applyAxisAngle(viewDir, ang * (1 - Math.exp(-FOLLOW_ROLL_W * 1.6 * h)))
+        }
         if (upRefVec.lengthSq() < 1e-6) upRefVec.set(0, 1, 0).applyQuaternion(fs.quat)
         upRefVec.normalize()
         sideVec.crossVectors(viewDir, upRefVec).normalize()
         upRefVec.crossVectors(sideVec, viewDir)
         rollMat.makeBasis(sideVec, upRefVec, midVec.copy(viewDir).negate())
-        rotGoal.setFromRotationMatrix(rollMat)
+        rotGoal.setFromRotationMatrix(rollMat).multiply(giroEncuadre(ce.enc.x, ce.enc.y, camera.fov, aspecto))
         if (corte) fs.quat.copy(rotGoal)
         else {
           // zona muerta: la mirada se suaviza y la ballita puede moverse dentro del tercio central, nunca fuera
@@ -1258,11 +1717,12 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
           fs.quat.slerp(rotGoal, 1 - Math.exp(-(entrando ? 4 * FOLLOW_ROT_W : FOLLOW_ROT_W) * h))
           // la zona es una elipse dentro del tercio central de la pantalla (más ancha en horizontal)
           midVec.copy(viewDir).applyQuaternion(occQuat.copy(fs.quat).invert())
-          const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * (entrando ? 0.8 : FOLLOW_ZONA)
+          const zona = entrando ? 0.8 : FOLLOW_ZONA
           const z = Math.max(1e-4, -midVec.z)
-          const fuera = midVec.z >= 0 ? 4 : Math.hypot(midVec.x / (z * t * (camera.aspect || 1)), midVec.y / (z * t))
+          const fuera = midVec.z >= 0 ? 4 : Math.hypot((midVec.x / (z * tanH * aspecto) - ce.enc.x) / zona, (midVec.y / (z * tanH) - ce.enc.y) / zona)
           if (fuera > 1) fs.quat.slerp(rotGoal, 1 - 1 / fuera)
         }
+        if (!entrando) topeAlabeo(fs.quat, ce.rollRef, ce.rollLim)
         camera.quaternion.copy(fs.quat)
       }
       // disco de oclusión en pantalla: todo lo que esté delante de la ballita y la tape se disuelve
@@ -1311,7 +1771,10 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
     }
     if (projDirty) camera.updateProjectionMatrix()
     const dbg = typeof window !== 'undefined' && window.__ballitasDebug // sólo con ?stats=1: sondeo de la cámara
-    if (dbg) dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: followRef.current.info }
+    if (dbg) {
+      const ce = camExtra.current
+      dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: { ...followRef.current.info, colMedia5s: +(ce.colV?.media ?? 0).toFixed(3), colPico5s: +(ce.colV?.pico ?? 0).toFixed(2), colPicos5s: ce.colV?.picos }, colis: colis.current, colGolpe: colis.current.golpe ? `${colis.current.golpe.g.etq}${colis.current.golpe.o ? '' : '[i]'}|${colis.current.golpe.o?.material?.type ?? ''}|r${Math.round(colis.current.golpe.r)}` : null, arm: +followRef.current.clear.toFixed(2), armGoal: +followRef.current.clearGoal.toFixed(2),colMs: +ce.msEma.toFixed(3), colMsMax: +ce.msMax.toFixed(2), colN: colis.current.cols.length, colCola: colis.current.cola.length, colColaEtq: colis.current.cola.slice(0, 4).map((g) => `${g.etq}@${g.fase}:${g.next}`), colHechas: (colis.current.hechas ?? []).slice(-8), colProf: [ce.pRef, ce.pSeg, ce.pNear].map((x) => +x.toFixed(3)), enc: { ...ce.enc } }
+    }
   })
 
   // Si el usuario toma el control en plena transición, la transición se corta (no se le pelea la cámara).
@@ -1390,26 +1853,33 @@ function PostFX({ dofOn, selected, highQuality }) {
   // programas (CoC, Bokeh, Kawase, variante del EffectMaterial) para que la primera Ballita no los compile.
   const warm = useRef(0) // 0 pendiente, 1 este cuadro, 2 hecho
   const gl = useThree((s) => s.gl)
-  const camera = useThree((s) => s.camera)
+  const getR3f = useThree((s) => s.get)
   const scene = useThree((s) => s.scene)
   useEffect(() => {
     // con plazo: si los cuadros no dejan hueco libre, sin timeout no llegaba a correr nunca
     const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 800 }) : (f) => setTimeout(f, 1)
     // Además, compila en paralelo todo lo montado aunque esté oculto (LOD de nodos, pieles, variantes
     // cercanas): sin esto, acercarse por primera vez (Camino/Ballita) esperaba su enlace dentro del cuadro.
-    const t = setTimeout(() => idle(() => {
-      if (warm.current === 0) warm.current = 1
-      gl.capabilities.getMaxAnisotropy() // consulta síncrona a la GPU (>100 ms con la cola llena); se cachea aquí
-      // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
-      // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
-      Promise.all([precompilar(gl, scene, camera, scene), precompilarSombra(gl, camera, scene)]).then(() => {
-        const pend = (gl.info.programs ?? []).slice()
-        const next = () => { pend.shift()?.getUniforms(); if (pend.length) idle(next) }
-        idle(next)
-      })
-    }), 2500)
-    return () => clearTimeout(t)
-  }, [gl, camera, scene])
+    // La cámara se lee al correr (no es dependencia): si cambiaba de objeto, el plazo de 2,5 s volvía a empezar y el
+    // precalentado llegaba tarde (medido: aún sin hacer a los 8 s de cargar, y caía justo al entrar a Ballita).
+    // Cuenta desde el primer cuadro pintado, no desde el montaje (el primer cuadro con todo el mundo tarda segundos).
+    let t = 0
+    const raf = requestAnimationFrame(() => {
+      t = setTimeout(() => idle(() => {
+        if (warm.current === 0) warm.current = 1
+        const camera = getR3f().camera
+        gl.capabilities.getMaxAnisotropy() // consulta síncrona a la GPU (>100 ms con la cola llena); se cachea aquí
+        // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
+        // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
+        // y el primer dibujo oculto de cada programa (detalle cercano de planetas y ciudades, oculto en el mapa): sin
+        // él, la primera llegada a un nodo pagaba la traducción nativa de ANGLE dentro del cuadro (cuadros de 1-2 s)
+        Promise.all([precompilar(gl, scene, camera, scene), precompilarSombra(gl, camera, scene)]).then(() => enlazarPendientes(gl))
+          .then(() => primerDibujo(gl, scene, scene, camera))
+        if (window.__enlace) window.__enlace.calentado = Math.round(performance.now())
+      }), 1500)
+    })
+    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
+  }, [gl, getR3f, scene])
 
   useFrame(() => {
     const e = dofRef.current

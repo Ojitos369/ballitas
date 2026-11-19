@@ -103,7 +103,7 @@ const BEAM_COL = new THREE.Color('#272e3c')
 const DIVIDER_COL = new THREE.Color('#e0a630')
 const PORT_BODY_COL = new THREE.Color('#343c4d')
 const unionesCache = new WeakMap()
-function buildUnionesData(way) {
+export function buildUnionesData(way) {
   if (unionesCache.has(way)) return unionesCache.get(way)
   const pillars = []; const beams = []; const beamTrims = []; const routeArrows = []
   const groundChevrons = []; const dividerBodies = []; const dividerGlows = []

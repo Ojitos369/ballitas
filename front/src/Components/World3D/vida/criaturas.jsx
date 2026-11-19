@@ -265,6 +265,11 @@ function getCritterMat() {
   return _critterMat
 }
 
+/** Materiales compartidos de criaturas (uno por animación y el de los bichos de berma), para el precalentado. */
+export function criaturasWarmup() {
+  return [...Object.keys(SPECIES).map(getTravelMat), getCritterMat()]
+}
+
 // ═══════════════════════════ CONSTRUCCIÓN DE FLOTAS Y BERMA ═══════════════════════════
 const dataCache = new WeakMap()
 const rr = (rng, [a, b]) => a + (b - a) * rng()
@@ -359,7 +364,7 @@ function buildBermCritters(way, rng) {
     })
 }
 
-function getWayFaunaData(way) {
+export function getWayFaunaData(way) {
   if (dataCache.has(way)) return dataCache.get(way)
   const themeId = way.theme?.id
   const spec = THEME_FAUNA[themeId] ?? THEME_FAUNA.bosque
