@@ -151,6 +151,8 @@ const occQuat = new THREE.Quaternion()
 const ENTRADA_S = 1.1 // duración de la transición al empezar a seguir
 const POV_TRANS_S = 0.9 // planeta → carretera: la cámara de seguimiento se desliza al POV en este tiempo
 const POV_TRANS_CORTE = 14 // si la ballita saltó más lejos (puerto, portal), corte en vez de cruzar el mundo
+const povTransQ = new THREE.Quaternion()
+const povTransM = new THREE.Matrix4()
 const rotGoal = new THREE.Quaternion()
 const REL_DEFAULT = { yaw: 0, pitch: 0.42, dist: SEGUIR_DIST }
 const springA = new THREE.Vector3()
@@ -1362,7 +1364,14 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
       // cámara semifija a la espalda (más lenta) → rígida en los ojos
       const fija = zv.back / 2.2
       const trans = povTrans.current < 1
-      povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : trans ? 6 : 8 - 4.5 * fija) * h))
+      if (trans && camera.position.distanceTo(selected.pos) > 0.6) {
+        // mientras se desliza desde el planeta la cámara mira a la ballita (nunca queda fuera de cuadro)
+        // y la mirada pasa a la del POV a medida que llega
+        const s = povTrans.current * povTrans.current * (3 - 2 * povTrans.current)
+        povTransQ.setFromRotationMatrix(povTransM.lookAt(camera.position, selected.pos, povUp.current))
+        povTransQ.slerp(povTargetQuat, s * s)
+        povQuat.current.slerp(povTransQ, 1 - Math.exp(-10 * h))
+      } else povQuat.current.slerp(povTargetQuat, 1 - Math.exp(-(interacting ? 14 : trans ? 6 : 8 - 4.5 * fija) * h))
       camera.quaternion.copy(povQuat.current)
 
       const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
