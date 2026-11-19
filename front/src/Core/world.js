@@ -1868,6 +1868,183 @@ export function ribbonHits(world, S = ribbonSamples(world)) {
   return { ...judgePairs(S, gatherPairs(S, JOINT_SEP + 0.6 * TK), RIBBON_CLEAR), S }
 }
 
+// ───────────────────────── espacio visible entre cintas (medidor en el marco local) ─────────────────────────
+// Lo que ve la cámara de seguimiento, medido en el marco real de cada carril (laneFrame: up/side/tangent con relieve,
+// giro y peralte). Para cada muestra de la cinta A y cada trozo cercano de la cinta B (rectángulo de semiancho
+// RIBBON_HALF, largo de su paso y grosor de quilla QUILLA, expresado en los ejes de A):
+//   galibo : B entra en el prisma libre sobre la calzada de A (ancho CALZADA_HALF·2, alto GALIBO_H a lo largo de up).
+//   lateral: el aire entre los bordes visibles (bermas incluidas) de A y B es menor que AIRE_LAT.
+//   union  : en la zona de unión (prefijo contiguo desde una punta común) dos cintas sólo pueden solaparse si son
+//            coplanares (normales con dot >= COPLANAR_DOT y desnivel <= COPLANAR_Y): se leen como una calzada que se
+//            ensancha o bifurca. Mientras se separan sin solaparse (aire < AIRE_LAT) quedan exentas; el largo de esa
+//            zona se reporta (unionSep). Un solape no coplanar dentro de la unión es choque.
+// La prueba es asimétrica (B sobre A no es A sobre B): se evalúan los dos sentidos. Una cinta contra sí misma cuenta a
+// más de RIB_SELF de arco (rizos, hélices).
+export const GALIBO_H = 6 * TK
+export const AIRE_LAT = 2 * RIBBON_HALF
+export const CALZADA_HALF = LANE_W / 2 + RIBBON_CURB
+export const QUILLA = 0.75 // quilla de la cinta bajo el firme (pista.jsx profile: 0.48 · k, k <= 1.55)
+export const COPLANAR_DOT = 0.98
+export const COPLANAR_Y = 0.25
+const CLR_STEP = 1 * TK
+const CLR_LIM = GALIBO_H + 2 * RIBBON_HALF + QUILLA + 2 * CLR_STEP
+
+// Muestras densas con marco: { ribs[], X,Y,Z, UX..,SX..,TX.., H (semipaso), R }.
+export function clearanceSamples(world) {
+  const ribs = []; const F = {}; const cols = { X: [], Y: [], Z: [], UX: [], UY: [], UZ: [], SX: [], SY: [], SZ: [], TX: [], TY: [], TZ: [], R: [] }
+  for (const [way, seg, id] of ribbonsOf(world)) {
+    const L = laneLength(seg, id); const n = Math.max(4, Math.ceil(Math.max(seg.length, L) / CLR_STEP))
+    const r = { idx: ribs.length, way, seg, lane: id, start: cols.X.length, n, ds: L / n, ends: [] }
+    for (let i = 0; i <= n; i++) {
+      const f = laneFrame(seg, id, i / n, F); const p = f.surface
+      cols.X.push(p.x); cols.Y.push(p.y); cols.Z.push(p.z)
+      cols.UX.push(f.up.x); cols.UY.push(f.up.y); cols.UZ.push(f.up.z)
+      cols.SX.push(f.side.x); cols.SY.push(f.side.y); cols.SZ.push(f.side.z)
+      cols.TX.push(f.tangent.x); cols.TY.push(f.tangent.y); cols.TZ.push(f.tangent.z)
+      cols.R.push(r.idx)
+      if (i === 0 || i === n) r.ends.push(ribbonEndKey(world, p.x, p.y, p.z))
+    }
+    ribs.push(r)
+  }
+  const S = { ribs }
+  for (const k in cols) S[k] = k === 'R' ? Int32Array.from(cols.R) : Float64Array.from(cols[k])
+  return S
+}
+
+// Relación de la muestra j (trozo de B) vista desde la muestra i (marco de A). Devuelve en `o`: gal (B en el prisma de
+// A), dist (aire entre bordes, u; 0 si se solapan), over (las cintas se solapan), cop (coplanares), abreast (B a la
+// altura de i a lo largo de A). hA/hB: semipaso a lo largo de cada cinta.
+function relate(S, i, j, hA, hB, o) {
+  const H = RIBBON_HALF; const q = QUILLA / 2
+  const ux = S.UX[i]; const uy = S.UY[i]; const uz = S.UZ[i]; const sx = S.SX[i]; const sy = S.SY[i]; const sz = S.SZ[i]
+  const tx = S.TX[i]; const ty = S.TY[i]; const tz = S.TZ[i]
+  const bux = S.UX[j]; const buy = S.UY[j]; const buz = S.UZ[j]
+  // centro del trozo de B (a media quilla bajo su firme), en ejes de A
+  const dx = S.X[j] - bux * q - S.X[i]; const dy = S.Y[j] - buy * q - S.Y[i]; const dz = S.Z[j] - buz * q - S.Z[i]
+  const cx = dx * sx + dy * sy + dz * sz; const cy = dx * ux + dy * uy + dz * uz; const cz = dx * tx + dy * ty + dz * tz
+  const bsx = S.SX[j]; const bsy = S.SY[j]; const bsz = S.SZ[j]; const btx = S.TX[j]; const bty = S.TY[j]; const btz = S.TZ[j]
+  // semiextensión del trozo de B a lo largo de cada eje de A (caja orientada -> caja en ejes de A)
+  const ext = (ax, ay, az) => H * Math.abs(bsx * ax + bsy * ay + bsz * az) + hB * Math.abs(btx * ax + bty * ay + btz * az) + q * Math.abs(bux * ax + buy * ay + buz * az)
+  const ex = ext(sx, sy, sz); const ey = ext(ux, uy, uz); const ez = ext(tx, ty, tz)
+  o.abreast = Math.abs(cz) - ez <= hA
+  o.gal = o.abreast && Math.abs(cx) - ex < CALZADA_HALF && cy - ey < GALIBO_H && cy + ey > 0
+  // cinta de A: x en ±H, y en [-QUILLA, 0.03]
+  const gx = Math.abs(cx) - ex - H; const gy = cy >= 0 ? cy - ey - 0.03 : -cy - ey - QUILLA
+  o.over = gx < 0 && gy < 0
+  o.dist = Math.hypot(Math.max(gx, 0), Math.max(gy, 0))
+  const dot = ux * bux + uy * buy + uz * buz
+  o.cop = dot >= COPLANAR_DOT && Math.abs(cy + q) <= COPLANAR_Y
+  return o
+}
+
+// Medidor de espacio entre cintas (ver arriba). { galibo, lateral, union: { n, worst, at }, unionSep (u máx. de una zona
+// de unión sin aire), hits: [{ cat, a, b, ... }] (los primeros), S }. worst: galibo -> mínima altura libre sobre la
+// calzada; lateral -> mínimo aire entre bordes.
+export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 400 } = {}) {
+  const { ribs, X, Y: Yy, Z, R } = S; const N = X.length; const lim = CLR_LIM; const L2 = lim * lim
+  const cell = (v) => Math.floor(v / lim); const grid = new Map()
+  for (let i = 0; i < N; i++) { const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
+  const half = (i) => { const r = ribs[R[i]]; return r.ds * 0.5 + 0.05 }
+  // pares por par de cintas: [i, j, flags] con flags bit0 gal(A<-B) bit1 gal(B<-A) bit2 over bit3 cop; dist aparte
+  const pairs = new Map(); const o1 = {}; const o2 = {}
+  for (let i = 0; i < N; i++) {
+    const x = cell(X[i]); const y = cell(Yy[i]); const z = cell(Z[i]); const ri = R[i]; const A = ribs[ri]
+    for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) for (let ddz = -1; ddz <= 1; ddz++) {
+      const b = grid.get(cellKey(x + ddx, y + ddy, z + ddz)); if (!b) continue
+      for (const j of b) {
+        if (j <= i) continue
+        const rj = R[j]
+        if (ri === rj && (j - i) * A.ds < RIB_SELF) continue
+        const d2 = (X[i] - X[j]) ** 2 + (Yy[i] - Yy[j]) ** 2 + (Z[i] - Z[j]) ** 2; if (d2 >= L2) continue
+        const hA = half(i); const hB = half(j)
+        relate(S, i, j, hA, hB, o1); relate(S, j, i, hB, hA, o2)
+        if (!o1.abreast && !o2.abreast) continue
+        const dist = Math.min(o1.abreast ? o1.dist : Infinity, o2.abreast ? o2.dist : Infinity)
+        const gal = (o1.gal ? 1 : 0) | (o2.gal ? 2 : 0)
+        if (!gal && dist >= AIRE_LAT) continue
+        const key = ri * 65536 + rj; let l = pairs.get(key); if (!l) pairs.set(key, l = [])
+        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0), dist)
+      }
+    }
+  }
+  const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', hits: [], S }
+  const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
+  const cap = JOINT_MAX
+  for (const l of pairs.values()) {
+    const A = ribs[R[l[0]]]; const B = ribs[R[l[1]]]
+    // zonas de unión: puntas comunes; prefijo contiguo (desde la punta) de muestras con algún par cercano
+    let zones = null
+    if (A !== B) {
+      for (let ea = 0; ea < 2; ea++) for (let eb = 0; eb < 2; eb++) if (A.ends[ea] === B.ends[eb]) (zones ||= []).push([ea, eb])
+      if (zones) {
+        const inA = new Set(); const inB = new Set()
+        for (let k = 0; k < l.length; k += 4) { inA.add(l[k] - A.start); inB.add(l[k + 1] - B.start) }
+        const pre = (set, r, e) => { let c = 0; while (c <= r.n && c * r.ds < cap && (set.has(e ? r.n - c : c) || set.has(e ? r.n - c - 1 : c + 1))) c++; return c }
+        zones = zones.map(([ea, eb]) => [ea, pre(inA, A, ea), eb, pre(inB, B, eb)])
+      }
+    }
+    for (let k = 0; k < l.length; k += 4) {
+      const i = l[k]; const j = l[k + 1]; const fl = l[k + 2]; const dist = l[k + 3]
+      const ia = i - A.start; const ib = j - B.start
+      const z = zones && zones.find(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)
+      if (z) {
+        const s = Math.max((z[0] ? A.n - ia : ia) * A.ds, (z[2] ? B.n - ib : ib) * B.ds)
+        if ((fl & 7) && !(fl & 8)) {
+          out.union.n++
+          if (s > out.union.worst) Object.assign(out.union, { worst: s, at: `${tag(i)} vs ${tag(j)}` })
+          if (out.hits.length < maxList) out.hits.push({ cat: 'union', a: i, b: j, s })
+        } else if (s > out.unionSep) { out.unionSep = s; out.unionSepAt = `${tag(i)} vs ${tag(j)}` }
+        continue
+      }
+      if (fl & 3) {
+        out.galibo.n++
+        // altura libre aproximada: distancia vertical del firme de A al punto más bajo de B (o al revés)
+        const ii = fl & 1 ? i : j; const jj = fl & 1 ? j : i
+        const hy = (X[jj] - X[ii]) * S.UX[ii] + (Yy[jj] - Yy[ii]) * S.UY[ii] + (Z[jj] - Z[ii]) * S.UZ[ii]
+        if (hy < out.galibo.worst) Object.assign(out.galibo, { worst: hy, at: `${tag(ii)} bajo ${tag(jj)}` })
+        if (out.hits.length < maxList) out.hits.push({ cat: 'galibo', a: ii, b: jj, h: hy })
+      } else if (dist < AIRE_LAT) {
+        out.lateral.n++
+        if (dist < out.lateral.worst) Object.assign(out.lateral, { worst: dist, at: `${tag(i)} vs ${tag(j)}` })
+        if (out.hits.length < maxList) out.hits.push({ cat: 'lateral', a: i, b: j, d: dist })
+      }
+    }
+  }
+  return out
+}
+
+// Estructuras (esferas { center, r, way, seg, lane }) que invaden el prisma de gálibo o cortan la calzada de una cinta
+// AJENA a su carril. { n, worst (máx. penetración, u), at, list }.
+export function structureIntrusions(S, items, { maxList = 200 } = {}) {
+  const { ribs, X, Y: Yy, Z, R } = S; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim); const grid = new Map()
+  for (let i = 0; i < X.length; i++) { const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
+  const out = { n: 0, worst: 0, at: '', list: [] }
+  const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
+  for (const it of items) {
+    const c = it.center; const r = it.r; const rings = Math.ceil((r + lim) / lim)
+    const x0 = cell(c.x); const y0 = cell(c.y); const z0 = cell(c.z); let worst = 0; let wi = -1
+    for (let dx = -rings; dx <= rings; dx++) for (let dy = -rings; dy <= rings; dy++) for (let dz = -rings; dz <= rings; dz++) {
+      const b = grid.get(cellKey(x0 + dx, y0 + dy, z0 + dz)); if (!b) continue
+      for (const i of b) {
+        const rb = ribs[R[i]]
+        if (rb.way.idx === (it.way?.idx ?? it.way) && rb.seg === it.seg && rb.lane === it.lane) continue
+        const ex = c.x - X[i]; const ey = c.y - Yy[i]; const ez = c.z - Z[i]
+        const cz = ex * S.TX[i] + ey * S.TY[i] + ez * S.TZ[i]; if (Math.abs(cz) > r + rb.ds * 0.5) continue
+        const cx = Math.abs(ex * S.SX[i] + ey * S.SY[i] + ez * S.SZ[i]); const cy = ex * S.UX[i] + ey * S.UY[i] + ez * S.UZ[i]
+        // penetración en el prisma [±CALZADA_HALF] x [-QUILLA, GALIBO_H]
+        const p = Math.min(CALZADA_HALF - (cx - r), (cy + r) + QUILLA, GALIBO_H - (cy - r))
+        if (p > worst) { worst = p; wi = i }
+      }
+    }
+    if (wi >= 0) {
+      out.n++
+      if (worst > out.worst) Object.assign(out, { worst, at: `${it.kind} w${it.way?.idx ?? it.way} L${it.lane} en ${tag(wi)}` })
+      if (out.list.length < maxList) out.list.push({ kind: it.kind, item: it, i: wi, p: worst })
+    }
+  }
+  return out
+}
+
 // Repulsión: cada par de muestras en choque empuja sus cintas en direcciones opuestas, sobre los vértices de la trenza.
 // Entre tramos distintos se mueve el haz entero (todos los carriles del tramo a la vez: no se aprietan contra sus
 // hermanos); entre carriles del mismo tramo, o una cinta consigo misma, sólo esos carriles. Cada desplazamiento se suaviza

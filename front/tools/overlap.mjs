@@ -101,6 +101,22 @@ export function measure(world) {
   return { cross, same, route, visual, ...measureRibbons(world), node }
 }
 
+// Medidor de espacio visible (world.ribbonClearance + structureIntrusions): categorías galibo, lateral, union y
+// estructuras. Cada una cuenta sus pares/piezas en falta (0 cumple). Las estructuras salen de vida/colocacion.js,
+// la misma colocación que dibujan los .jsx.
+let COLOC = null
+export async function measureClearance(world, { estructuras = true } = {}) {
+  const c = W.ribbonClearance(world)
+  let est = { n: 0, worst: 0, at: '', items: 0 }
+  if (estructuras && W.structureIntrusions) {
+    COLOC ||= await import('../src/Components/World3D/vida/colocacion.js')
+    const items = COLOC.colocarTodoMundo(world)
+    est = { ...W.structureIntrusions(c.S, items), items: items.length }
+  }
+  return { galibo: c.galibo, lateral: c.lateral, union: c.union, unionSep: c.unionSep, unionSepAt: c.unionSepAt, estructuras: est, samples: c.S.X.length }
+}
+export const clearanceOk = (m) => !m.galibo.n && !m.lateral.n && !m.union.n && !m.estructuras.n
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const n = +(process.argv[2] ?? 20); const s0 = +(process.argv[3] ?? 1)
   const KEYS = ['cross', 'same', 'route', 'visual', 'lane', 'cintas']
@@ -109,15 +125,21 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const byFmt = (o) => Object.entries(o).map(([k, v]) => `${k} ${v.toFixed(1)}u/${(v / TK).toFixed(1)}`).join(' ')
   let bad = 0; let tot = 0; let minNode = Infinity; let maxMs = 0
   const fmt = (m) => `${m.gap.toFixed(2)} (holg ${m.slack.toFixed(2)})`
+  const nw = { galibo: 0, lateral: 0, union: 0, estructuras: 0 }; const wv = { galibo: Infinity, lateral: Infinity, union: 0, estructuras: 0, sep: 0 }
   for (let seed = s0; seed < s0 + n; seed++) {
     const t = performance.now(); const w = buildWorld(seed); const ms = performance.now() - t
     const m = measure(w); tot += ms; maxMs = Math.max(maxMs, ms)
-    const ok = KEYS.every((k) => m[k].slack >= 0); maxJoint = Math.max(maxJoint, m.cintas.joint); for (const k in maxBy) maxBy[k] = Math.max(maxBy[k], m.cintas.jointBy[k] ?? 0)
+    const c = await measureClearance(w)
+    for (const k in nw) if (c[k].n) nw[k]++
+    wv.galibo = Math.min(wv.galibo, c.galibo.worst); wv.lateral = Math.min(wv.lateral, c.lateral.worst); wv.union = Math.max(wv.union, c.union.worst); wv.estructuras = Math.max(wv.estructuras, c.estructuras.worst); wv.sep = Math.max(wv.sep, c.unionSep)
+    console.log(`seed ${seed} ESPACIO: galibo ${c.galibo.n} (min ${c.galibo.worst.toFixed(1)}u ${c.galibo.at}) | lateral ${c.lateral.n} (min ${c.lateral.worst.toFixed(1)}u ${c.lateral.at}) | union ${c.union.n} (hasta ${c.union.worst.toFixed(1)}u ${c.union.at}) sep ${c.unionSep.toFixed(1)}u | estructuras ${c.estructuras.n}/${c.estructuras.items} (pen ${c.estructuras.worst.toFixed(1)}u ${c.estructuras.at}) | muestras ${c.samples}`)
+    const ok = KEYS.every((k) => m[k].slack >= 0) && clearanceOk(c); maxJoint = Math.max(maxJoint, m.cintas.joint); for (const k in maxBy) maxBy[k] = Math.max(maxBy[k], m.cintas.jointBy[k] ?? 0)
     if (!ok) bad++
     for (const k of Object.keys(worst)) { worst[k] = Math.min(worst[k], m[k].gap); worstS[k] = Math.min(worstS[k], m[k].slack) }
     minNode = Math.min(minNode, m.node)
     if (process.argv[5] === 'malas' && ok) continue // 5º arg: sólo semillas que incumplen
     console.log(`seed ${seed}${w.failed ? ' [FALLÓ]' : ''}: circuitos ${fmt(m.cross)} | ida/vuelta ${fmt(m.same)} | rutas ${fmt(m.route)} [${m.route.info}] | visual ${fmt(m.visual)} [${m.visual.info}] | carriles ${fmt(m.lane)} [${m.lane.info}] | cintas ${fmt(m.cintas)} ${m.cintas.n} choques [${m.cintas.info}] unión ${m.cintas.joint.toFixed(1)}u (${byFmt(m.cintas.jointBy)}) | relax ${w.relax ? `${w.relax.it}it/${w.relax.left} ${w.relax.ms}ms` : "-"} | nodo ${m.node.toFixed(2)} | gen ${ms.toFixed(0)}ms`)
   }
-  console.log(`PEOR (huelgo/holgura): circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; visual ${worst.visual.toFixed(2)}/${worstS.visual.toFixed(2)} (umbral ${2 * LANE_W}u, pad ${VISUAL_PAD}); carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u = ${(maxJoint / TK).toFixed(1)}·TK; por punta: ${byFmt(maxBy)}); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
+  console.log(`ESPACIO semillas con fallo: galibo ${nw.galibo}/${n} (altura libre mín ${wv.galibo.toFixed(1)}u, meta ${W.GALIBO_H.toFixed(1)}) | lateral ${nw.lateral}/${n} (aire mín ${wv.lateral.toFixed(1)}u, meta ${W.AIRE_LAT.toFixed(1)}) | union ${nw.union}/${n} (solape no coplanar hasta ${wv.union.toFixed(1)}u de la punta; zona sin aire máx ${wv.sep.toFixed(1)}u) | estructuras ${nw.estructuras}/${n} (penetración máx ${wv.estructuras.toFixed(1)}u)`)
+  console.log(`PEOR (huelgo/holgura):circuitos ${worst.cross.toFixed(2)}/${worstS.cross.toFixed(2)}; ida-vuelta ${worst.same.toFixed(2)}/${worstS.same.toFixed(2)} (${(worst.same / W.LANE_W).toFixed(1)} calzadas); rutas ${worst.route.toFixed(2)}/${worstS.route.toFixed(2)}; visual ${worst.visual.toFixed(2)}/${worstS.visual.toFixed(2)} (umbral ${2 * LANE_W}u, pad ${VISUAL_PAD}); carriles ${worst.lane.toFixed(2)}/${worstS.lane.toFixed(2)}; cintas ${worst.cintas.toFixed(2)}/${worstS.cintas.toFixed(2)} (unión máx ${maxJoint.toFixed(1)}u = ${(maxJoint / TK).toFixed(1)}·TK; por punta: ${byFmt(maxBy)}); nodo ajeno ${minNode.toFixed(2)}; semillas malas ${bad}/${n}; gen medio ${(tot / n).toFixed(0)}ms (máx ${maxMs.toFixed(0)})`)
 }
