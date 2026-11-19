@@ -15,6 +15,7 @@ import { precargarKit } from '../Modelos.jsx'
 import { precargarModelos } from './modelos.js'
 import { ETAPAS_NOMBRES, etapaActual, marcarEtapa } from './etapas.js'
 import { prismaPaso } from './colocacion.js'
+import { PRISMA_STATS } from '../../../Core/world.js'
 
 /** Piezas del kit GLB que montará la vida de `way` (kart, decoración, anillos y eventos). */
 export function kitDeCamino(way) {
@@ -44,7 +45,7 @@ const MONTABLE = ETAPAS_NOMBRES.indexOf('modelos') + 1
 /** Tiempos por etapa (ms acumulados y peor porción), visibles con ?stats=1 en window.__precarga. */
 // listo[idx] / montado[idx]: performance.now() en que la vida del camino quedó calculada / montada (para las sondas)
 export const PRECARGA = { ms: {}, max: {}, caminos: 0, listo: {}, montado: {} }
-if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stats') === '1') window.__precarga = PRECARGA
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stats') === '1') { window.__precarga = PRECARGA; window.__prismaStats = PRISMA_STATS }
 
 /** true si montar la vida de `way` ya no construye nada pesado de golpe. */
 export const vidaMontable = (way) => etapaActual(way) >= MONTABLE

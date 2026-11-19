@@ -2132,6 +2132,7 @@ export function prismaQuien(world, c, r, own) {
   prismaLibre(world, c, r, own); const k = prismaCache(world); const { i, p } = prismInvasion(k.S, k.grid, c, r, own)
   return i < 0 ? null : { rib: k.S.ribs[k.S.R[i]], p }
 }
+export const clearanceGridDe = (S) => clearanceGrid(S)
 /** Solo pruebas: veredicto con la rejilla global de todo el mundo (referencia para la perezosa). */
 export function prismaLibreGlobal(world, c, r, own, S = clearanceSamples(world), grid = clearanceGrid(S)) {
   return prismInvasion(S, grid, c, r, own).i < 0
