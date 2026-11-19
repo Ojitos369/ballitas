@@ -8,7 +8,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe } from '../colisionObjetos.js'
-import { MIDE, creceDe, d2Delante, kBorde, kDelante } from '../InstanceCuller.jsx'
+import { MIDE, creceDe, publicaCrece, d2Delante, kBorde, kDelante } from '../InstanceCuller.jsx'
 import { triplanarMaterial } from '../triplanar.js'
 import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
 import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
@@ -559,8 +559,8 @@ export default function Estructuras({ way, detail, focused, time }) {
       let ac = 0
       const rSq = (overview ? 105 : ARCH_CULL_DIST) ** 2
       const rA = overview ? 105 : ARCH_CULL_DIST // los arcos crecen desde ese borde (kBorde)
-      const Ka = overview ? 1 : K
-      let cmA = Infinity
+      const Ka = K // también en vista general: el camino siguiente se ve al fondo de la recta
+      const cmA = [Infinity, Infinity]
       lejos.length = 0
       for (let s = 0; s < nearData.length && ac < ARCH_CAP; s++) {
         const list = nearData[s].arches
@@ -576,16 +576,16 @@ export default function Estructuras({ way, detail, focused, time }) {
           const kb = kBorde(d2, rA)
           tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
           archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
-          if (MIDE) cmA = creceDe(deltaTmp.x, deltaTmp.y, deltaTmp.z, camFwdTmp, kb, cmA)
+          if (MIDE) creceDe(deltaTmp.x, deltaTmp.y, deltaTmp.z, camFwdTmp, kb, cmA)
         }
       }
       for (let j = 0; j < lejos.length && ac < ARCH_CAP; j += 5) {
         const it = lejos[j]; const kb = kBorde(lejos[j + 1], rA)
         tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
         archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
-        if (MIDE) cmA = creceDe(lejos[j + 2], lejos[j + 3], lejos[j + 4], camFwdTmp, kb, cmA)
+        if (MIDE) creceDe(lejos[j + 2], lejos[j + 3], lejos[j + 4], camFwdTmp, kb, cmA)
       }
-      if (MIDE) archMesh.userData.__crece = cmA
+      if (MIDE) publicaCrece(archMesh, cmA)
       archMesh.count = ac
       if (ac > 0) archMesh.instanceMatrix.needsUpdate = true
     }
@@ -600,11 +600,11 @@ export default function Estructuras({ way, detail, focused, time }) {
       const stride = overview ? 2 : 1
       const effRangeSq = overview ? 96 * 96 : rangeSq
       const rP = Math.sqrt(effRangeSq) // la pieza mide 0 en el borde y crece al acercarse (kBorde)
-      const Kp = overview ? 1 : K
+      const Kp = K
       let count = 0
       let tinted = false
       lejos.length = 0
-      let cm = Infinity
+      const cm = [Infinity, Infinity]
       const pon = (it, d2, dx, dy, dz) => {
         const kb = kBorde(d2, rP)
         tmpS.setScalar(it.scale * kb)
@@ -612,7 +612,7 @@ export default function Estructuras({ way, detail, focused, time }) {
         if (it.color) { mesh.setColorAt(count, it.color); tinted = true }
         else if (tinted) mesh.setColorAt(count, white)
         count++
-        if (MIDE) cm = creceDe(dx, dy, dz, camFwdTmp, kb, cm)
+        if (MIDE) creceDe(dx, dy, dz, camFwdTmp, kb, cm)
       }
       for (let s = 0; s < nearData.length && count < POOL_CAP; s++) {
         const list = nearData[s].byModel.get(model)
@@ -630,7 +630,7 @@ export default function Estructuras({ way, detail, focused, time }) {
         }
       }
       for (let j = 0; j < lejos.length && count < POOL_CAP; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
-      if (MIDE) mesh.userData.__crece = cm
+      if (MIDE) publicaCrece(mesh, cm)
       mesh.count = count
       if (count > 0) {
         mesh.instanceMatrix.needsUpdate = true

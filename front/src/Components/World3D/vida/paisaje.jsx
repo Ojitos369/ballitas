@@ -10,7 +10,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe, nuevoLocal } from '../colisionObjetos.js'
 import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32 } from './base.jsx'
-import { MIDE, creceDe, d2Delante, kBorde, kDelante } from '../InstanceCuller.jsx'
+import { MIDE, creceDe, publicaCrece, d2Delante, kBorde, kDelante } from '../InstanceCuller.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, bermY, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 
@@ -1045,14 +1045,14 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       const r2 = ly.range * ly.range
       let n = 0
       lejos.length = 0
-      let cm = Infinity
+      const cm = [Infinity, Infinity]
       const pon = (it, d2, dx, dy, dz) => {
         const kb = kBorde(d2, ly.range)
         tmp.s.setScalar(it.scale * kb) // crece desde el borde de recorte
         mesh.setMatrixAt(n, tmp.m.compose(it.pos, it.quat, tmp.s))
         mesh.setColorAt(n, it.color)
         n++
-        if (MIDE) cm = creceDe(dx, dy, dz, tmp.f, kb, cm)
+        if (MIDE) creceDe(dx, dy, dz, tmp.f, kb, cm)
       }
       for (const { seg } of overview ? [] : nearRef.current) {
         const sd = segCache.get(seg)
@@ -1071,7 +1071,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
         }
       }
       for (let j = 0; j < lejos.length && n < ly.cap; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
-      if (MIDE) mesh.userData.__crece = cm
+      if (MIDE) publicaCrece(mesh, cm)
       mesh.count = n
       if (n) {
         mesh.instanceMatrix.needsUpdate = true
