@@ -535,7 +535,7 @@ export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(s
 // Giro propio (rad) del camino alrededor de su avance; 0 (mod 2π) en las puntas.
 function rollAt(seg, lane, u) {
   if (seg._braid?.fila) return lerpArr(seg._braid.roll, u) // calzada fundida: todos con la misma normal
-  if (seg._braid?.row) return 0 // fila paralela: normal compartida (un giro propio pondría la calzada de uno mirando al vecino)
+  if (seg._braid?.row) { const r = lane && seg._braid.sroll?.[lane.id]; return r ? lerpArr(r, u) : 0 } // sinuoso: giro propio lejos de los hermanos; fila paralela: normal compartida (un giro propio pondría la calzada de uno mirando al vecino)
   if (!lane || lane.roll === 'plano' || !seg._braid) return 0
   const e = braidEnv(seg, u)
   if (lane.roll === 'cabeza') return Math.PI * e
@@ -1049,6 +1049,183 @@ function buildLanes(way) {
   for (const s of way.segments) for (const sw of s.switches) delete sw._arc
 }
 
+// ───────────────────────── caminos sinuosos (pieza SINUOSO) ─────────────────────────
+// Pasada global tras colocar todos los caminos (ways) y antes de la relajación. En el tramo abierto de cada tramo en fila
+// paralela, cada camino deja la fila y toma un recorrido propio: una hélice ancha alrededor del eje (radio SIN_R, todos
+// los caminos del tramo giran con el mismo paso y repartidos en ángulo: quedan a ~1.2-1.9 radios unos de otros) más un
+// tirabuzón corto propio (SIN_WA, SIN_WL) que mantiene curvatura en los tres ejes en todo el recorrido. La normal de la
+// calzada mira al eje del tramo (la ballita rueda por dentro de un tubo imaginario): la «abajo» da la vuelta completa con
+// cada vuelta de la hélice y se mece con el tirabuzón. Pendientes acotadas (SIN_SLOPE) para que la cinta no se pliegue.
+// Choques: cada vértice se comprueba contra una rejilla con TODAS las cintas del mundo (posiciones originales de las que
+// aún no se han movido y finales de las ya movidas), los nodos y la cáscara radial; donde choca, el desvío se reduce con
+// rampas largas (SIN_BLEND) hasta volver, como mucho, a la fila original, que el reparto ya garantizó libre.
+export const SINUOSO = { off: !!globalThis.process?.env?.NO_SINUOSO }
+const SIN_R = +(globalThis.process?.env?.SIN_R ?? 240) // (u) radio de la hélice ancha
+const SIN_SLOPE = 0.4 // pendiente máxima (desvío lateral por u de avance) de la hélice ancha
+const SIN_WA = 24 // (u) radio del tirabuzón corto
+const SIN_WL = 330 // (u) paso del tirabuzón corto: pendiente 2π·24/330 = 0.46, radio de curvatura ~115 u
+const SIN_CLEAR = 6 * TK + 2 * RIBBON_HALF + 0.75 + 1.5 * TK // (u) centro a centro: gálibo + cintas + quilla + margen = 47.7
+const SIN_BLEND = 210 // (u) semilargo de la rampa con que se reduce el desvío junto a un choque
+const SIN_MIN = 260 // (u) tramo abierto mínimo para desviar
+const SIN_ROLL = 0.035 // (rad/u) ritmo máximo del giro de la normal (9.4° por muestra de 4.7 u)
+const SIN_FLY = 120 // (u/s) velocidad de vuelo de un evento entre caminos lejanos
+function sinuarCaminos(world) {
+  if (SINUOSO.off) return
+  const st = world.sinuoso = { caminos: 0, completos: 0, reducidos: 0, nulos: 0 }
+  const segs = world.ways.flatMap((w) => w.segments.filter((s) => !s.air && s.lanes && s._braid)); const wayOf = new Map(); for (const w of world.ways) for (const s of w.segments) wayOf.set(s, w)
+  // rejilla de obstáculos (clave entera < 2^30): [x, y, z, tramo, camino, vértice] por punto; fijos = posiciones originales
+  const CELL = SIN_CLEAR; const key = (x, y, z) => ((Math.floor(x / CELL) + 512) * 1024 + (Math.floor(y / CELL) + 512)) * 1024 + (Math.floor(z / CELL) + 512)
+  const OX = []; const OY = []; const OZ = []; const OS = []; const OL = []; const OI = []; const OD = [] // OD: 1 = posición final (ya movida)
+  const grid = new Map(); let rLo = Infinity; let rHi = 0
+  const add = (x, y, z, sg, ln, i, dyn) => { const k = key(x, y, z); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(OX.length); OX.push(x); OY.push(y); OZ.push(z); OS.push(sg); OL.push(ln); OI.push(i); OD.push(dyn) }
+  segs.forEach((s, sg) => {
+    const br = s._braid
+    for (const l of s.lanes) { const P = br.P[l.id]; for (let i = 0; i <= br.N; i += 2) { const x = P[i * 3]; const y = P[i * 3 + 1]; const z = P[i * 3 + 2]; add(x, y, z, sg, l.id, i, 0); const r = Math.hypot(x, y, z); if (r < rLo) rLo = r; if (r > rHi) rHi = r } }
+  })
+  const tmp = new THREE.Vector3(); let airN = -1
+  for (const w of world.ways) for (const s of w.segments) if (s.air || !s.lanes) { const n = Math.max(2, Math.ceil(s.length / 14)); airN--; for (let i = 0; i <= n; i++) { s.curve.getPoint(i / n, tmp); add(tmp.x, tmp.y, tmp.z, airN, 0, i, 1) } }
+  rHi += 100
+  const movido = new Set() // tramo * 8 + camino ya procesado: sus puntos fijos dejan de contar (cuentan los finales)
+  const nodes = world.nodes.map((n) => [n.pos.x, n.pos.y, n.pos.z, (NODE_R + 150) ** 2])
+  // ¿choca el punto (x, y, z) del camino `ln` del tramo `sg`? `near`: distancia mínima exigida a sus hermanos ya movidos
+  const choca = (x, y, z, sg, near) => {
+    const r2 = x * x + y * y + z * z; if (r2 < rLo * rLo || r2 > rHi * rHi) return true
+    for (const n of nodes) if ((x - n[0]) ** 2 + (y - n[1]) ** 2 + (z - n[2]) ** 2 < n[3]) return true
+    const cx = Math.floor(x / CELL) + 512; const cy = Math.floor(y / CELL) + 512; const cz = Math.floor(z / CELL) + 512; const C2 = SIN_CLEAR * SIN_CLEAR
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const b = grid.get(((cx + dx) * 1024 + cy + dy) * 1024 + cz + dz); if (!b) continue
+      for (let q = 0; q < b.length; q++) {
+        const j = b[q]; const d2 = (x - OX[j]) ** 2 + (y - OY[j]) ** 2 + (z - OZ[j]) ** 2
+        if (d2 >= C2) continue
+        if (OS[j] === sg) { if (OD[j] && d2 < near * near) return true; continue } // hermanos: nunca más cerca que en la fila
+        if (!OD[j] && movido.has(OS[j] * 8 + OL[j])) continue
+        return true
+      }
+    }
+    return false
+  }
+  const WF = {}; const T = new THREE.Vector3(); const s0 = new THREE.Vector3()
+  segs.forEach((s, sg) => {
+    const br = s._braid; if (!br.row) return
+    const N = br.N; const L = s.length; const step = L / N; const nl = s.lanes.length
+    const [da, db] = braidDelay(s); const [qa, qb] = braidRamps(s); const a0 = da + qa; const b0 = L - db - qb; const Lu = b0 - a0
+    if (Lu < SIN_MIN) return
+    const rng = mulberry32(77000 + wayOf.get(s).idx * 977 + wayOf.get(s).segments.indexOf(s) * 131)
+    const rw = clamp(Lu * 0.3, 110, 540); const R = Math.min(SIN_R, 0.45 * rw)
+    const om = (rng() < 0.5 ? -1 : 1) * Math.min(SIN_SLOPE / (1.2 * R), TAU / 500); const th0 = rng() * TAU
+    // marco del eje y tope por curvatura del eje (el desvío no pasa de 0.6 radios de curvatura)
+    const C = new Float32Array((N + 1) * 3); const D0 = new Float32Array((N + 1) * 3); const S0 = new Float32Array((N + 1) * 3); const Tn = new Float32Array((N + 1) * 3); const AW = new Float32Array(N + 1); const ref = new THREE.Vector3()
+    for (let i = 0; i <= N; i++) {
+      // marco SIN torsión (transporte paralelo): el de wallFrame gira alrededor del avance y, a 200 u del eje, plegaba la cinta
+      const f = wallFrame(s, 0, i / N, 0, WF); T.copy(f.tangent)
+      if (i) ref.addScaledVector(T, -ref.dot(T)); else ref.copy(f.dir)
+      if (ref.lengthSq() < 1e-8) ref.copy(f.dir)
+      ref.normalize(); s0.crossVectors(T, ref).normalize()
+      f.axis.toArray(C, i * 3); ref.toArray(D0, i * 3); s0.toArray(S0, i * 3); T.toArray(Tn, i * 3)
+      const cs = f.dir.dot(ref); const sn = T.dot(s0.crossVectors(f.dir, ref)); let a = Math.atan2(sn, cs); if (i) { let d = (a - AW[i - 1]) % TAU; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU; a = AW[i - 1] + d }
+      AW[i] = a // ángulo (convención de wallFrame) del marco transportado respecto del marco del eje
+    }
+    const w2 = Math.max(2, Math.round(28 / step)); const rho = new Float32Array(N + 1)
+    for (let i = 0; i <= N; i++) {
+      const p = Math.max(0, i - w2) * 3; const q = Math.min(N, i + w2) * 3
+      const an = Math.acos(clamp(Tn[p] * Tn[q] + Tn[p + 1] * Tn[q + 1] + Tn[p + 2] * Tn[q + 2], -1, 1)); rho[i] = an > 1e-4 ? ((q - p) / 3 * step) / an : 1e6
+    }
+    const w = Math.max(3, Math.ceil(SIN_BLEND / step))
+    const suave = (a) => { // mínimo extendido y luego media móvil: baja antes del choque y nunca sube de golpe
+      const lo = new Float32Array(N + 1); const out = new Float32Array(N + 1); const h = Math.max(2, Math.round(w / 3))
+      for (let i = 0; i <= N; i++) { let m = 1; for (let j = Math.max(0, i - 2 * h); j <= Math.min(N, i + 2 * h); j++) if (a[j] < m) m = a[j]; lo[i] = m } // mínimo en ±2h: las dos medias de ±h quedan por debajo del dato
+      const pre = new Float64Array(N + 2); for (let i = 0; i <= N; i++) pre[i + 1] = pre[i] + lo[i]
+      for (let i = 0; i <= N; i++) { const p = Math.max(0, i - h); const q = Math.min(N, i + h); out[i] = (pre[q + 1] - pre[p]) / (q - p + 1) }
+      return out
+    }
+    const gap = rowGap(nl); br.sroll = []; let hecho = false
+    s.lanes.forEach((lane, j) => {
+      const id = lane.id; const P = br.P[id]; st.caminos++
+      const Rj = R * (0.8 + 0.45 * rng()); const aj = Math.min(SIN_WA * (0.8 + 0.4 * rng()), 0.3 * rw)
+      const nu = (rng() < 0.5 ? -1 : 1) * TAU / (SIN_WL * (0.8 + 0.5 * rng())); const ph = rng() * TAU; const thj = th0 + (TAU * j) / nl
+      // objetivo (posición sobre la hélice) y peso base (rampa de entrada/salida y tope por curvatura)
+      const O = new Float32Array((N + 1) * 3); const base = new Float32Array(N + 1); const th = new Float32Array(N + 1)
+      for (let i = 0; i <= N; i++) {
+        const x = i * step; const t = thj + om * (x - a0); const ps = ph + nu * x; th[i] = t
+        const c = Rj * Math.cos(t) + aj * Math.cos(ps); const sn = Rj * Math.sin(t) + aj * Math.sin(ps); const q = i * 3
+        O[q] = C[q] + D0[q] * c + S0[q] * sn - P[q]; O[q + 1] = C[q + 1] + D0[q + 1] * c + S0[q + 1] * sn - P[q + 1]; O[q + 2] = C[q + 2] + D0[q + 2] * c + S0[q + 2] * sn - P[q + 2]
+        base[i] = smooth01((x - a0) / rw) * smooth01((b0 - x) / rw) 
+      }
+      let cap = new Float32Array(N + 1).fill(1); for (let i = 0; i <= N; i++) cap[i] = Math.min(1, (0.6 * rho[i]) / (Rj + aj)); let ks = suave(cap); let k = base.map((v, i) => v * ks[i]); let ok = false; let red = false
+      for (let it = 0; it < 7 && !ok; it++) {
+        ok = true
+        for (let i = 0; i <= N; i += 2) {
+          if (k[i] < 0.02) continue
+          const q = i * 3; const near = Math.min(SIN_CLEAR, 0.9 * gap * br.env[i])
+          if (choca(P[q] + O[q] * k[i], P[q + 1] + O[q + 1] * k[i], P[q + 2] + O[q + 2] * k[i], sg, near)) { ok = false; red = true; cap[i] = it < 4 ? ks[i] * 0.5 : 0; if (i < N) cap[i + 1] = cap[i] }
+        }
+        if (!ok) { ks = suave(cap); k = base.map((v, i) => v * ks[i]) }
+      }
+      if (!ok) { k = new Float32Array(N + 1); st.nulos++ } else if (red) st.reducidos++; else st.completos++
+      // giro de la normal: la calzada mira al eje (dir = hacia fuera) y se mece con el tirabuzón; ritmo limitado
+      const roll = new Float32Array(N + 1); const tA = thj + om * (0 - a0) + AW[0]; const t0 = thj - (tA - TAU * Math.round(tA / TAU)) - 0 // la rama del ángulo más cercana a 0 en la punta
+      for (let i = 0; i <= N; i++) roll[i] = k[i] > 0 ? Math.min(1, k[i] / Math.max(0.05, base[i]) ) * smooth01(k[i] * 3) * (th[i] + AW[i] - TAU * Math.round(tA / TAU) + 0.45 * Math.sin(ph + nu * i * step)) : 0
+      const lim = SIN_ROLL * step
+      for (let i = 1; i <= N; i++) roll[i] = clamp(roll[i], roll[i - 1] - lim, roll[i - 1] + lim)
+      roll[N] = 0; for (let i = N - 1; i >= 0; i--) roll[i] = clamp(roll[i], roll[i + 1] - lim, roll[i + 1] + lim)
+      roll[0] = 0; for (let i = 1; i <= N; i++) roll[i] = clamp(roll[i], roll[i - 1] - lim, roll[i - 1] + lim)
+      br.sroll[id] = roll
+      for (let i = 0; i <= N; i++) { const q = i * 3; P[q] += O[q] * k[i]; P[q + 1] += O[q + 1] * k[i]; P[q + 2] += O[q + 2] * k[i] }
+      movido.add(sg * 8 + id); hecho = true
+      for (let i = 0; i <= N; i += 2) add(P[i * 3], P[i * 3 + 1], P[i * 3 + 2], sg, id, i, 1)
+    })
+    if (hecho) { br.len = []; br.curves = []; br.sin = true }
+  })
+  ajustarEventos(world, segs, wayOf)
+}
+// Eventos de cambio de camino entre caminos lejanos: vía según distancia y desnivel, apex y duración proporcionales a
+// la distancia y trayectoria comprobada contra todas las cintas (si atraviesa alguna, prueba la siguiente vía; el portal
+// no vuela y siempre es válido).
+const ARCO_KINDS = ['salto', 'tirolina', 'geiser', 'erupcion', 'rampa']
+function ajustarEventos(world, segs, wayOf) {
+  const CELL = 24; const grid = new Map(); const PX = []; const PO = []
+  const key = (x, y, z) => ((Math.floor(x / CELL) + 512) * 1024 + (Math.floor(y / CELL) + 512)) * 1024 + (Math.floor(z / CELL) + 512)
+  segs.forEach((s, sg) => { for (const l of s.lanes) { const P = s._braid.P[l.id]; for (let i = 0; i <= s._braid.N; i++) { const k = key(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(PX.length / 3); PX.push(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); PO.push(sg * 8 + l.id) } } })
+  const EV = RIBBON_HALF + 3.2; const out = {}; const fA = {}; const fB = {}
+  const libre = (s, sw, sg) => {
+    const oa = sg * 8 + sw.from; const ob = sg * 8 + sw.to
+    for (let q = 0; q <= 24; q++) {
+      const r = switchPath(s, sw, q / 24, out); if (sw.via === 'portal' && r.vis < 1) continue
+      const p = r.pos; const cx = Math.floor(p.x / CELL) + 512; const cy = Math.floor(p.y / CELL) + 512; const cz = Math.floor(p.z / CELL) + 512
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const b = grid.get(((cx + dx) * 1024 + cy + dy) * 1024 + cz + dz); if (!b) continue
+        for (const j of b) { if (PO[j] === oa || PO[j] === ob) continue; if ((PX[j * 3] - p.x) ** 2 + (PX[j * 3 + 1] - p.y) ** 2 + (PX[j * 3 + 2] - p.z) ** 2 < EV * EV) return false }
+      }
+    }
+    return true
+  }
+  const st = world.sinuoso
+  segs.forEach((s, sg) => {
+    if (!s._braid.sin || !s.switches) return
+    const theme = wayOf.get(s).theme.id; const rng = mulberry32(78000 + sg * 53); const mechs = THEME_MECHS[theme] || {}
+    const arcos = ARCO_KINDS.filter((k) => mechs[k]); if (!arcos.length) arcos.push('salto')
+    for (const sw of s.switches) {
+      delete sw._arc
+      const a = laneFrame(s, sw.from, sw.u, fA).pos; const b = laneFrame(s, sw.to, sw.uLand, fB).pos
+      const dy = b.y - a.y; const dist = a.distanceTo(b)
+      if (dist <= 1.6 * ROW_GAP) continue
+      const vias = dy < -0.45 * dist ? ['caida', 'arco', 'portal'] : dy > 0.45 * dist ? ['elevador', 'arco', 'portal'] : rng() < 0.3 ? ['portal'] : ['arco', 'portal']
+      const base = sw.duration
+      for (const via of vias) {
+        const kind = via === 'arco' ? arcos[Math.floor(rng() * arcos.length)] : via; const M = MECHANISMS[kind]
+        Object.assign(sw, { kind, via, style: via, name: mechs[kind] || M.name, emoji: M.emoji, risk: M.risk, fail: M.fail, reward: { ...M.reward }, boost: M.boost, lejos: via !== 'portal', dist: +dist.toFixed(1) })
+        sw.apex = +((3.5 * TK + 0.22 * dist)).toFixed(2)
+        sw.duration = via === 'portal' ? Math.min(base, M.dur) : +clamp(dist / SIN_FLY, 0.9, 4.5).toFixed(2)
+        delete sw._arc
+        if (via === 'portal' || libre(s, sw, sg)) break
+      }
+      delete sw._arc
+    }
+    s.switchesByLane = new Map(s.lanes.map((l) => [l.id, s.switches.filter((sw) => sw.from === l.id).sort((x, y) => x.u - y.u)]))
+  })
+  if (st) st.eventos = segs.reduce((n, s) => n + (s._braid.sin ? s.switches.length : 0), 0)
+}
+
 const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si la distribución no admite 0.82
 
 // Elecciones de la búsqueda de huecos ({theta, bowExtra, salt} por camino), calculadas aparte (worker/caché):
@@ -1096,6 +1273,7 @@ function buildWorldAttempt(seed, onProgress, attempt) {
     }
   }
   // carriles: repulsión de cintas visibles y luego el índice de colisión (world.colision)
+  sinuarCaminos(world)
   indexarColisiones(world, relaxRibbons(world))
   return world
 }
