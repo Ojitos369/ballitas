@@ -25,18 +25,18 @@ export function medir(world) {
     return `${k}:${zona(i, A) || zona(j, B) ? 'union' : 'libre'}`
   }
   const c = ribbonClearance(world, S, { clase })
-  return { clases: c.clases || {}, total: { galibo: c.galibo, lateral: c.lateral, union: c.union }, muestras: S.X.length }
+  return { clases: c.clases || {}, total: { galibo: c.galibo, lateral: c.lateral, union: c.union }, fundido: c.fundido, muestras: S.X.length }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const n = +(process.argv[2] ?? 10); const s0 = +(process.argv[3] ?? 369)
   const KS = ['ways:libre', 'rutas:libre', 'ruta:libre', 'tramo:libre', 'ways:union', 'rutas:union', 'ruta:union', 'tramo:union']
-  const ac = {}; let tot = 0; let malas = 0
+  const ac = {}; let tot = 0; let malas = 0; let fundido = 0
   const f = (v) => (v === Infinity ? '-' : v.toFixed(1))
   console.log(`metas: altura libre >= ${GALIBO_H.toFixed(1)} u, aire lateral >= ${AIRE_LAT.toFixed(1)} u`)
   for (let seed = s0; seed < s0 + n; seed++) {
     const t = performance.now(); const w = buildWorld(seed); const ms = performance.now() - t; tot += ms
-    const m = medir(w)
+    const m = medir(w); fundido += m.fundido
     const parts = []
     for (const k of KS) {
       const c = m.clases[k]; if (!c) continue
@@ -52,5 +52,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   }
   console.log('— RESUMEN —')
   for (const k of KS) { const a = ac[k]; if (a) console.log(`${k}: semillas ${a.semillas}/${n}, pares ${a.pares}, galibo ${a.galibo} (minH ${f(a.minH)} ${a.atH}), lateral ${a.lateral} (minD ${f(a.minD)} ${a.atD}), union ${a.union}`) }
+  console.log(`fundido coplanar (excluido de todas las clases): ${fundido} pares de muestras`)
   console.log(`semillas con pares de rutas/caminos distintos en falta fuera de uniones: ${malas}/${n}; gen medio ${(tot / n).toFixed(0)} ms`)
 }

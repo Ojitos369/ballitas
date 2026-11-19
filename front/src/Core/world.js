@@ -479,7 +479,7 @@ export const ringRadius = (n) => (BRAID_A * Math.sin(Math.PI / 5)) / Math.sin(Ma
 export const FILA_GAP = ROW_GAP // (antes RIBBON_CLEAR + TK = 20 u: 8.5 u de aire, menos que AIRE_LAT) mismo hueco que la fila paralela
 export const FILA_W = (5 - 1) * FILA_GAP + 2 * RIBBON_HALF
 // (espiral y sacacorchos se quedan en anillo: en su zona delgada la fila se doblaba sobre sí misma; ver REPORTE_SEP)
-const FILA_KINDS = new Set(['rizo', 'embudo'])
+const FILA_KINDS = new Set(['rizo', 'embudo', 'espiral', 'sacacorchos', 'horquilla'])
 const BRAID_PAD = 3.7 * TK // (texto previo: holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
 const BRAID_OPEN = 16 * TK * AK + (8.5 + 14) * TK * (AK - 1) // + (NODE_R + GRID_LEN)·(ANCHO_K − 1): la zona de puerto (PORT_ZONE) crece en proporción aunque el nodo y la parrilla no // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
 const BRAID_RAMP = 18 * TK * AK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
@@ -893,7 +893,7 @@ function buildBraid(s) {
     // no paralela al avance: se le quita la parte a lo largo de T que pase de SH_MAX (cizalla máxima de la fila)
     const SH_MAX = 0.6; const fit = (x, T) => { const d = x.dot(T); if (Math.abs(d) > SH_MAX) x.addScaledVector(T, -(d - Math.sign(d) * SH_MAX)); return x.lengthSq() < 1e-8 ? x.copy(V(R, 0)) : x.normalize() }
     const target = (i) => {
-      const a = avg[i]; const m = avgT[i].length(); const k = a.length() > EPS ? smooth01((0.8 - m) / 0.3) : 0 // 1: hélice gruesa (eje); 0: delgada o recta
+      const a = avg[i]; const m = avgT[i].length(); const k = a.length() > EPS ? smooth01((0.6 - m) / 0.3) : 0 // 1: hélice gruesa (eje); 0: delgada o recta. Tope 0.6 = SH_MAX: con el eje a más de SH_MAX del avance, `fit` recortaba la fila en cada vuelta y la plegaba
       mt.copy(avgT[i]); if (m > 1e-6) mt.divideScalar(m)
       wv.copy(v).addScaledVector(mt, -v.dot(mt)); if (wv.lengthSq() < 1e-6) wv.copy(V(R, i)).addScaledVector(mt, -V(R, i).dot(mt)); wv.normalize()
       tg.copy(a); if (tg.lengthSq() > 1e-12) tg.normalize(); if (tg.dot(v) < 0) tg.negate()
@@ -2073,6 +2073,7 @@ function relate(S, i, j, hA, hB, o) {
   const dot = ux * bux + uy * buy + uz * buz
   o.cop = dot >= COPLANAR_DOT && Math.abs(cy + q) <= COPLANAR_Y
   o.fun = dot >= FUNDIDA_DOT && Math.abs(cy + q) <= FUNDIDA_Y
+  o.fc = dot >= COPLANAR_DOT && Math.abs(cy + q) <= FUNDIDA_Y // mismas normales; desnivel solo el del relieve propio de cada carril
   return o
 }
 
@@ -2102,11 +2103,11 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
         const gal = (o1.gal ? 1 : 0) | (o2.gal ? 2 : 0)
         if (!gal && dist >= AIRE_LAT) continue
         const key = ri * 65536 + rj; let l = pairs.get(key); if (!l) pairs.set(key, l = [])
-        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0) | ((o1.fun && o2.fun) ? 16 : 0), dist)
+        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0) | ((o1.fun && o2.fun) ? 16 : 0) | ((o1.fc && o2.fc) ? 32 : 0), dist)
       }
     }
   }
-  const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', hits: [], S }
+  const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', fundido: 0, hits: [], S }
   const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
   // desglose opcional (tools/separacion.mjs): clase(i, j, A, B) -> clave; por clave, casos y peor valor de cada categoría
   const anota = (cat, i, j, v) => {
@@ -2132,6 +2133,15 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
     for (let k = 0; k < l.length; k += 4) {
       const i = l[k]; const j = l[k + 1]; const fl = l[k + 2]; const dist = l[k + 3]
       const ia = i - A.start; const ib = j - B.start
+      // FUNDIDO COPLANAR (excluido de union, galibo y lateral; se cuenta aparte en out.fundido): carriles del MISMO tramo,
+      // a la misma altura del recorrido (cintas contiguas), con la misma normal (dot >= COPLANAR_DOT) y sin más desnivel
+      // que el relieve (FUNDIDA_Y), dentro de la calzada única de una punta o de su rampa de apertura (braidDelay +
+      // braidRamps). Se lee como una sola calzada que se ensancha. Todo lo demás de la zona de unión cuenta.
+      if (A.seg === B.seg && A !== B && (fl & 32)) {
+        const sg = A.seg; const L = sg.length; const xa = (ia / A.n) * L; const xb = (ib / B.n) * L
+        const zf = sg._zf ||= (() => { const [da, db] = braidDelay(sg); const [qa, qb] = braidRamps(sg); return [da + qa, db + qb] })()
+        if (Math.abs(xa - xb) < 3 * ROW_GAP && (Math.max(xa, xb) < zf[0] || L - Math.min(xa, xb) < zf[1])) { out.fundido++; continue }
+      }
       const z = zones && zones.find(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)
       if (z) {
         const s = Math.max((z[0] ? A.n - ia : ia) * A.ds, (z[2] ? B.n - ib : ib) * B.ds)
