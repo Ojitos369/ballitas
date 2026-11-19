@@ -44,7 +44,7 @@ export const MONTABLE = ETAPAS_NOMBRES.indexOf('modelos') + 1
 
 /** Tiempos por etapa (ms acumulados y peor porción), visibles con ?stats=1 en window.__precarga. */
 // listo[idx] / montado[idx]: performance.now() en que la vida del camino quedó calculada / montada (para las sondas)
-export const PRECARGA = { ms: {}, max: {}, caminos: 0, listo: {}, montado: {} }
+export const PRECARGA = { ms: {}, max: {}, caminos: 0, listo: {}, montado: {}, presu: { cuadros: 0, lim: 0, usado: 0 } }
 if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stats') === '1') { window.__precarga = PRECARGA; window.__prismaStats = PRISMA_STATS }
 
 /** true si montar la vida de `way` ya no construye nada pesado de golpe. */

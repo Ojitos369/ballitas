@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe, nuevoLocal } from '../colisionObjetos.js'
-import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32 } from './base.jsx'
+import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32, tramosDelante } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, bermY, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 
@@ -995,11 +995,12 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       lastSeg.current.copy(cam)
       const near = []
       let best = Infinity
+      const delante = tramosDelante(way) // por delante de la ballita seguida según el arco, no solo por distancia
       for (const x of nonAirSegs) {
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
         const d2 = segDistSq(x.seg, cam)
         if (d2 < best) best = d2
-        if (d2 <= lim * lim) near.push(x)
+        if (d2 <= lim * lim || delante?.has(x.seg)) near.push(x)
       }
       nearRef.current = near
       overviewRef.current = best > OVERVIEW_DIST_SQ

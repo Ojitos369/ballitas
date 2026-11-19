@@ -1352,7 +1352,7 @@ function Way({ way, world = null, focused, detailActive = false, detailMounted =
   }, [ctrl, focused, detailActive, nearActive, forceFocusDetail])
 
   return (
-    <group>
+    <group name={`way:${way.idx}`}>
       {/* El tubo solo informa el recorrido en el mapa lejano; los circuitos son abiertos en Camino. */}
       {/* Siempre montado (oculto en el mapa): el precompilado del mapa enlaza sus dos programas (cristal de doble
           cara) y la primera Ballita/Camino, que lo muestra en los caminos no enfocados, no los espera (0,2-0,8 s). */}
@@ -1469,7 +1469,7 @@ function selectTopIds(list, maxCount) {
   return out
 }
 
-export default function Paths({ world, sim = null, focusWay = null, prefetchWays = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
+export default function Paths({ world, sim = null, seguida = null, focusWay = null, prefetchWays = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
   useMemo(() => registrarMundo(world), [world]) // los objetos procedurales de cada camino consultan sus colisiones por el mundo
   const wayMetas = useMemo(() => world.ways.map((w) => {
     const pts = []
@@ -1551,6 +1551,7 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     SHARED_TIME.value = t
     EXT_PX.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height)
     VIDA_BUS.sim = sim
+    VIDA_BUS.seguida = seguida
 
     const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail || prevPrefetchRef.current !== prefetchWays
     if (focusChanged || t - lastEvalRef.current >= 0.12) {
@@ -1661,10 +1662,12 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     // segundo (sin vsync los cuadros duran 8 ms y siempre «sobraría»).
     let urgente = false
     const cola = urgentesRef.current
-    const pend = cola.find((w) => !vidaMontable(w)) ?? cola.find((w) => !vidaCompleta(w))
+    // el camino de la cámara primero y entero (ya se ve); luego anchura y profundidad sobre los que vienen
+    const sig = () => { const f = focusWay != null ? world.ways[focusWay] : null; return (f && !vidaCompleta(f) ? f : null) ?? cola.find((x) => !vidaMontable(x)) ?? cola.find((x) => !vidaCompleta(x)) }
+    const pend = sig()
     const gasto = gastoRef.current
     if (pend) {
-      const enPlaneta = prefetchWays != null && focusWay == null
+      const enPlaneta = seguida ? seguida.phase !== 'travel' : (prefetchWays != null && focusWay == null)
       const coste = dt * 1000 - gasto.prev
       let lim = Math.min(Math.max(1000 / 60 - coste + PRECARGA_CUADRO_MS, PRECARGA_CUADRO_MS), enPlaneta ? PRECARGA_TECHO_PLANETA_MS : PRECARGA_TECHO_MS)
       if (!vidaMontable(pend) && pend.idx === focusWay) lim = Math.max(lim, PRECARGA_ENTRADA_MS)
@@ -1678,10 +1681,11 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
       let w = pend
       while (w && !agotado()) {
         precargaPaso(w, agotado, vidaMontable(w) ? undefined : MONTABLE)
-        w = cola.find((x) => !vidaMontable(x)) ?? cola.find((x) => !vidaCompleta(x))
+        w = sig()
       }
       gasto.prev = performance.now() - t0
       gasto.seg += gasto.prev
+      PRECARGA.presu.cuadros++; PRECARGA.presu.lim += lim; PRECARGA.presu.usado += gasto.prev
       urgente = true
     } else gasto.prev = 0
     // Fondo: el resto del mundo con lo que sobre de un cuadro de 60 Hz (tope 1,5 ms; nada si el cuadro va justo).

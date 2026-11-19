@@ -42,15 +42,17 @@ await p.evaluate(() => {
       const listo = P?.listo?.[w]; const montado = P?.montado?.[w]
       const ok = listo != null && montado != null ? Math.max(listo, montado) : null
       E.push({ tipo: 'entra', t: Math.round(now), way: w, listo, montado, antelacion_s: ok == null ? null : +((now - ok) / 1000).toFixed(2) })
+      // más entradas por tanda: tras entrar se sigue a otra ballita que aún esté en un planeta (CAMBIA_TRAS_ENTRAR=0 lo desactiva)
+      if (window.__cambiaTrasEntrar !== false) { prevPh = sel.phase; elegir(); return }
     }
     prevPh = sel.phase; prevWay = w
   }, 100)
 })
 await p.waitForTimeout(secs * 1000)
-const R = await p.evaluate(() => ({ E: window.__ant.E, caminos: window.__precarga?.caminos ?? null, ms: window.__precarga?.ms ?? null, max: window.__precarga?.max ?? null, total: window.__ballitasDebug ? null : null }))
+const R = await p.evaluate(() => ({ E: window.__ant.E, caminos: window.__precarga?.caminos ?? null, ms: window.__precarga?.ms ?? null, max: window.__precarga?.max ?? null, presu: window.__precarga?.presu ?? null, total: window.__ballitasDebug ? null : null }))
 const entradas = R.E.filter((x) => x.tipo === 'entra')
 const ant = entradas.map((x) => x.antelacion_s).filter((x) => x != null)
-const res = { modo, caminos_8s: caminos8s, caminos_fin: R.caminos, precarga_ms: R.ms, precarga_max: R.max, ok_pct: entradas.length ? Math.round(100 * entradas.filter((x) => x.listo != null && x.montado != null && (x.t - x.montado) >= 2000 && (x.t - x.listo) >= 500).length / entradas.length) : null, entradas: entradas.length, antelacion_min_s: ant.length ? Math.min(...ant) : null, antelacion: ant, sin_listo: entradas.filter((x) => x.antelacion_s == null).length, eventos: R.E }
+const res = { modo, caminos_8s: caminos8s, caminos_fin: R.caminos, precarga_ms: R.ms, precarga_max: R.max, presu: R.presu, ok_pct: entradas.length ? Math.round(100 * entradas.filter((x) => x.listo != null && x.montado != null && (x.t - x.montado) >= 2000 && (x.t - x.listo) >= 500).length / entradas.length) : null, entradas: entradas.length, antelacion_min_s: ant.length ? Math.min(...ant) : null, antelacion: ant, sin_listo: entradas.filter((x) => x.antelacion_s == null).length, eventos: R.E }
 console.log(JSON.stringify({ ...res, eventos: undefined }))
 if (salida) writeFileSync(salida, JSON.stringify(res, null, 1))
 } finally {

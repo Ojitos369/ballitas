@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe } from '../colisionObjetos.js'
 import { triplanarMaterial } from '../triplanar.js'
-import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
+import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq, tramosDelante } from './base.jsx'
 import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
 import { precargarModelos, useModelo } from './modelos.js'
 import { CURB, TERR, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
@@ -489,12 +489,13 @@ export default function Estructuras({ way, detail, focused, time }) {
       lastSegCheckRef.current.copy(cam)
       const near = []
       let bestD2 = Infinity
+      const delante = tramosDelante(way) // por delante de la ballita seguida según el arco, no solo por distancia
       for (let i = 0; i < nonAirSegs.length; i++) {
         const x = nonAirSegs[i]
         const d2 = minSegDistSq(x.seg, cam)
         if (d2 < bestD2) bestD2 = d2
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
-        if (d2 <= lim * lim) near.push(x)
+        if (d2 <= lim * lim || delante?.has(x.seg)) near.push(x)
       }
       minDistSqRef.current = bestD2
       nearSegsRef.current = near

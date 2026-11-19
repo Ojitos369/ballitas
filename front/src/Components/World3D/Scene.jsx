@@ -2245,7 +2245,7 @@ export default function Scene({ sim, ballitas, speed, selected, follow, pov = fa
       <SimDriver sim={sim} speed={speed} />
       <group visible={!supOn}>
       <Nodes world={sim.world} />
-      <Paths world={sim.world} sim={sim} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
+      <Paths world={sim.world} sim={sim} seguida={forceFocusDetail && !camino && selected && selected.phase !== 'gone' ? selected : null} focusWay={focusedWay} prefetchWays={prefetchWays} worldRadius={r} forceFocusDetail={forceFocusDetail} cameraOnBall={cameraOnBall} onPickWay={vista === 'mapa' ? onSelectWay : undefined} />
       {/* Precompilado: las ballitas nacen con pieles nuevas tras el precompilado inicial; sin esto la primera
           vez que entran en cuadro (al acercarse en Camino/Ballita) se esperaba su enlace dentro del cuadro. */}
       {ballitas.map((b) => (

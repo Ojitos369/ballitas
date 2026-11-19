@@ -88,16 +88,19 @@ for (let k = 0; k < nBall; k++) {
       clearInterval(st.pop)
       const R = window.__rec.R; const d = window.__ballitasDebug
       const prev = new WeakMap(); const fr = new T.Frustum(); const M = new T.Matrix4(); const S = new T.Sphere()
-      const dib = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return !(o.isInstancedMesh && o.count === 0) && !!o.geometry }
+      // estado de dibujo: 'si' | 'oculto' (algún ancestro invisible: LOD, camino oculto) | 'vacio' (InstancedMesh sin instancias: tramo/rango)
+      const dib = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return 'oculto'; return o.isInstancedMesh && o.count === 0 ? 'vacio' : o.geometry ? 'si' : 'oculto' }
+      const wayDe = (o) => { for (let q = o; q; q = q.parent) if (q.name?.startsWith('way:')) return +q.name.slice(4); return null }
       st.pop = setInterval(() => {
         const cam = d.camera
         M.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); fr.setFromProjectionMatrix(M)
         const t = performance.now()
         d.scene.traverse((o) => {
           if (!o.isMesh && !o.isPoints) return
-          const ahora = dib(o); const antes = prev.get(o)
-          prev.set(o, ahora)
-          if (!ahora || antes === true) return
+          const est = dib(o); const antes = prev.get(o)
+          prev.set(o, est)
+          const ahora = est === 'si'
+          if (!ahora || antes === 'si') return
           if (t - st.entrada < 5000) return
           const bs = o.isInstancedMesh ? (o.boundingSphere ?? (o.computeBoundingSphere(), o.boundingSphere)) : (o.geometry.boundingSphere ?? (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere))
           if (!bs) return
@@ -105,7 +108,7 @@ for (let k = 0; k < nBall; k++) {
           const dist = Math.max(0, S.center.distanceTo(cam.position) - S.radius)
           if (dist < 60 && fr.intersectsSphere(S)) {
             const m = Array.isArray(o.material) ? o.material[0] : o.material
-            R.pops.push({ t: Math.round(t - st.t0), geo: o.geometry?.name || '-', mat: m?.name || m?.type, inst: o.isInstancedMesh ? o.count : 0, dist: +dist.toFixed(1), nuevo: antes === undefined, phase: st.b?.phase })
+            R.pops.push({ t: Math.round(t - st.t0), geo: o.geometry?.name || '-', mat: m?.name || m?.type, inst: o.isInstancedMesh ? o.count : 0, dist: +dist.toFixed(1), nuevo: antes === undefined, causa: antes ?? 'nuevo', way: wayDe(o), seguida: st.b?.seg?.way?.idx ?? st.b?.way?.idx ?? null, phase: st.b?.phase })
           }
         })
       }, 200)
@@ -126,6 +129,8 @@ const resumen = {
   modo, throttle, minutos: +total.toFixed(2), fps: fpsMed, fpsP1: +(1000 / p99).toFixed(1),
   largos50_min: +(R.largos.length / total).toFixed(1), largos100_min: +(R.largos.filter((x) => x.ms > 100).length / total).toFixed(1),
   largos50_post_min: +(R.largos.filter((x) => !x.entrada).length / total).toFixed(1), max_post: Math.max(0, ...msPost.map(Math.round)), post_gt120: msPost.filter((x) => x > 120).length,
+  popCausa: R.pops.reduce((a, x) => { const k = (x.causa ?? '?') + (x.way == null ? '' : x.way === x.seguida ? ':suyo' : ':otro'); a[k] = (a[k] ?? 0) + 1; return a }, {}),
+  popFase: R.pops.reduce((a, x) => ((a[x.phase ?? '?'] = (a[x.phase ?? '?'] ?? 0) + 1), a), {}),
   pops_min: +(R.pops.length / total).toFixed(1), popEventos_min: +(new Set(R.pops.map((x) => x.t)).size / total).toFixed(1), popTop: Object.entries(R.pops.reduce((a, x) => ((a[x.geo + '|' + x.mat] = (a[x.geo + '|' + x.mat] ?? 0) + 1), a), {})).sort((x, y) => y[1] - x[1]).slice(0, 8), cambios: R.cambios, mem: R.mem, errores: errs.length,
 }
 console.log(JSON.stringify(resumen))

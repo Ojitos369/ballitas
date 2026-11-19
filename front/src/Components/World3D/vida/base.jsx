@@ -135,10 +135,27 @@ const Y = new THREE.Vector3(0, 1, 0)
 
 // ═══════════════════════════ BUS DE DATOS EN VIVO ═══════════════════════════
 // Paths.jsx escribe aquí la simulación en cada frame; los módulos solo leen.
-export const VIDA_BUS = { sim: null }
+// `seguida`: la ballita que sigue la cámara (o null); las capas por tramo activan por delante de ella según el arco.
+export const VIDA_BUS = { sim: null, seguida: null }
 const NO_BALLITAS = []
 export function getBallitas() {
   return VIDA_BUS.sim?.ballitas ?? NO_BALLITAS
+}
+
+const DELANTE_S = 4 // segundos de viaje por delante de la ballita seguida que se activan aunque la cámara aún esté lejos
+const DELANTE_MIN = 220 // y al menos este arco (u), para que los tramos cortos no se queden sin margen
+/** Tramos de `way` que la ballita seguida recorrerá en los próximos DELANTE_S s (incluye el actual); null si no va por él. */
+export function tramosDelante(way) {
+  const b = VIDA_BUS.seguida
+  if (!b || b.phase !== 'travel' || b.way !== way || !b.seg) return null
+  const segs = way.segments
+  let i = segs.indexOf(b.seg)
+  if (i < 0) return null
+  const out = new Set([b.seg])
+  let arco = (1 - (b.segT ?? 0)) * (b.seg.length ?? 0)
+  const meta = Math.max(DELANTE_MIN, (b.speed ?? 0) * DELANTE_S)
+  while (arco < meta && ++i < segs.length) { out.add(segs[i]); arco += segs[i].length ?? 0 }
+  return out
 }
 
 // ═══════════════════════════ MARCOS DEL TUBO ═══════════════════════════
