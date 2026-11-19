@@ -445,7 +445,15 @@ export const LANE_W = +(0.4 * 2.6).toFixed(2) * TK
 // Semiancho útil de la calzada para el centro de la ballita y desvío lateral (u) del carril c (0..CARRILES-1).
 export const CARRIL_EDGE = LANE_W / 2 - BALL_R * 0.85
 export const carrilLat = (c, edge = CARRIL_EDGE) => ((clamp(c, 0, CARRILES - 1) / (CARRILES - 1)) - 0.5) * 2 * edge
-export const BRAID_A = 6 * TK // radio (u) del anillo de la trenza abierta con 5 caminos: cuerda entre vecinos de 33 u (más que el gálibo)
+// Carriles en fila paralela, lado a lado y SIN enrollarse (nada de giro alrededor del eje: ningún carril pasa por
+// encima de otro). ROW_GAP: centro a centro entre vecinos con la fila abierta (aire entre bermas = ROW_GAP - 2·RIBBON_HALF
+// > AIRE_LAT). BRAID_A: semiancho (u) de la fila de 5 carriles, del eje al centro del carril exterior.
+// El semiancho se limita a BRAID_A para que la fila quepa en el envolvente del reparto global: con 3 carriles el hueco
+// es ROW_GAP completo, con 4 y 5 se reparte BRAID_A (rowGap). ENV_PAD: holgura del envolvente sobre BRAID_A.
+export const ROW_GAP = 26
+export const BRAID_A = 36
+export const rowGap = (n) => Math.min(ROW_GAP, (2 * BRAID_A) / Math.max(1, n - 1))
+const ENV_PAD = 9.7 * TK - BRAID_A
 // Cinta visible de un carril (calzada + bordillo + berma, pista.jsx); ver «colisión de cintas visibles» más abajo.
 export const RIBBON_CURB = 0.17 * TK
 export const RIBBON_TERR = 0.55 * TK
@@ -462,7 +470,7 @@ export const FILA_GAP = RIBBON_CLEAR + 1 * TK
 export const FILA_W = (5 - 1) * FILA_GAP + 2 * RIBBON_HALF
 // (espiral y sacacorchos se quedan en anillo: en su zona delgada la fila se doblaba sobre sí misma; ver REPORTE_SEP)
 const FILA_KINDS = new Set(['rizo', 'embudo'])
-const BRAID_PAD = 3.7 * TK // holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
+const BRAID_PAD = 3.7 * TK // (texto previo: holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
 const BRAID_OPEN = 16 * TK // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
 const BRAID_RAMP = 18 * TK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
 export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon', 'tirabuzon_inv']
@@ -482,7 +490,7 @@ export function braidEnv(seg, u, hubs = true) {
 // (parrilla/meta + BRAID_OPEN): las elecciones del reparto no cambian y el envolvente queda del lado holgado.
 const NODE_OPEN = 8 * TK
 const HUB_OPEN = 6 * TK
-const OPEN_RAMP = 16 * TK
+const OPEN_RAMP = 11 * TK // (16·TK con el anillo) la fila se abre de lado y tarda más en separar vecinos: rampa más corta
 const FILA_TWIST = 8 * TK
 const FILA_TURN = 0.008 // (rad/u) giro máximo de la dirección de la fila a lo largo del tramo
 export function braidDelay(seg, hubs = true) {
@@ -492,11 +500,12 @@ export function braidDelay(seg, hubs = true) {
 }
 // Radio del envolvente de la trenza alrededor del eje (para separar pistas distintas; la búsqueda de huecos no cuenta
 // HUB_OPEN, así sus elecciones no cambian y el envolvente queda del lado holgado).
-export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + BRAID_PAD)
+export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + ENV_PAD)
 
 // Giro propio (rad) del camino alrededor de su avance; 0 (mod 2π) en las puntas.
 function rollAt(seg, lane, u) {
   if (seg._braid?.fila) return lerpArr(seg._braid.roll, u) // calzada fundida: todos con la misma normal
+  if (seg._braid?.row) return 0 // fila paralela: normal compartida (un giro propio pondría la calzada de uno mirando al vecino)
   if (!lane || lane.roll === 'plano' || !seg._braid) return 0
   const e = braidEnv(seg, u)
   if (lane.roll === 'cabeza') return Math.PI * e
@@ -907,18 +916,20 @@ function buildBraid(s) {
       }
     }
   } else {
-    for (let i = 0; i <= N; i++) rad[i] = Math.max(0, Math.min(ringR * env[i], cap[i]))
+    // fila paralela: carriles lado a lado a lo largo de la lateral de la calzada (T × up del suelo, ángulo 0), todos con
+    // la misma normal; la apertura (env) escala el hueco de 0 (una sola calzada en las puntas) a ROW_GAP.
+    const gap = rowGap(nl); const half = ((nl - 1) / 2) * gap; const WF = {}; const row = new THREE.Vector3(); const T = new THREE.Vector3()
     for (let i = 0; i <= N; i++) {
-      const u = i / N
+      rad[i] = half * env[i]
+      T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]); row.crossVectors(wallFrame(s, 0, i / N, 0, WF).dir, T).normalize()
       for (let j = 0; j < nl; j++) {
-        const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
-        const theta = (j * TAU) / nl + u * TAU; const radius = rad[i]
-        for (let k = 0; k < 3; k++) dst[i * 3 + k] = C[i * 3 + k] + R[i * 3 + k] * Math.cos(theta) * radius + S[i * 3 + k] * Math.sin(theta) * radius
+        const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * gap * env[i]
+        dst[i * 3] = C[i * 3] + row.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + row.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + row.z * off
       }
     }
   }
   const [da, db] = braidDelay(s)
-  s._braid = { N, P, env, rad, fila, ang, roll, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
+  s._braid = { N, P, env, rad, fila, row: !fila, ang, roll, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -947,7 +958,7 @@ function buildLanes(way) {
     let opts
     if (dy < -0.45 * dist) opts = ['caida', 'caida', 'salto', ...(extra.abajo || [])]
     else if (dy > 0.45 * dist) opts = ['elevador', 'elevador', 'rampa', ...(extra.arriba || [])]
-    else if (dist > 1.3 * BRAID_A) opts = ['portal'] // vecinos del anillo o de la fila: salto; más lejos: portal
+    else if (dist > 1.3 * ROW_GAP) opts = ['portal'] // vecinos del anillo o de la fila: salto; más lejos: portal
     else opts = ['salto', 'rampa', 'botado', 'laberinto', ...(extra.nivel || [])]
     return pref && opts.includes(pref) ? pref : opts[Math.floor(rng() * opts.length)]
   }
