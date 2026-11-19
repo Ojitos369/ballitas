@@ -1,0 +1,134 @@
+{
+ "desk": {
+  "libre": {
+   "far": 241980.3388105641,
+   "dist": 21622,
+   "fov": 50
+  },
+  "filas": [
+   {
+    "img": "desk_pov0_salida.jpg",
+    "id": 2,
+    "phase": "travel",
+    "kind": "salida",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 6643
+   },
+   {
+    "img": "desk_pov1_embudo.jpg",
+    "id": 1,
+    "phase": "travel",
+    "kind": "embudo",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 5279
+   },
+   {
+    "img": "desk_pov2_canon.jpg",
+    "id": 4,
+    "phase": "travel",
+    "kind": "canon",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 7761
+   },
+   {
+    "img": "desk_pov3_espiral.jpg",
+    "id": 1,
+    "phase": "travel",
+    "kind": "espiral",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 4282
+   }
+  ],
+  "nErr": 2,
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+ },
+ "movil": {
+  "libre": {
+   "far": 241980.3388105641,
+   "dist": 45831,
+   "fov": 50
+  },
+  "filas": [
+   {
+    "img": "movil_pov0_salida.jpg",
+    "id": 3,
+    "phase": "travel",
+    "kind": "salida",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 6891
+   },
+   {
+    "img": "movil_pov1_canon.jpg",
+    "id": 7,
+    "phase": "travel",
+    "kind": "canon",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 8435
+   },
+   {
+    "img": "movil_pov2_horquilla.jpg",
+    "id": 10,
+    "phase": "travel",
+    "kind": "horquilla",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 5313
+   },
+   {
+    "img": "movil_pov3_espiral.jpg",
+    "id": 1,
+    "phase": "travel",
+    "kind": "espiral",
+    "far": 241980.3388105641,
+    "fog": [
+     null,
+     null,
+     0.000026448429783422537
+    ],
+    "camDist": 8385
+   }
+  ],
+  "nErr": 2,
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+ }
+}

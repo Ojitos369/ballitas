@@ -93,3 +93,59 @@ Tiempo de generación, misma tanda, semillas 369-378: main media **5.89 s** (4.2
 4. Decidir con el usuario la duración del viaje y el ajuste de cámara; después 10 semillas, prueba nueva, build y navegador.
 
 Conocimiento consultado: separacion_visible_en_marco_local
+
+## Sesión 4 (2026-11-19)
+
+**Resultado: `pnpm test` pasa de 13 fallos a 2 (ver «Pruebas»); generación 1.31 × main sin mundos fallidos; `ways:libre` en 0. La meta final (0 en falta en TODAS las clases) NO se cumple. No integrable todavía por los 2 fallos.**
+
+### Qué cambió
+1. **Rampa de salida/llegada** (`braidRamps`, `be1c861`). Diagnóstico: los 9 fallos no eran solo una rampa corta. (a) La calzada fundida de la zona de puerto mide 244 u, más que `JOINT_MAX` (117 u), y el medidor de cintas contaba el tope desde la punta, así que la apertura no tenía arco exento. (b) La rampa real (`OPEN_RAMP`, 52 u) abría más rápido que el envolvente que usó el reparto (`BRAID_RAMP`, 128 u): los carriles asomaban hasta 22 u fuera de lo garantizado. Ahora la rampa junto a un nodo es la misma que la del envolvente y el tope `JOINT_MAX` de carriles de un mismo tramo se cuenta desde el fin de la calzada fundida (entre tramos distintos sigue contando desde la punta). **Es un cambio de criterio del medidor `ribbonHits`, no solo de geometría.** No se usó la rampa en función de la distancia al nodo del ejemplo: abrir dentro de `PORT_ZONE` deja la fila sin envolvente garantizado frente a las salidas vecinas (ahí el reparto no mide).
+2. **Espiral, sacacorchos y horquilla en `FILA_KINDS`** (`3399d2b`): copias trasladadas a lo largo del eje. Umbral de mezcla eje/perpendicular de 0.8 a 0.6 (= `SH_MAX`): con el eje a más de `SH_MAX` del avance, `fit` recortaba la fila en cada vuelta y la plegaba. La horquilla queda peraltada como pared (captura `sep4/movil_pov2_horquilla.jpg`); es una consecuencia de diseño a revisar.
+3. **Semilla 27**: `ROUTE_MARGIN × ANCHO_K` (los pasos de muestreo de la búsqueda crecieron en esa proporción). Fallo de rutas del mismo sentido resuelto.
+4. **Medidor** (`3399d2b`): «fundido coplanar» = carriles del mismo tramo, a la misma altura del recorrido (< 3·`ROW_GAP` de arco), normales con dot ≥ `COPLANAR_DOT`, desnivel ≤ `FUNDIDA_Y` (el relieve propio de cada carril impide exigir `COPLANAR_Y`) y dentro de la calzada única de una punta o de su rampa. Se excluye de todas las clases y se cuenta aparte (`out.fundido`). El resto de uniones cuenta.
+5. **Velocidad de viaje** (`3399d2b`): `MAP_SPEED_K × 1.14` en `sim.js`. `MAP_SPEED_K` ya llevaba `SIZE_K` (y con él `ANCHO_K`); faltaba el 1.14 extra de `spread`. La prueba de duración pasa sin tocar su rango (antes 142.6 s, tope 140).
+6. `braidCap` ya no se calcula en `buildBraid` (`48e75af`; no se usaba, ~6 % de la generación).
+7. Herramienta nueva `tools/chequeo_sep.mjs` (lo que afirma `layout.test.js`, por semilla) y sonda `_capturas/sep_vista.mjs`.
+
+### Mediciones
+Generación, misma tanda, semillas 369-378: main 5.29 s y 5.67 s (dos pasadas, media 5.48 s); rama **7.17 s = 1.31 ×** (meta ≤ 1.5), **0 mundos fallidos**.
+
+`node tools/separacion.mjs 10 369` (10 semillas). La columna «antes» es la sesión 3 con solo 3 semillas y sin la exclusión de fundido coplanar: no es comparable caso a caso.
+
+| Clase | Sesión 3 (3 semillas) | Sesión 4 (10 semillas) |
+|---|---|---|
+| ways:libre | 0 pares | **0 pares** |
+| rutas:libre | 0 pares | 4 pares en 2 de 10 semillas (gálibo 2, lateral 16, minD 3.1, s377 rizo contra espiral) |
+| ruta:libre gálibo / lateral | 66 / 16 | 226 (minH 19.0) / 148 (minD 4.5) |
+| tramo:libre gálibo / lateral | 7 / 8 715 | 70 (minH 14.5) / 21 850 (minD 5.0, sacacorchos) |
+| ways:union gálibo / lateral | 1 024 / 567 | 3 352 (minH 15.4) / 2 507 (minD 6.9) |
+| rutas:union gálibo / lateral | 2 588 / 661 | 7 004 (minH 15.5) / 2 655 (minD 0.0) |
+| ruta:union gálibo / lateral | 162 / 350 | 1 168 (minH 13.4) / 405 (minD 0.0) |
+| tramo:union gálibo / lateral | 50 349 / 12 582 | 736 (minH −1.1) / 18 034 (minD 0.0) |
+| fundido coplanar (excluido) | — | 1 420 205 pares de muestras |
+
+Lectura: fuera de uniones no hay pares de caminos distintos en falta; sí quedan dentro de una ruta y de un tramo (sacacorchos a 5.0 u de aire) y en 2 semillas entre rutas del mismo camino. Las clases `:union` siguen lejos de 0.
+
+### Pruebas
+`pnpm test` antes de mezclar main: 79 pruebas, **2 fallan** (resultado tras mezclar main: al final de esta sección):
+- `huelgo … (semilla 3)`: carriles `w17 rampa/r1 L0@0.09 vs L1@0.10` a 13.96 u (faltan 1.46). Causa medida: la relajación de cintas no converge junto a la bifurcación (`relax: it 19, left 2`) y aprieta dos carriles de la rampa. Es el abanico de rutas en las uniones.
+- `sim.test.js:446` (tope 3 000 ms): 3 011 ms dentro de la batería. Sola y con el equipo libre: 2 734 / 2 821 / 2 915 ms (antes de quitar `braidCap`: 3 223 / 3 246 / 2 887 / 3 385 ms). Es **coste real con margen insuficiente**, no solo carga: la relajación de cintas pesa ~1.7 s (11 pasadas, 75 tramos). No se redujo más.
+
+Tras `git merge main` (`092f902`, sin conflictos): los mismos 2 fallos y ninguno nuevo (semilla 3 igual, a 13.96 u; reconstrucción 3 581 ms con la batería en paralelo).
+
+Prueba nueva en `layout.test.js` (semillas 1 y 369): 0 pares en `ways:libre` y `rutas:libre`. Cubre solo la parte de la meta que se cumple; no afirma las demás clases.
+
+### Navegador (build de producción, puerto 4301, `?stats=1`)
+Capturas en `front/_capturas/sep4/` (abiertas y revisadas: vista libre de escritorio y móvil, salida, espiral y horquilla; las otras cinco se tomaron pero no se abrieron).
+- Vista libre inicial: el mapa cabe entero en 1400×900 y en 412×915; la niebla no tapa caminos. `Scene.jsx` ya deriva cámara, `far` (`r * 20`), niebla (`0.32 / r`) y `maxDistance` (`r * 6`) del radio del mundo: **no hay constantes que cambiar**.
+- POV: salida como una sola calzada; espiral sin cintas encimadas; horquilla peraltada como pared.
+- No comparado contra main: el panel marca 0.7 FPS en la captura inicial (12 s tras cargar, con «Vida: 0 activos», probablemente aún en precarga) y 35-67 FPS en POV. Falta un A/B en la misma sesión para saber si la carga inicial empeoró.
+- Consola: 2 errores «500 (Internal Server Error)» al cargar un recurso en cada viewport; no se investigó su origen.
+
+### No cumplido / pendiente
+1. Meta final de 0 en falta en todas las clases.
+2. Los 2 fallos de prueba de arriba.
+3. Abanico de rutas en bifurcaciones (origen de `rutas:union`, `ruta:union` y del fallo de la semilla 3) y aire lateral en sacacorchos.
+4. A/B de rendimiento en navegador contra main.
+
+Conocimiento consultado: separacion_visible_en_marco_local
