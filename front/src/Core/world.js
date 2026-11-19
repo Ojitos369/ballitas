@@ -481,6 +481,10 @@ export const FILA_W = (5 - 1) * FILA_GAP + 2 * RIBBON_HALF
 // (espiral y sacacorchos se quedan en anillo: en su zona delgada la fila se doblaba sobre sí misma; ver REPORTE_SEP)
 const FILA_KINDS = new Set(['rizo', 'embudo', 'espiral', 'sacacorchos', 'horquilla'])
 const HELI_KINDS = new Set(['espiral', 'sacacorchos']) // fila radial (rampa helicoidal), ver buildBraid
+// Hueco (u) entre carriles en espiral y sacacorchos: calzada estrecha (RIBBON_CLEAR + 0.6·TK = 18.2 u, el mínimo que la
+// medida de cintas admite con margen) en vez de FILA_GAP (26 u). Los carriles de fuera giran con menos brazo alrededor
+// del eje de la hélice y la cinta se retuerce menos donde el radio nace o muere (sesión 7, tools/torsion.mjs).
+export const HELI_GAP = RIBBON_CLEAR + 0.6 * TK
 const HELI_MINR = 1.2 * TK // (u) radio mínimo de la hélice para tomar su rumbo radial
 const HELI_TURN = 0.03 // (rad/u) giro máximo de la fila radial
 const BRAID_PAD = 3.7 * TK // (texto previo: holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
@@ -912,7 +916,11 @@ function buildBraid(s) {
     // así el hueco entre vecinos es FILA_GAP en toda la vuelta y las vueltas quedan separadas por el paso (PITCH). La
     // fila paralela al eje (banda de cilindro) no cabe: con el avance a más de SH_MAX del eje se recortaba y los
     // carriles se pellizcaban en cada vuelta (aire 5 u de 11.7).
-    const heli = !globalThis.process?.env?.NO_HELI && HELI_KINDS.has(s.kind)
+    // SESIÓN 7: la rampa helicoidal queda APAGADA (solo diagnóstico, HELI=1 en Node). Donde el radio de la hélice nace o
+    // muere el rumbo radial gira hasta HELI_TURN rad/u y los carriles de fuera barren de lado más de lo que avanzan:
+    // cintas retorcidas 59-67° entre muestras (tools/torsion.mjs). La fila trasladada con calzada estrecha (HELI_GAP)
+    // queda en ~32°, al nivel del propio eje.
+    const heli = !!globalThis.process?.env?.HELI && HELI_KINDS.has(s.kind)
     if (heli) {
       const A0 = V(C, 0); const c = V(C, N).sub(A0); const cl = c.length()
       if (cl > 1e-6) c.divideScalar(cl)
@@ -950,6 +958,7 @@ function buildBraid(s) {
     // giro real: 0 (mod 2π) en las puntas; el resto se deshace dentro de la zona cerrada de cada punta (FILA_TWIST)
     roll = new Float32Array(N + 1); const [za, zb] = braidDelay(s); const r0 = ang[0]; const r1 = ang[N] - TAU * Math.round(ang[N] / TAU)
     for (let i = 0; i <= N; i++) { const x = (i / N) * s.length; roll[i] = ang[i] - r0 * (1 - smooth01(x / za)) - r1 * (1 - smooth01((s.length - x) / zb)) }
+    const gapF = HELI_KINDS.has(s.kind) ? +(globalThis.process?.env?.HELI_GAP || HELI_GAP) : FILA_GAP
     // posiciones: fila a lo largo de T × up REAL (con el giro ya atenuado por la apertura: coplanar también en las
     // rampas) más la cizalla a lo largo de T que la alinea con el eje de la hélice
     for (let i = 0; i <= N; i++) {
@@ -958,9 +967,9 @@ function buildBraid(s) {
       // traslación pura a lo largo de B (con su parte a lo largo de T): los carriles son copias desplazadas del eje y no se
       // pellizcan en las curvas cerradas; se escala para que la separación perpendicular al avance sea FILA_GAP
       const bt = B[i].dot(T); row.addScaledVector(T, (bt / Math.sqrt(1 - bt * bt)) * env[i])
-      rad[i] = ((nl - 1) / 2) * FILA_GAP * env[i]
+      rad[i] = ((nl - 1) / 2) * gapF * env[i]
       for (let j = 0; j < nl; j++) {
-        const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * FILA_GAP * env[i]
+        const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * gapF * env[i]
         dst[i * 3] = C[i * 3] + row.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + row.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + row.z * off
       }
     }
