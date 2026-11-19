@@ -21,7 +21,7 @@ import { StatsProbe } from './StatsOverlay.jsx'
 import { VistaCamino, useSuperficie, cerrarSuperficie } from './Vistas.jsx'
 import Superficie from './mundos/Superficie.jsx'
 import InstanceCuller from './InstanceCuller.jsx'
-import Precompilado, { precompilar, precompilarSombra } from './Precompilado.jsx'
+import Precompilado, { enlazarPendientes, precompilar, precompilarSombra, primerDibujo } from './Precompilado.jsx'
 import { clampYaw, decayOffset, povZoomView, povView, POV_ZOOM_EYE, rayEnterSphere } from './povLook.js'
 import { getNodeCameraEnvelopes } from './Nodes.jsx'
 import { resolveNodeBiome } from './mundos/biomas.js'
@@ -1390,26 +1390,33 @@ function PostFX({ dofOn, selected, highQuality }) {
   // programas (CoC, Bokeh, Kawase, variante del EffectMaterial) para que la primera Ballita no los compile.
   const warm = useRef(0) // 0 pendiente, 1 este cuadro, 2 hecho
   const gl = useThree((s) => s.gl)
-  const camera = useThree((s) => s.camera)
+  const getR3f = useThree((s) => s.get)
   const scene = useThree((s) => s.scene)
   useEffect(() => {
     // con plazo: si los cuadros no dejan hueco libre, sin timeout no llegaba a correr nunca
     const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 800 }) : (f) => setTimeout(f, 1)
     // Además, compila en paralelo todo lo montado aunque esté oculto (LOD de nodos, pieles, variantes
     // cercanas): sin esto, acercarse por primera vez (Camino/Ballita) esperaba su enlace dentro del cuadro.
-    const t = setTimeout(() => idle(() => {
-      if (warm.current === 0) warm.current = 1
-      gl.capabilities.getMaxAnisotropy() // consulta síncrona a la GPU (>100 ms con la cola llena); se cachea aquí
-      // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
-      // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
-      Promise.all([precompilar(gl, scene, camera, scene), precompilarSombra(gl, camera, scene)]).then(() => {
-        const pend = (gl.info.programs ?? []).slice()
-        const next = () => { pend.shift()?.getUniforms(); if (pend.length) idle(next) }
-        idle(next)
-      })
-    }), 2500)
-    return () => clearTimeout(t)
-  }, [gl, camera, scene])
+    // La cámara se lee al correr (no es dependencia): si cambiaba de objeto, el plazo de 2,5 s volvía a empezar y el
+    // precalentado llegaba tarde (medido: aún sin hacer a los 8 s de cargar, y caía justo al entrar a Ballita).
+    // Cuenta desde el primer cuadro pintado, no desde el montaje (el primer cuadro con todo el mundo tarda segundos).
+    let t = 0
+    const raf = requestAnimationFrame(() => {
+      t = setTimeout(() => idle(() => {
+        if (warm.current === 0) warm.current = 1
+        const camera = getR3f().camera
+        gl.capabilities.getMaxAnisotropy() // consulta síncrona a la GPU (>100 ms con la cola llena); se cachea aquí
+        // ANGLE resuelve el enlace real en la primera consulta de uniforms (cientos de ms por programa):
+        // se fuerza aquí, uno por hueco libre del mapa, en vez de en el primer cuadro de Camino/Ballita.
+        // y el primer dibujo oculto de cada programa (detalle cercano de planetas y ciudades, oculto en el mapa): sin
+        // él, la primera llegada a un nodo pagaba la traducción nativa de ANGLE dentro del cuadro (cuadros de 1-2 s)
+        Promise.all([precompilar(gl, scene, camera, scene), precompilarSombra(gl, camera, scene)]).then(() => enlazarPendientes(gl))
+          .then(() => primerDibujo(gl, scene, scene, camera))
+        if (window.__enlace) window.__enlace.calentado = Math.round(performance.now())
+      }), 1500)
+    })
+    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
+  }, [gl, getR3f, scene])
 
   useFrame(() => {
     const e = dofRef.current

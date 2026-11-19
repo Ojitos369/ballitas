@@ -37,6 +37,9 @@ function ringCoreMat(baseMat) {
   return m
 }
 
+/** Calentado: el material del núcleo del anillo (derivado del kit) tal como lo usa la capa, para precompilarlo. */
+export const anilloCoreWarmup = (baseMat) => (Array.isArray(baseMat) ? [ringCoreMat(baseMat[0]), ...baseMat.slice(1)] : ringCoreMat(baseMat))
+
 let _lowGeoBase = null
 function lowRingBaseGeo() {
   if (!_lowGeoBase) {
@@ -73,7 +76,7 @@ export function anillosWarmup() {
 const F0 = {}
 const ringsCache = new WeakMap()
 
-function buildAnillosData(way) {
+export function buildAnillosData(way) {
   if (ringsCache.has(way)) return ringsCache.get(way)
   const P = pal(way.theme.id)
   const baseCol = new THREE.Color(P.mec)

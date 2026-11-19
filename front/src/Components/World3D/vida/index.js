@@ -6,6 +6,8 @@ import { VidaGuard, disposeObject3D, setWayDetail } from './base.jsx'
 import Pista from './pista.jsx'
 import Criaturas from './criaturas.jsx'
 import Uniones from './uniones.jsx'
+import Precompilado from '../Precompilado.jsx'
+import { useEtapa } from './etapas.js'
 
 export const VIDA_PERF = {
   active: 0,
@@ -32,11 +34,14 @@ export function VidaDeCamino(props) {
       disposeObject3D(root)
     }
   }, [])
+  // Criaturas y uniones entran cuando la precarga tiene sus datos (como las capas de Pista), ocultas hasta enlazar.
+  const criaturas = useEtapa(props.way, 'criaturas')
+  const uniones = useEtapa(props.way, 'uniones')
   return createElement(
     'group',
     { ref: wrapRef },
-    createElement(VidaGuard, { themeId: id }, createElement(Pista, props), createElement(Criaturas, props)),
-    createElement(VidaGuard, { themeId: id }, createElement(Uniones, props)),
+    createElement(VidaGuard, { themeId: id }, createElement(Pista, props), criaturas && createElement(Precompilado, null, createElement(Criaturas, props))),
+    createElement(VidaGuard, { themeId: id }, uniones && createElement(Precompilado, null, createElement(Uniones, props))),
   )
 }
 

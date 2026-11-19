@@ -33,8 +33,35 @@ const decorCache = new WeakMap()
 const F = {}
 const YAW = new THREE.Quaternion()
 
+/** Piezas del kit que monta la decoración de `way` (para cargarlas y compilarlas antes de entrar). */
+export function decorKit(way) {
+  const t = KIT_THEMES.has(way.theme?.id) ? way.theme.id : 'bosque'
+  return [`rebote_${t}`, `deco_${t}_hito`, `deco_${t}_flora`, 'farola_pista', 'banderin']
+}
+
+const decorGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+const NUNCA = () => false
+
+/** Avanza la decoración de `way` hasta que `agotado()` diga basta; true cuando quedó en caché. Mismo orden y
+ *  mismo rng que de un tirón: solo se reparte entre cuadros/huecos libres. */
+export function decorPaso(way, agotado) {
+  if (decorCache.has(way)) return true
+  let g = decorGens.get(way)
+  if (!g) { g = decorGen(way); decorGens.set(way, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { decorGens.delete(way); decorCache.set(way, r.value); return true }
+    if (agotado()) return false
+  }
+}
+
 function buildDecorData(way) {
-  if (decorCache.has(way)) return decorCache.get(way)
+  decorPaso(way, NUNCA)
+  return decorCache.get(way)
+}
+
+// Los `yield` van al final de cada muestra: el marco compartido F no se usa a medias entre dos reanudaciones.
+function* decorGen(way) {
   const rawTheme = way.theme?.id
   const theme = KIT_THEMES.has(rawTheme) ? rawTheme : 'bosque'
   const rng = mulberry32(7717 + way.idx * 97)
@@ -48,8 +75,10 @@ function buildDecorData(way) {
   const decoCands = []
   const floraCands = []
 
-  way.segments?.forEach((seg, si) => {
-    if (seg.air) return
+  const segsW = way.segments ?? []
+  for (let si = 0; si < segsW.length; si++) {
+    const seg = segsW[si]
+    if (seg.air) continue
     const L = Math.max(seg.length ?? 1, 1)
     const lanes = lanesOf(seg)
 
@@ -139,6 +168,7 @@ function buildDecorData(way) {
 
         if (kind === 'rebote') rebotesSide.push({ pos, quat, scale: sc })
         else decoCands.push({ kind, pos, quat, scale: sc })
+        yield
       }
 
       // 3) Flora densa en ambas bermas a lo largo de todo el tramo
@@ -164,9 +194,10 @@ function buildDecorData(way) {
           const quat = baseQuat.clone().multiply(YAW.setFromAxisAngle(Y_AXIS, rng() * Math.PI * 2))
           floraCands.push({ pos, quat, scale: sc })
         }
+        yield
       }
     }
-  })
+  }
 
   rebotesJump = capStride(rebotesJump, MAX_REBOTES_JUMP)
   const rebotes = [...rebotesJump, ...capStride(rebotesSide, MAX_REBOTES_SIDE)]
@@ -197,7 +228,6 @@ function buildDecorData(way) {
     farola,
     banderin,
   }
-  decorCache.set(way, out)
   return out
 }
 

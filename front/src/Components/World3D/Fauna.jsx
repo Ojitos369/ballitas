@@ -118,6 +118,13 @@ function makeMaterial(k, time) {
   return m
 }
 
+/** Un material por animación (misma clave de programa que la fauna real), para el precalentado del mapa. */
+export function faunaWarmup(time) {
+  const porAnim = new Map()
+  for (const k of Object.keys(SPECIES)) if (!porAnim.has(SPECIES[k].anim)) porAnim.set(SPECIES[k].anim, makeMaterial(k, time))
+  return [...porAnim.values()]
+}
+
 const rr = (rng, [a, b]) => a + (b - a) * rng()
 const boundR = (k) => { const g = speciesGeo(k); g.boundingSphere ?? g.computeBoundingSphere(); return g.boundingSphere.radius }
 
