@@ -1322,6 +1322,8 @@ function Planet({ node, world, tex }) {
     const kAqui = FOCO.nodo === node.idx ? FOCO.k.value : 0
     planetMat.uniforms.uNear.value = kAqui
     if (roadRef.current) roadRef.current.visible = kAqui > 0.02
+    // El casco de contorno (BackSide a 1.045 R) visto rasante desde la calle era una franja negra en el horizonte.
+    if (outlineMeshRef.current) outlineMeshRef.current.visible = kAqui < 0.5
     labelFade.value = 1 - FOCO.k.value
     const showOrbitals = dist < LOD_ORBITALS
     const sphereGeo = showOrbitals ? unitSphereGeo : unitSphereLowGeo
