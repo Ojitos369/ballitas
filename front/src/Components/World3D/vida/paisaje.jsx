@@ -19,6 +19,30 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const SEG_ACTIVE_DIST = 96
 const MOVE_RECOMPACT_SQ = 20
 const OVERVIEW_DIST_SQ = 36 * 36 // como estructuras.jsx: > 36 u del tramo más cercano = vista general
+// minSegDistSq (base.jsx) mira solo 5 puntos por tramo: con tramos de cientos de unidades (TRACK_K) la cámara
+// que sigue a una ballita queda a > 36 u de todos y el paisaje se creía siempre en vista general (count 0).
+// Aquí se muestrea el tramo cada ~SEG_SAMPLE_STEP u (caché por tramo) para medir la distancia real.
+const SEG_SAMPLE_STEP = 8
+const denseCache = new WeakMap()
+function segDistSq(seg, cam) {
+  let pts = denseCache.get(seg)
+  if (!pts) {
+    if (seg.curve) {
+      const n = Math.min(400, Math.max(4, Math.ceil((seg.length ?? seg.curve.getLength()) / SEG_SAMPLE_STEP)))
+      pts = seg.curve.getSpacedPoints(n)
+    } else if (seg.start && seg.end) {
+      const n = Math.min(400, Math.max(1, Math.ceil(seg.start.distanceTo(seg.end) / SEG_SAMPLE_STEP)))
+      pts = Array.from({ length: n + 1 }, (_, i) => seg.start.clone().lerp(seg.end, i / n))
+    } else return minSegDistSq(seg, cam)
+    denseCache.set(seg, pts)
+  }
+  let best = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    const d2 = pts[i].distanceToSquared(cam)
+    if (d2 < best) best = d2
+  }
+  return best
+}
 
 // ═══════════════════════════ GEOMETRÍAS PROCEDURALES ═══════════════════════════
 const _m4 = new THREE.Matrix4()
@@ -386,7 +410,8 @@ const GEOS = {
     }
     parts.push(piece(sphere(0.5, 12, 4), { pos: [0, 0.01, 0], scl: [0.85, 0.03, 0.85], color: '#ff5a1a' }))
     return merge(parts, 'basalt')
-  },  // Charco de lava: disco irregular naranja con borde de roca oscura (material de brillo).
+  },
+  // Charco de lava: disco irregular naranja con borde de roca oscura (material de brillo).
   lavaPool: () => {
     const parts = [
       piece(sphere(0.5, 14, 6), { pos: [0, -0.02, 0], scl: [1.4, 0.12, 0.9], noise: 0.18, color: (c, x, y, z) => c.set('#2b2020').lerp(_c2.set('#4a3530'), hash3(x * 9, 0, z * 9)) }),
@@ -754,7 +779,8 @@ const PAISAJE = {
       { geo: 'embers', mat: 'bubbles', step: 5, ax: [0.2, 2.2], scale: [3.5, 5.5], y: [0, 0.3], foot: 0, both: 0.6, cap: 90, range: 55, tints: ['#ffffff'], noClear: true },
       { geo: 'ray', mat: 'ray', step: 18, ax: [0.6, 2.4], scale: [12, 17], y: [-0.5, 0.2], foot: 0, both: 0.4, cap: 24, range: 90, tints: ['#ff7a3a', '#ffa060'], tilt: 0.25, noClear: true },
     ],
-  },  // Cristal: drusas translúcidas de varios tonos, geodas abiertas, destellos y rayos de color.
+  },
+  // Cristal: drusas translúcidas de varios tonos, geodas abiertas, destellos y rayos de color.
   cristal: {
     layers: [
       { geo: 'druse', mat: 'glass', step: 7, ax: [0.6, 2.8], scale: [3.5, 7], foot: 0.3, both: 0.75, cap: 120, range: 100, tints: ['#ffffff', '#ffe0ff', '#d8f8ff'], ground: true },
@@ -946,7 +972,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
       let best = Infinity
       for (const x of nonAirSegs) {
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
-        const d2 = minSegDistSq(x.seg, cam)
+        const d2 = segDistSq(x.seg, cam)
         if (d2 < best) best = d2
         if (d2 <= lim * lim) near.push(x)
       }
