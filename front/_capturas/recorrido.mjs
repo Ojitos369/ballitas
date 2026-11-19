@@ -112,6 +112,63 @@ for (let k = 0; k < nBall; k++) {
           }
         })
       }, 200)
+      // Apariciones BRUSCAS (definición del orquestador): malla o instancia que pasa de no dibujarse a medir > 14 px de
+      // alto en un solo cuadro a < 60 u de la cámara. Se mira cada cuadro; con InstanceCuller nuevo (window.__aparece) el
+      // tamaño incluye su factor de borde y de revelado; en main el factor es 1.
+      R.bruscas = R.bruscas ?? []
+      const prevB = new WeakMap(); let lista = []; let nf = 0
+      const AP = window.__aparece; const V = new T.Vector3(); const Mi = new T.Matrix4(); const Sc = new T.Vector3()
+      const altoPx = (rad, dist) => { const f = cam0().fov * Math.PI / 180; return (2 * rad) / (2 * Math.max(dist, 0.5) * Math.tan(f / 2)) * d.gl.domElement.clientHeight }
+      const cam0 = () => d.camera
+      const medir = (o) => {
+        const cam = d.camera
+        const bs = o.geometry.boundingSphere ?? (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)
+        if (!bs) return 0
+        const ws = o.matrixWorld.getMaxScaleOnAxis()
+        if (!o.isInstancedMesh) {
+          S.copy(bs).applyMatrix4(o.matrixWorld)
+          const dist = S.center.distanceTo(cam.position)
+          if (dist - S.radius > 60 || !fr.intersectsSphere(S)) return 0
+          return altoPx(S.radius, dist)
+        }
+        const noCull = !!o.userData.noCull; const n = o.count
+        const D = AP ? (noCull ? o.userData.recorte : (n >= AP.min ? AP.radio : null)) : null
+        const rev = AP ? (o.userData.__rev ?? 1) : 1
+        let best = 0
+        for (let i = 0; i < n; i++) {
+          o.getMatrixAt(i, Mi); Mi.premultiply(o.matrixWorld)
+          V.setFromMatrixPosition(Mi); Sc.setFromMatrixScale(Mi)
+          const dist = V.distanceTo(cam.position)
+          if (!noCull && n >= 48 && dist >= 60) continue // lo recorta InstanceCuller
+          if (dist > 60) continue
+          let k = rev
+          if (D) { const t = Math.min(1, Math.max(0, (dist - D * AP.borde) / (D - D * AP.borde))); k *= 1 - t * t * (3 - 2 * t) }
+          const r = bs.radius * Math.max(Sc.x, Sc.y, Sc.z) * k
+          if (r <= 0) continue
+          S.center.copy(bs.center).applyMatrix4(Mi); S.radius = r
+          if (!fr.intersectsSphere(S)) continue
+          const px = altoPx(r, dist)
+          if (px > best) best = px
+        }
+        return best
+      }
+      const bucle = () => {
+        if (!st.run) return
+        if (nf++ % 30 === 0) { lista = []; d.scene.traverse((o) => { if ((o.isMesh || o.isPoints) && o.geometry) lista.push(o) }) }
+        const cam = d.camera
+        M.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); fr.setFromProjectionMatrix(M)
+        const t = performance.now()
+        for (const o of lista) {
+          const ahora = dib(o) === 'si'; const antes = prevB.get(o)
+          prevB.set(o, ahora)
+          if (!ahora || antes !== false) continue
+          if (o.userData?.__ballita || t - st.entrada < 5000) continue
+          const px = medir(o)
+          if (px > 14) { const m = Array.isArray(o.material) ? o.material[0] : o.material; R.bruscas.push({ t: Math.round(t - st.t0), geo: o.geometry?.name || '-', mat: m?.name || m?.type, px: Math.round(px), way: wayDe(o) }) }
+        }
+        requestAnimationFrame(bucle)
+      }
+      requestAnimationFrame(bucle)
     })
   }
   if (memoria) {
@@ -131,6 +188,7 @@ const resumen = {
   largos50_post_min: +(R.largos.filter((x) => !x.entrada).length / total).toFixed(1), max_post: Math.max(0, ...msPost.map(Math.round)), post_gt120: msPost.filter((x) => x > 120).length,
   popCausa: R.pops.reduce((a, x) => { const k = (x.causa ?? '?') + (x.way == null ? '' : x.way === x.seguida ? ':suyo' : ':otro'); a[k] = (a[k] ?? 0) + 1; return a }, {}),
   popFase: R.pops.reduce((a, x) => ((a[x.phase ?? '?'] = (a[x.phase ?? '?'] ?? 0) + 1), a), {}),
+  bruscas_min: +((R.bruscas ?? []).length / total).toFixed(1), bruscasTop: Object.entries((R.bruscas ?? []).reduce((a, x) => ((a[x.geo + '|' + x.mat] = (a[x.geo + '|' + x.mat] ?? 0) + 1), a), {})).sort((x, y) => y[1] - x[1]).slice(0, 6),
   pops_min: +(R.pops.length / total).toFixed(1), popEventos_min: +(new Set(R.pops.map((x) => x.t)).size / total).toFixed(1), popTop: Object.entries(R.pops.reduce((a, x) => ((a[x.geo + '|' + x.mat] = (a[x.geo + '|' + x.mat] ?? 0) + 1), a), {})).sort((x, y) => y[1] - x[1]).slice(0, 8), cambios: R.cambios, mem: R.mem, errores: errs.length,
 }
 console.log(JSON.stringify(resumen))

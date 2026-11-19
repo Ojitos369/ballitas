@@ -1033,6 +1033,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     spec.layers.forEach((ly, li) => {
       const mesh = meshes[li]
       const r2 = ly.range * ly.range
+      mesh.userData.recorte = ly.range // InstanceCuller: la pieza mide 0 en el borde y crece al acercarse
       let n = 0
       for (const { seg } of overview ? [] : nearRef.current) {
         const sd = segCache.get(seg)

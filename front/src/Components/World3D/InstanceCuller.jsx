@@ -6,8 +6,18 @@ import { useFrame, useThree } from '@react-three/fiber'
 // se compactan al inicio del buffer las instancias a menos de `radius` de la cámara y se baja `count`;
 // tras el render (prioridad 2) se restauran array y count, así setMatrixAt(i) sigue usando índices lógicos.
 // Si nada cambió (ni cámara ni versiones de los atributos) se reutiliza lo ya subido a la GPU.
+//
+// Aparición gradual (sin programas nuevos: solo se escala la matriz de cada instancia en la copia compactada):
+// - borde: la instancia mide 0 en su distancia de recorte D y crece hasta su tamaño en 0.8·D (D = `radius` para las
+//   que recorta este componente, o `userData.recorte` para las que recorta su dueño: estructuras);
+// - revelado: una malla que pasa de oculta (ella o un ancestro: LOD, capa que se revela) o vacía a dibujarse crece
+//   de 0 a 1 en REVELA_MS.
+// Así lo que entra en el borde o se revela no «salta» a la vista.
 const MIN_COUNT = 48
 const MOVE2 = 1.5 * 1.5
+const REVELA_MS = 400
+const BORDE = 0.8
+if (typeof window !== 'undefined') window.__aparece = { borde: BORDE, radio: 60, min: MIN_COUNT } // lo leen las sondas
 
 function instAttrs(mesh) {
   const out = [mesh.instanceMatrix]
@@ -28,48 +38,68 @@ export default function InstanceCuller({ active, radius = 60 }) {
     let list = []
     let frame = 0
     const restore = []
-    const R2 = radius * radius
 
     const collect = () => {
       list = []
-      scene.traverse((o) => { if (o.isInstancedMesh && !o.userData.noCull) list.push(o) })
+      scene.traverse((o) => { if (o.isInstancedMesh) list.push(o) })
     }
 
     const visible = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true }
 
     const before = () => {
-      if (frame++ % 30 === 0) collect()
+      if (frame++ % 15 === 0) collect()
+      const now = performance.now()
       const cx = camera.position.x; const cy = camera.position.y; const cz = camera.position.z
       for (const mesh of list) {
         const n = mesh.count
-        if (n < MIN_COUNT) {
-          const s = state.get(mesh)
-          if (s?.gpuCompact) { for (const a of instAttrs(mesh)) { a.clearUpdateRanges(); a.needsUpdate = true } s.gpuCompact = false; s.n = -1 }
+        let s = state.get(mesh)
+        const vis = !!mesh.parent && n > 0 && visible(mesh)
+        if (!s) {
+          s = { vers: [], n: -1, cam: [Infinity, 0, 0], near: 0, idx: null, backup: [], gpuCompact: false, vis, t0: -Infinity, rev: 1 }
+          state.set(mesh, s)
+        }
+        if (!vis) { s.vis = false; mesh.userData.__rev = 0; continue }
+        if (!s.vis) { s.vis = true; s.t0 = now }
+        const rev = Math.min(1, (now - s.t0) / REVELA_MS)
+        mesh.userData.__rev = rev // para las sondas (tamaño real dibujado en este cuadro)
+        const noCull = !!mesh.userData.noCull
+        const D = noCull ? mesh.userData.recorte : (n >= MIN_COUNT ? radius : null)
+        const cullR2 = !noCull && n >= MIN_COUNT ? radius * radius : Infinity
+        if (!D && rev >= 1 && s.rev >= 1) {
+          if (s.gpuCompact) { for (const a of instAttrs(mesh)) { a.clearUpdateRanges(); a.needsUpdate = true } s.gpuCompact = false; s.n = -1 }
           continue
         }
-        if (!mesh.parent || !visible(mesh)) continue
         const attrs = instAttrs(mesh)
-        let s = state.get(mesh)
-        if (!s) { s = { vers: [], n: -1, cam: [Infinity, 0, 0], near: 0, idx: null, backup: [], gpuCompact: false }; state.set(mesh, s) }
-        const dirty = s.n !== n || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
+        const dirty = s.n !== n || rev !== s.rev || s.D !== D || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
           (cx - s.cam[0]) ** 2 + (cy - s.cam[1]) ** 2 + (cz - s.cam[2]) ** 2 > MOVE2
         if (!dirty) {
           if (s.gpuCompact) { restore.push(mesh, n, null); mesh.count = s.near }
           continue
         }
+        s.rev = rev; s.D = D
         // posición mundial de cada instancia: matrixWorld × traslación de su matriz
         const m = mesh.instanceMatrix.array; const w = mesh.matrixWorld.elements
-        if (!s.idx || s.idx.length < n) s.idx = new Int32Array(n)
-        let near = 0
+        if (!s.idx || s.idx.length < n) { s.idx = new Int32Array(n); s.k = new Float32Array(n) }
+        const d0 = D ? D * BORDE : 0; const dd = D ? D - d0 : 1
+        let near = 0; let escala = false
         for (let i = 0; i < n; i++) {
           const o = i * 16; const x = m[o + 12]; const y = m[o + 13]; const z = m[o + 14]
           const dx = w[0] * x + w[4] * y + w[8] * z + w[12] - cx
           const dy = w[1] * x + w[5] * y + w[9] * z + w[13] - cy
           const dz = w[2] * x + w[6] * y + w[10] * z + w[14] - cz
-          if (dx * dx + dy * dy + dz * dz < R2) s.idx[near++] = i
+          const d2 = dx * dx + dy * dy + dz * dz
+          if (d2 >= cullR2) continue
+          let k = rev
+          if (D) {
+            const t = (Math.sqrt(d2) - d0) / dd
+            if (t > 0) { const c = t >= 1 ? 1 : t; k *= 1 - c * c * (3 - 2 * c) }
+          }
+          if (k < 1) escala = true
+          s.k[near] = k
+          s.idx[near++] = i
         }
         s.n = n; s.cam[0] = cx; s.cam[1] = cy; s.cam[2] = cz; s.near = near
-        if (near === n) {
+        if (near === n && !escala) {
           if (s.gpuCompact) for (const a of attrs) { a.clearUpdateRanges(); a.needsUpdate = true }
           s.gpuCompact = false
         } else {
@@ -80,6 +110,17 @@ export default function InstanceCuller({ active, radius = 60 }) {
             for (let j = 0; j < near; j++) {
               const src = s.idx[j]
               if (src !== j) for (let c = 0; c < sz; c++) arr[j * sz + c] = s.backup[k][src * sz + c]
+            }
+            if (a === mesh.instanceMatrix && escala) {
+              // escala respecto al origen de la pieza: columnas 0-2 de la matriz × k (la traslación no cambia)
+              for (let j = 0; j < near; j++) {
+                const kk = s.k[j]
+                if (kk >= 1) continue
+                const o = j * 16
+                arr[o] *= kk; arr[o + 1] *= kk; arr[o + 2] *= kk
+                arr[o + 4] *= kk; arr[o + 5] *= kk; arr[o + 6] *= kk
+                arr[o + 8] *= kk; arr[o + 9] *= kk; arr[o + 10] *= kk
+              }
             }
             a.clearUpdateRanges()
             if (near > 0) a.addUpdateRange(0, near * sz)

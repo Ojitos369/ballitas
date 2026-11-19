@@ -547,6 +547,7 @@ export default function Estructuras({ way, detail, focused, time }) {
     if (archMesh) {
       let ac = 0
       const rSq = (overview ? 105 : ARCH_CULL_DIST) ** 2
+      archMesh.userData.recorte = overview ? 105 : ARCH_CULL_DIST // InstanceCuller las hace crecer desde ese borde
       for (let s = 0; s < nearData.length && ac < ARCH_CAP; s++) {
         const list = nearData[s].arches
         for (let i = 0; i < list.length && ac < ARCH_CAP; i += (overview ? 2 : 1)) {
@@ -571,6 +572,7 @@ export default function Estructuras({ way, detail, focused, time }) {
       }
       const stride = overview ? 2 : 1
       const effRangeSq = overview ? 96 * 96 : rangeSq
+      mesh.userData.recorte = Math.sqrt(effRangeSq) // InstanceCuller: la pieza mide 0 en el borde y crece al acercarse
       let count = 0
       let tinted = false
       for (let s = 0; s < nearData.length && count < POOL_CAP; s++) {
