@@ -14,6 +14,7 @@ import { paisajePaso } from './paisaje.jsx'
 import { precargarKit } from '../Modelos.jsx'
 import { precargarModelos } from './modelos.js'
 import { ETAPAS_NOMBRES, etapaActual, marcarEtapa } from './etapas.js'
+import { prismaPaso } from './colocacion.js'
 
 /** Piezas del kit GLB que montará la vida de `way` (kart, decoración, anillos y eventos). */
 export function kitDeCamino(way) {
@@ -25,6 +26,8 @@ const FN = {
   pista: trackGeoPaso,
   // los GLB se piden al empezar: llegan (y se compilan en el precalentado de Paths) mientras se calcula el resto
   modelos: (way) => { precargarKit(kitDeCamino(way)); precargarModelos(estructurasModelos(way)); return true },
+  // muestras del prisma libre de las cintas cercanas (colocación con gálibo ajeno), por porciones y antes de anillos
+  prisma: prismaPaso,
   anillos: una(buildAnillosData),
   eventos: eventosPaso,
   uniones: una(buildUnionesData),

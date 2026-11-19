@@ -75,6 +75,25 @@ export function prismaLibre(world, c, r, own) {
   return !world || !WORLD.prismaLibre || WORLD.prismaLibre(world, c, r, own)
 }
 
+// Estadística de colocación con gálibo ajeno (tools/overlap.mjs): por tipo, candidatas (las que main colocaría) y su
+// destino: igual (en su sitio), movida (a lo largo del carril), encogida, quitada.
+const tipoStats = () => ({ cand: 0, igual: 0, movida: 0, encogida: 0, quitada: 0 })
+export const STATS = { anillo: tipoStats(), arco: tipoStats(), portico: tipoStats(), arco_kart: tipoStats(), tunel: tipoStats() }
+const cuenta = (tipo, ok) => { STATS[tipo].cand++; STATS[tipo][ok ? 'igual' : 'quitada']++; return ok }
+export const DIAG = { on: false, cats: {} } // solo diagnóstico en node
+export function reiniciarStats() { for (const k in STATS) STATS[k] = tipoStats() }
+// desvíos a lo largo del carril, en fracciones del paso de la rejilla de cada pieza; 0 = su sitio de siempre
+const DESVIOS = [0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75]
+const ESCALAS_ANILLO = [1, 0.85, 0.7]
+const ESCALAS_ARCO = [1, 0.75, 0.5] // fracción de berma que conserva cada pilar; la altura nunca baja (ya roza el gálibo)
+const ARCO_MIN_H = WORLD.GALIBO_H ?? 6 * TRACK_K
+
+/** Etapa «prisma» de la precarga (vida/precarga.js): prepara por porciones las muestras de las cintas cercanas a `way`. */
+export function prismaPaso(way, agotado) {
+  const world = mundoDe(way)
+  return !world || !WORLD.prismaPaso || WORLD.prismaPaso(world, way, agotado)
+}
+
 function segStartsByWay(way) {
   const byI = new Map()
   for (const rt of way.routes ?? []) {
@@ -118,22 +137,42 @@ export function buildAnillosData(way) {
       const sc = (E + TERR * 0.55) * 2.15
       const minSep2 = Math.max(8 * TRACK_K, E * 3.0) ** 2
       const step = li === 0 ? RING_STEP : RING_STEP + 4
-      for (let s = 14; s <= L - 10; s += step) {
-        const u = s / L
-        const f = surfFrame(seg, lane.id, u, F_RING)
-        const pos = f.pos.clone().addScaledVector(f.up, -0.42 * sc)
-        let overlap = false
-        for (let i = rings.length - 1; i >= 0; i--) {
-          if (rings[i].pos.distanceToSquared(pos) < minSep2) { overlap = true; break }
+      const own = { way, seg, lane: lane.id }
+      const choca = (pos) => {
+        for (let i = rings.length - 1; i >= 0; i--) if (rings[i].pos.distanceToSquared(pos) < minSep2) return true
+        return false
+      }
+      for (let s0 = 14; s0 <= L - 10; s0 += step) {
+        // misma rejilla que main: la decisión de solape se toma en s0, como siempre
+        const f0 = surfFrame(seg, lane.id, s0 / L, F_RING)
+        if (choca(f0.pos.clone().addScaledVector(f0.up, -0.42 * sc))) continue
+        STATS.anillo.cand++
+        // gálibo ajeno: mover a lo largo del carril y luego encoger antes de quitar (sin rng: nada más cambia)
+        let hit = null
+        for (const kk of ESCALAS_ANILLO) {
+          for (const d of DESVIOS) {
+            const s = s0 + d * step
+            if (s < 14 || s > L - 10) continue
+            const f = surfFrame(seg, lane.id, s / L, F_RING)
+            const scK = sc * kk
+            const pos = f.pos.clone().addScaledVector(f.up, -0.42 * scK)
+            if (d !== 0 && choca(pos)) continue
+            const center = f.pos.clone().addScaledVector(f.up, 0.24 * scK)
+            if (!prismaLibre(world, center, 0.56 * scK, own)) continue
+            hit = { s, f, pos, center, scK, d, kk }
+            break
+          }
+          if (hit) break
         }
-        if (overlap) continue
-        const center = f.pos.clone().addScaledVector(f.up, 0.24 * sc)
-        if (!prismaLibre(world, center, 0.56 * sc, { way, seg, lane: lane.id })) continue
+        if (!hit) { STATS.anillo.quitada++; continue }
+        STATS.anillo[hit.kk < 1 ? 'encogida' : hit.d !== 0 ? 'movida' : 'igual']++
+        const { s, f, pos, center, scK } = hit
+        const u = s / L
         box.expandByPoint(pos)
         rings.push({
           pos,
           quat: basisQuat(f.up, f.tangent),
-          scale: sc,
+          scale: scK,
           phase: (segStart + s) * 0.14,
           color: col,
           way: way.idx,
@@ -141,8 +180,8 @@ export function buildAnillosData(way) {
           lane: lane.id,
           u,
           center,
-          r: 0.56 * sc,
-          clearH: (0.24 + 0.5) * sc,
+          r: 0.56 * scK,
+          clearH: (0.24 + 0.5) * scK,
         })
       }
     }
@@ -284,8 +323,116 @@ const _pL = new THREE.Vector3()
 const _pR = new THREE.Vector3()
 const segStructPlacementCache = new WeakMap()
 
+// Haz del carril 0 en s: { f, minLat, maxLat, any } (mismo cálculo que la colocación de siempre).
+const FB0 = {}; const FB1 = {}; const _d = new THREE.Vector3()
+function haz(seg, lanes, s, L) {
+  const lane = lanes[0]; const f = surfFrame(seg, lane.id, s / L, FB0); const E = halfWidth(lane) + CURB
+  let minLat = -(E + TERR * 0.65); let maxLat = E + TERR * 0.65; let any = false
+  for (let j = 1; j < lanes.length; j++) {
+    const fj = surfFrame(seg, lanes[j].id, s / L, FB1)
+    const diff = _d.copy(fj.pos).sub(f.pos)
+    if (diff.lengthSq() < (E * 5.2) ** 2) {
+      any = true
+      const lat = diff.dot(f.side); const Ej = halfWidth(lanes[j]) + CURB + TERR * 0.65
+      minLat = Math.min(minLat, lat - Ej); maxLat = Math.max(maxLat, lat + Ej)
+    }
+  }
+  return { f, minLat, maxLat, any }
+}
+const DESVIOS_ARCO = [0.25, -0.25, 0.5, -0.5, 0.75, -0.75, -1]
+const FA = {}
+// Arco en s (sy, sz ya sorteados: el rng no se toca aquí). Si su esfera invade el prisma de otra cinta, prueba a moverlo
+// a lo largo del carril (pilares libres, lejos de otros arcos y cambios de carril); los arcos no se encogen: ya rozan
+// el gálibo de la ballita y la cámara. null si no cabe en ningún sitio.
+// Volumen del arco (getArchGeo de estructuras.jsx: pilares en x = ±0.48, dintel en y ≈ 0.9, follaje hasta x = ±0.63 y
+// z = ±0.56): cadena de esferas de radio rr sobre la U, en vez de una sola esfera envolvente de radio sx/2.
+function partesArco(pos, up, side, sx, sy, sz, kind) {
+  // bosque y mar llevan follaje/toro ancho; el resto es poste + dintel delgados (≤ ±0.15 en z, ±0.1 en x)
+  const ancho = kind === 'bosque' || kind === 'mar'
+  const rr = ancho ? Math.max(0.2 * sy, 0.6 * sz) : Math.max(0.1 * sy, 0.25 * sz, 0.08 * sx); const out = []; const hw = (ancho ? 0.63 : 0.52) * sx; const nb = Math.max(2, Math.ceil((2 * hw) / rr))
+  for (let i = 0; i <= nb; i++) out.push({ c: pos.clone().addScaledVector(side, -hw + (2 * hw * i) / nb).addScaledVector(up, 0.9 * sy), r: rr })
+  const np = Math.max(1, Math.ceil((0.8 * sy - rr) / rr))
+  for (const sg of [-1, 1]) for (let i = 0; i <= np; i++) out.push({ c: pos.clone().addScaledVector(side, sg * 0.48 * sx).addScaledVector(up, rr + ((0.8 * sy - rr) * i) / np), r: rr })
+  return out
+}
+const partesLibres = (world, partes, own) => partes.every((p) => prismaLibre(world, p.c, p.r, own))
+function arcoLibre(world, way, seg, lanes, lane, L, s, step, bundled, kx, sy, sz, busyList, col, local, arches, base, up, tan, side, span) {
+  STATS.arco.cand++
+  const own = { way, seg, lane: bundled ? '*' : lane.id }
+  const item = (pos, up, tan, sx, u, partes) => ({
+    pos, quat: basisQuat(up, tan), scale: [sx, sy, sz], way: way.idx, seg, lane: lane.id, u, bundled, partes,
+    center: pos.clone().addScaledVector(up, 0.5 * sy), r: 0.5 * sx, spanHalf: 0.5 * sx, clearH: 0.72 * sy,
+  })
+  const dy = bundled ? -0.14 : -0.12
+  {
+    const pos = base.clone().addScaledVector(up, dy); const sx = span * kx; const partes = partesArco(pos, up, side, sx, sy, sz, way.theme?.id)
+    if (partesLibres(world, partes, own)) { STATS.arco.igual++; return item(pos, up, tan, sx, s / L, partes) }
+    if (DIAG.on && WORLD.prismaQuien && WORLD.prismaQuien(world, pos.clone().addScaledVector(up, 0.5 * sy), 0.5 * sx, own)) {
+      const q = WORLD.prismaQuien(world, pos.clone().addScaledVector(up, 0.5 * sy), 0.5 * sx, own); const rb = q.rib
+      const k = `${bundled ? 'haz' : 'carril'} r=${(0.5 * sx).toFixed(0)}: ${rb.way === way ? (rb.seg.route === seg.route ? 'mismo camino misma ruta' : 'mismo camino otra ruta') : 'otro camino'}${rb.way === way && Math.abs(rb.seg.i - seg.i) <= 1 ? ' vecino' : ''} pen ${q.p < 2 ? '<2' : q.p < 6 ? '<6' : '>=6'}`
+      DIAG.cats[k] = (DIAG.cats[k] ?? 0) + 1
+    }
+  }
+  const sepMin = 0.4 * step
+  // encoger = estrechar (pilares más cerca del bordillo; la altura no baja del gálibo): nunca por dentro de la berma
+  const terr = TERR * (bundled ? 0.65 : 0.72)
+  for (const k of ESCALAS_ARCO) for (const d of k === 1 ? DESVIOS_ARCO : [0, ...DESVIOS_ARCO]) {
+    const s2 = s + d * step
+    if (s2 < 16 || s2 >= L - 12) continue
+    if (d !== 0) {
+      if (busyList.some((w) => (w.from === lane.id || w.to === lane.id) && Math.abs(w.u * L - s2) < 7.5)) continue
+      if (arches.some((a) => a.lane === lane.id && Math.abs(a.u * L - s2) < sepMin)) continue
+    }
+    let b; let mid; let sp; let f
+    if (bundled) {
+      b = haz(seg, lanes, s2, L); if (!b.any) continue
+      f = b.f; mid = (b.minLat + b.maxLat) * 0.5; sp = b.maxLat - b.minLat
+      const sk = sp - (1 - k) * 2 * terr * 1.5; if (sk / 2 < sp / 2 - terr + 0.6) continue; sp = sk
+      _pL.copy(f.pos).addScaledVector(f.side, mid - sp / 2); _pR.copy(f.pos).addScaledVector(f.side, mid + sp / 2)
+    } else {
+      if (lanes.length > 1) {
+        if (lane.id === lanes[0].id) { if (haz(seg, lanes, s2, L).any) continue }
+        else { const f0 = surfFrame(seg, lanes[0].id, s2 / L, FB0); const fl = surfFrame(seg, lane.id, s2 / L, FA); if (fl.pos.distanceToSquared(f0.pos) < ((halfWidth(lane) + CURB) * 5.2) ** 2) continue }
+      }
+      f = surfFrame(seg, lane.id, s2 / L, FA); mid = 0; sp = span - (1 - k) * 2 * terr * 1.5
+      if (sp / 2 < span / 2 - terr + 0.6) continue
+      _pL.copy(f.pos).addScaledVector(f.side, -span / 2); _pR.copy(f.pos).addScaledVector(f.side, span / 2)
+      if (!laneSideClear(seg, lane, s2 / L, _pL, 0.85) || !laneSideClear(seg, lane, s2 / L, _pR, 0.85)) continue
+    }
+    // pilares del sitio nuevo: solo se comprueban (no se registran) para no alterar la colocación de lo demás
+    if (col && (!col.libre(_pL, 0.75, { way: way.idx }) || !col.libre(_pR, 0.75, { way: way.idx }))) continue
+    if (!local.libre(_pL, 0.75) || !local.libre(_pR, 0.75)) continue
+    const fu = f.up.clone(); const ft = f.tangent.clone()
+    const pos = f.pos.clone().addScaledVector(f.side, mid).addScaledVector(fu, dy); const sx = sp * kx
+    const partes = partesArco(pos, fu, f.side.clone(), sx, sy, sz, way.theme?.id)
+    if (!partesLibres(world, partes, own)) continue
+    STATS.arco[k < 1 ? 'encogida' : 'movida']++
+    return item(pos, fu, ft, sx, s2 / L, partes)
+  }
+  STATS.arco.quitada++
+  return null
+}
+
+const segPlaceGens = new WeakMap()
+const NUNCA_C = () => false
+/** Avanza la colocación de arcos y piezas del tramo hasta que `agotado()` diga basta; true cuando quedó en caché. */
+export function placeSegPaso(way, seg, si, agotado) {
+  if (segStructPlacementCache.has(seg)) return true
+  let g = segPlaceGens.get(seg)
+  if (!g) { g = placeSegGen(way, seg, si); segPlaceGens.set(seg, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { segPlaceGens.delete(seg); segStructPlacementCache.set(seg, r.value); return true }
+    if (agotado()) return false
+  }
+}
 export function placeSegArchesAndProps(way, seg, si) {
-  if (segStructPlacementCache.has(seg)) return segStructPlacementCache.get(seg)
+  placeSegPaso(way, seg, si, NUNCA_C)
+  return segStructPlacementCache.get(seg)
+}
+
+// Mismo cálculo y rng que de un tirón; los `yield` van al final de cada muestra (marcos compartidos fuera de uso).
+function* placeSegGen(way, seg, si) {
   const themeId = way.theme?.id
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
   const rng = mulberry32(4219 + way.idx * 313 + si * 977)
@@ -335,25 +482,10 @@ export function placeSegArchesAndProps(way, seg, si) {
             const okL = colocar(world, { pos: _pL, seed: aSeed + 1 }, 0.75, { way: way.idx }, 0, local)
             const okR = okL && colocar(world, { pos: _pR, seed: aSeed + 2 }, 0.75, { way: way.idx }, 0, local)
             if (okL && okR) {
-              const sx = span * (archSpec.sx ?? 1)
               const sy = (archSpec.sy ?? 8.2) * (0.95 + rng() * 0.14)
               const sz = 2.8 + rng() * 0.8
-              const pos = f.pos.clone().addScaledVector(f.side, midLat).addScaledVector(f.up, -0.14)
-              if (!prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.5 * sx, { way, seg, lane: '*' })) continue
-              arches.push({
-                pos,
-                quat: basisQuat(f.up, f.tangent),
-                scale: [sx, sy, sz],
-                way: way.idx,
-                seg,
-                lane: lane.id,
-                u,
-                bundled: true,
-                center: pos.clone().addScaledVector(f.up, 0.5 * sy),
-                r: 0.5 * sx,
-                spanHalf: 0.5 * sx,
-                clearH: 0.72 * sy,
-              })
+              const a = arcoLibre(world, way, seg, lanes, lane, L, s, archSpec.step, true, archSpec.sx ?? 1, sy, sz, busyList, col, local, arches, f.pos.clone().addScaledVector(f.side, midLat), f.up.clone(), f.tangent.clone(), f.side.clone(), span)
+              if (a) arches.push(a)
             }
             continue
           }
@@ -371,26 +503,12 @@ export function placeSegArchesAndProps(way, seg, si) {
         if (!colocar(world, { pos: _pL, seed: aSeed + 1 }, 0.75, { way: way.idx }, 0, local)) continue
         if (!colocar(world, { pos: _pR, seed: aSeed + 2 }, 0.75, { way: way.idx }, 0, local)) continue
 
-        const sx = spanHalf * 2 * (archSpec.sx ?? 1)
         const sy = (archSpec.sy ?? 7.4) * (0.94 + rng() * 0.14)
         const sz = 2.6 + rng() * 0.8
-        const pos = f.pos.clone().addScaledVector(f.up, -0.12)
-        if (!prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.5 * sx, { way, seg, lane: lane.id })) continue
-        arches.push({
-          pos,
-          quat: basisQuat(f.up, f.tangent),
-          scale: [sx, sy, sz],
-          way: way.idx,
-          seg,
-          lane: lane.id,
-          u,
-          bundled: false,
-          center: pos.clone().addScaledVector(f.up, 0.5 * sy),
-          r: 0.5 * sx,
-          spanHalf: 0.5 * sx,
-          clearH: 0.72 * sy,
-        })
+        const a = arcoLibre(world, way, seg, lanes, lane, L, s, archSpec.step, false, archSpec.sx ?? 1, sy, sz, busyList, col, local, arches, f.pos.clone(), f.up.clone(), f.tangent.clone(), f.side.clone(), spanHalf * 2)
+        if (a) arches.push(a)
       }
+      yield
     }
   }
 
@@ -447,13 +565,12 @@ export function placeSegArchesAndProps(way, seg, si) {
           })
           if (!tryBoth) break
         }
+        yield
       }
     }
   }
 
-  const out = { arches, byModel }
-  segStructPlacementCache.set(seg, out)
-  return out
+  return { arches, byModel }
 }
 
 // ═══════════════════════════ 3. UNIONES (uniones.jsx) ═══════════════════════════
@@ -545,7 +662,7 @@ export function buildUnionesData(way) {
       : null
 
     // pórtico de unión: abarca los tramos de su camino que nacen ahí (exentos); no debe invadir cintas de OTROS caminos
-    if (beamMid && prismaLibre(world, beamMid, beamSpan * 0.5, { way, seg: '*', lane: '*' })) {
+    if (beamMid && cuenta('portico', prismaLibre(world, beamMid, beamSpan * 0.5, { way, seg: '*', lane: '*' }))) {
       beams.push({ pos: beamMid, quat: beamQuat, scale: [beamSpan, 1, 1], color: BEAM_COL })
       beamTrims.push({
         pos: beamMid.clone().addScaledVector(hubUp, 0.14),
@@ -827,7 +944,7 @@ function* kartGen(way) {
       const sz = Math.min(2.6, Math.max(1.8, sx * 0.85))
       const pos = f.pos.clone().addScaledVector(f.up, -0.02)
       // arco de parrilla: abarca el haz en la zona cerrada; no debe invadir cintas de otros tramos
-      if (prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.42 * sx, { way, seg: salida, lane: '*' })) arcos.push({
+      if (cuenta('arco_kart', prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.42 * sx, { way, seg: salida, lane: '*' }))) arcos.push({
         pos, quat: qArch, scale: [sx, sy, sz],
         way: way.idx, seg: salida, lane: lane0.id, u,
         center: pos.clone().addScaledVector(f.up, 0.5 * sy), r: 0.42 * sx, spanHalf: 0.42 * sx, clearH: sy,
@@ -851,7 +968,7 @@ function* kartGen(way) {
       const sy = Math.min(3.4, Math.max(2.1, sx * 0.98))
       const sz = Math.min(2.6, Math.max(1.8, sx * 0.85))
       const pos = f.pos.clone().addScaledVector(f.up, -0.02)
-      if (prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.42 * sx, { way, seg: llegada, lane: '*' })) arcos.push({
+      if (cuenta('arco_kart', prismaLibre(world, pos.clone().addScaledVector(f.up, 0.5 * sy), 0.42 * sx, { way, seg: llegada, lane: '*' }))) arcos.push({
         pos, quat: qArch, scale: [sx, sy, sz],
         way: way.idx, seg: llegada, lane: lane0.id, u,
         center: pos.clone().addScaledVector(f.up, 0.5 * sy), r: 0.42 * sx, spanHalf: 0.42 * sx, clearH: sy,
@@ -1006,7 +1123,7 @@ export function colocarTodoMundo(world) {
       if (seg.air) return
       const st = placeSegArchesAndProps(way, seg, si)
       for (const a of st.arches) {
-        items.push({ kind: `arco_${way.theme.id}`, way: way.idx, seg, lane: a.bundled ? '*' : a.lane, u: a.u, center: a.center, r: a.r, clearH: a.clearH, bundled: a.bundled })
+        items.push({ kind: `arco_${way.theme.id}`, way: way.idx, seg, lane: a.bundled ? '*' : a.lane, u: a.u, center: a.center, r: a.r, clearH: a.clearH, bundled: a.bundled, partes: a.partes })
       }
     })
   }

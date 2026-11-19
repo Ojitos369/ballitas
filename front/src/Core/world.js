@@ -2043,19 +2043,107 @@ function prismInvasion(S, grid, c, r, own) {
   return { p: worst, i: wi }
 }
 // Consulta para la colocación de estructuras (vida/colocacion.js): true si la esfera (c, r) de una pieza de `own` no
-// invade el gálibo ni la calzada de otra cinta. Las muestras con marco se construyen una vez por mundo, al primer uso.
+// invade el gálibo ni la calzada de otra cinta. Rejilla PEREZOSA por camino: las muestras de un camino solo se calculan
+// cuando una consulta cae cerca de su caja (o cuando la etapa «prisma» de la precarga lo adelanta por porciones con
+// prismaPaso). Mismo veredicto que la rejilla global: una muestra solo puede invadir si está a menos de
+// 3r + CALZADA_HALF + GALIBO_H + QUILLA + paso de la esfera, y todo camino cuya caja corta esa esfera ya está preparado.
+const PRISMA_PAD = 3 * TK // (u) holgura de la caja estimada (vértices de la trenza) sobre las muestras reales
 const CLR_CACHE = new WeakMap()
-export function prismaLibre(world, c, r, own) {
+export const PRISMA_STATS = { sincronos: 0, msSincrono: 0, fueraCaja: 0, muestras: 0 }
+function prismaCache(world) {
   let k = CLR_CACHE.get(world)
-  if (!k) { const S = clearanceSamples(world); k = { S, grid: clearanceGrid(S) }; CLR_CACHE.set(world, k) }
+  if (k) return k
+  const S = { ribs: [], X: [], Y: [], Z: [], UX: [], UY: [], UZ: [], SX: [], SY: [], SZ: [], TX: [], TY: [], TZ: [], R: [] }
+  // caja de cada camino a partir de los vértices de su trenza (barato: sin laneFrame)
+  const cajas = world.ways.map((way) => {
+    const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]
+    const add = (x, y, z, m) => { b[0] = Math.min(b[0], x - m); b[1] = Math.min(b[1], y - m); b[2] = Math.min(b[2], z - m); b[3] = Math.max(b[3], x + m); b[4] = Math.max(b[4], y + m); b[5] = Math.max(b[5], z + m) }
+    for (const seg of way.segments) {
+      if (seg.air || !seg.lanes) continue
+      const br = seg._braid
+      if (br) { for (const P of Object.values(br.P)) if (P) for (let i = 0; i < P.length; i += 3) add(P[i], P[i + 1], P[i + 2], PRISMA_PAD) }
+      else for (let i = 0; i <= 32; i++) { const p = seg.curve.getPointAt(i / 32); add(p.x, p.y, p.z, PRISMA_PAD + 4 * (seg.radius ?? TK)) }
+    }
+    return b
+  })
+  k = { S, grid: new Map(), cajas, hechos: new Set(), gens: new Map() }
+  CLR_CACHE.set(world, k)
+  return k
+}
+// Generador: añade las muestras del camino `wi` a la rejilla, una cinta (carril de un tramo) por porción.
+function* prismaWayGen(world, k, wi) {
+  const way = world.ways[wi]; const S = k.S; const F = {}; const lim = CLR_LIM; const cell = (v) => Math.floor(v / lim); const b = k.cajas[wi]
+  for (const seg of way.segments) {
+    if (seg.air || !seg.lanes) continue
+    for (const l of seg.lanes) {
+      const id = l.id; const L = laneLength(seg, id); const n = Math.max(4, Math.ceil(Math.max(seg.length, L) / CLR_STEP))
+      const r = { idx: S.ribs.length, way, seg, lane: id, start: S.X.length, n, ds: L / n }
+      for (let i = 0; i <= n; i++) {
+        const f = laneFrame(seg, id, i / n, F); const p = f.surface; const j = S.X.length
+        S.X.push(p.x); S.Y.push(p.y); S.Z.push(p.z)
+        S.UX.push(f.up.x); S.UY.push(f.up.y); S.UZ.push(f.up.z)
+        S.SX.push(f.side.x); S.SY.push(f.side.y); S.SZ.push(f.side.z)
+        S.TX.push(f.tangent.x); S.TY.push(f.tangent.y); S.TZ.push(f.tangent.z)
+        S.R.push(r.idx)
+        if (p.x < b[0] || p.y < b[1] || p.z < b[2] || p.x > b[3] || p.y > b[4] || p.z > b[5]) PRISMA_STATS.fueraCaja++
+        const key = cellKey(cell(p.x), cell(p.y), cell(p.z)); let bk = k.grid.get(key); if (!bk) k.grid.set(key, bk = []); bk.push(j)
+      }
+      S.ribs.push(r); PRISMA_STATS.muestras += n + 1
+      yield
+    }
+  }
+}
+function prismaWayPaso(world, k, wi, agotado) {
+  if (k.hechos.has(wi)) return true
+  let g = k.gens.get(wi)
+  if (!g) { g = prismaWayGen(world, k, wi); k.gens.set(wi, g) }
+  for (;;) {
+    if (g.next().done) { k.gens.delete(wi); k.hechos.add(wi); return true }
+    if (agotado()) return false
+  }
+}
+const cajaCorta = (b, x0, y0, z0, x1, y1, z1) => b[0] <= x1 && b[3] >= x0 && b[1] <= y1 && b[4] >= y0 && b[2] <= z1 && b[5] >= z0
+/** Etapa «prisma» de la precarga: prepara por porciones las muestras de todo camino cuya caja corta la de `way`
+ *  crecida en el alcance máximo de una pieza; true cuando están todas. */
+export function prismaPaso(world, way, agotado) {
+  const k = prismaCache(world); const a = k.cajas[way.idx]; const m = PRISMA_ALCANCE
+  for (let wi = 0; wi < world.ways.length; wi++) {
+    if (k.hechos.has(wi)) continue
+    if (!cajaCorta(k.cajas[wi], a[0] - m, a[1] - m, a[2] - m, a[3] + m, a[4] + m, a[5] + m)) continue
+    if (!prismaWayPaso(world, k, wi, agotado)) return false
+    if (agotado()) return false
+  }
+  return true
+}
+const PRISMA_ALCANCE = 25 * TK // (u) radio de esfera de pieza más holgado que se espera (las consultas mayores se completan en el acto)
+const NUNCA_P = () => false
+export function prismaLibre(world, c, r, own) {
+  const k = prismaCache(world)
+  const d = 3 * r + CALZADA_HALF + GALIBO_H + QUILLA + 2 * CLR_STEP + PRISMA_PAD
+  for (let wi = 0; wi < world.ways.length; wi++) {
+    if (k.hechos.has(wi) || !cajaCorta(k.cajas[wi], c.x - d, c.y - d, c.z - d, c.x + d, c.y + d, c.z + d)) continue
+    const t0 = performance.now(); prismaWayPaso(world, k, wi, NUNCA_P)
+    PRISMA_STATS.sincronos++; PRISMA_STATS.msSincrono += performance.now() - t0
+  }
   return prismInvasion(k.S, k.grid, c, r, own).i < 0
 }
-export function structureIntrusions(S, items, { maxList = 200 } = {}) {
+/** Diagnóstico: cinta invadida por la esfera (o null). */
+export function prismaQuien(world, c, r, own) {
+  prismaLibre(world, c, r, own); const k = prismaCache(world); const { i, p } = prismInvasion(k.S, k.grid, c, r, own)
+  return i < 0 ? null : { rib: k.S.ribs[k.S.R[i]], p }
+}
+/** Solo pruebas: veredicto con la rejilla global de todo el mundo (referencia para la perezosa). */
+export function prismaLibreGlobal(world, c, r, own, S = clearanceSamples(world), grid = clearanceGrid(S)) {
+  return prismInvasion(S, grid, c, r, own).i < 0
+}
+export function structureIntrusions(S, items, { maxList = 200, envolvente = false } = {}) {
   const { ribs, R } = S; const grid = clearanceGrid(S)
   const out = { n: 0, worst: 0, at: '', list: [] }
   const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
   for (const it of items) {
-    const { p: worst, i: wi } = prismInvasion(S, grid, it.center, it.r, it)
+    // piezas con volumen detallado (arcos: cadena de esferas sobre la U): invade si invade alguna parte
+    let worst = 0; let wi = -1
+    for (const q of (envolvente || !it.partes) ? [{ c: it.center, r: it.r }] : it.partes) { const v = prismInvasion(S, grid, q.c, q.r, it); if (v.i >= 0 && (wi < 0 || v.p > worst)) { worst = v.p; wi = v.i } }
     if (wi >= 0) {
       out.n++
       if (worst > out.worst) Object.assign(out, { worst, at: `${it.kind} w${it.way?.idx ?? it.way} L${it.lane} en ${tag(wi)}` })

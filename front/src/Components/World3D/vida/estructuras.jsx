@@ -10,7 +10,7 @@ import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe } from '../colisionObjetos.js'
 import { triplanarMaterial } from '../triplanar.js'
 import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
-import { THEME_STRUCTS, placeSegArchesAndProps } from './colocacion.js'
+import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
 import { precargarModelos, useModelo } from './modelos.js'
 import { CURB, TERR, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 
@@ -344,6 +344,7 @@ const segDataCache = new WeakMap()
 const SEG_PASO_MS = 3 // presupuesto por cuadro del propio componente para un tramo cercano aún sin datos
 const segGens = new WeakMap() // seg -> generador a medias (la precarga y el propio componente lo comparten)
 const NUNCA = () => false
+const SIEMPRE = () => true
 /** Avanza los datos del tramo hasta que `agotado()` diga basta; true cuando quedaron en caché. */
 function segStructPaso(way, seg, si, agotado) {
   if (segDataCache.has(seg)) return true
@@ -366,6 +367,8 @@ function* segStructGen(way, seg, si) {
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
   const world = mundoDe(way)
   const ribbonGeo = yield* buildSegRibbonGeo(way, seg, si, world, spec.ribbon)
+  // colocación por porciones (una muestra por paso): cede igual que la cinta
+  while (!placeSegPaso(way, seg, si, SIEMPRE)) yield
   const { arches, byModel } = placeSegArchesAndProps(way, seg, si)
   return { ribbonGeo, arches, byModel }
 }
