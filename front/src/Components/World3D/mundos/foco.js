@@ -88,7 +88,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
           float _dr = length(vFocoW - cameraPosition - _ab * _h);
           float _rr = mix(0.5, 2.3, _h);
           if (_h < 0.985 && _dr < _rr) {
-            float _a = smoothstep(_rr, _rr * 0.55, _dr) * uFocoK * 0.92;
+            float _a = (1.0 - smoothstep(_rr * 0.55, _rr, _dr)) * uFocoK * 0.92;
             if (_a > _focoIgn(gl_FragCoord.xy)) discard;
           }
         }`)
