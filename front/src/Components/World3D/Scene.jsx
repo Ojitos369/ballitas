@@ -1384,8 +1384,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
       const upShift = onWall ? 0.1 : selected.phase === 'travel' ? -0.06 : 0.08
       povEye.copy(selected.pos).addScaledVector(povFwd, 0.14)
       if (selected.up) povEye.addScaledVector(selected.up, upShift)
-      if (zv.back > 0) { // sale hacia atrás por donde mira la cámara y sube un poco
+      if (zv.back > 0) { // sale hacia atrás por donde mira la cámara (sin su inclinación) y sube un poco
+        // se quita la componente vertical de la mirada: usarla tal cual se realimentaba con el lookAt
+        // de abajo (más alto → mira más abajo → más alto) y la espalda acababa en vista cenital
         camera.getWorldDirection(povLookDirTmp)
+        povLookDirTmp.addScaledVector(povUp.current, -povLookDirTmp.dot(povUp.current))
+        if (povLookDirTmp.lengthSq() < 1e-4) povLookDirTmp.copy(povFwd)
+        povLookDirTmp.normalize()
         povEye.addScaledVector(povLookDirTmp, -zv.back).addScaledVector(povUp.current, zv.up)
       }
       // en tercera persona la cámara va rígida a la ballita (con retraso se quedaba a metros a alta velocidad); sólo la mirada es lenta
@@ -1426,7 +1431,8 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
       // En la espalda, tras mover y resolver colisiones, reorienta la cámara hacia el cuerpo.
       // La pose anterior al movimiento dejaba a la ballita fuera del campo durante curvas cerradas.
       if (zv.back > 0.05 && Math.abs(totalYaw) < 1e-3 && Math.abs(totalPitch) < 1e-3 && Math.abs(totalRoll) < 1e-3) {
-        povMat.lookAt(camera.position, selected.pos, povUp.current)
+        // mira de la espalda hacia el frente: a un punto por delante de la ballita, que queda abajo al centro
+        povMat.lookAt(camera.position, povLeadTmp.copy(selected.pos).addScaledVector(povFwd, 2.5), povUp.current)
         camera.quaternion.setFromRotationMatrix(povMat)
         povQuat.current.copy(camera.quaternion)
       }
