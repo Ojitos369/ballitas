@@ -110,7 +110,8 @@ const nodeEnvC = new THREE.Vector3()
 const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
 const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
 const NODE_ARM_MIN = 2.2 // brazo mínimo real en un planeta (más cerca, la ballita o una pieza llenaba la pantalla)
-const NODE_SUBIR = 0.75 // cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
+const NODE_PITCH_VERT = 0.4 // cabeceo extra en planeta con pantalla vertical (~55° sobre el plano tangente en total)
+const NODE_SUBIR = 0.75// cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
 const povTargetQuat = new THREE.Quaternion()
@@ -1532,7 +1533,10 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       const sway = cine ? Math.sin(cineClock.current * 0.5) * 0.22 : 0
       const yaw = fs.rel.yaw + fs.uYaw + sway
       // en un planeta, si una estructura acorta el brazo, la cámara sube por encima (rodea) en vez de pegarse a la ballita
-      const pitch = Math.min(1.3, fs.rel.pitch + NODE_PITCH_PLUS * (fs.nodeBlend ?? 0) + fs.uPitch + NODE_SUBIR * camExtra.current.subir + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0))
+      // en vertical (teléfono) el campo horizontal es estrecho: en un planeta la cámara sube sobre la normal y mira hacia
+      // abajo (los edificios son radiales, desde arriba no se interponen); con resorte, sin saltos
+      ce.vert = (ce.vert ?? 0) + (((camera.aspect || 1) < 0.87 ? 1 : 0) - (ce.vert ?? 0)) * (1 - Math.exp(-3 * h))
+      const pitch = Math.min(1.35, fs.rel.pitch + (NODE_PITCH_PLUS + NODE_PITCH_VERT * ce.vert) * (fs.nodeBlend ?? 0) + fs.uPitch + NODE_SUBIR * camExtra.current.subir + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0))
       const dist = fs.rel.dist * distK
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal
