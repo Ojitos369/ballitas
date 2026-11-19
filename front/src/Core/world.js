@@ -2470,6 +2470,81 @@ export function prismaQuien(world, c, r, own) {
   prismaLibre(world, c, r, own); const k = prismaCache(world); const { i, p } = prismInvasion(k.S, k.grid, c, r, own)
   return i < 0 ? null : { rib: k.S.ribs[k.S.R[i]], p }
 }
+// ─────────────────────────── recorte de berma (cuñas) ───────────────────────────
+// La berma (terreno) y el bordillo de una cinta van 0.02-0.06 u POR ENCIMA del firme: donde dos carriles van fundidos o a
+// medio abrir, la berma de uno se dibujaba sobre la calzada del vecino (cuñas del color del terreno sobre el firme).
+// pista.jsx registra aquí el marco de cada muestra de cada carril del camino (bermaAdd) y, al emitir la malla, pregunta
+// cuánto sitio hay a cada lado (bermaLibre) y con qué perfil dibujar (bermaPerfil): la berma se queda con la MITAD del
+// hueco hasta el bordillo vecino (las dos se encuentran en medio, sin huecos) y, si las calzadas se solapan, el bordillo
+// y el borde del firme se hunden bajo el firme vecino. tools/cunas.mjs lo mide con una prueba independiente.
+export const BERMA = { off: false } // diagnóstico (Node): sin recorte, para medir el «antes»
+const BERMA_CELL = 6 * TK // 28 u: claves de celda por debajo de 31 bits (un Map con claves mayores es lento)
+const bermaKey = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512)
+const BERMA_Y = 1.5 // (u) desnivel máximo entre firmes para que la berma de uno pueda verse sobre el otro
+const BERMA_LAT = 0.05 // (0.3 dejaba una cuña en la primera muestra de cada apertura) (u) por debajo, el otro carril va sobre el mío (calzada única o continuación): no recorta
+export function bermaIndice() { return { n: 0, V: [], rib: [], half: [], grid: new Map() } }
+/** Registra la muestra (marco de superficie: pos, side, up, tangent) de la cinta `rib` (entero por carril y tramo). */
+export function bermaAdd(ix, rib, pos, side, up, tangent, half) {
+  const k = ix.n++
+  ix.V.push(pos.x, pos.y, pos.z, side.x, side.y, side.z, up.x, up.y, up.z, tangent.x, tangent.y, tangent.z)
+  ix.rib.push(rib); ix.half.push(half)
+  const c = BERMA_CELL; const key = bermaKey(Math.floor(pos.x / c), Math.floor(pos.y / c), Math.floor(pos.z / c))
+  let b = ix.grid.get(key); if (!b) ix.grid.set(key, b = []); b.push(k)
+  return k
+}
+/** Sitio libre (u) a la izquierda (out[0]) y a la derecha (out[1]) de la muestra `k`: del borde de su bordillo al del
+ *  bordillo de la cinta más cercana de otro carril que vaya a su altura (negativo: las calzadas se solapan). */
+export function bermaLibre(ix, k, out = [Infinity, Infinity]) {
+  out[0] = out[1] = Infinity
+  if (BERMA.off) return out
+  const V = ix.V; const o = k * 12; const c = BERMA_CELL; const E = CALZADA_HALF
+  const px = V[o]; const py = V[o + 1]; const pz = V[o + 2]; const sx = V[o + 3]; const sy = V[o + 4]; const sz = V[o + 5]
+  const ux = V[o + 6]; const uy = V[o + 7]; const uz = V[o + 8]; const rk = ix.rib[k]; const hk = ix.half[k]
+  const x0 = Math.floor(px / c); const y0 = Math.floor(py / c); const z0 = Math.floor(pz / c)
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+    const b = ix.grid.get(bermaKey(x0 + dx, y0 + dy, z0 + dz)); if (!b) continue
+    for (let q = 0; q < b.length; q++) {
+      const j = b[q]; if (ix.rib[j] === rk) continue
+      const p = j * 12; const ex = V[p] - px; const ey = V[p + 1] - py; const ez = V[p + 2] - pz
+      const win = ix.half[j] + 0.5 * hk
+      if (Math.abs(ex * V[p + 9] + ey * V[p + 10] + ez * V[p + 11]) > win) continue // no va a mi altura del recorrido
+      const sS = Math.abs(V[p + 3] * sx + V[p + 4] * sy + V[p + 5] * sz); const tS = Math.abs(V[p + 9] * sx + V[p + 10] * sy + V[p + 11] * sz)
+      const sU = Math.abs(V[p + 3] * ux + V[p + 4] * uy + V[p + 5] * uz); const tU = Math.abs(V[p + 9] * ux + V[p + 10] * uy + V[p + 11] * uz)
+      if (Math.abs(ex * ux + ey * uy + ez * uz) > BERMA_Y + E * sU + win * tU) continue // a otro nivel: no es la misma superficie
+      const lat = ex * sx + ey * sy + ez * sz
+      const free = Math.abs(lat) - E * sS - win * tS - E
+      if (Math.abs(lat) < BERMA_LAT) {
+        // sobre mi eje: calzada única o continuación (no recorta), salvo que cruce en ángulo (empalme con quiebre)
+        if (sS > 0.94) continue
+        if (free < out[0]) out[0] = free
+        if (free < out[1]) out[1] = free
+        continue
+      }
+      const s = lat > 0 ? 1 : 0; if (free < out[s]) out[s] = free
+    }
+  }
+  return out
+}
+/** Sitio libre de las muestras k0..k0+n de una tira, en L (izquierda) y R (derecha), tomando en cada muestra el mínimo
+ *  con sus dos vecinas: la malla interpola entre muestras y la apertura empieza entre dos de ellas. */
+export function bermaLibres(ix, k0, n, L, R) {
+  const o = [0, 0]; const a = new Float32Array(n + 1); const b = new Float32Array(n + 1)
+  for (let i = 0; i <= n; i++) { bermaLibre(ix, k0 + i, o); a[i] = Math.min(o[0], 99); b[i] = Math.min(o[1], 99) }
+  for (let i = 0; i <= n; i++) {
+    const p = Math.max(0, i - 1); const q = Math.min(n, i + 1)
+    L[i] = Math.min(a[p], a[i], a[q]); R[i] = Math.min(b[p], b[i], b[q])
+  }
+}
+/** Perfil de un lado de la cinta según su sitio libre: { w (ancho de berma), yH (borde del firme), yE (borde del
+ *  bordillo), yM / yO (berma a media anchura y en su borde) }, alturas relativas al eje del firme. */
+export function bermaPerfil(free, o = {}) {
+  const T = RIBBON_TERR; const C = RIBBON_CURB
+  const w = free >= 2 * T ? T : Math.max(0, free / 2); const q = Math.min(1, w / 0.4)
+  const k1 = clamp(-free / C, 0, 1); const k2 = clamp((-free - C) / C, 0, 1)
+  o.w = w; o.yH = 0.02 - 0.07 * k2; o.yE = 0.025 - 0.13 * k1 - 0.07 * k2
+  o.yM = o.yE - 0.1 * (1 - q); o.yO = (o.yE - 0.2) + (-0.08 - (o.yE - 0.2)) * q
+  return o
+}
 export const clearanceGridDe = (S) => clearanceGrid(S)
 /** Solo pruebas: veredicto con la rejilla global de todo el mundo (referencia para la perezosa). */
 export function prismaLibreGlobal(world, c, r, own, S = clearanceSamples(world), grid = clearanceGrid(S)) {

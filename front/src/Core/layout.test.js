@@ -76,6 +76,18 @@ for (const seed of [1, 369]) {
   })
 }
 
+// Pieza GEO (tools/cunas.mjs): el terreno (berma) de un carril no se dibuja sobre el firme de otra cinta. Sin el recorte
+// de berma (BERMA.off) el mismo mundo tiene miles de cuñas: la medida es independiente del recorte y lo detecta.
+test('cuñas: ninguna berma sobre el firme de otra cinta (semilla 369)', async () => {
+  const { cunas } = await import('../../tools/cunas.mjs')
+  const W = await import('./world.js')
+  const w = mundo(369)
+  const con = cunas(w)
+  assert.equal(con.n, 0, `cuñas ${con.n}; peor ${con.peor.toFixed(3)} u ${con.at}`)
+  W.BERMA.off = true
+  try { const sin = cunas(w); assert.ok(sin.n > 1000, `sin recorte la medida debe ver cuñas: ${sin.n}`) } finally { W.BERMA.off = false }
+})
+
 test('contrato world.colision: lejos libre, centro de cinta ocupado salvo que se ignore', () => {
   const w = mundo(369); const col = w.colision
   assert.ok(col && typeof col.libre === 'function' && typeof col.cercano === 'function')

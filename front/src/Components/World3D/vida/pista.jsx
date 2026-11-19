@@ -262,22 +262,68 @@ const RING = 12
 const F0 = {}
 // Generador: cede cada pocas muestras para que la precarga reparta una tira larga entre cuadros (una tira entera
 // llegaba a 15-30 ms). Mismo resultado: solo se interrumpe al final de una muestra, sin marcos a medias.
-function* pushLaneStrip(seg, lane, out) {
+// Primera pasada (por tira): marcos de superficie de cada muestra, guardados y registrados en el índice de bermas del
+// camino. La malla se emite después, cuando ya están todas las tiras: así cada berma sabe cuánto sitio le dejan las
+// demás cintas (WORLD.bermaLibre) y no se dibuja sobre el firme de un carril vecino (cuñas).
+function* stripFrames(seg, lane, ix, rib) {
+  const n = Math.max(4, Math.ceil(seg.length / STEP))
+  const fr = { n, k0: ix.n, P: [], S: [], U: [], T: [] }
+  for (let i = 0; i <= n; i++) {
+    if (i % 12 === 11) yield fr
+    const f = surfFrame(seg, lane.id, i / n, F0)
+    fr.P.push(f.pos.clone()); fr.S.push(f.side.clone()); fr.U.push(f.up.clone()); fr.T.push(f.tangent.clone())
+    WORLD.bermaAdd(ix, rib, f.pos, f.side, f.up, f.tangent, seg.length / n / 2)
+  }
+  return fr
+}
+const LIBRE = [0, 0]; const PF_L = {}; const PF_R = {}
+const V_AB = new THREE.Vector3(); const V_AM = new THREE.Vector3()
+const DIEZMO = 3 // muestras por paso en recta (paso máximo 3 × STEP ≈ 21 u)
+const DIEZMO_COS = Math.cos(1.5 * Math.PI / 180) // giro máximo de tangente y normal dentro de un paso diezmado
+function* pushLaneStrip(seg, lane, out, fr, ix) {
   const L = seg.length
   const H = halfWidth(lane)
   const { top, keelX } = profile(H)
-  const n = Math.max(4, Math.ceil(L / STEP))
+  const E = H + CURB
+  const n = fr.n
   const base = out.pos.length / 3
-  const Ts = []; const Ss = []
+  const Ts = fr.T; const Ss = fr.S
   const salt = lane.id * 3.7 + seg.length * 0.013
-  for (let i = 0; i <= n; i++) {
-    if (i % 12 === 11) yield
+  // sitio libre a cada lado de cada muestra
+  const libL = new Float32Array(n + 1); const libR = new Float32Array(n + 1)
+  WORLD.bermaLibres(ix, fr.k0, n, libL, libR)
+  yield
+  // Diezmado por longitud: en recta (misma tangente y normal, berma entera) se salta hasta DIEZMO − 1 muestras, así los
+  // triángulos de la cinta crecen con las curvas del camino y no con el tamaño del mapa.
+  const llena = (i) => libL[i] >= 2 * TERR && libR[i] >= 2 * TERR
+  const keep = [0]
+  // las muestras saltadas quedan a menos de 0.08 u de la cuerda (badenes y relieve no se aplanan)
+  const cuerda = (a, c) => {
+    V_AB.subVectors(fr.P[c], fr.P[a]); const l2 = V_AB.lengthSq() || 1
+    for (let m = a + 1; m < c; m++) { V_AM.subVectors(fr.P[m], fr.P[a]); if (V_AM.addScaledVector(V_AB, -V_AM.dot(V_AB) / l2).lengthSq() > 0.0064) return false }
+    return true
+  }
+  for (let a = 0; a < n;) {
+    let b = a + 1
+    while (b < n && b - a < DIEZMO && llena(a) && llena(b) && llena(b + 1) && Ts[b + 1].dot(Ts[a]) > DIEZMO_COS && fr.U[b + 1].dot(fr.U[a]) > DIEZMO_COS && cuerda(a, b + 1)) b++
+    keep.push(b); a = b
+  }
+  const nk = keep.length - 1
+  for (let q = 0; q <= nk; q++) {
+    if (q % 24 === 23) yield
+    const i = keep[q]
     const u = i / n
-    const f = surfFrame(seg, lane.id, u, F0)
-    Ts.push(f.tangent.clone()); Ss.push(f.side.clone())
+    const f = { pos: fr.P[i], side: fr.S[i], up: fr.U[i] }
     const s = u * L
     const k = 1 + 0.35 * Math.sin(s * 0.37 + salt) + 0.2 * Math.sin(s * 1.13 + salt * 2)
-    const ring = [...top, [keelX, -0.28 * k, 1], [0, -0.48 * k, 0.5], [-keelX, -0.28 * k, 0]]
+    // berma y bordillo de cada lado según el sitio que dejan las demás cintas (izquierda: top[0..3]; derecha: top[5..8])
+    const a = WORLD.bermaPerfil(libL[i], PF_L); const b = WORLD.bermaPerfil(libR[i], PF_R)
+    const ring = [
+      [-(E + a.w), a.yO, 0], [-(E + a.w * 0.5), a.yM, 0.08], [-E, a.yE, TRACK_U[0]], [-H, a.yH, TRACK_U[1]],
+      top[4],
+      [H, b.yH, TRACK_U[2]], [E, b.yE, TRACK_U[3]], [E + b.w * 0.5, b.yM, 0.92], [E + b.w, b.yO, 1],
+      [keelX, -0.28 * k, 1], [0, -0.48 * k, 0.5], [-keelX, -0.28 * k, 0],
+    ]
     for (let j = 0; j < RING; j++) {
       const [x, y, ux] = ring[j]
       out.pos.push(
@@ -295,7 +341,8 @@ function* pushLaneStrip(seg, lane, out) {
     const a = Math.max(0, i - 1); const b = Math.min(n, i + 1)
     const d = Ts[b].clone().sub(Ts[a]); return { k: d.length() / ((b - a) * ds), d }
   }
-  for (let i = 0; i <= n; i++) {
+  for (let q = 0; q <= nk; q++) {
+    const i = keep[q]
     let c = 0
     if (kAt(i).k < CHEV_K * 0.8) {
       let best = 0; let bd = null
@@ -311,7 +358,7 @@ function* pushLaneStrip(seg, lane, out) {
     for (let j = 0; j < RING; j++) out.chev.push(c)
   }
   const i0 = out.idx.length
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < nk; i++) {
     for (let j = 0; j < RING; j++) {
       const a = base + i * RING + j; const b = base + i * RING + ((j + 1) % RING)
       out.idx.push(a, a + RING, b, b, a + RING, b + RING)
@@ -342,12 +389,19 @@ export function trackGeoPaso(way, agotado) {
   if (geoCache.has(way)) return true
   let st = pendiente.get(way)
   if (!st) {
-    st = { out: { pos: [], nrm: [], uv: [], chev: [], under: [], idx: [] }, strips: [], k: 0, gen: null }
+    st = { out: { pos: [], nrm: [], uv: [], chev: [], under: [], idx: [] }, strips: [], k: 0, gen: null, ix: WORLD.bermaIndice(), frs: [], kf: 0, genF: null }
     for (const seg of way.segments) for (const lane of lanesOf(seg)) st.strips.push([seg, lane])
     pendiente.set(way, st)
   }
+  // 1) marcos de todas las tiras (índice de bermas); 2) malla
+  while (st.genF || st.kf < st.strips.length) {
+    if (!st.genF) { const [seg, lane] = st.strips[st.kf]; st.genF = stripFrames(seg, lane, st.ix, st.kf++) }
+    const r = st.genF.next()
+    if (r.done) { st.frs.push(r.value); st.genF = null }
+    if (agotado()) return false
+  }
   while (st.gen || st.k < st.strips.length) {
-    if (!st.gen) { const [seg, lane] = st.strips[st.k++]; st.gen = pushLaneStrip(seg, lane, st.out) }
+    if (!st.gen) { const [seg, lane] = st.strips[st.k]; st.gen = pushLaneStrip(seg, lane, st.out, st.frs[st.k], st.ix); st.k++ }
     if (st.gen.next().done) st.gen = null
     if (agotado()) return false
   }
