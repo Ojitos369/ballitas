@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Instanced, markShared, mergePlainParts, vidaSharedMats } from './base.jsx'
 import { buildUnionesData } from './colocacion.js'
+export { buildUnionesData }
 
 // ═══════════════════════════ GEOMETRÍAS COMPARTIDAS ═══════════════════════════
 function buildPillarGeo() {

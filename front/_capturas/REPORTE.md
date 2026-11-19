@@ -12,3 +12,6 @@ Estado al iniciar: commits 371316d, 04bc9d2, 435abdd (medidor nuevo), dae565f (w
 - Probado y descartado: guardia con muestras cada 2·TK (coste ~mitad) -> se escapan 60 piezas en semilla 1 (pen 8.8 u). Se queda en 1·TK: clearanceSamples cuesta 2795 ms con la máquina cargada (semilla 369, 257127 muestras), una vez por mundo, en el hilo principal al colocar la primera pieza.
 - vite build OK (31.6 s). pnpm test: 69/70; las 2 pruebas M4 nuevas pasan (semillas 1 y 369); falla sim.test.js:446 «reconstrucción lenta: 4015 ms» (tope 3000 ms), es tiempo con la máquina cargada: la generación es la de main (wip revertido).
 - NO hecho: M1-M3 (trenza/relajación/uniones), validación visual en Edge, choques3d, MAP_SPEED_K/WORLD_GEN (no cambia el mundo generado).
+
+## Sesión 5 (inicio 22:28)
+- Paso 0: merge de main en curso.

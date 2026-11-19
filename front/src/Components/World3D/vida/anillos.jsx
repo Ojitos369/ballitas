@@ -6,6 +6,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { getWayDetail, markShared } from './base.jsx'
 import { RING_RANGE, buildAnillosData } from './colocacion.js'
+export { buildAnillosData }
 import { precargarKit, useKit } from '../Modelos.jsx'
 
 const RING_TIME = { value: 0 }
@@ -29,6 +30,9 @@ function ringCoreMat(baseMat) {
   _coreMat = m
   return m
 }
+
+/** Calentado: el material del núcleo del anillo (derivado del kit) tal como lo usa la capa, para precompilarlo. */
+export const anilloCoreWarmup = (baseMat) => (Array.isArray(baseMat) ? [ringCoreMat(baseMat[0]), ...baseMat.slice(1)] : ringCoreMat(baseMat))
 
 let _lowGeoBase = null
 function lowRingBaseGeo() {

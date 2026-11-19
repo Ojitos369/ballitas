@@ -774,8 +774,28 @@ function capStride(arr, max) {
 
 const kartDataCache = new WeakMap()
 
+const kartGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+const NUNCA = () => false
+
+/** Avanza las piezas kart de `way` hasta que `agotado()` diga basta; true cuando quedaron en caché. */
+export function kartPaso(way, agotado) {
+  if (kartDataCache.has(way)) return true
+  let g = kartGens.get(way)
+  if (!g) { g = kartGen(way); kartGens.set(way, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { kartGens.delete(way); kartDataCache.set(way, r.value); return true }
+    if (agotado()) return false
+  }
+}
+
 export function buildKartPistaData(way) {
-  if (kartDataCache.has(way)) return kartDataCache.get(way)
+  kartPaso(way, NUNCA)
+  return kartDataCache.get(way)
+}
+
+// Los `yield` van al final de cada muestra: los marcos compartidos no se usan a medias entre reanudaciones.
+function* kartGen(way) {
   const world = mundoDe(way)
   const local = nuevoLocal()
   const P = pal(way.theme.id)
@@ -870,6 +890,7 @@ export function buildKartPistaData(way) {
         tunnelPicked = { seg, lane: lane0, s0 }
         break
       }
+      yield
     }
   }
   if (tunnelPicked) {
@@ -896,8 +917,9 @@ export function buildKartPistaData(way) {
 
   const pianoCands = []
   const barrierCands = []
-  segs.forEach((seg, si) => {
-    if (seg.air) return
+  for (let si = 0; si < segs.length; si++) {
+    const seg = segs[si]
+    if (seg.air) continue
     const L = seg.length
     const lanes = lanesOf(seg)
     for (const lane of lanes) {
@@ -931,9 +953,10 @@ export function buildKartPistaData(way) {
           const quat = basisQuat(fUp, f.tangent).multiply(outSide > 0 ? Q_YN90 : Q_Y90)
           barrierCands.push({ k, o, fSide, fUp, E, want, seed, quat, si, laneId: lane.id })
         }
+        yield
       }
     }
-  })
+  }
 
   const pianoPicked = capStride(pianoCands, MAX_PIANOS)
   for (const c of pianoPicked) {
@@ -956,9 +979,7 @@ export function buildKartPistaData(way) {
     barreras.push({ pos: p, quat: c.quat, scale: [1.5, 1.0, 0.55], color: barrierTint })
   }
 
-  const out = { arcos, startLines, finishLines, tuneles, bordillos, barreras }
-  kartDataCache.set(way, out)
-  return out
+  return { arcos, startLines, finishLines, tuneles, bordillos, barreras }
 }
 
 // ═══════════════════════════ 5. VOLÚMENES DEL MUNDO PARA EL MEDIDOR ═══════════════════════════

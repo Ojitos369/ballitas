@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Instanced, getWayBoundingSphere, getWayDetail, markShared } from './base.jsx'
-import { buildKartPistaData } from './colocacion.js'
+import { buildKartPistaData, kartPaso } from './colocacion.js'
+export { kartPaso }
 import { useKit, precargarKit } from '../Modelos.jsx'
 import { TRACK_K } from '../../../Core/world.js'
 

@@ -213,18 +213,179 @@ export function estructurasWarmup() {
   ]
 }
 
+// ═══════════════════════════ HELPERS POR TRAMO ═══════════════════════════
+function outerClear(col, wayIdx, seg, lane, u, pos, rad, local) {
+  if (!laneSideClear(seg, lane, u, pos, Math.max(0.85, rad * 0.65))) return false
+  if (col && !col.libre(pos, rad, { way: wayIdx })) return false
+  if (local && !local.libre(pos, rad)) return false
+  return true
+}
+
+const F_RIB = {}
+const RIB_N = 9
+const _c3 = new THREE.Color()
+const _ribCheck = new THREE.Vector3()
+// Generador (planificación, no aspecto): cede cada pocas muestras para repartir un tramo entre cuadros; solo se
+// interrumpe al empezar una muestra, sin marcos ni temporales compartidos a medias.
+function* buildSegRibbonGeo(way, seg, si, world, spec) {
+  if (!spec) return null
+  const col = world ? colisionDe(world) : null
+  const c1 = new THREE.Color(spec.c1)
+  const c2 = new THREE.Color(spec.c2)
+  const cc = new THREE.Color()
+  const pos = []
+  const nrm = []
+  const colArr = []
+  const uv = []
+  const idx = []
+
+  const L = Math.max(seg.length ?? 1, 1)
+  const lanes = lanesOf(seg)
+  const stepDist = 1.3 * TRACK_K // ~6 u: sigue curvas y deja ver el relieve
+  const n = Math.max(6, Math.ceil(L / stepDist))
+  const isLava = spec.mode === 'lava'
+  const isIce = spec.mode === 'ice'
+  const isDune = spec.mode === 'dune'
+  const isCanyon = spec.mode === 'canyon'
+  const isCyber = spec.mode === 'cyber'
+  const W = spec.w
+  const H = spec.h
+
+  for (let li = 0; li < lanes.length; li++) {
+    const lane = lanes[li]
+    const hw = halfWidth(lane)
+    const E = hw + CURB
+    const edge0 = E + TERR * 0.85
+    for (const sideSign of [-1, 1]) {
+      let stripCount = 0
+      for (let i = 0; i <= n; i++) {
+        if (i % 8 === 7) yield
+        const u = i / n
+        const f = surfFrame(seg, lane.id, u, F_RIB)
+        const midLat = edge0 + W * 0.45
+        _ribCheck.copy(f.pos).addScaledVector(f.side, sideSign * midLat)
+        if (!laneSideClear(seg, lane, u, _ribCheck, TERR * 0.55) || (col && !col.libre(_ribCheck, 0.85, { way: way.idx }))) {
+          stripCount = 0
+          continue
+        }
+
+        const s = u * L
+        const wave = Math.sin(s * 0.14 + si * 2.1 + lane.id * 1.7 + sideSign)
+        const wave2 = Math.cos(s * 0.31 + si * 0.9)
+        let hCrest = H * (0.78 + 0.38 * wave + 0.2 * wave2)
+        if (isIce || isCanyon) hCrest = H * (0.62 + 0.72 * Math.abs(wave))
+        else if (isDune) hCrest = H * (0.8 + 0.45 * wave)
+
+        let pts
+        if (isLava) pts = [[edge0, -0.08, 0, 0], [edge0 + W * 0.16, -0.34, 0.35, 0.18], [edge0 + W * 0.72, -0.34, 0.65, 0.82], [edge0 + W, 0.28 * H, 1, 1]]
+        else if (isCyber) pts = [[edge0, -0.08, 0, 0], [edge0 + W * 0.14, 0.22, 0.75, 0.2], [edge0 + W * 0.86, 0.26, 1, 0.85], [edge0 + W, -0.45, 0.2, 1]]
+        else {
+          // Relieve real: 9 puntos con ondulación de varias frecuencias (lomas, hondonadas y crestas
+          // irregulares) y color por altura con manchas, para que la ribera no sea un manto liso.
+          pts = []
+          for (let j = 0; j < RIB_N; j++) {
+            const t = j / (RIB_N - 1)
+            const bump = Math.sin(Math.PI * Math.min(1, t * 1.12)) ** 0.8
+            const nz = 0.5 * Math.sin(s * 0.41 + t * 7.3 + si) + 0.3 * Math.sin(s * 0.93 - t * 11.1 + lane.id) + 0.2 * Math.sin(s * 1.9 + t * 17.0)
+            const py = j === 0 ? -0.08 : j === RIB_N - 1 ? -0.7 : hCrest * bump * (0.78 + 0.32 * nz)
+            pts.push([edge0 + W * t, py, Math.max(0, Math.min(1, 0.15 + (py / Math.max(0.4, H)) * 0.75 + nz * 0.18)), t])
+          }
+        }
+        const NP = pts.length
+
+        const vBase = pos.length / 3
+        for (let j = 0; j < NP; j++) {
+          const [lat, py, tCol, ux] = pts[j]
+          const lx = sideSign * lat
+          pos.push(
+            f.pos.x + f.side.x * lx + f.up.x * py,
+            f.pos.y + f.side.y * lx + f.up.y * py,
+            f.pos.z + f.side.z * lx + f.up.z * py,
+          )
+          nrm.push(f.up.x, f.up.y, f.up.z)
+          cc.copy(c1).lerp(c2, tCol)
+          if (spec.c3 && NP > 4) {
+            const patch = 0.5 + 0.5 * Math.sin(s * 0.27 + ux * 9.0 + si * 1.3) * Math.cos(s * 0.19 - ux * 5.0)
+            cc.lerp(_c3.set(spec.c3), Math.max(0, patch - 0.45) * 1.2)
+          }
+          if (NP > 4) cc.multiplyScalar(0.8 + 0.35 * tCol)
+          colArr.push(cc.r, cc.g, cc.b)
+          uv.push(ux, s * 0.18)
+        }
+        if (stripCount > 0) {
+          const p0 = vBase - NP
+          for (let j = 0; j < NP - 1; j++) {
+            const a = p0 + j
+            const b = vBase + j
+            if (sideSign > 0) idx.push(a, a + 1, b, b, a + 1, b + 1)
+            else idx.push(a, b, a + 1, b, b + 1, a + 1)
+          }
+        }
+        stripCount++
+      }
+    }
+  }
+
+  if (!idx.length) return null
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3))
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colArr, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  g.computeBoundingSphere()
+  g.name = `estructuras:rib:${way.idx}:${si}`
+  return markShared(g)
+}
+
 const segDataCache = new WeakMap()
 
+const SEG_PASO_MS = 3 // presupuesto por cuadro del propio componente para un tramo cercano aún sin datos
+const segGens = new WeakMap() // seg -> generador a medias (la precarga y el propio componente lo comparten)
+const NUNCA = () => false
+/** Avanza los datos del tramo hasta que `agotado()` diga basta; true cuando quedaron en caché. */
+function segStructPaso(way, seg, si, agotado) {
+  if (segDataCache.has(seg)) return true
+  let g = segGens.get(seg)
+  if (!g) { g = segStructGen(way, seg, si); segGens.set(seg, g) }
+  for (;;) {
+    const r = g.next()
+    if (r.done) { segGens.delete(seg); segDataCache.set(seg, r.value); return true }
+    if (agotado()) return false
+  }
+}
 function getSegStructData(way, seg, si) {
-  if (segDataCache.has(seg)) return segDataCache.get(seg)
+  segStructPaso(way, seg, si, NUNCA)
+  return segDataCache.get(seg)
+}
+
+// Mismo cálculo que de un tirón (mismo rng y orden); los `yield` van al final de cada muestra.
+function* segStructGen(way, seg, si) {
   const themeId = way.theme?.id
   const spec = THEME_STRUCTS[themeId] ?? THEME_STRUCTS.bosque
   const world = mundoDe(way)
-  const ribbonGeo = buildSegRibbonGeo(way, seg, si, world, spec.ribbon)
+  const ribbonGeo = yield* buildSegRibbonGeo(way, seg, si, world, spec.ribbon)
   const { arches, byModel } = placeSegArchesAndProps(way, seg, si)
-  const out = { ribbonGeo, arches, byModel }
-  segDataCache.set(seg, out)
-  return out
+  return { ribbonGeo, arches, byModel }
+}
+
+/** Precarga (vida/precarga.js): construye por delante los tramos de `way` (un tramo por paso) hasta que
+ *  `agotado()` diga basta; true cuando están todos. Mismos datos que al acercarse: solo cambia cuándo. */
+export function estructurasPaso(way, agotado) {
+  const segs = way.segments ?? []
+  for (let si = 0; si < segs.length; si++) {
+    const seg = segs[si]
+    if (seg.air || segDataCache.has(seg)) continue
+    if (!segStructPaso(way, seg, si, agotado)) return false
+    if (agotado()) return false
+  }
+  return true
+}
+/** Modelos GLB que usarán las estructuras de `way` (para pedirlos antes de entrar). */
+export function estructurasModelos(way) {
+  const spec = THEME_STRUCTS[way.theme?.id] ?? THEME_STRUCTS.bosque
+  return spec.props.filter((p) => !p.model.startsWith('proc:')).map((p) => p.model)
 }
 
 // ═══════════════════════════ POOL DE INSTANCIAS FIJAS POR MODELO ═══════════════════════════
@@ -338,14 +499,17 @@ export default function Estructuras({ way, detail, focused, time }) {
       segChanged = true
     }
 
-    // 2) Construir como máximo 1 tramo cercano aún no cacheado en este frame (sin picos de CPU)
+    // 2) Avanzar como máximo 1 tramo cercano aún no cacheado en este frame, con presupuesto (un tramo entero
+    //    costaba 150-450 ms de golpe); la precarga (vida/precarga.js) suele tenerlos ya hechos.
     let builtOne = false
+    let tocado = false
     for (let i = 0; i < nearSegsRef.current.length; i++) {
       const { seg, si } = nearSegsRef.current[i]
       if (!segDataCache.has(seg)) {
-        if (builtOne) continue
-        builtOne = true
-        getSegStructData(way, seg, si)
+        if (tocado) continue
+        tocado = true
+        const t0 = performance.now()
+        builtOne = segStructPaso(way, seg, si, () => performance.now() - t0 > SEG_PASO_MS)
       }
     }
     if (builtOne) dirtyPoolRef.current = true

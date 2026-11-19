@@ -16,6 +16,8 @@ import Estructuras, { estructurasWarmup } from './estructuras.jsx'
 import Eventos, { eventosWarmup } from './eventos.jsx'
 import KartPista from './kartPista.jsx'
 import Paisaje, { paisajeWarmup } from './paisaje.jsx'
+import Precompilado from '../Precompilado.jsx'
+import { useEtapa } from './etapas.js'
 
 // Bandas de la sección en U (las mismas que TRACK_U de tools/assets/generate_textures.py).
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
@@ -258,7 +260,9 @@ function profile(H) {
 const RING = 12
 
 const F0 = {}
-function pushLaneStrip(seg, lane, out) {
+// Generador: cede cada pocas muestras para que la precarga reparta una tira larga entre cuadros (una tira entera
+// llegaba a 15-30 ms). Mismo resultado: solo se interrumpe al final de una muestra, sin marcos a medias.
+function* pushLaneStrip(seg, lane, out) {
   const L = seg.length
   const H = halfWidth(lane)
   const { top, keelX } = profile(H)
@@ -267,6 +271,7 @@ function pushLaneStrip(seg, lane, out) {
   const Ts = []; const Ss = []
   const salt = lane.id * 3.7 + seg.length * 0.013
   for (let i = 0; i <= n; i++) {
+    if (i % 12 === 11) yield
     const u = i / n
     const f = surfFrame(seg, lane.id, u, F0)
     Ts.push(f.tangent.clone()); Ss.push(f.side.clone())
@@ -337,17 +342,29 @@ export function trackGeoPaso(way, agotado) {
   if (geoCache.has(way)) return true
   let st = pendiente.get(way)
   if (!st) {
-    st = { out: { pos: [], nrm: [], uv: [], chev: [], under: [], idx: [] }, strips: [], k: 0 }
+    st = { out: { pos: [], nrm: [], uv: [], chev: [], under: [], idx: [] }, strips: [], k: 0, gen: null }
     for (const seg of way.segments) for (const lane of lanesOf(seg)) st.strips.push([seg, lane])
     pendiente.set(way, st)
   }
-  while (st.k < st.strips.length) {
-    const [seg, lane] = st.strips[st.k++]
-    pushLaneStrip(seg, lane, st.out)
+  while (st.gen || st.k < st.strips.length) {
+    if (!st.gen) { const [seg, lane] = st.strips[st.k++]; st.gen = pushLaneStrip(seg, lane, st.out) }
+    if (st.gen.next().done) st.gen = null
+    if (agotado()) return false
+  }
+  // cajas del raycast por trozos (ver raycastPista), también repartidas
+  st.cajas ??= []
+  const P = st.out.pos; const I = st.out.idx
+  for (let s = st.cajas.length * TROZO; s < I.length; s += TROZO) {
+    let x0 = Infinity; let y0 = Infinity; let z0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; let z1 = -Infinity
+    for (let i = s, e = Math.min(I.length, s + TROZO); i < e; i++) {
+      const v = I[i] * 3; const x = P[v]; const y = P[v + 1]; const z = P[v + 2]
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z
+    }
+    st.cajas.push(new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1)))
     if (agotado()) return false
   }
   pendiente.delete(way)
-  cerrarGeo(way, st.out)
+  cerrarGeo(way, st.out, st.cajas)
   return true
 }
 
@@ -357,7 +374,7 @@ export function trackGeo(way) {
   return geoCache.get(way)
 }
 
-function cerrarGeo(way, out) {
+function cerrarGeo(way, out, cajas) {
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3))
   g.setAttribute('uv', new THREE.Float32BufferAttribute(out.uv, 2))
@@ -369,6 +386,61 @@ function cerrarGeo(way, out) {
   g.name = 'pista:' + way.idx
   markShared(g) // en caché por camino: se reutiliza al volver a entrar
   geoCache.set(way, g)
+  if (cajas) cajasCache.set(g, cajas)
+}
+
+// ─────────────────────────── raycast por trozos ───────────────────────────
+// La colisión de cámara (Scene.jsx, CameraRig) lanza un rayo contra las mallas `pista:` cada 3 cuadros, y Mesh.raycast
+// recorre TODOS los triángulos del camino (10-30 ms por rayo, un cuadro > 50 ms cada ~100 ms en la vista Ballita).
+// Caché de cajas por trozo de índices: el rayo solo prueba los trozos cuya caja cruza, con el raycast original de three
+// limitado a ese trozo (drawRange), así que las intersecciones son exactamente las mismas.
+const TROZO = 512 * 3 // índices por trozo (512 triángulos)
+const cajasCache = new WeakMap()
+const _vc = new THREE.Vector3()
+function cajasDe(g) {
+  let cajas = cajasCache.get(g)
+  if (cajas) return cajas
+  const idx = g.index; const p = g.attributes.position
+  if (!idx || !p) return null
+  cajas = []
+  for (let s = 0; s < idx.count; s += TROZO) {
+    const b = new THREE.Box3()
+    const e = Math.min(idx.count, s + TROZO)
+    for (let i = s; i < e; i++) b.expandByPoint(_vc.fromBufferAttribute(p, idx.getX(i)))
+    cajas.push(b)
+  }
+  cajasCache.set(g, cajas)
+  return cajas
+}
+const _inv = new THREE.Matrix4()
+const _rayL = new THREE.Ray()
+const _sph = new THREE.Sphere()
+const _hit = new THREE.Vector3()
+function raycastPista(raycaster, intersects) {
+  const g = this.geometry
+  const cajas = cajasDe(g)
+  const dr = g.drawRange
+  if (!cajas || dr.start !== 0 || dr.count !== Infinity) { THREE.Mesh.prototype.raycast.call(this, raycaster, intersects); return }
+  if (g.boundingSphere === null) g.computeBoundingSphere()
+  _sph.copy(g.boundingSphere).applyMatrix4(this.matrixWorld)
+  if (!raycaster.ray.intersectsSphere(_sph)) return
+  _inv.copy(this.matrixWorld).invert()
+  _rayL.copy(raycaster.ray).applyMatrix4(_inv)
+  try {
+    for (let k = 0; k < cajas.length; k++) {
+      const b = cajas[k]
+      if (!b.containsPoint(_rayL.origin)) { // desde fuera: la entrada a la caja es el punto más cercano posible
+        if (!_rayL.intersectBox(b, _hit)) continue
+        if (_hit.applyMatrix4(this.matrixWorld).distanceTo(raycaster.ray.origin) > raycaster.far) continue
+      }
+      dr.start = k * TROZO
+      dr.count = TROZO
+      THREE.Mesh.prototype.raycast.call(this, raycaster, intersects)
+    }
+  } finally {
+    dr.start = 0
+    dr.count = Infinity
+  }
 }
 
 /** Mallas mínimas con los materiales de la pista, para compilar y enlazar sus programas antes de la
@@ -382,7 +454,11 @@ export function pistaWarmup(extra = []) {
   tiny.setAttribute('aTint', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   tiny.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3))
   g.add(new THREE.Mesh(tiny, trackMat('neon')))
+  // Tres variantes por material (malla simple, instanciada sin y con color por instancia): cada una es otra clave de
+  // programa, y la vida usa las tres según la capa (medido: anillos, criaturas y estructuras compilaban al entrar).
   for (const mat of [...eventosWarmup(), ...anillosWarmup(), ...estructurasWarmup(), ...paisajeWarmup(), ...extra]) {
+    g.add(new THREE.Mesh(tiny, mat))
+    g.add(new THREE.InstancedMesh(tiny, mat, 1))
     const im = new THREE.InstancedMesh(tiny, mat, 1)
     im.setColorAt(0, new THREE.Color('#ffffff'))
     g.add(im)
@@ -429,16 +505,22 @@ export default function Pista({ way, detail, focused, time }) {
     TRACK_TIME.value = t
   })
   const mat = useMemo(() => trackMat(way.theme.id), [way])
+  // Cada capa se monta cuando la precarga (vida/precarga.js) ya calculó sus datos, y entra oculta hasta tener sus
+  // programas enlazados: montarla antes los construía de golpe dentro del render (cientos de ms por capa).
+  const kart = useEtapa(way, 'kart')
+  const anillos = useEtapa(way, 'anillos')
+  const decor = useEtapa(way, 'decor')
+  const eventos = useEtapa(way, 'eventos')
   return (
     <>
       <TemaAtmosfera focused={focused} themeId={way.theme?.id} />
-      {geo && <mesh geometry={geo} material={mat} receiveShadow />}
-      <KartPista way={way} />
-      <Anillos way={way} />
-      <Decor way={way} focused={focused} />
+      {geo && <mesh geometry={geo} material={mat} receiveShadow raycast={raycastPista} />}
+      {kart && <Precompilado><KartPista way={way} /></Precompilado>}
+      {anillos && <Precompilado><Anillos way={way} /></Precompilado>}
+      {decor && <Precompilado><Decor way={way} focused={focused} /></Precompilado>}
       <Estructuras way={way} detail={detail} focused={focused} time={time} />
       <Paisaje way={way} detail={detail} focused={focused} time={time} />
-      <Eventos way={way} />
+      {eventos && <Precompilado><Eventos way={way} /></Precompilado>}
     </>
   )
 }
