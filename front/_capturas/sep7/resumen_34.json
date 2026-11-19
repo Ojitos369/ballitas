@@ -1,0 +1,62 @@
+[
+ {
+  "img": "desk_34_helice1_sacacorchos_w12",
+  "a": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "sacacorchos",
+   "way": 12
+  },
+  "b": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "sacacorchos",
+   "way": 12
+  }
+ },
+ {
+  "img": "desk_34_helice2_espiral_w10",
+  "a": {
+   "id": 8,
+   "phase": "travel",
+   "kind": "espiral",
+   "way": 10
+  },
+  "b": {
+   "id": 8,
+   "phase": "travel",
+   "kind": "espiral",
+   "way": 10
+  }
+ },
+ {
+  "img": "movil_34_helice1_espiral_w18",
+  "a": {
+   "id": 9,
+   "phase": "travel",
+   "kind": "espiral",
+   "way": 18
+  },
+  "b": {
+   "id": 9,
+   "phase": "travel",
+   "kind": "espiral",
+   "way": 18
+  }
+ },
+ {
+  "img": "movil_34_helice2_espiral_w2",
+  "a": {
+   "id": 3,
+   "phase": "travel",
+   "kind": "espiral",
+   "way": 2
+  },
+  "b": {
+   "id": 3,
+   "phase": "travel",
+   "kind": "espiral",
+   "way": 2
+  }
+ }
+]

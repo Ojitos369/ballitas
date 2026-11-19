@@ -1,0 +1,288 @@
+[
+ {
+  "tanda": 1,
+  "nombre": "rama",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 62.9,
+  "tris": 924198,
+  "heapMB": 469,
+  "enViaje": 1,
+  "tramos": "salida>canon>cascada",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "cascada",
+   "way": 4
+  },
+  "errs": [],
+  "tomas": [
+   {
+    "img": "desk_helice1_sacacorchos_w4",
+    "pov": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "sacacorchos",
+     "way": 4
+    },
+    "tresCuartos": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "sacacorchos",
+     "way": 4
+    }
+   },
+   {
+    "img": "desk_helice2_espiral_w2",
+    "pov": {
+     "id": 2,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 2
+    },
+    "tresCuartos": {
+     "id": 2,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 2
+    }
+   }
+  ]
+ },
+ {
+  "tanda": 1,
+  "nombre": "rama",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 82.9,
+  "tris": 738523,
+  "heapMB": 441,
+  "enViaje": 1,
+  "tramos": "salida>embudo",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "embudo",
+   "way": 13
+  },
+  "errs": [],
+  "tomas": [
+   {
+    "img": "movil_helice1_espiral_w18",
+    "pov": {
+     "id": 3,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 18
+    },
+    "tresCuartos": {
+     "id": 3,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 18
+    }
+   },
+   {
+    "img": "movil_helice2_espiral_w17",
+    "pov": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 17
+    },
+    "tresCuartos": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 17
+    }
+   }
+  ]
+ },
+ {
+  "tanda": 1,
+  "nombre": "main",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "born",
+   "kind": null
+  },
+  "fps": 63.6,
+  "tris": 688436,
+  "heapMB": 398,
+  "enViaje": 0.86,
+  "tramos": "salida",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "salida",
+   "way": 17
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 1,
+  "nombre": "main",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 71.7,
+  "tris": 781337,
+  "heapMB": 427,
+  "enViaje": 0.95,
+  "tramos": "salida>trampolin>portal>caida",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "caida",
+   "way": 4
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "rama",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 61.2,
+  "tris": 886186,
+  "heapMB": 483,
+  "enViaje": 1,
+  "tramos": "salida>canon>portal",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "portal",
+   "way": 15
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "rama",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 79.3,
+  "tris": 946402,
+  "heapMB": 515,
+  "enViaje": 1,
+  "tramos": "salida>rampa>pantano",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "pantano",
+   "way": 18
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "main",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 59,
+  "tris": 669105,
+  "heapMB": 377,
+  "enViaje": 0.98,
+  "tramos": "salida>caida>geiser",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "geiser",
+   "way": 10
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "main",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 84.3,
+  "tris": 608645,
+  "heapMB": 381,
+  "enViaje": 0.99,
+  "tramos": "salida>caida>geiser",
+  "fin": {
+   "id": 1,
+   "phase": "travel",
+   "kind": "geiser",
+   "way": 10
+  },
+  "errs": [],
+  "tomas": []
+ }
+]
