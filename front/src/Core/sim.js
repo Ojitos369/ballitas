@@ -130,9 +130,18 @@ export function breed(a, b, rng, rate = 0.15) {
   return child
 }
 
-const NAMES = ['Pelusa', 'Moti', 'Canica', 'Tapioca', 'Chispa', 'Nube', 'Gotita', 'Burbuja', 'Pixel', 'Mochi',
-  'Fresita', 'Oliva', 'Trufa', 'Cometa', 'Bombón', 'Churro', 'Kiwi', 'Lentejuela', 'Migajita', 'Ñoño',
-  'Pepita', 'Zumo', 'Tuerca', 'Brillo', 'Galleta', 'Lunita', 'Rulo', 'Bizcocho', 'Canela', 'Peque']
+// Nombres de sílabas al azar (inicio + medio opcional + final), sin repetir en toda la simulación.
+const SIL_INI = ['Pe', 'Mo', 'Ca', 'Ta', 'Chi', 'Nu', 'Go', 'Bu', 'Pi', 'Mi', 'Fre', 'O', 'Tru', 'Ki', 'Lu', 'Ru', 'Bi', 'Ga', 'Zu', 'Ñe', 'Bo', 'Che', 'Fi', 'La']
+const SIL_MED = ['', '', 'lu', 'ti', 'ra', 'pi', 'ne', 'mo', 'ca', 'si', 'li', 'ru']
+const SIL_FIN = ['sa', 'ti', 'ca', 'pa', 'ba', 'to', 'lla', 'chi', 'na', 'jo', 'ki', 'ña', 'rí', 'lín', 'tón', 'mi']
+
+export function nombreUnico(rng, usados) {
+  const p = (a) => a[Math.floor(rng() * a.length)]
+  for (let i = 0; ; i++) {
+    const n = p(SIL_INI) + p(SIL_MED) + p(SIL_FIN) + (i > 50 ? p(SIL_FIN) : '') // tras muchos choques, una sílaba más
+    if (!usados.has(n)) { usados.add(n); return n }
+  }
+}
 
 export class Sim {
   constructor({ rng = Math.random, pop = POP, seed } = {}) {
@@ -148,6 +157,7 @@ export class Sim {
     this.spawnQueue = []
     this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }
     this.feed = [] // eventos globales recientes
+    this.nombres = new Set() // nombres ya usados: nunca se repiten
     for (let i = 0; i < pop; i++) this.spawn()
   }
 
@@ -173,7 +183,7 @@ export class Sim {
     const up = node.verts[vert].dir.clone()
     const b = {
       id: this.nextId++, gen, genome, padres, node: node.idx, vert, p: 60, e: 60, age: 0, visits: 0, score: 0,
-      name: `${NAMES[Math.floor(this.rng() * NAMES.length)]} ${gen > 1 ? 'G' + gen : ''}`.trim(),
+      name: `${nombreUnico(this.rng, this.nombres)} ${gen > 1 ? 'G' + gen : ''}`.trim(),
       phase: 'born', timer: 0.8, dur: 0.8, bornAt: this.t,
       dest: null, way: null, route: null, seg: null, segT: 0, walk: null,
       visited: [node.idx], visitedRoutes: {}, plannedRoute: null, nextDest: null, plan: null,
