@@ -324,9 +324,13 @@ function colOcio(cs, scene, fin) {
     if (o.parent) colInstanciasCalc(cs, o, performance.now() / 1000)
   }
   // indexado: solo lo encolado por el refresco (cercano); lo que la ballita dejó atrás (> COL_IDX_R) sale de la cola
-  while (cs.cola.length && performance.now() < fin - 0.3) {
+  colIndexar(cs, fin - 0.3, 1500)
+}
+const COL_IDX_MS = 0.12 // indexado dentro del cuadro (solo si queda cola)
+function colIndexar(cs, fin, trozo = 300) {
+  while (cs.cola.length && performance.now() < fin) {
     const g = cs.cola[0]
-    if (construir(g, 1500)) { cs.cola.shift(); (cs.hechas ??= []).push(g.etq); if (cs.hechas.length > 64) cs.hechas.shift() }
+    if (construir(g, trozo)) { cs.cola.shift(); (cs.hechas ??= []).push(g.etq); if (cs.hechas.length > 64) cs.hechas.shift() }
   }
 }
 // Refresca la lista de colisionadores alrededor de `bp` cada COL_REFRESH s, repartido en varios cuadros con
@@ -402,11 +406,13 @@ function colIgnora(b) {
   return colIgnoraObj
 }
 // coste por cuadro de la colisión: media y pico de la ventana de los últimos 5 s (se publican en cam.info)
-function colCoste(ce, ms, ahora) {
-  const v = (ce.colV ??= { t: ahora, s: 0, n: 0, max: 0, media: 0, pico: 0 })
+// partes: refresco, rayos, cercanía, indexado (pico de cada una en la ventana)
+function colCoste(ce, ms, ahora, ...partes) {
+  const v = (ce.colV ??= { t: ahora, s: 0, n: 0, max: 0, media: 0, pico: 0, pm: [0, 0, 0, 0], picos: [0, 0, 0, 0] })
   v.s += ms; v.n++; if (ms > v.max) v.max = ms
+  for (let i = 0; i < partes.length; i++) if (partes[i] > v.pm[i]) v.pm[i] = partes[i]
   ce.msEma += (ms - ce.msEma) * 0.05
-  if (ahora - v.t > 5000) { v.media = v.s / v.n; v.pico = v.max; v.t = ahora; v.s = 0; v.n = 0; v.max = 0 }
+  if (ahora - v.t > 5000) { v.media = v.s / v.n; v.pico = v.max; v.picos = v.pm.map((x) => +x.toFixed(2)); v.pm = [0, 0, 0, 0]; v.t = ahora; v.s = 0; v.n = 0; v.max = 0 }
 }
 const COL_PISTA_D = 0.55
 const COL_PISTA_R = COL_PISTA_D - RIBBON_HALF
@@ -1628,9 +1634,13 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
           if (dn2 < CAM_RADIO_MIN) camera.position.addScaledVector(colN, CAM_RADIO_MIN - dn2)
         }
       } else ce.push.set(0, 0, 0)
+      // indexado: el grueso va en tiempo ocioso; con el hilo saturado (planetas) un poco en el cuadro para no dejar
+      // estructuras cercanas sin colisión
+      const colT3 = performance.now()
+      if (cs.cola.length) colIndexar(cs, colT3 + COL_IDX_MS)
       const colMs = performance.now() - colT0
-      ce.pNear += (colMs - (colT2 - colT0) - ce.pNear) * 0.05
-      colCoste(ce, colMs, colT0)
+      ce.pNear += (colT3 - colT2 - ce.pNear) * 0.05
+      colCoste(ce, colMs, colT0, colT1 - colT0, colT2 - colT1, colT3 - colT2, colMs - (colT3 - colT0))
       ce.msMax = Math.max(ce.msMax * 0.995, colMs)
       // Evita que la cámara se meta dentro de la esfera de un planeta (en el planeta seguido, su radio visual real).
       for (let i = 0; !enTubo && i < nodes.length; i++) {
@@ -1763,7 +1773,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
     const dbg = typeof window !== 'undefined' && window.__ballitasDebug // sólo con ?stats=1: sondeo de la cámara
     if (dbg) {
       const ce = camExtra.current
-      dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: { ...followRef.current.info, colMedia5s: +(ce.colV?.media ?? 0).toFixed(3), colPico5s: +(ce.colV?.pico ?? 0).toFixed(2) }, colis: colis.current, colGolpe: colis.current.golpe ? `${colis.current.golpe.g.etq}${colis.current.golpe.o ? '' : '[i]'}|${colis.current.golpe.o?.material?.type ?? ''}|r${Math.round(colis.current.golpe.r)}` : null, arm: +followRef.current.clear.toFixed(2), armGoal: +followRef.current.clearGoal.toFixed(2),colMs: +ce.msEma.toFixed(3), colMsMax: +ce.msMax.toFixed(2), colN: colis.current.cols.length, colCola: colis.current.cola.length, colColaEtq: colis.current.cola.slice(0, 4).map((g) => `${g.etq}@${g.fase}:${g.next}`), colHechas: (colis.current.hechas ?? []).slice(-8), colProf: [ce.pRef, ce.pSeg, ce.pNear].map((x) => +x.toFixed(3)), enc: { ...ce.enc } }
+      dbg.cam = { selected, camera, target: c.target, modo: modo.current, THREE, nodes, bp: bpVec, info: { ...followRef.current.info, colMedia5s: +(ce.colV?.media ?? 0).toFixed(3), colPico5s: +(ce.colV?.pico ?? 0).toFixed(2), colPicos5s: ce.colV?.picos }, colis: colis.current, colGolpe: colis.current.golpe ? `${colis.current.golpe.g.etq}${colis.current.golpe.o ? '' : '[i]'}|${colis.current.golpe.o?.material?.type ?? ''}|r${Math.round(colis.current.golpe.r)}` : null, arm: +followRef.current.clear.toFixed(2), armGoal: +followRef.current.clearGoal.toFixed(2),colMs: +ce.msEma.toFixed(3), colMsMax: +ce.msMax.toFixed(2), colN: colis.current.cols.length, colCola: colis.current.cola.length, colColaEtq: colis.current.cola.slice(0, 4).map((g) => `${g.etq}@${g.fase}:${g.next}`), colHechas: (colis.current.hechas ?? []).slice(-8), colProf: [ce.pRef, ce.pSeg, ce.pNear].map((x) => +x.toFixed(3)), enc: { ...ce.enc } }
     }
   })
 
