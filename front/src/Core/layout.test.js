@@ -73,3 +73,23 @@ for (const seed of [1, 369]) {
     assert.ok(typeof ribbonClearance === 'function')
   })
 }
+
+// La rejilla perezosa del prisma (por camino, etapa «prisma» de la precarga) da el mismo veredicto que la global, y la
+// colocación mueve o encoge antes de quitar: se quita a lo sumo el 15 % de las piezas candidatas.
+test('prisma perezoso = global; quitadas <= 15 % (semilla 1)', async () => {
+  const W = await import('./world.js')
+  const C = await import('../Components/World3D/vida/colocacion.js')
+  const w = mundo(1); C.reiniciarStats(); const items = C.colocarTodoMundo(w)
+  const S = W.clearanceSamples(w); const G = W.clearanceGridDe(S); let diff = 0; let pos = 0
+  for (let i = 0; i < items.length; i += 7) {
+    const it = items[i]
+    for (const k of [1, 2.5]) {
+      const a = W.prismaLibre(w, it.center, it.r * k, it); const b = W.prismaLibreGlobal(w, it.center, it.r * k, it, S, G)
+      if (a !== b) diff++; if (!b) pos++
+    }
+  }
+  assert.equal(diff, 0); assert.ok(pos > 0)
+  assert.equal(W.PRISMA_STATS.fueraCaja, 0)
+  let cand = 0; let quit = 0; for (const k in C.STATS) { cand += C.STATS[k].cand; quit += C.STATS[k].quitada }
+  assert.ok(quit / cand <= 0.15, `quitadas ${quit}/${cand}`)
+})
