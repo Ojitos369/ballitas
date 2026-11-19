@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe } from '../colisionObjetos.js'
 import { triplanarMaterial } from '../triplanar.js'
-import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq, tramosDelante } from './base.jsx'
+import { getWayBoundingSphere, getWayDetail, markShared, mergeColoredParts, minSegDistSq } from './base.jsx'
 import { THEME_STRUCTS, placeSegArchesAndProps, placeSegPaso } from './colocacion.js'
 import { precargarModelos, useModelo } from './modelos.js'
 import { CURB, TERR, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
@@ -455,7 +455,6 @@ export default function Estructuras({ way, detail, focused, time }) {
   const [ribList, setRibList] = useState([]) // [{ si, geo }] solo de los 1-3 tramos cercanos
   const ribKeyRef = useRef('')
   const nearSegsRef = useRef([]) // [{ seg, si }]
-  const preSegsRef = useRef([]) // tramos por delante de la ballita seguida aún lejos (solo cálculo)
   const poolsRef = useRef(new Map()) // model -> { mesh, rangeSq }
   const lastCamRef = useRef(new THREE.Vector3(Infinity, 0, 0))
   const lastFwdRef = useRef(new THREE.Vector3(0, 0, 1))
@@ -489,18 +488,14 @@ export default function Estructuras({ way, detail, focused, time }) {
     if (cam.distanceToSquared(lastSegCheckRef.current) >= 100) {
       lastSegCheckRef.current.copy(cam)
       const near = []
-      const pre = [] // por delante (arco) pero aún lejos: solo se calculan, no se dibujan
       let bestD2 = Infinity
-      const delante = tramosDelante(way) // por delante de la ballita seguida según el arco, no solo por distancia
       for (let i = 0; i < nonAirSegs.length; i++) {
         const x = nonAirSegs[i]
         const d2 = minSegDistSq(x.seg, cam)
         if (d2 < bestD2) bestD2 = d2
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
         if (d2 <= lim * lim) near.push(x)
-        else if (delante?.has(x.seg)) pre.push(x)
       }
-      preSegsRef.current = pre
       minDistSqRef.current = bestD2
       nearSegsRef.current = near
       dirtyPoolRef.current = true
@@ -511,9 +506,8 @@ export default function Estructuras({ way, detail, focused, time }) {
     //    costaba 150-450 ms de golpe); la precarga (vida/precarga.js) suele tenerlos ya hechos.
     let builtOne = false
     let tocado = false
-    const porHacer = preSegsRef.current.length ? [...nearSegsRef.current, ...preSegsRef.current] : nearSegsRef.current
-    for (let i = 0; i < porHacer.length; i++) {
-      const { seg, si } = porHacer[i]
+    for (let i = 0; i < nearSegsRef.current.length; i++) {
+      const { seg, si } = nearSegsRef.current[i]
       if (!segDataCache.has(seg)) {
         if (tocado) continue
         tocado = true

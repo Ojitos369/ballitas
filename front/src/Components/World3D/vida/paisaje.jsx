@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { TRACK_K } from '../../../Core/world.js'
 import { colisionDe, mundoDe, nuevoLocal } from '../colisionObjetos.js'
-import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32, tramosDelante } from './base.jsx'
+import { getWayBoundingSphere, markShared, minSegDistSq, mulberry32 } from './base.jsx'
 import { basisQuat } from './dyn.js'
 import { CURB, TERR, bermY, halfWidth, laneSideClear, lanesOf, surfFrame } from './pista.jsx'
 
@@ -975,7 +975,6 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
   const waterKey = useRef('')
   const groupRef = useRef()
   const nearRef = useRef([])
-  const preRef = useRef([])
   const overviewRef = useRef(false)
   const lastSeg = useRef(new THREE.Vector3(Infinity, 0, 0))
   const lastCam = useRef(new THREE.Vector3(Infinity, 0, 0))
@@ -995,18 +994,14 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     if (cam.distanceToSquared(lastSeg.current) >= 100) {
       lastSeg.current.copy(cam)
       const near = []
-      const pre = []
       let best = Infinity
-      const delante = tramosDelante(way) // por delante de la ballita seguida según el arco, no solo por distancia
       for (const x of nonAirSegs) {
         const lim = SEG_ACTIVE_DIST + Math.min(130, x.seg.length * 0.2)
         const d2 = segDistSq(x.seg, cam)
         if (d2 < best) best = d2
         if (d2 <= lim * lim) near.push(x)
-        else if (delante?.has(x.seg)) pre.push(x) // por delante (arco) aún lejos: solo se calcula
       }
       nearRef.current = near
-      preRef.current = pre
       overviewRef.current = best > OVERVIEW_DIST_SQ
       segChanged = true
       dirty.current = true
@@ -1015,7 +1010,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     const overview = overviewRef.current
     let built = false
     if (!overview) {
-      for (const { seg, si } of preRef.current.length ? [...nearRef.current, ...preRef.current] : nearRef.current) {
+      for (const { seg, si } of nearRef.current) {
         if (!segCache.get(seg)?.done) {
           const t0 = performance.now()
           if (buildSegStep(way, seg, si, spec, () => performance.now() - t0 > SEG_PASO_MS)) segChanged = true

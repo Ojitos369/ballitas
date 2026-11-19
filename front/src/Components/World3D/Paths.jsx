@@ -9,7 +9,7 @@ import WorldHtml from './WorldHtml.jsx'
 import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
 import { pistaWarmup } from './vida/pista.jsx'
-import { MONTABLE, PRECARGA, precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
+import { PRECARGA, precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
 import { fijarPreparadorKit } from './Modelos.jsx'
 import Precompilado, { enlazarPendientes, precompilar, primerDibujo } from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
@@ -1352,7 +1352,7 @@ function Way({ way, world = null, focused, detailActive = false, detailMounted =
   }, [ctrl, focused, detailActive, nearActive, forceFocusDetail])
 
   return (
-    <group name={`way:${way.idx}`}>
+    <group>
       {/* El tubo solo informa el recorrido en el mapa lejano; los circuitos son abiertos en Camino. */}
       {/* Siempre montado (oculto en el mapa): el precompilado del mapa enlaza sus dos programas (cristal de doble
           cara) y la primera Ballita/Camino, que lo muestra en los caminos no enfocados, no los espera (0,2-0,8 s). */}
@@ -1426,15 +1426,10 @@ function Precalentar() {
 
 const MAX_ACTIVE_VIDA = 2
 // Siguiendo a una ballita: su camino + los dos siguientes (el planeado primero) quedan montados ocultos y compilados.
-// 4: en el planeta, los 4 caminos que salen (el orden de prefetchWays es el de probabilidad); en viaje, el actual y
-// los 3 más probables del nodo siguiente. Los ocultos no actualizan matrices ni animaciones.
-const MAX_ACTIVE_VIDA_PRE = 3 // 4 bajó los FPS (cada montado arrastra su exterior cercano, ver nearDesired)
+const MAX_ACTIVE_VIDA_PRE = 3
 const MAX_ACTIVE_NEAR = 3
 const PRECARGA_ENTRADA_MS = 6 // por cuadro, si falta el camino que la cámara ya mira
-const PRECARGA_CUADRO_MS = 3 // por cuadro (suelo), para los caminos que vienen
-const PRECARGA_TECHO_MS = 5 // techo por cuadro con la ballita en la pista
-const PRECARGA_TECHO_PLANETA_MS = 12 // techo por cuadro con la ballita en el planeta
-const PRECARGA_SEG_MS = 400 // tope por segundo (sin vsync siempre «sobraría» cuadro)
+const PRECARGA_CUADRO_MS = 3 // por cuadro, para los caminos que vienen
 const FONDO_CUADRO_MS = 1.5 // por cuadro, el resto del mundo, solo si el cuadro deja margen
 const DESCARGA_S = 6 // un camino que deja de hacer falta se oculta ya y se desmonta pasado este tiempo (histéresis)
 
@@ -1469,7 +1464,7 @@ function selectTopIds(list, maxCount) {
   return out
 }
 
-export default function Paths({ world, sim = null, seguida = null, focusWay = null, prefetchWays = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
+export default function Paths({ world, sim = null, focusWay = null, prefetchWays = null, worldRadius = 110, forceFocusDetail = false, cameraOnBall = false, onPickWay }) {
   useMemo(() => registrarMundo(world), [world]) // los objetos procedurales de cada camino consultan sus colisiones por el mundo
   const wayMetas = useMemo(() => world.ways.map((w) => {
     const pts = []
@@ -1493,7 +1488,6 @@ export default function Paths({ world, sim = null, seguida = null, focusWay = nu
   // llenan en useFrame) con unos ms por cuadro aunque no haya hueco; luego, en huecos libres, el camino de cada
   // ballita viva (la primera es la que abre la tecla 3) y por último el resto del mundo.
   const urgentesRef = useRef([])
-  const gastoRef = useRef({ prev: 0, t0: 0, seg: 0 }) // ms de precarga del cuadro anterior y del segundo en curso
   const fondoRef = useRef(null) // paso de fondo por cuadro (ver useFrame): sin huecos libres, el idle solo daba 4 ms/s
   useEffect(() => {
     let vivo = true
@@ -1551,7 +1545,6 @@ export default function Paths({ world, sim = null, seguida = null, focusWay = nu
     SHARED_TIME.value = t
     EXT_PX.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height)
     VIDA_BUS.sim = sim
-    VIDA_BUS.seguida = seguida
 
     const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail || prevPrefetchRef.current !== prefetchWays
     if (focusChanged || t - lastEvalRef.current >= 0.12) {
@@ -1657,37 +1650,15 @@ export default function Paths({ world, sim = null, seguida = null, focusWay = nu
 
     // Precarga urgente con presupuesto por cuadro (no depende de que haya huecos libres, que en el móvil o con los
     // cuadros llenos casi no hay): más ms si falta el camino que se ve ahora (entrada), menos para los siguientes.
-    // Presupuesto adaptativo: lo que sobra del cuadro de 60 Hz descontando lo que gastó la precarga en el anterior
-    // (si no, oscila), con suelo y techo, más techo en el planeta (escena barata, nadie mira la pista) y tope por
-    // segundo (sin vsync los cuadros duran 8 ms y siempre «sobraría»).
     let urgente = false
-    const cola = urgentesRef.current
-    // el camino de la cámara primero y entero (ya se ve); luego anchura y profundidad sobre los que vienen
-    const sig = () => { const f = focusWay != null ? world.ways[focusWay] : null; return (f && !vidaCompleta(f) ? f : null) ?? cola.find((x) => !vidaMontable(x)) ?? cola.find((x) => !vidaCompleta(x)) }
-    const pend = sig()
-    const gasto = gastoRef.current
-    if (pend) {
-      const enPlaneta = seguida ? seguida.phase !== 'travel' : (prefetchWays != null && focusWay == null)
-      const coste = dt * 1000 - gasto.prev
-      let lim = Math.min(Math.max(1000 / 60 - coste + PRECARGA_CUADRO_MS, PRECARGA_CUADRO_MS), enPlaneta ? PRECARGA_TECHO_PLANETA_MS : PRECARGA_TECHO_MS)
-      if (!vidaMontable(pend) && pend.idx === focusWay) lim = Math.max(lim, PRECARGA_ENTRADA_MS)
-      // ventana de 1 s: como mucho PRECARGA_SEG_MS por segundo
-      const ahora = performance.now()
-      if (ahora - gasto.t0 > 1000) { gasto.t0 = ahora; gasto.seg = 0 }
-      lim = Math.max(Math.min(lim, PRECARGA_SEG_MS - gasto.seg), Math.min(lim, PRECARGA_CUADRO_MS))
+    for (const w of urgentesRef.current) {
+      if (vidaCompleta(w)) continue
       const t0 = performance.now()
-      const agotado = () => performance.now() - t0 > lim
-      // anchura: todos los candidatos hasta montables; profundidad: completos en el orden de la cola (más probable primero)
-      let w = pend
-      while (w && !agotado()) {
-        precargaPaso(w, agotado, vidaMontable(w) ? undefined : MONTABLE)
-        w = sig()
-      }
-      gasto.prev = performance.now() - t0
-      gasto.seg += gasto.prev
-      PRECARGA.presu.cuadros++; PRECARGA.presu.lim += lim; PRECARGA.presu.usado += gasto.prev
+      const lim = !vidaMontable(w) && w.idx === focusWay ? PRECARGA_ENTRADA_MS : PRECARGA_CUADRO_MS
+      precargaPaso(w, () => performance.now() - t0 > lim)
       urgente = true
-    } else gasto.prev = 0
+      break
+    }
     // Fondo: el resto del mundo con lo que sobre de un cuadro de 60 Hz (tope 1,5 ms; nada si el cuadro va justo).
     if (!urgente && fondoRef.current) {
       const libre = Math.min(FONDO_CUADRO_MS, 1000 / 60 - 3 - dt * 1000)
