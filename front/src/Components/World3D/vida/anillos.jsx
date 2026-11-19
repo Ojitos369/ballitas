@@ -4,17 +4,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { getWayDetail, markShared, routeInfo } from './base.jsx'
-import { basisQuat } from './dyn.js'
+import { getWayDetail, markShared } from './base.jsx'
+import { RING_RANGE, buildAnillosData } from './colocacion.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
-import { CURB, TERR, halfWidth, lanesOf, pal, surfFrame } from './pista.jsx'
-import { TRACK_K } from '../../../Core/world.js'
 
-const RING_STEP = 55 * TRACK_K
-// El culling conserva la escala del trazado, con un radio acotado para no triplicar
-// los aros visibles desde la cámara pegada a la ballita.
-const RING_RANGE = 135 // culling desde la cámara de la ballita; no escala con el trazado
-const ROUTE_COLS = ['#38e8ff', '#ff5c8a', '#ffd24a']
 const RING_TIME = { value: 0 }
 
 let _coreMat = null
@@ -68,70 +61,6 @@ function lowRingMat() {
 
 export function anillosWarmup() {
   return [lowRingMat()]
-}
-
-const F0 = {}
-const ringsCache = new WeakMap()
-
-function buildAnillosData(way) {
-  if (ringsCache.has(way)) return ringsCache.get(way)
-  const P = pal(way.theme.id)
-  const baseCol = new THREE.Color(P.mec)
-  const info = routeInfo(way)
-  const rings = []
-  const box = new THREE.Box3()
-
-  for (const seg of way.segments ?? []) {
-    if (seg.air) continue
-    const L = Math.max(seg.length ?? 1, 1)
-    const segStart = info.byI.get(seg.i)?.start ?? 0
-    const col = seg.route >= 0
-      ? baseCol.clone().lerp(new THREE.Color(ROUTE_COLS[seg.route % ROUTE_COLS.length]), 0.35)
-      : baseCol
-    const lanes = lanesOf(seg)
-    for (let li = 0; li < lanes.length; li++) {
-      const lane = lanes[li]
-      const H = halfWidth(lane)
-      const E = H + CURB
-      const sc = (E + TERR * 0.55) * 2.15
-      const minSep2 = Math.max(8 * TRACK_K, E * 3.0) ** 2
-      const step = li === 0 ? RING_STEP : RING_STEP + 4
-      for (let s = 14; s <= L - 10; s += step) {
-        const u = s / L
-        const f = surfFrame(seg, lane.id, u, F0)
-        const pos = f.pos.clone().addScaledVector(f.up, -0.42 * sc)
-        let overlap = false
-        for (let i = rings.length - 1; i >= 0; i--) {
-          if (rings[i].pos.distanceToSquared(pos) < minSep2) { overlap = true; break }
-        }
-        if (overlap) continue
-        box.expandByPoint(pos)
-        rings.push({
-          pos,
-          quat: basisQuat(f.up, f.tangent),
-          scale: sc,
-          phase: (segStart + s) * 0.14,
-          color: col,
-        })
-      }
-    }
-  }
-
-  const n = rings.length
-  const phases = new Float32Array(Math.max(1, n))
-  const tints = new Float32Array(Math.max(1, n) * 3)
-  for (let i = 0; i < n; i++) {
-    phases[i] = rings[i].phase
-    tints[i * 3] = rings[i].color.r
-    tints[i * 3 + 1] = rings[i].color.g
-    tints[i * 3 + 2] = rings[i].color.b
-  }
-  const sphere = new THREE.Sphere()
-  if (!box.isEmpty()) { box.getBoundingSphere(sphere); sphere.radius += 6 * TRACK_K } else sphere.radius = 60 * TRACK_K
-
-  const out = { rings, phases, tints, sphere }
-  ringsCache.set(way, out)
-  return out
 }
 
 function populateRingMesh(mesh, rings) {
