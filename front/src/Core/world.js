@@ -111,7 +111,12 @@ import * as THREE from 'three'
 export const WORLD_SCALE = 2.8
 export const TUBE_SCALE = 1.8
 // Ampliación del mapa (esfera de nodos, panza y arco de los caminos) sin agrandar las pistas: más espacio entre caminos.
-export const SIZE_K = 2.8
+export const SIZE_K = 2.8 * 1.52 // 2.8 (main) × ANCHO_K
+// ANCHO_K: envolvente de un camino (fila de 5 carriles con aire) / envolvente de main (9.7·TK). TODAS las distancias del
+// reparto global (esfera de nodos, panza, arco, separación de rutas, abanicos, uniones, radios de hélice, celdas y pasos
+// de muestreo de la búsqueda) van multiplicadas por él: la relación ancho de camino / espacio disponible es la de main.
+export const ANCHO_K = 1.52
+const AK = ANCHO_K
 // Escala uniforme del trazado: TODO lo espacial (nodos, radios, separaciones, anchos, trenzas, rectas, márgenes, alturas y
 // pasos de muestreo) se multiplica por TRACK_K; la ballita no (BALL_R fijo). Las holguras en radios de pista quedan como con
 // TRACK_K = 1 y la calzada (LANE_W) queda TRACK_K veces más ancha respecto a la ballita: ~6 ballitas de ancho.
@@ -125,6 +130,11 @@ const Y = new THREE.Vector3(0, 1, 0)
 const X = new THREE.Vector3(1, 0, 0)
 const TAU = Math.PI * 2
 const PORT_K = 0.22 // separación angular (tan) entre la entrada y la salida de un puerto
+
+// Diagnóstico del reparto (interruptor): con DIAG.on = true se cuenta en DIAG.rechazos el motivo de cada candidato
+// rechazado por placeWay / evalCand / fila de rutas. tools/diag_reparto.mjs lo imprime. Apagado no cuesta nada.
+export const DIAG = { on: false, rechazos: {} }
+const rej = (k) => { if (DIAG.on) DIAG.rechazos[k] = (DIAG.rechazos[k] || 0) + 1; return null }
 
 export function mulberry32(a) {
   return () => {
@@ -158,7 +168,7 @@ const scaleParam = ({ bow, arch, spread, radius, ...rest }) => ({
   ...rest,
   bow: +(bow * WORLD_SCALE * SIZE_K).toFixed(1) * TK,
   arch: +(arch * WORLD_SCALE * SIZE_K).toFixed(1) * TK,
-  spread: +(spread * WORLD_SCALE).toFixed(1) * TK,
+  spread: +(spread * WORLD_SCALE).toFixed(1) * TK * AK * 1.14, // 1.14: routeExtent creció algo más que ANCHO_K (56.8 / 49.9)
   radius: +(radius * TUBE_SCALE).toFixed(2) * TK,
 })
 export const PARAMS = {
@@ -191,10 +201,10 @@ export const KINDS = {
   portal: { name: 'Portal', emoji: '🌀', w: 0.95, boost: 34, drag: 0, speedK: 2.0, risk: 0.65, air: true, event: true },
   geiser: { name: 'Géiser', emoji: '⛲', w: 1.3, boost: 25, drag: 0, speedK: 1.35, risk: 0.75, air: true, event: true },
   erupcion: { name: 'Erupción', emoji: '🌋', w: 1.4, boost: 31, drag: 0, speedK: 1.45, risk: 0.95, air: true, event: true },
-  espiral: { name: 'Espiral', emoji: '🌀', w: 0.9, boost: 0, drag: 0.8, speedK: 1.0, risk: 0.5, drop: 12 * WS },
-  caida: { name: 'Caída libre', emoji: '🪂', w: 0.75, boost: 0, drag: 0, speedK: 1.45, risk: 0.9, drop: 13 * WS, air: true },
-  cascada: { name: 'Cascada', emoji: '🪜', w: 1.2, boost: 0, drag: 1.1, speedK: 1.15, risk: 0.4, drop: 10 * WS, event: true },
-  embudo: { name: 'Embudo', emoji: '🌪️', w: 0.85, boost: 0, drag: 4, speedK: 0.65, risk: 0.5, drop: 9 * WS },
+  espiral: { name: 'Espiral', emoji: '🌀', w: 0.9, boost: 0, drag: 0.8, speedK: 1.0, risk: 0.5, drop: 12 * WS * 1.52 },
+  caida: { name: 'Caída libre', emoji: '🪂', w: 0.75, boost: 0, drag: 0, speedK: 1.45, risk: 0.9, drop: 13 * WS * 1.52, air: true },
+  cascada: { name: 'Cascada', emoji: '🪜', w: 1.2, boost: 0, drag: 1.1, speedK: 1.15, risk: 0.4, drop: 10 * WS * 1.52, event: true },
+  embudo: { name: 'Embudo', emoji: '🌪️', w: 0.85, boost: 0, drag: 4, speedK: 0.65, risk: 0.5, drop: 9 * WS * 1.52 },
 }
 // Mecanismos que cambian de carril. style: salto (vuelo por el interior), pared (rueda pegada),
 // portal (teletransporte corto). dur: segundos base. fail: probabilidad base de fallar (cae al
@@ -451,9 +461,9 @@ export const carrilLat = (c, edge = CARRIL_EDGE) => ((clamp(c, 0, CARRILES - 1) 
 // El semiancho se limita a BRAID_A para que la fila quepa en el envolvente del reparto global: con 3 carriles el hueco
 // es ROW_GAP completo, con 4 y 5 se reparte BRAID_A (rowGap). ENV_PAD: holgura del envolvente sobre BRAID_A.
 export const ROW_GAP = 26
-export const BRAID_A = 36
+export const BRAID_A = 52
 export const rowGap = (n) => Math.min(ROW_GAP, (2 * BRAID_A) / Math.max(1, n - 1))
-const ENV_PAD = 9.7 * TK - BRAID_A
+const ENV_PAD = 9.7 * TK * AK - BRAID_A // envolvente total = 9.7·TK·ANCHO_K (69.3 u)
 // Cinta visible de un carril (calzada + bordillo + berma, pista.jsx); ver «colisión de cintas visibles» más abajo.
 export const RIBBON_CURB = 0.17 * TK
 export const RIBBON_TERR = 0.55 * TK
@@ -466,13 +476,13 @@ export const ringRadius = (n) => (BRAID_A * Math.sin(Math.PI / 5)) / Math.sin(Ma
 // Calzada fundida («fila»): donde el anillo no cabe (hélices, rizos, embudos y curvas más cerradas que el anillo) los
 // caminos del tramo van en fila coplanar a lo largo de la binormal del eje (no cambia el radio de giro de ninguno),
 // todos con la misma normal (hacia el centro de la curva). FILA_GAP: centro a centro; FILA_W: ancho total con 5 caminos.
-export const FILA_GAP = RIBBON_CLEAR + 1 * TK
+export const FILA_GAP = ROW_GAP // (antes RIBBON_CLEAR + TK = 20 u: 8.5 u de aire, menos que AIRE_LAT) mismo hueco que la fila paralela
 export const FILA_W = (5 - 1) * FILA_GAP + 2 * RIBBON_HALF
 // (espiral y sacacorchos se quedan en anillo: en su zona delgada la fila se doblaba sobre sí misma; ver REPORTE_SEP)
 const FILA_KINDS = new Set(['rizo', 'embudo'])
 const BRAID_PAD = 3.7 * TK // (texto previo: holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
-const BRAID_OPEN = 16 * TK // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
-const BRAID_RAMP = 18 * TK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
+const BRAID_OPEN = 16 * TK * AK + (8.5 + 14) * TK * (AK - 1) // + (NODE_R + GRID_LEN)·(ANCHO_K − 1): la zona de puerto (PORT_ZONE) crece en proporción aunque el nodo y la parrilla no // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
+const BRAID_RAMP = 18 * TK * AK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
 export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon', 'tirabuzon_inv']
 
 // Apertura de la trenza en `u` (0 en las puntas y en las rectas de parrilla/meta, 1 con los caminos abiertos).
@@ -1260,10 +1270,10 @@ function bezierPts(P0, T0, P1, T1) {
 
 const SHAPES = {
   // las vueltas guardan un paso mínimo (PITCH): entre dos vueltas caben los carriles de la trenza
-  espiral: (A, B, P) => coil(A, B, Math.min(2 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => 3.2 * WS * P.coil * bump(t), A, undefined, true),
-  sacacorchos: (A, B, P) => coil(A, B, Math.min(3 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => (P.radius * 1.85 + 4.7 * TK) * bump(t), A, undefined, true),
+  espiral: (A, B, P) => coil(A, B, Math.min(2 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => 3.2 * WS * AK * P.coil * bump(t), A, undefined, true),
+  sacacorchos: (A, B, P) => coil(A, B, Math.min(3 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => (P.radius * 1.85 + 4.7 * TK) * AK * bump(t), A, undefined, true),
   // remolino que se cierra: empieza en el borde del cono (A) y acaba en su vértice (B)
-  embudo: (A, B, P) => { const R = 4.0 * WS * P.coil; return coil(A, B, Math.min(3, Math.max(1, A.distanceTo(B) / (2 * PITCH))), (t) => R * (1 - t), at(A, basis(A, B).u, -R), (t) => 0.5 * t + 0.5 * t * t) },
+  embudo: (A, B, P) => { const R = 4.0 * WS * AK * P.coil; return coil(A, B, Math.min(3, Math.max(1, A.distanceTo(B) / (2 * PITCH))), (t) => R * (1 - t), at(A, basis(A, B).u, -R), (t) => 0.5 * t + 0.5 * t * t) },
   // tiro horizontal: parábola de caída libre
   caida: (A, B) => { const { C } = basis(A, B); return [1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(A.x + C.x * (i / 8), A.y + C.y * (i / 8) ** 2, A.z + C.z * (i / 8))) },
   // un salto largo (un solo arco: sin botes alternados)
@@ -1298,7 +1308,7 @@ function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   if (PLANS[kind]) return cr([A, ...trackPts(kind, A, B, Ta, Tb, opt), B])
   if (kind === 'rizo') {
     // curva de entrada, círculo vertical (desplazado de lado lo justo para no cortarse) y curva de salida
-    const { C, L, c, u, v } = basis(A, B); const r = Math.min(Math.max(3.4 * WS * P.coil, 13 * TK), L * 0.3); const sh = Math.max(P.radius * 2.4, PITCH) // el paso del rizo deja pasar los carriles de la trenza
+    const { C, L, c, u, v } = basis(A, B); const r = Math.min(Math.max(3.4 * WS * AK * P.coil, 13 * TK * AK), L * 0.3); const sh = Math.max(P.radius * 2.4, PITCH) // el paso del rizo deja pasar los carriles de la trenza
     const loop = []
     for (let k = 0; k <= 24; k++) { const a = (k / 24) * TAU; loop.push(at(A, C, 0.5, c, r * Math.sin(a), v, r * (1 - Math.cos(a)), u, sh * (k / 24 - 0.5))) }
     const tIn = c.clone().addScaledVector(u, sh / (TAU * r)).normalize()
@@ -1344,13 +1354,13 @@ function wrapMid(node, dir, target) {
 
 // Extensión real de la ruta en `u` (carriles abiertos de la trenza + ancho de pista), para medir rutas de un mismo sentido.
 export const routeExtent = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + LANE_W / 2 + 0.5 * TK)
-export const ROUTE_JOIN = 56 * TK // radio (u, euclidiano) alrededor de fork/cross/merge donde las rutas aún se abren en abanico por diseño
+export const ROUTE_JOIN = 56 * TK * AK // radio (u, euclidiano) alrededor de fork/cross/merge donde las rutas aún se abren en abanico por diseño
 export const SPREAD_K = 1.3 // separación lateral entre rutas de un mismo sentido, sobre P.spread
 // Si dos rutas de una mitad se tocan (routeSlack < ROUTE_MARGIN) se prueba otra fila: otro orden de las rutas (PERMS) y luego más apertura.
 const SPREAD_STEPS = [1, 1.4, 1.9]
 const PERMS = { 2: [[0, 1], [1, 0]], 3: [[0, 1, 2], [2, 1, 0], [1, 0, 2], [0, 2, 1], [1, 2, 0], [2, 0, 1]] }
 const ROUTE_MARGIN = 1.5 * TK // (u) el muestreo de la búsqueda (cada ~5 u) es más grueso que el de tools/overlap.mjs
-const FAN_D = 105 * TK // distancia (u) del hub a los puntos de paso Q0/Q1: las rutas se abren en abanico en ese tramo
+const FAN_D = 105 * TK * AK // distancia (u) del hub a los puntos de paso Q0/Q1: las rutas se abren en abanico en ese tramo
 
 // Par en zona de puerto: uno de los dos puntos está a menos de PORT_ZONE de un nodo al que también llega (o del que sale) el otro camino.
 // Misma regla en tools/overlap.mjs.
@@ -1360,7 +1370,7 @@ function sampleWayPoints(way, steps = 14) {
   // arranque (head) o remate (tail) de cada mitad de ruta: ahí las rutas confluyen en la unión
   for (const s of way.segments) {
     // fino (28): un punto cada ~1.5 u para no saltarse cruces entre tubos; grueso (14): descarte rápido
-    const n = steps === 28 ? Math.max(12, Math.ceil(s.length / (1.5 * TK))) : steps
+    const n = steps === 28 ? Math.max(12, Math.ceil(s.length / (1.5 * TK * AK))) : steps
     for (let k = 0; k <= n; k++) {
       const u = k / n
       const p = s.curve.getPointAt(u)
@@ -1378,10 +1388,10 @@ function sampleWayPoints(way, steps = 14) {
 // Huelgo mínimo entre rutas distintas de un mismo sentido (fuera de las uniones), menos 1.5 radios de pista.
 // `only` (mitad 0/1): sólo pares en que al menos un punto es de esa mitad.
 // Celda ROUTE_CELL: todo par a menos de ROUTE_CELL se mide; más lejos la holgura ya pasa de ROUTE_CELL - 2·ext - 1.5·radio (> ROUTE_MARGIN).
-const ROUTE_CELL = 20 * TK
+const ROUTE_CELL = 20 * TK * AK
 function routeSlack(pts, only = -1) {
   // borde de la unión medido 6 u antes: allí las rutas convergen y el muestreo grueso (~5 u) se saltaba el punto más cercano
-  const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN - 6 * TK)
+  const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN - 6 * TK * AK)
   const cell = (v) => Math.floor(v / ROUTE_CELL)
   for (const q of pool) { const key = cellKey(cell(q.p.x), cell(q.p.y), cell(q.p.z)); let b = grid.get(key); if (!b) grid.set(key, b = []); b.push(q) }
   let min = ROUTE_CELL
@@ -1401,7 +1411,7 @@ function routeSlack(pts, only = -1) {
   return min
 }
 
-const SPATIAL_CELL = 32 * TK // >= 2 * (BRAID_A + BRAID_PAD) + TARGET: el vecindario ±1 cubre toda la holgura medida
+const SPATIAL_CELL = 32 * TK * AK // >= 2 * (BRAID_A + BRAID_PAD) + TARGET: el vecindario ±1 cubre toda la holgura medida
 const CAND_ARC_DIV = 48
 // clave numérica de celda (sin cadenas): coordenadas de celda en ±1024
 const cellKey = (x, y, z) => ((x + 1024) * 2048 + (y + 1024)) * 2048 + (z + 1024)
@@ -1427,6 +1437,7 @@ function placeWayAt(world, circuit, from, to, placed, pick) {
 
 // holgura que se busca primero: los primeros caminos no deben agotar el espacio de los demás
 const TARGET = 6 * TK // holgura (u) sobre los 1.5 radios de pista
+const HUB_MIN = 24 * TK * AK // distancia mínima (u) entre uniones de caminos distintos
 const TARGET_LOW = 3 * TK // holgura que se acepta al cerrar una pasada completa de la búsqueda
 const SPINE_MAX = 1.6 * SPHERE_R // radio máximo de la espina (sobre ella van rizos, saltos y arcos; la cáscara llega a 1.8 R)
 const LAYER_K = 0.42 // grosor de la cáscara de altitud de los caminos (fracción de SPHERE_R): los cruces se resuelven por altura
@@ -1448,17 +1459,17 @@ function placeWay(world, circuit, from, to, placed) {
         const d2 = pt.p.distanceToSquared(o.pos)
         if (d2 < nodeAcceptSq) minNode = Math.min(minNode, Math.sqrt(d2) - pt.r - nodeMargin)
       }
-      if (pt.kind !== 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R + pt.r) ** 2) return null
-      if (pt.kind !== 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R + pt.r) ** 2) return null
-      if (pt.kind === 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R - 0.005 * TK) ** 2) return null
-      if (pt.kind === 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R - 0.005 * TK) ** 2) return null
+      if (pt.kind !== 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R + pt.r) ** 2) return rej('nulo:roza_nodo_origen:' + pt.kind)
+      if (pt.kind !== 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R + pt.r) ** 2) return rej('nulo:roza_nodo_destino:' + pt.kind)
+      if (pt.kind === 'salida' && pt.p.distanceToSquared(a.pos) <= (NODE_R - 0.005 * TK) ** 2) return rej('nulo:salida_dentro_nodo')
+      if (pt.kind === 'llegada' && pt.p.distanceToSquared(b.pos) <= (NODE_R - 0.005 * TK) ** 2) return rej('nulo:llegada_dentro_nodo')
     }
     if (minNode === Infinity) minNode = 1.5 * TK
     let minTube = Infinity; let minHub = Infinity; let minAt = null
     for (const prev of placed) {
       for (const h1 of cand.junctions) for (const h2 of prev.hubs) minHub = Math.min(minHub, h1.pos.distanceTo(h2.pos))
     }
-    if ((minNode < 1.5 * TK || minHub < 24 * TK) && Math.min(TARGET, minNode + TK, minHub * 0.2) <= floor) return { minTube: -Infinity, minNode, minHub, minAt: null }
+    if ((minNode < 1.5 * TK || minHub < HUB_MIN) && Math.min(TARGET, minNode + TK, minHub * 0.2) <= floor) return { minTube: -Infinity, minNode, minHub, minAt: null }
     const grid = steps === 14 ? placed.gridC : placed.grid
     let lastKey = NaN; let near = null // puntos consecutivos comparten celda: se reúnen sus 27 cubetas una sola vez
     if (grid) for (const pt of pts) {
@@ -1484,8 +1495,10 @@ function placeWay(world, circuit, from, to, placed) {
     return { minTube, minNode, minHub, minAt }
   }
 
+  // diagnóstico (DIAG.on): motivo que limita a cada candidato rechazado
+  const rejRes = (fase, r) => { if (DIAG.on) rej(fase + ':' + (r.minNode < 1.5 * TK ? 'nodo_ajeno' : r.minHub < HUB_MIN ? 'uniones_cerca' : r.minTube < CLEAR ? 'tubo<CLEAR:' + (r.minAt ? r.minAt.join('/') : '?') : r.minTube < TARGET ? 'tubo<TARGET' : 'peor_que_el_mejor')) }
   const CLEAR = 0.6 * TK // holgura mínima (u) sobre los 1.5 radios de pista entre envolventes de caminos distintos (margen del muestreo)
-  const okRes = (r, thr) => r.minTube >= thr && r.minNode >= 1.5 * TK && r.minHub >= 24 * TK
+  const okRes = (r, thr) => r.minTube >= thr && r.minNode >= 1.5 * TK && r.minHub >= HUB_MIN
   const scoreOf = (r) => Math.min(TARGET, r.minTube < CLEAR ? r.minTube - 10 * TK : Math.min(r.minTube, r.minNode + TK, r.minHub * 0.2))
   const commit = (c) => {
     const w = buildWay(world, circuit, from, to, c.theta, c.bowExtra, true, c.salt)
@@ -1515,13 +1528,14 @@ function placeWay(world, circuit, from, to, placed) {
     const s = scoreOf({ minTube, minNode, minHub }); bounds.set(key, s); return s
   }
   const tryCand = (theta, bowExtra, salt) => {
-    if (hubBound(theta, bowExtra) <= bestScore) return false // ponytail: cota heurística (minNode puede sesgarla), basta para podar
+    if (hubBound(theta, bowExtra) <= bestScore) { rej('poda:cota_uniones'); return false } // ponytail: cota heurística (minNode puede sesgarla), basta para podar
     // criba gruesa sin búsqueda de fila de rutas (sólo cota para podar); la fina mide el camino exacto que se colocaría
     const coarse = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt, false), 14, bestScore)
-    if (!coarse || scoreOf(coarse) <= bestScore) return false
+    if (!coarse || scoreOf(coarse) <= bestScore) { if (coarse) rejRes('gruesa', coarse); return false }
     const res = evalCand(buildWay(world, circuit, from, to, theta, bowExtra, false, salt), 28, bestScore)
     if (!res) return false
     const score = scoreOf(res)
+    if (!okRes(res, TARGET)) rejRes('fina', res)
     if (score > bestScore) { bestScore = score; best = { theta, bowExtra, salt }; bestRes = res }
     return okRes(res, TARGET)
   }
@@ -1545,7 +1559,7 @@ function placeWay(world, circuit, from, to, placed) {
     }
   }
   if (best && bestRes && okRes(bestRes, CLEAR)) return commit(best)
-  world.failed = true
+  world.failed = true; rej('FALLO_camino')
   ;(world.failLog ||= []).push({ way: world.ways.length, circuit: circuit.idx, ...bestRes })
   return commit(best || { theta: baseTheta, bowExtra: 0, salt: 0 })
 }
@@ -1695,7 +1709,7 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       let L0 = 0; let q0 = cv.getPoint(0)
       for (let k = 1; k <= 24; k++) { const q = cv.getPoint(k / 24); L0 += q.distanceTo(q0); q0 = q }
       // 24 cuerdas subestiman el largo de hélices y rizos: u se normaliza con el acumulado fino (si no, acc/L > 1 cierra la trenza y la extensión sale corta)
-      const n = clamp(Math.ceil(L0 / (5 * TK)), 8, 200); const ps = []; const accs = []; let acc = 0; let prev = null
+      const n = clamp(Math.ceil(L0 / (5 * TK * AK)), 8, 200); const ps = []; const accs = []; let acc = 0; let prev = null
       for (let k = 0; k <= n; k++) { const p = cv.getPoint(k / n); if (prev) acc += p.distanceTo(prev); prev = p; ps.push(p); accs.push(acc) }
       const pseudo = { length: acc, kind: halves[h][m], radius: P.radius }
       for (let k = 0; k <= n; k++) {
@@ -1715,8 +1729,10 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
       buildHalf(h, mul, perm); sampleHalf(h); last = { mul, perm }
       const rs = routeSlack(h ? halfPts[0].concat(halfPts[1]) : halfPts[0], h)
       if (rs >= ROUTE_MARGIN) { best = null; break search }
+      if (commit) rej('fila_rutas:intento_con_roce')
       if (!best || rs > best.rs) best = { mul, perm, rs }
     }
+    if (best && commit) rej('fila_rutas:SIN_HUECO(mejor ' + Math.round(best.rs) + ')')
     if (best && (best.mul !== last.mul || best.perm !== last.perm)) { buildHalf(h, best.mul, best.perm); sampleHalf(h) }
   }
   // perm[r]: puesto de la ruta r en la fila (0 = un lado, n-1 = el otro)
