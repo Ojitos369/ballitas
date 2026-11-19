@@ -42,7 +42,7 @@ const encadenar = (prev, fn) => (shader, renderer) => {
  * - `metal`: factor de metalicidad dentro del planeta (sin mapa de entorno, el metal se veía negro).
  * Con k = 0 el resultado es idéntico al material original.
  */
-export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal = 1, xray = true, relleno = 0.7, plano = 0 } = {}) {
+export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal = 1, xray = true, relleno = 0.7, plano = 0, adoquin = false } = {}) {
   if (!mat || mat.userData._foco) return mat
   mat.userData._foco = true
   const planoU = { value: plano }
@@ -91,7 +91,17 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
           }
         }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        diffuseColor.rgb = mix(diffuseColor.rgb, uFocoLift.rgb, uFocoLift.a * uFocoK);`)
+        diffuseColor.rgb = mix(diffuseColor.rgb, uFocoLift.rgb, uFocoLift.a * uFocoK);
+        ${adoquin ? `if (uFocoK > 0.001) {
+          // adoquinado a escala de ballita en coordenadas de mundo: tono por pieza (±10 %) y junta oscura
+          vec3 _q = vFocoW * 1.7;
+          vec3 _c = floor(_q);
+          vec3 _f = abs(fract(_q) - 0.5);
+          float _j = smoothstep(0.43, 0.49, max(_f.x, max(_f.y, _f.z)));
+          float _t = fract(sin(dot(_c, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          float _m = 0.92 + 0.16 * _t;
+          diffuseColor.rgb *= mix(1.0, _m * (1.0 - 0.22 * _j), uFocoK);
+        }` : ''}`)
       // plano: dentro del planeta se aplana el mapa de normales (en piezas torneadas sus UV radiales pintaban rayos)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         normal = normalize(mix(normal, nonPerturbedNormal, uFocoPlano * uFocoK));`)
@@ -107,7 +117,7 @@ export function conFoco(mat, { desat = 0.55, oscurece = 0.35, lift = null, metal
           gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(_fl), _ff * uFocoPar.x) * (1.0 - _ff * uFocoPar.y);
         }`)
   })
-  mat.customProgramCacheKey = () => `${prevKey ? `${prevKey}|` : ''}foco-v2${xray ? '' : '-nx'}`
+  mat.customProgramCacheKey = () => `${prevKey ? `${prevKey}|` : ''}foco-v2${xray ? '' : '-nx'}${adoquin ? '-adq' : ''}`
   mat.needsUpdate = true
   return mat
 }

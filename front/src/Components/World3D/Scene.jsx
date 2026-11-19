@@ -115,7 +115,8 @@ const NODE_PITCH_VERT = 0.3 // cabeceo extra en planeta con pantalla vertical (~
 // y el brazo crece un poco, para que entren la calle por delante y el destino
 const NODE_FOV_VERT = 16 // grados extra de FOV en planeta con pantalla vertical
 const NODE_FOV_HORIZ = 6 // y con pantalla horizontal
-const NODE_DIST_K = 0.3 // brazo extra (fracción) en planeta
+const NODE_DIST_K = 0.4 // brazo extra (fracción) en planeta
+const NODE_DIST_K_VERT = 0.8 // y extra adicional con pantalla vertical (medido: con +30 % la ballita aún ocupaba ~20 % del alto)
 const NODE_SUBIR = 0.75// cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
@@ -1542,7 +1543,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       // abajo (los edificios son radiales, desde arriba no se interponen); con resorte, sin saltos
       ce.vert = (ce.vert ?? 0) + (((camera.aspect || 1) < 0.87 ? 1 : 0) - (ce.vert ?? 0)) * (1 - Math.exp(-3 * h))
       const pitch = Math.min(1.35, fs.rel.pitch + (NODE_PITCH_PLUS + NODE_PITCH_VERT * ce.vert) * (fs.nodeBlend ?? 0) + fs.uPitch + NODE_SUBIR * camExtra.current.subir + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0))
-      const dist = fs.rel.dist * distK * (1 + NODE_DIST_K * (fs.nodeBlend ?? 0))
+      const dist = fs.rel.dist * distK * (1 + (NODE_DIST_K + NODE_DIST_K_VERT * ce.vert) * (fs.nodeBlend ?? 0))
       targetFov += (NODE_FOV_HORIZ + (NODE_FOV_VERT - NODE_FOV_HORIZ) * ce.vert) * (fs.nodeBlend ?? 0)
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal

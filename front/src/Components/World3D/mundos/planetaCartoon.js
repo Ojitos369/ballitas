@@ -398,11 +398,11 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
       // juntas: grietas cálidas en lava, trazas luminosas en ácido/neón, grietas azules en hielo, sombra en el resto
       vec3 cJunta = det * 0.74;
       float luzJunta = 0.0;
-      if (pType == 3) { cJunta = uCol4; luzJunta = 0.75; }
-      else if (pType == 5) { cJunta = mix(uCol3, uCol4, 0.5); luzJunta = 0.55; }
+      if (pType == 3) { cJunta = mix(uCol3, uCol4, 0.5); luzJunta = 0.4; }
+      else if (pType == 5) { cJunta = mix(uCol3, uCol4, 0.5); luzJunta = 0.35; }
       else if (pType == 4) { cJunta = mix(uCol0, det, 0.5); }
       else if (pType == 6) { cJunta = mix(uCol3, vec3(1.0), 0.25); luzJunta = 0.2; }
-      det = mix(det, cJunta, junta * 0.8);
+      det = mix(det, cJunta, junta * 0.6);
       baseCol = mix(baseCol, det, uNear);
       nearGrain = g2 * 0.07 + g3 * 0.04 - junta * 0.06;
       bumpNdotL += nearGrain * uNear;

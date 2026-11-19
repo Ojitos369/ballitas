@@ -22,6 +22,13 @@ import {
 import { registerWorldForVistas, focusWorldNode, escalaMapa } from './Vistas.jsx'
 import { FOCO, conFoco, nodoEnFoco } from './mundos/foco.js'
 
+// Pavimento de la calle dentro del planeta: tono medio del bioma con algo de piedra clara (luminancia ~0.42)
+function tonoCalle(biome) {
+  const c = new THREE.Color(biome.groundMid).lerp(new THREE.Color(biome.roadColor), 0.25).lerp(new THREE.Color('#cbc4b4'), 0.3)
+  const l = c.r * 0.299 + c.g * 0.587 + c.b * 0.114
+  return c.multiplyScalar(THREE.MathUtils.clamp(0.42 / Math.max(l, 0.04), 0.7, 2.2))
+}
+
 function applyCityFade(mat) {
   if (!mat || mat.userData._camFade) return
   mat.userData._camFade = true
@@ -1248,7 +1255,9 @@ function Planet({ node, world, tex }) {
     // con foco (k > 0.02), así que el mapa y la vista camino no cambian.
     emissive: new THREE.Color(biome.roadColor).lerp(new THREE.Color('#d6d0c3'), 0.72),
     emissiveIntensity: 0.32,
-  }), { desat: 0.4, oscurece: 0.3, xray: false, relleno: 0.85 }), [biome.roadColor])
+    // dentro del planeta (k → 1) el pavimento toma el tono del bioma (lift) y un adoquinado a escala de ballita:
+    // antes era un gris neutro que llenaba media pantalla. Con k = 0 no cambia nada.
+  }), { desat: 0.4, oscurece: 0.3, xray: false, relleno: 0.85, adoquin: true, lift: [tonoCalle(biome), 0.7] }), [biome])
   const lineMat = useMemo(() => new THREE.MeshStandardMaterial({
     color: '#2a3048',
     emissive: biome.cityLight,

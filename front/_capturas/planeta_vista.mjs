@@ -30,7 +30,19 @@ async function estado(p) {
     for (const t of document.querySelectorAll('.tag.node')) {
       const s = t.querySelectorAll('span'); if (s[0]?.textContent.includes(n?.name)) bioma = s[1]?.textContent ?? ''
     }
-    return { id: b.id, name: b.name, phase: b.phase, node: b.node, planeta: n?.name, bioma, dest: b.dest?.name, sx: Math.round(sx), sy: Math.round(sy), card: card ? [Math.round(card.left), Math.round(card.top), Math.round(card.width), Math.round(card.height)] : null, tapa }
+    // tamaño aparente de la ballita (% del alto): radio ~0.75 u a lo largo del «arriba» de la cámara
+    const e = c.camera.matrixWorld.elements
+    const top = (c.bp ?? b.pos).clone(); top.x += e[4] * 0.75; top.y += e[5] * 0.75; top.z += e[6] * 0.75; top.project(c.camera)
+    const altoPct = +(Math.abs(top.y - bp.y) * 100).toFixed(1) // (2 r en NDC) / 2 * 100
+    // destino actual en pantalla
+    const F = window.__ballitasFoco
+    let destVis = null
+    if (F && F.k.value > 0.5 && F.destKind) { const dp = F.dest.value.clone().project(c.camera); destVis = dp.z < 1 && Math.abs(dp.x) < 1 && Math.abs(dp.y) < 1 }
+    // rótulo del destino entero dentro de la pantalla
+    let rotulo = null
+    const rt = document.querySelector('.tag.destino-foco')
+    if (rt && rt.offsetParent !== null) { const r = rt.getBoundingClientRect(); if (r.width > 0) rotulo = r.left >= -1 && r.right <= W + 1 && r.top >= -1 && r.bottom <= H + 1 ? 'entero' : 'cortado' }
+    return { id: b.id, name: b.name, phase: b.phase, node: b.node, planeta: n?.name, bioma, dest: b.dest?.name, altoPct, destVis, rotulo, sx: Math.round(sx), sy: Math.round(sy), card: card ? [Math.round(card.left), Math.round(card.top), Math.round(card.width), Math.round(card.height)] : null, tapa }
   })
 }
 
@@ -127,6 +139,6 @@ for (const vp of vpArg === 'ambos' ? ['desk', 'movil'] : [vpArg]) out[vp] = awai
 writeFileSync(`${dir}/resumen.json`, JSON.stringify(out, null, 1))
 for (const [vp, r] of Object.entries(out)) {
   console.log(`== ${vp}: ${r.filas.length} capturas, ${new Set(r.filas.map((f) => f.planeta)).size} planetas, errores ${r.nErr}`)
-  for (const f of r.filas) console.log(`${f.img}\t${f.bioma}\tdest=${f.dest}\tfps=${f.fps}\tcalls=${f.calls}\ttris=${f.tris}\tliso=${f.lisoPct}%\tball=(${f.sx},${f.sy})\ttapa=${f.tapa}\tcard=${f.card}`)
+  for (const f of r.filas) console.log(`${f.img}\t${f.bioma}\tdest=${f.dest}\tfps=${f.fps}\tcalls=${f.calls}\ttris=${f.tris}\tliso=${f.lisoPct}%\talto=${f.altoPct}%\tdestVis=${f.destVis}\trotulo=${f.rotulo}\tball=(${f.sx},${f.sy})\ttapa=${f.tapa}\tcard=${f.card}`)
   if (r.errores.length) console.log('errores:', r.errores)
 }
