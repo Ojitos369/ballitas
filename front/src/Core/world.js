@@ -445,8 +445,24 @@ export const LANE_W = +(0.4 * 2.6).toFixed(2) * TK
 // Semiancho útil de la calzada para el centro de la ballita y desvío lateral (u) del carril c (0..CARRILES-1).
 export const CARRIL_EDGE = LANE_W / 2 - BALL_R * 0.85
 export const carrilLat = (c, edge = CARRIL_EDGE) => ((clamp(c, 0, CARRILES - 1) / (CARRILES - 1)) - 0.5) * 2 * edge
-export const BRAID_A = 5.2 * TK // separación nominal (u) de cada camino respecto al central en el tramo abierto
-const BRAID_PAD = 4.5 * TK // holgura del envolvente para ancho de pista, ballita y arcos
+export const BRAID_A = 6 * TK // radio (u) del anillo de la trenza abierta con 5 caminos: cuerda entre vecinos de 33 u (más que el gálibo)
+// Cinta visible de un carril (calzada + bordillo + berma, pista.jsx); ver «colisión de cintas visibles» más abajo.
+export const RIBBON_CURB = 0.17 * TK
+export const RIBBON_TERR = 0.55 * TK
+export const RIBBON_HALF = LANE_W / 2 + RIBBON_CURB + RIBBON_TERR
+export const RIBBON_GAP = 0.8 * TK // hueco entre cintas: una ballita con TRACK_K = 1 (escala con el trazado)
+export const RIBBON_CLEAR = 2 * RIBBON_HALF + RIBBON_GAP
+// Todos los caminos van sobre el anillo (ninguno por el eje): con n caminos el radio se ajusta para que la cuerda entre
+// vecinos sea siempre la de 5 caminos. Así ningún camino pasa por encima de otro a menos del gálibo.
+export const ringRadius = (n) => (BRAID_A * Math.sin(Math.PI / 5)) / Math.sin(Math.PI / clamp(n, 3, 5))
+// Calzada fundida («fila»): donde el anillo no cabe (hélices, rizos, embudos y curvas más cerradas que el anillo) los
+// caminos del tramo van en fila coplanar a lo largo de la binormal del eje (no cambia el radio de giro de ninguno),
+// todos con la misma normal (hacia el centro de la curva). FILA_GAP: centro a centro; FILA_W: ancho total con 5 caminos.
+export const FILA_GAP = RIBBON_CLEAR + 1 * TK
+export const FILA_W = (5 - 1) * FILA_GAP + 2 * RIBBON_HALF
+// (espiral y sacacorchos se quedan en anillo: en su zona delgada la fila se doblaba sobre sí misma; ver REPORTE_SEP)
+const FILA_KINDS = new Set(['rizo', 'embudo'])
+const BRAID_PAD = 3.7 * TK // holgura del envolvente para ancho de pista, ballita y arcos (BRAID_A + BRAID_PAD = 9.7·TK, igual que antes de ensanchar el anillo: el reparto global no pierde sitio)
 const BRAID_OPEN = 16 * TK // retardo (u) extra antes de abrir la trenza en las rectas de parrilla/meta
 const BRAID_RAMP = 18 * TK // largo (u) de la apertura/cierre de la trenza en cada punta del tramo
 export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon', 'tirabuzon_inv']
@@ -467,9 +483,12 @@ export function braidEnv(seg, u, hubs = true) {
 const NODE_OPEN = 8 * TK
 const HUB_OPEN = 6 * TK
 const OPEN_RAMP = 16 * TK
+const FILA_TWIST = 8 * TK
+const FILA_TURN = 0.008 // (rad/u) giro máximo de la dirección de la fila a lo largo del tramo
 export function braidDelay(seg, hubs = true) {
   if (!hubs) return [seg.kind === 'salida' ? GRID_LEN + 2 * TK + BRAID_OPEN : 0, seg.kind === 'llegada' ? FINISH_LEN + 2 * TK + BRAID_OPEN : 0]
-  return [seg.kind === 'salida' ? NODE_OPEN : seg.hubA ? HUB_OPEN : 0, seg.kind === 'llegada' ? NODE_OPEN : seg.hubB ? HUB_OPEN : 0]
+  const m = seg.fila ? FILA_TWIST : 0 // la fila gira hasta su normal mientras los carriles aún van juntos (una sola cinta)
+  return [Math.max(m, seg.kind === 'salida' ? NODE_OPEN : seg.hubA ? HUB_OPEN : 0), Math.max(m, seg.kind === 'llegada' ? NODE_OPEN : seg.hubB ? HUB_OPEN : 0)]
 }
 // Radio del envolvente de la trenza alrededor del eje (para separar pistas distintas; la búsqueda de huecos no cuenta
 // HUB_OPEN, así sus elecciones no cambian y el envolvente queda del lado holgado).
@@ -477,6 +496,7 @@ export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(s
 
 // Giro propio (rad) del camino alrededor de su avance; 0 (mod 2π) en las puntas.
 function rollAt(seg, lane, u) {
+  if (seg._braid?.fila) return lerpArr(seg._braid.roll, u) // calzada fundida: todos con la misma normal
   if (!lane || lane.roll === 'plano' || !seg._braid) return 0
   const e = braidEnv(seg, u)
   if (lane.roll === 'cabeza') return Math.PI * e
@@ -493,7 +513,7 @@ export function laneAngle(seg, laneId, u) {
   if (!l) return 0
   const a = rollAt(seg, l, u)
   const bk = seg._bank
-  if (!bk) return a
+  if (!bk || seg._braid?.fila) return a // la fila ya mira al centro de la curva; un peralte por carril la escalonaría
   const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y)
   return m < 1e-6 ? a : a + m * Math.sin(angDiff(a, Math.atan2(y, x)))
 }
@@ -728,7 +748,7 @@ function buildSurface(s, rng) {
   const nr = clamp(Math.ceil(L / (0.5 * TK)), 32, 8000) // tramos largos (mapa grande) siguen muestreados a ~0.5 u (× TK)
   s._relief = { n: nr, h: new Map() }
   for (const lane of s.lanes) {
-    const feats = []
+    const feats = []; const fila = !!s._braid?.fila // calzada fundida: firme liso, los carriles quedan coplanares
     for (let j = ri(rng, R.n[0], R.n[1]); j > 0; j--) {
       feats.push({ c: (0.12 + rng() * 0.76) * L, w: (4 + rng() * 5) * TK, h: (R.h[0] + rng() * (R.h[1] - R.h[0])) * TK * (rng() < 0.35 ? -1 : 1) })
     }
@@ -739,6 +759,7 @@ function buildSurface(s, rng) {
       while (kicks.some(([q]) => Math.abs(q - p) < 2.5 * KICK_DROP)) p += 2.5 * KICK_DROP // sus caídas no se apilan (pendiente máx. del relieve)
       kicks.push([Math.min(p, L - 8 * TK), 0.5 * TK, 7 * TK])
     }
+    if (fila) { feats.length = 0; kicks.length = 0 }
     const arr = new Float32Array(nr + 1)
     for (let i = 0; i <= nr; i++) {
       const x = (i / nr) * L; let h = RELIEF_BASE
@@ -757,6 +778,7 @@ function buildSurface(s, rng) {
 // separados por más de LANE_SELF de arco deben dejar LANE_GAP entre sus carriles más cercanos.
 const LANE_SELF = 25 * TK
 const LANE_GAP = LANE_W * (1 + MIN_GAP_K / 2) // centro a centro mínimo entre carriles: su ancho + 1.5 radios de pista (radio de carril = LANE_W / 2)
+const RING_MIN = (RIBBON_CLEAR + 1.5 * TK) / (2 * Math.sin(Math.PI / 5))
 const LANE_MARGIN = LANE_W * 0.6 // holgura extra sobre LANE_GAP: el muestreo y el suavizado de la cota no dejan los carriles al ras
 function braidCap(C, N, step) {
   const CELL = 13 * TK; const grid = new Map(); const key = (x, y, z) => `${x},${y},${z}`
@@ -785,7 +807,8 @@ function braidCap(C, N, step) {
     if (la < 1e-6 || lb < 1e-6) continue
     const ang = Math.acos(clamp((ax * bx + ay * by + az * bz) / (la * lb), -1, 1))
     // sin bajar del mínimo que separa carriles (central contra anillo): en codos muy cerrados manda la separación
-    if (ang > 1e-4) cap[i] = Math.min(cap[i], Math.max(LANE_GAP + LANE_MARGIN, 0.8 * ((la + lb) / 2 / ang)))
+    // (RING_MIN: con todos los caminos en el anillo, la cuerda entre vecinos no baja de RIBBON_CLEAR + 1.5·TK)
+    if (ang > 1e-4) cap[i] = Math.min(cap[i], Math.max(RING_MIN, 0.8 * ((la + lb) / 2 / ang)))
   }
   // el mínimo se extiende y se suaviza: el radio de la trenza no da saltos
   const w = Math.max(2, Math.ceil((6 * TK) / step)); const lo = new Float32Array(N + 1); const out = new Float32Array(N + 1)
@@ -799,7 +822,8 @@ function buildBraid(s) {
   const N = clamp(Math.ceil(s.length / (1.5 * TK)), 48, 1200)
   const lanes = s.lanes; const P = lanes.map(() => new Float32Array((N + 1) * 3)); const env = new Float32Array(N + 1)
   const tangent = new THREE.Vector3(); const ref = new THREE.Vector3(); const priorRef = new THREE.Vector3(); const side = new THREE.Vector3(); const center = new THREE.Vector3()
-  const C = new Float32Array((N + 1) * 3); const R = new Float32Array((N + 1) * 3); const S = new Float32Array((N + 1) * 3)
+  const C = new Float32Array((N + 1) * 3); const R = new Float32Array((N + 1) * 3); const S = new Float32Array((N + 1) * 3); const Tn = new Float32Array((N + 1) * 3)
+  const angDiffSigned = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU; return d }
   for (let i = 0; i <= N; i++) {
     const u = i / N; const f = wallFrame(s, 0, u, 0, {})
     center.copy(f.axis); segmentTangent(s, u, tangent)
@@ -808,24 +832,93 @@ function buildBraid(s) {
     if (ref.lengthSq() < 1e-8) ref.set(1, 0, 0).addScaledVector(tangent, -tangent.x)
     ref.normalize(); side.crossVectors(tangent, ref).normalize()
     priorRef.copy(ref)
-    env[i] = braidEnv(s, u)
-    center.toArray(C, i * 3); ref.toArray(R, i * 3); side.toArray(S, i * 3)
+    env[i] = braidEnv(s, u) // (la fila lo recalcula: su zona cerrada es más larga)
+    center.toArray(C, i * 3); ref.toArray(R, i * 3); side.toArray(S, i * 3); tangent.toArray(Tn, i * 3)
   }
-  const cap = braidCap(C, N, s.length / N)
-  const rad = new Float32Array(N + 1)
-  for (let i = 0; i <= N; i++) rad[i] = Math.max(0, Math.min(BRAID_A * env[i], cap[i]))
-  for (let i = 0; i <= N; i++) {
-    const u = i / N
-    for (let j = 0; j < lanes.length; j++) {
-      const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
-      const ringCount = Math.max(1, lanes.length - 1)
-      const theta = id === 0 ? 0 : ((id - 1) * TAU / ringCount + u * TAU)
-      const radius = id === 0 ? 0 : rad[i]
-      for (let k = 0; k < 3; k++) dst[i * 3 + k] = C[i * 3 + k] + R[i * 3 + k] * Math.cos(theta) * radius + S[i * 3 + k] * Math.sin(theta) * radius
+  const step = s.length / N
+  const cap = braidCap(C, N, step)
+  const rad = new Float32Array(N + 1); const nl = lanes.length; const ringR = ringRadius(nl)
+  // fila (calzada fundida) según el tipo de tramo; en los demás el anillo se estrecha con cap donde no cabe
+  let fila = FILA_KINDS.has(s.kind) && !s.air
+
+  let ang = null; let roll = null
+  if (fila) {
+    s.fila = true; for (let i = 0; i <= N; i++) env[i] = braidEnv(s, i / N)
+    // binormal cruda (T[i-w] × T[i+w], módulo ~ curvatura), promediada; se recorre con transporte paralelo, signo
+    // continuo y giro limitado: en las rectas conserva la dirección y nunca da un vuelco.
+    const V = (a, i) => new THREE.Vector3(a[i * 3], a[i * 3 + 1], a[i * 3 + 2])
+    // La dirección de la fila es el promedio de la binormal en una ventana de ~una vuelta: en una hélice eso es su EJE
+    // (constante), así la fila es una banda de cilindro sin torsión; la binormal local la retorcería como una hélice.
+    const w = Math.max(1, Math.round((6 * TK) / step)); const w2 = Math.max(1, Math.round((24 * TK) / step))
+    const raw = []; for (let i = 0; i <= N; i++) raw.push(V(Tn, Math.max(0, i - w)).cross(V(Tn, Math.min(N, i + w))))
+    const pre = [new THREE.Vector3()]; for (let i = 0; i <= N; i++) pre.push(pre[i].clone().add(raw[i]))
+    const avg = raw.map((_, i) => { const lo = Math.max(0, i - w2); const hi = Math.min(N, i + w2); return pre[hi + 1].clone().sub(pre[lo]).divideScalar(hi - lo + 1) })
+    // Donde la hélice es delgada (avanza casi recta: |media de T| alto) su eje casi coincide con el avance y no sirve de
+    // fila: ahí se conserva una dirección fija perpendicular al avance medio (los carriles son copias trasladadas del
+    // eje). El paso de una a otra es lento (FILA_TURN rad/u): un giro rápido de la fila la retorcería como una hélice.
+    const preT = [new THREE.Vector3()]; for (let i = 0; i <= N; i++) preT.push(preT[i].clone().add(V(Tn, i)))
+    const avgT = raw.map((_, i) => { const lo = Math.max(0, i - w2); const hi = Math.min(N, i + w2); return preT[hi + 1].clone().sub(preT[lo]).divideScalar(hi - lo + 1) })
+    const B = []; const v = new THREE.Vector3(); const tg = new THREE.Vector3(); const wv = new THREE.Vector3(); const mt = new THREE.Vector3(); const maxStep = FILA_TURN * step; let vote = 0
+    const EPS = 0.02
+    // no paralela al avance: se le quita la parte a lo largo de T que pase de SH_MAX (cizalla máxima de la fila)
+    const SH_MAX = 0.6; const fit = (x, T) => { const d = x.dot(T); if (Math.abs(d) > SH_MAX) x.addScaledVector(T, -(d - Math.sign(d) * SH_MAX)); return x.lengthSq() < 1e-8 ? x.copy(V(R, 0)) : x.normalize() }
+    const target = (i) => {
+      const a = avg[i]; const m = avgT[i].length(); const k = a.length() > EPS ? smooth01((0.8 - m) / 0.3) : 0 // 1: hélice gruesa (eje); 0: delgada o recta
+      mt.copy(avgT[i]); if (m > 1e-6) mt.divideScalar(m)
+      wv.copy(v).addScaledVector(mt, -v.dot(mt)); if (wv.lengthSq() < 1e-6) wv.copy(V(R, i)).addScaledVector(mt, -V(R, i).dot(mt)); wv.normalize()
+      tg.copy(a); if (tg.lengthSq() > 1e-12) tg.normalize(); if (tg.dot(v) < 0) tg.negate()
+      return tg.multiplyScalar(k).addScaledVector(wv, 1 - k).normalize()
+    }
+    for (let i = 0; i <= N; i++) {
+      const T = V(Tn, i)
+      if (i === 0) { v.copy(V(R, 0)); const j = avg.findIndex((a, q) => a.length() > EPS && avgT[q].length() < 0.65); if (j >= 0) v.copy(avg[j]).normalize(); v.copy(target(0)) }
+      else {
+        target(i)
+        const an = Math.acos(clamp(tg.dot(v), -1, 1))
+        if (an > maxStep) v.lerp(tg, maxStep / an).normalize(); else v.copy(tg)
+      }
+      vote += avg[i].dot(v); B.push(fit(v.clone(), T))
+    }
+    if (vote < 0) for (const b of B) b.negate() // la normal de la fila mira al centro de la curva en la mayor parte del tramo
+    // ángulo (convención de wallFrame) cuya normal es B × T; desenrollado para que sea continuo
+    ang = new Float32Array(N + 1); const WF = {}; const up = new THREE.Vector3(); const cr = new THREE.Vector3(); const row = new THREE.Vector3()
+    for (let i = 0; i <= N; i++) {
+      const T = V(Tn, i); const d0 = wallFrame(s, 0, i / N, 0, WF).dir
+      up.crossVectors(B[i], T).normalize().negate() // -up: la dirección eje -> firme que debe dar wallFrame
+      let a = Math.atan2(T.dot(cr.crossVectors(d0, up)), d0.dot(up))
+      if (i) a = ang[i - 1] + angDiffSigned(a, ang[i - 1])
+      ang[i] = a
+    }
+    // giro real: 0 (mod 2π) en las puntas; el resto se deshace dentro de la zona cerrada de cada punta (FILA_TWIST)
+    roll = new Float32Array(N + 1); const [za, zb] = braidDelay(s); const r0 = ang[0]; const r1 = ang[N] - TAU * Math.round(ang[N] / TAU)
+    for (let i = 0; i <= N; i++) { const x = (i / N) * s.length; roll[i] = ang[i] - r0 * (1 - smooth01(x / za)) - r1 * (1 - smooth01((s.length - x) / zb)) }
+    // posiciones: fila a lo largo de T × up REAL (con el giro ya atenuado por la apertura: coplanar también en las
+    // rampas) más la cizalla a lo largo de T que la alinea con el eje de la hélice
+    for (let i = 0; i <= N; i++) {
+      const T = V(Tn, i); const d = wallFrame(s, roll[i], i / N, 0, WF).dir
+      row.crossVectors(d, T).normalize() // T × up, con up = -d
+      // traslación pura a lo largo de B (con su parte a lo largo de T): los carriles son copias desplazadas del eje y no se
+      // pellizcan en las curvas cerradas; se escala para que la separación perpendicular al avance sea FILA_GAP
+      const bt = B[i].dot(T); row.addScaledVector(T, (bt / Math.sqrt(1 - bt * bt)) * env[i])
+      rad[i] = ((nl - 1) / 2) * FILA_GAP * env[i]
+      for (let j = 0; j < nl; j++) {
+        const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * FILA_GAP * env[i]
+        dst[i * 3] = C[i * 3] + row.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + row.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + row.z * off
+      }
+    }
+  } else {
+    for (let i = 0; i <= N; i++) rad[i] = Math.max(0, Math.min(ringR * env[i], cap[i]))
+    for (let i = 0; i <= N; i++) {
+      const u = i / N
+      for (let j = 0; j < nl; j++) {
+        const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
+        const theta = (j * TAU) / nl + u * TAU; const radius = rad[i]
+        for (let k = 0; k < 3; k++) dst[i * 3 + k] = C[i * 3 + k] + R[i * 3 + k] * Math.cos(theta) * radius + S[i * 3 + k] * Math.sin(theta) * radius
+      }
     }
   }
   const [da, db] = braidDelay(s)
-  s._braid = { N, P, env, rad, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
+  s._braid = { N, P, env, rad, fila, ang, roll, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -854,7 +947,7 @@ function buildLanes(way) {
     let opts
     if (dy < -0.45 * dist) opts = ['caida', 'caida', 'salto', ...(extra.abajo || [])]
     else if (dy > 0.45 * dist) opts = ['elevador', 'elevador', 'rampa', ...(extra.arriba || [])]
-    else if (dist > 7 * TK) opts = ['portal']
+    else if (dist > 1.3 * BRAID_A) opts = ['portal'] // vecinos del anillo o de la fila: salto; más lejos: portal
     else opts = ['salto', 'rampa', 'botado', 'laberinto', ...(extra.nivel || [])]
     return pref && opts.includes(pref) ? pref : opts[Math.floor(rng() * opts.length)]
   }
@@ -890,7 +983,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 8
+export const WORLD_GEN = 9
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1066,9 +1159,13 @@ const coil = (A, B, turns, rad, A0 = A, ease = (t) => t, spin = false) => {
   }
   return pts
 }
-const PITCH = 2 * BRAID_A + LANE_W * (1 + MIN_GAP_K / 2) + 2 * TK // paso mínimo (u) entre vueltas de hélices y rizos: dos trenzas abiertas sin tocarse
+const PITCH = FILA_W + 2 * RIBBON_HALF + 3 * TK // paso mínimo (u) entre vueltas de hélices y rizos: dos calzadas fundidas (fila de 5) con un ancho de cinta de aire entre bordes
 const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x) }
 const bump = (t) => smooth01(Math.min(1, 2.2 * t, 2.2 * (1 - t))) // el radio nace y muere en la cuerda, sin quiebros
+// Con `spin` el giro avanza en proporción al radio: en el centro (radio máximo) las vueltas van 1 / BUMP_MEAN veces más
+// juntas que la media. Las vueltas se cuentan con ese factor para que el paso REAL nunca baje de PITCH; con una sola
+// vuelta (mínimo) no hay vuelta vecina que pisar.
+const BUMP_MEAN = (() => { let s = 0; for (let i = 0; i < 64; i++) s += bump((i + 0.5) / 64); return s / 64 })()
 
 // ───────────────────────── piezas de pista (trazado tipo circuito) ─────────────────────────
 // Plan de un obstáculo "de pista": lista de piezas [giro (rad, + a la izquierda), largo relativo];
@@ -1152,10 +1249,10 @@ function bezierPts(P0, T0, P1, T1) {
 
 const SHAPES = {
   // las vueltas guardan un paso mínimo (PITCH): entre dos vueltas caben los carriles de la trenza
-  espiral: (A, B, P) => coil(A, B, Math.min(2 + P.turns, Math.max(1.2, A.distanceTo(B) / PITCH)), (t) => 3.2 * WS * P.coil * bump(t), A, undefined, true),
-  sacacorchos: (A, B, P) => coil(A, B, Math.min(3 + P.turns, Math.max(1.5, A.distanceTo(B) / PITCH)), (t) => (P.radius * 1.85 + 4.7 * TK) * bump(t), A, undefined, true),
+  espiral: (A, B, P) => coil(A, B, Math.min(2 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => 3.2 * WS * P.coil * bump(t), A, undefined, true),
+  sacacorchos: (A, B, P) => coil(A, B, Math.min(3 + P.turns, Math.max(1, (A.distanceTo(B) * BUMP_MEAN) / PITCH)), (t) => (P.radius * 1.85 + 4.7 * TK) * bump(t), A, undefined, true),
   // remolino que se cierra: empieza en el borde del cono (A) y acaba en su vértice (B)
-  embudo: (A, B, P) => { const R = 4.0 * WS * P.coil; return coil(A, B, Math.min(3, Math.max(1.2, A.distanceTo(B) / (2 * PITCH))), (t) => R * (1 - t), at(A, basis(A, B).u, -R), (t) => 0.5 * t + 0.5 * t * t) },
+  embudo: (A, B, P) => { const R = 4.0 * WS * P.coil; return coil(A, B, Math.min(3, Math.max(1, A.distanceTo(B) / (2 * PITCH))), (t) => R * (1 - t), at(A, basis(A, B).u, -R), (t) => 0.5 * t + 0.5 * t * t) },
   // tiro horizontal: parábola de caída libre
   caida: (A, B) => { const { C } = basis(A, B); return [1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(A.x + C.x * (i / 8), A.y + C.y * (i / 8) ** 2, A.z + C.z * (i / 8))) },
   // un salto largo (un solo arco: sin botes alternados)
@@ -1726,11 +1823,6 @@ function buildWay(world, circuit, from, to, theta = 0, bowExtra = 0, commit = tr
 // punto mientras aún no se separan JOINT_SEP (prefijo contiguo desde la unión), y como mucho hasta que la trenza termina de abrirse:
 // braidDelay + BRAID_RAMP en esa punta. En la zona cerrada (braidDelay: parrilla, recta de meta y junto a las uniones de
 // rutas) los carriles de un mismo tramo van juntos, coinciden por diseño y ni se comparan.
-export const RIBBON_CURB = 0.17 * TK
-export const RIBBON_TERR = 0.55 * TK
-export const RIBBON_HALF = LANE_W / 2 + RIBBON_CURB + RIBBON_TERR
-export const RIBBON_GAP = 0.8 * TK // hueco entre cintas: una ballita con TRACK_K = 1 (escala con el trazado)
-export const RIBBON_CLEAR = 2 * RIBBON_HALF + RIBBON_GAP
 // Margen que sobresale de la berma para cubrir los anillos neón y la decoración lateral.
 // El anillo de anillos.jsx usa escala (H + CURB + TERR * 0.55) * 2.15; se toma su
 // envolvente completa respecto del centro del carril para medir el espacio que ve la cámara.
@@ -1886,6 +1978,10 @@ export const CALZADA_HALF = LANE_W / 2 + RIBBON_CURB
 export const QUILLA = 0.75 // quilla de la cinta bajo el firme (pista.jsx profile: 0.48 · k, k <= 1.55)
 export const COPLANAR_DOT = 0.98
 export const COPLANAR_Y = 0.25
+// Calzada fundida (carriles de un mismo tramo en fila sobre una banda de cilindro): normales casi paralelas y desnivel
+// menor que un bordillo ancho; la banda es curva, por eso admite más que COPLANAR_*.
+export const FUNDIDA_DOT = 0.88
+export const FUNDIDA_Y = 0.75 * TK
 const CLR_STEP = 1 * TK
 const CLR_LIM = GALIBO_H + 2 * RIBBON_HALF + QUILLA + 2 * CLR_STEP
 
@@ -1934,13 +2030,14 @@ function relate(S, i, j, hA, hB, o) {
   o.dist = Math.hypot(Math.max(gx, 0), Math.max(gy, 0))
   const dot = ux * bux + uy * buy + uz * buz
   o.cop = dot >= COPLANAR_DOT && Math.abs(cy + q) <= COPLANAR_Y
+  o.fun = dot >= FUNDIDA_DOT && Math.abs(cy + q) <= FUNDIDA_Y
   return o
 }
 
 // Medidor de espacio entre cintas (ver arriba). { galibo, lateral, union: { n, worst, at }, unionSep (u máx. de una zona
 // de unión sin aire), hits: [{ cat, a, b, ... }] (los primeros), S }. worst: galibo -> mínima altura libre sobre la
 // calzada; lateral -> mínimo aire entre bordes.
-export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 400 } = {}) {
+export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 400, clase = null } = {}) {
   const { ribs, X, Y: Yy, Z, R } = S; const N = X.length; const lim = CLR_LIM; const L2 = lim * lim
   const cell = (v) => Math.floor(v / lim); const grid = new Map()
   for (let i = 0; i < N; i++) { const k = cellKey(cell(X[i]), cell(Yy[i]), cell(Z[i])); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(i) }
@@ -1963,12 +2060,19 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
         const gal = (o1.gal ? 1 : 0) | (o2.gal ? 2 : 0)
         if (!gal && dist >= AIRE_LAT) continue
         const key = ri * 65536 + rj; let l = pairs.get(key); if (!l) pairs.set(key, l = [])
-        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0), dist)
+        l.push(i, j, gal | ((o1.over || o2.over) ? 4 : 0) | ((o1.cop && o2.cop) ? 8 : 0) | ((o1.fun && o2.fun) ? 16 : 0), dist)
       }
     }
   }
   const out = { galibo: { n: 0, worst: Infinity, at: '' }, lateral: { n: 0, worst: Infinity, at: '' }, union: { n: 0, worst: 0, at: '' }, unionSep: 0, unionSepAt: '', hits: [], S }
   const tag = (i) => { const r = ribs[R[i]]; return `w${r.way.idx} ${r.seg.kind}/r${r.seg.route} L${r.lane}@${((i - r.start) / r.n).toFixed(2)}` }
+  // desglose opcional (tools/separacion.mjs): clase(i, j, A, B) -> clave; por clave, casos y peor valor de cada categoría
+  const anota = (cat, i, j, v) => {
+    if (!clase) return
+    const k = clase(i, j, ribs[R[i]], ribs[R[j]]); const c = (out.clases ||= {})[k] ||= { galibo: 0, lateral: 0, union: 0, minH: Infinity, minD: Infinity, maxU: 0, atH: '', atD: '', atU: '', pares: new Set() }
+    c[cat]++; c.pares.add(R[i] < R[j] ? R[i] * 65536 + R[j] : R[j] * 65536 + R[i])
+    if (cat === 'galibo' && v < c.minH) { c.minH = v; c.atH = `${tag(i)} bajo ${tag(j)}` } else if (cat === 'lateral' && v < c.minD) { c.minD = v; c.atD = `${tag(i)} vs ${tag(j)}` } else if (cat === 'union' && v > c.maxU) { c.maxU = v; c.atU = `${tag(i)} vs ${tag(j)}` }
+  }
   const cap = JOINT_MAX
   for (const l of pairs.values()) {
     const A = ribs[R[l[0]]]; const B = ribs[R[l[1]]]
@@ -1993,9 +2097,13 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
           out.union.n++
           if (s > out.union.worst) Object.assign(out.union, { worst: s, at: `${tag(i)} vs ${tag(j)}` })
           if (out.hits.length < maxList) out.hits.push({ cat: 'union', a: i, b: j, s })
+          anota('union', i, j, s)
         } else if (s > out.unionSep) { out.unionSep = s; out.unionSepAt = `${tag(i)} vs ${tag(j)}` }
         continue
       }
+      // calzada fundida: carriles del mismo tramo, coplanares y a la misma altura del recorrido, se leen como una sola
+      // calzada de varios carriles (no cuenta contra otra vuelta de la hélice: ahí la distancia de arco es grande)
+      if (A.seg === B.seg && A.seg.fila && (fl & 16) && !(fl & 3) && Math.abs(ia / A.n - ib / B.n) * A.seg.length < 3 * FILA_GAP) continue
       if (fl & 3) {
         out.galibo.n++
         // altura libre aproximada: distancia vertical del firme de A al punto más bajo de B (o al revés)
@@ -2003,10 +2111,12 @@ export function ribbonClearance(world, S = clearanceSamples(world), { maxList = 
         const hy = (X[jj] - X[ii]) * S.UX[ii] + (Yy[jj] - Yy[ii]) * S.UY[ii] + (Z[jj] - Z[ii]) * S.UZ[ii]
         if (hy < out.galibo.worst) Object.assign(out.galibo, { worst: hy, at: `${tag(ii)} bajo ${tag(jj)}` })
         if (out.hits.length < maxList) out.hits.push({ cat: 'galibo', a: ii, b: jj, h: hy })
+        anota('galibo', ii, jj, hy)
       } else if (dist < AIRE_LAT) {
         out.lateral.n++
         if (dist < out.lateral.worst) Object.assign(out.lateral, { worst: dist, at: `${tag(i)} vs ${tag(j)}` })
         if (out.hits.length < maxList) out.hits.push({ cat: 'lateral', a: i, b: j, d: dist })
+        anota('lateral', i, j, dist)
       }
     }
   }
