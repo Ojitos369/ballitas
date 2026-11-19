@@ -4,6 +4,8 @@ import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39
 import { writeFileSync } from 'node:fs'
 const [url, salida = 'traza.json'] = process.argv.slice(2)
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--window-size=1600,900', '--ignore-gpu-blocklist', '--disable-frame-rate-limit'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const p = await b.newPage({ viewport: { width: 1600, height: 900 } })
 await p.goto(url)
 await p.waitForFunction(() => window.__ballitasDebug?.gl, null, { timeout: 60000 })
@@ -51,4 +53,7 @@ for (const e of eventos) if (e.ph === 'M' && e.name === 'process_name') nombres.
 dur.sort((a, b) => b.ms - a.ms)
 for (const d of dur.slice(0, 60)) console.log(`${d.ms}ms ${d.name} [${d.cat}] ${nombres.get(`${d.pid}`) ?? d.pid}/${nombres.get(`${d.pid}:${d.tid}`) ?? d.tid} ts=${d.ts} ${d.args ?? ''}`)
 writeFileSync(salida, JSON.stringify({ largos, dur: dur.slice(0, 300) }, null, 1))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

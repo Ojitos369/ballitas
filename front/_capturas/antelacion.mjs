@@ -7,6 +7,8 @@ const [url, secsA, modo = 'escritorio', salida] = process.argv.slice(2)
 const secs = +(secsA ?? 120)
 const movil = modo === 'movil'
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: [movil ? '--window-size=500,1000' : '--window-size=1600,900', '--ignore-gpu-blocklist', '--disable-frame-rate-limit'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const ctx = await b.newContext(movil ? { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true } : { viewport: { width: 1600, height: 900 } })
 const p = await ctx.newPage()
 await p.goto(url)
@@ -51,4 +53,7 @@ const ant = entradas.map((x) => x.antelacion_s).filter((x) => x != null)
 const res = { modo, caminos_8s: caminos8s, caminos_fin: R.caminos, entradas: entradas.length, antelacion_min_s: ant.length ? Math.min(...ant) : null, antelacion: ant, sin_listo: entradas.filter((x) => x.antelacion_s == null).length, eventos: R.E }
 console.log(JSON.stringify({ ...res, eventos: undefined }))
 if (salida) writeFileSync(salida, JSON.stringify(res, null, 1))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

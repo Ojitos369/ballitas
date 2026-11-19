@@ -5,6 +5,8 @@ import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39
 import { writeFileSync } from 'node:fs'
 const [url, caso = 'auto', reps = '1', cpu = '0', salida] = process.argv.slice(2)
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--window-size=1600,900', '--ignore-gpu-blocklist', '--disable-frame-rate-limit'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const todo = []
 for (let r = 0; r < +reps; r++) {
   const p = await b.newPage({ viewport: { width: 1600, height: 900 } })
@@ -138,4 +140,7 @@ for (let r = 0; r < +reps; r++) {
   await p.close()
 }
 if (salida) writeFileSync(salida, JSON.stringify(todo, null, 1))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

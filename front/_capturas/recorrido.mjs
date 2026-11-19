@@ -10,6 +10,8 @@ const nBall = memoria ? 1 : +(nA ?? 3)
 const movil = modo === 'movil'
 const throttle = +(thrA ?? 1)
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: [movil ? '--window-size=500,1000' : '--window-size=1600,900', '--ignore-gpu-blocklist', '--disable-frame-rate-limit', '--enable-precise-memory-info'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const ctx = await b.newContext(movil ? { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true } : { viewport: { width: 1600, height: 900 } })
 const p = await ctx.newPage()
 const errs = []
@@ -128,4 +130,7 @@ const resumen = {
 }
 console.log(JSON.stringify(resumen))
 if (salida) writeFileSync(salida, JSON.stringify({ resumen, largos: R.largos, pops: R.pops }, null, 1))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}
