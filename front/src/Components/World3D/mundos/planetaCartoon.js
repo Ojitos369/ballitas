@@ -382,18 +382,31 @@ const PLANET_FRAGMENT_SHADER = /* glsl */ `
       float g1 = fbm(wp * 0.075 + uSeedVec * 0.37);
       float g2 = noise3(wp * 0.42 + uSeedVec.zxy);
       float g3 = noise3(wp * 1.9 + uSeedVec.yzx);
-      float lum = dot(baseCol, vec3(0.299, 0.587, 0.114));
-      // contraste del bioma comprimido hacia su tono medio (las manchas de color gigantes dejan de gritar)
-      vec3 medio = mix(uCol1, uCol2, 0.5);
-      vec3 det = mix(baseCol, medio, 0.35);
+      // Materialidad del bioma a escala de ballita (sin desaturar: el bioma se reconoce por su suelo).
+      // Losas/placas de ~1.6 u (celdas) con tono por pieza tomado de la paleta y juntas por tipo de planeta;
+      // variación de tono de baja frecuencia y poro fino, todo a ±18 % de luminancia como mucho.
+      vec3 cel = voronoi3(wp * 0.62 + uSeedVec);
+      float junta = 1.0 - smoothstep(0.035, 0.11, cel.z - cel.x);
+      vec3 pieza = mix(uCol1, uCol2, 0.35 + 0.4 * cel.y);
+      pieza = mix(pieza, uCol3, smoothstep(0.55, 1.0, g1 + 0.5) * 0.35);
+      vec3 det = mix(baseCol, pieza, 0.55);
+      // el color del bioma, contenido pero con saturación propia (luminancia media, no plano chillón ni gris)
       float dl = dot(det, vec3(0.299, 0.587, 0.114));
-      det = mix(det, vec3(dl), 0.4);
-      det = mix(det, det * vec3(1.07, 1.0, 0.88), clamp(g1 * 0.9 + 0.45, 0.0, 1.0));
-      det *= 0.8 + 0.3 * g1 + 0.16 * g2 + 0.08 * g3;
+      det *= clamp(0.46 / max(dl, 0.05), 0.75, 1.9);
+      det = mix(vec3(dot(det, vec3(0.299, 0.587, 0.114))), det, 0.82);
+      det *= 0.9 + 0.12 * g1 + 0.08 * g2 + 0.06 * g3 + 0.06 * (cel.y - 0.5);
+      // juntas: grietas cálidas en lava, trazas luminosas en ácido/neón, grietas azules en hielo, sombra en el resto
+      vec3 cJunta = det * 0.74;
+      float luzJunta = 0.0;
+      if (pType == 3) { cJunta = uCol4; luzJunta = 0.75; }
+      else if (pType == 5) { cJunta = mix(uCol3, uCol4, 0.5); luzJunta = 0.55; }
+      else if (pType == 4) { cJunta = mix(uCol0, det, 0.5); }
+      else if (pType == 6) { cJunta = mix(uCol3, vec3(1.0), 0.25); luzJunta = 0.2; }
+      det = mix(det, cJunta, junta * 0.8);
       baseCol = mix(baseCol, det, uNear);
-      nearGrain = g2 * 0.09 + g3 * 0.05;
+      nearGrain = g2 * 0.07 + g3 * 0.04 - junta * 0.06;
       bumpNdotL += nearGrain * uNear;
-      emissiveBoost *= 1.0 - 0.6 * uNear;
+      emissiveBoost = mix(emissiveBoost, junta * luzJunta, uNear);
     }
 
     // Sombreado toon de 3 bandas usando la dirección de luz de la escena

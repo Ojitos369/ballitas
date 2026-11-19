@@ -215,6 +215,11 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .tag.destino-foco { display: flex; align-items: center; gap: 8px; padding: 3px 11px; font-size: 12.5px; background: rgba(10, 12, 30, 0.78); border-width: 1.5px; }
 .tag.destino-foco b { font-weight: 600; }
 .tag.destino-foco .ef { font-size: 12px; font-weight: 600; color: #d6dbf5; }
+/* rótulo sujeto al borde de la pantalla: flecha hacia donde está el destino */
+[data-borde="izq"] .tag.destino-foco::before { content: '◀'; font-size: 10px; opacity: 0.85; }
+[data-borde="der"] .tag.destino-foco::after { content: '▶'; font-size: 10px; opacity: 0.85; }
+[data-borde="arr"] .tag.destino-foco::after { content: '▲'; font-size: 10px; opacity: 0.85; }
+[data-borde="aba"] .tag.destino-foco::after { content: '▼'; font-size: 10px; opacity: 0.85; }
 
 /* Bocadillo legible: tamaño fijo en pantalla, máximo dos líneas */
 .bubble.globo { display: block; max-width: 190px; width: max-content; padding: 3px 9px; border-width: 2px; border-radius: 10px; font-size: 12px; line-height: 1.3; white-space: normal; text-align: center; opacity: 0.94; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

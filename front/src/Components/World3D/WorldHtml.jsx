@@ -30,6 +30,7 @@ export default function WorldHtml({
   const group = useRef(null)
   const rootRef = useRef(null)
   const lastOp = useRef('')
+  const medida = useRef({ t: 0, w: 0, h: 0 })
   const [el] = useState(() => document.createElement('div'))
 
   const innerStyle = useMemo(() => ({
@@ -74,7 +75,9 @@ export default function WorldHtml({
     camera.getWorldDirection(_camDir)
 
     const op = opacity ? opacity.value : 1
-    const behind = dist < 1e-4 || _delta.angleTo(_camDir) > Math.PI / 2 || op < 0.02
+    const detras = dist < 1e-4 || _delta.angleTo(_camDir) > Math.PI / 2
+    // con clamp, un ancla detrás de la cámara no se oculta: se pega al borde con flecha (ver abajo)
+    const behind = (detras && !clamp) || op < 0.02
     if (opacity) {
       const s = op >= 0.995 ? '' : op.toFixed(2)
       if (lastOp.current !== s) { lastOp.current = s; el.style.opacity = s }
@@ -89,8 +92,23 @@ export default function WorldHtml({
     let x = _objPos.x * (size.width * 0.5) + (size.width * 0.5)
     let y = -(_objPos.y * (size.height * 0.5)) + (size.height * 0.5)
     if (clamp) {
-      x = Math.min(size.width - clamp[0], Math.max(clamp[0], x))
-      y = Math.min(size.height - clamp[2], Math.max(clamp[1], y))
+      // el rótulo entero dentro de la pantalla: se sujeta con su propio ancho/alto (medidos cada ~0.5 s)
+      const hijo = el.firstElementChild
+      const t = performance.now()
+      if (hijo && (!medida.current.t || t - medida.current.t > 500)) medida.current = { t, w: hijo.offsetWidth, h: hijo.offsetHeight }
+      const hw = center ? medida.current.w / 2 : 0
+      const hh = center ? medida.current.h / 2 : 0
+      if (detras) {
+        // detrás de la cámara la proyección se invierte: se refleja y se lleva al borde inferior
+        x = size.width - x
+        y = size.height * 2
+      }
+      const x0 = Math.min(size.width / 2, clamp[0] * 0.25 + hw + 8)
+      const xs = Math.min(size.width - x0, Math.max(x0, x))
+      const ys = Math.min(size.height - clamp[2] - hh, Math.max(clamp[1] + hh, y))
+      const borde = ys > y + 1 ? 'arr' : ys < y - 1 ? 'aba' : xs > x + 1 ? 'izq' : xs < x - 1 ? 'der' : ''
+      if (el.dataset.borde !== borde) el.dataset.borde = borde
+      x = xs; y = ys
     }
 
     let scale = 1

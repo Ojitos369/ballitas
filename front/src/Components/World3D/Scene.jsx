@@ -110,7 +110,12 @@ const nodeEnvC = new THREE.Vector3()
 const NODE_LIFT_EXTRA = 1.1 // la ballita se apoya sobre el relieve, no a ras de la esfera base
 const NODE_PITCH_PLUS = 0.14 // cabeceo extra en planeta
 const NODE_ARM_MIN = 2.2 // brazo mínimo real en un planeta (más cerca, la ballita o una pieza llenaba la pantalla)
-const NODE_PITCH_VERT = 0.4 // cabeceo extra en planeta con pantalla vertical (~55° sobre el plano tangente en total)
+const NODE_PITCH_VERT = 0.3 // cabeceo extra en planeta con pantalla vertical (~50° sobre el plano tangente en total)
+// en planeta la ballita ocupaba ~20 % del alto en vertical: el campo de visión se abre (la colisión no lo recorta)
+// y el brazo crece un poco, para que entren la calle por delante y el destino
+const NODE_FOV_VERT = 16 // grados extra de FOV en planeta con pantalla vertical
+const NODE_FOV_HORIZ = 6 // y con pantalla horizontal
+const NODE_DIST_K = 0.3 // brazo extra (fracción) en planeta
 const NODE_SUBIR = 0.75// cabeceo extra (rad) para pasar por encima de una estructura que tapa en un planeta
 const povTargetUp = new THREE.Vector3()
 const povMat = new THREE.Matrix4()
@@ -1537,7 +1542,8 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, cine, suspend =
       // abajo (los edificios son radiales, desde arriba no se interponen); con resorte, sin saltos
       ce.vert = (ce.vert ?? 0) + (((camera.aspect || 1) < 0.87 ? 1 : 0) - (ce.vert ?? 0)) * (1 - Math.exp(-3 * h))
       const pitch = Math.min(1.35, fs.rel.pitch + (NODE_PITCH_PLUS + NODE_PITCH_VERT * ce.vert) * (fs.nodeBlend ?? 0) + fs.uPitch + NODE_SUBIR * camExtra.current.subir + (cine ? Math.sin(cineClock.current * 0.31) * 0.06 : 0))
-      const dist = fs.rel.dist * distK
+      const dist = fs.rel.dist * distK * (1 + NODE_DIST_K * (fs.nodeBlend ?? 0))
+      targetFov += (NODE_FOV_HORIZ + (NODE_FOV_VERT - NODE_FOV_HORIZ) * ce.vert) * (fs.nodeBlend ?? 0)
       if (enTubo && !fs.userRel) {
         // en el tubo la cámara va sobre el propio tubo, detrás a lo largo del eje: nunca atraviesa el cristal
         // "arriba" del riel = horizonte de la vista (no el de la ballita): si rueda por la pared la cámara no la orbita
