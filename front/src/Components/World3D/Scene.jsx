@@ -43,6 +43,7 @@ const POV_SENS = 0.0026
 const POV_LOCK_SENS = 0.0014
 const POV_KEY_YAW_SPEED = 1.2
 const POV_KEY_PITCH_SPEED = 0.9
+const POV_ZOOM_SALIDA_INICIAL = 0.15 // la primera salida debe arrancar con el cuerpo entero visible
 const POV_JOY_YAW_SPEED = 1.3
 const POV_JOY_PITCH_SPEED = 0.9
 const NOOP = () => {}
@@ -1250,6 +1251,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
         Object.assign(st, createPovState())
         const mem = povZoomMem.current
         if (mem.sel === selected && mem.zoom != null) st.zoom = st.zs = mem.zoom
+        else if (desdeSeguir) st.zoom = st.zs = POV_ZOOM_SALIDA_INICIAL
         povTrans.current = desdeSeguir ? 0 : 1
         povTransPrev.current.hasPrev = false
         povDragging.current = false
