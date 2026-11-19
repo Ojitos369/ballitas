@@ -1,0 +1,1436 @@
+{
+ "vp": "movil",
+ "zoom": "espalda",
+ "eventos": [
+  {
+   "tipo": "salida",
+   "fase": "travel",
+   "cuadros": 104,
+   "enCuadroPct": 52.9,
+   "peorCuadroMs": 108.5,
+   "modos": "pov",
+   "fuera": [
+    [
+     0,
+     "pov",
+     "travel",
+     0.18,
+     -0.42,
+     1.58,
+     1.87,
+     0.5
+    ],
+    [
+     29,
+     "pov",
+     "travel",
+     0.17,
+     -0.97,
+     1.39,
+     1.873,
+     0.5
+    ],
+    [
+     71,
+     "pov",
+     "travel",
+     0.16,
+     -1.63,
+     1.17,
+     1.899,
+     0.5
+    ],
+    [
+     96,
+     "pov",
+     "travel",
+     0.16,
+     -1.87,
+     1.1,
+     1.913,
+     0.5
+    ],
+    [
+     115,
+     "pov",
+     "travel",
+     0.16,
+     -2.02,
+     1.08,
+     1.93,
+     0.5
+    ],
+    [
+     155,
+     "pov",
+     "travel",
+     0.15,
+     -2.16,
+     1.17,
+     1.992,
+     0.5
+    ],
+    [
+     190,
+     "pov",
+     "travel",
+     0.15,
+     -2.15,
+     1.21,
+     2.006,
+     0.5
+    ],
+    [
+     224,
+     "pov",
+     "travel",
+     0.15,
+     -2.19,
+     1.33,
+     2.094,
+     0.5
+    ],
+    [
+     251,
+     "pov",
+     "travel",
+     0.14,
+     -2.21,
+     1.26,
+     2.13,
+     0.5
+    ],
+    [
+     284,
+     "pov",
+     "travel",
+     0.14,
+     -2.16,
+     1.21,
+     2.144,
+     0.5
+    ],
+    [
+     314,
+     "pov",
+     "travel",
+     0.13,
+     -2.04,
+     1.26,
+     2.175,
+     0.5
+    ],
+    [
+     349,
+     "pov",
+     "travel",
+     0.13,
+     -1.77,
+     1.45,
+     2.236,
+     0.5
+    ],
+    [
+     374,
+     "pov",
+     "travel",
+     0.13,
+     -1.18,
+     1.73,
+     2.327,
+     0.5
+    ],
+    [
+     394,
+     "pov",
+     "travel",
+     0.13,
+     -0.74,
+     1.85,
+     2.359,
+     0.5
+    ],
+    [
+     432,
+     "pov",
+     "travel",
+     0.13,
+     0.18,
+     2.01,
+     2.414,
+     0.5
+    ],
+    [
+     468,
+     "pov",
+     "travel",
+     0.13,
+     1.23,
+     2.02,
+     2.421,
+     0.5
+    ],
+    [
+     509,
+     "pov",
+     "travel",
+     0.14,
+     2.19,
+     1.83,
+     2.357,
+     0.5
+    ],
+    [
+     534,
+     "pov",
+     "travel",
+     0.14,
+     2.56,
+     1.62,
+     2.278,
+     0.5
+    ],
+    [
+     573,
+     "pov",
+     "travel",
+     0.15,
+     2.74,
+     1.41,
+     2.196,
+     0.5
+    ],
+    [
+     608,
+     "pov",
+     "travel",
+     0.15,
+     2.76,
+     1.21,
+     2.105,
+     0.5
+    ],
+    [
+     663,
+     "pov",
+     "travel",
+     0.15,
+     2.62,
+     1.01,
+     2.006,
+     0.5
+    ],
+    [
+     732,
+     "pov",
+     "travel",
+     0.16,
+     2.25,
+     0.9,
+     1.903,
+     0.5
+    ],
+    [
+     807,
+     "pov",
+     "travel",
+     0.16,
+     1.71,
+     0.88,
+     1.821,
+     0.5
+    ],
+    [
+     861,
+     "pov",
+     "travel",
+     0.17,
+     1.26,
+     0.93,
+     1.784,
+     0.5
+    ],
+    [
+     890,
+     "pov",
+     "travel",
+     0.17,
+     1.13,
+     0.94,
+     1.775,
+     0.5
+    ],
+    [
+     917,
+     "pov",
+     "travel",
+     0.17,
+     1.01,
+     0.95,
+     1.769,
+     0.5
+    ],
+    [
+     940,
+     "pov",
+     "travel",
+     0.17,
+     0.89,
+     0.96,
+     1.764,
+     0.5
+    ],
+    [
+     978,
+     "pov",
+     "travel",
+     0.17,
+     0.71,
+     0.98,
+     1.758,
+     0.5
+    ],
+    [
+     1072,
+     "pov",
+     "travel",
+     0.17,
+     0.41,
+     0.99,
+     1.746,
+     0.5
+    ],
+    [
+     1108,
+     "pov",
+     "travel",
+     0.17,
+     0.36,
+     0.98,
+     1.741,
+     0.5
+    ],
+    [
+     1145,
+     "pov",
+     "travel",
+     0.17,
+     0.31,
+     0.97,
+     1.736,
+     0.5
+    ],
+    [
+     1190,
+     "pov",
+     "travel",
+     0.17,
+     0.28,
+     0.96,
+     1.731,
+     0.5
+    ],
+    [
+     1213,
+     "pov",
+     "travel",
+     0.17,
+     0.28,
+     0.96,
+     1.728,
+     0.5
+    ],
+    [
+     1234,
+     "pov",
+     "travel",
+     0.17,
+     0.28,
+     0.95,
+     1.727,
+     0.5
+    ],
+    [
+     1283,
+     "pov",
+     "travel",
+     0.17,
+     0.29,
+     0.94,
+     1.724,
+     0.5
+    ],
+    [
+     1330,
+     "pov",
+     "travel",
+     0.17,
+     0.32,
+     0.93,
+     1.722,
+     0.5
+    ],
+    [
+     1353,
+     "pov",
+     "travel",
+     0.17,
+     0.34,
+     0.93,
+     1.722,
+     0.5
+    ],
+    [
+     1374,
+     "pov",
+     "travel",
+     0.17,
+     0.35,
+     0.93,
+     1.722,
+     0.5
+    ],
+    [
+     1395,
+     "pov",
+     "travel",
+     0.17,
+     0.36,
+     0.93,
+     1.722,
+     0.5
+    ],
+    [
+     1417,
+     "pov",
+     "travel",
+     0.17,
+     0.38,
+     0.93,
+     1.722,
+     0.5
+    ],
+    [
+     1441,
+     "pov",
+     "travel",
+     0.17,
+     0.39,
+     0.93,
+     1.723,
+     0.5
+    ],
+    [
+     1471,
+     "pov",
+     "travel",
+     0.17,
+     0.43,
+     0.93,
+     1.724,
+     0.5
+    ],
+    [
+     1494,
+     "pov",
+     "travel",
+     0.17,
+     0.45,
+     0.93,
+     1.725,
+     0.5
+    ],
+    [
+     1516,
+     "pov",
+     "travel",
+     0.17,
+     0.48,
+     0.93,
+     1.726,
+     0.5
+    ],
+    [
+     1555,
+     "pov",
+     "travel",
+     0.17,
+     0.52,
+     0.93,
+     1.726,
+     0.5
+    ],
+    [
+     1579,
+     "pov",
+     "travel",
+     0.17,
+     0.53,
+     0.92,
+     1.725,
+     0.5
+    ],
+    [
+     1624,
+     "pov",
+     "travel",
+     0.17,
+     0.53,
+     0.92,
+     1.724,
+     0.5
+    ],
+    [
+     1650,
+     "pov",
+     "travel",
+     0.17,
+     0.51,
+     0.92,
+     1.733,
+     0.49
+    ],
+    [
+     1680,
+     "pov",
+     "travel",
+     0.17,
+     0.5,
+     0.94,
+     1.756,
+     0.48
+    ]
+   ]
+  },
+  {
+   "tipo": "entrada",
+   "fase": "toDest",
+   "cuadros": 109,
+   "enCuadroPct": 100,
+   "peorCuadroMs": 58.3,
+   "modos": "entrando>siguiendo>pov",
+   "fuera": []
+  },
+  {
+   "tipo": "salida",
+   "fase": "travel",
+   "cuadros": 108,
+   "enCuadroPct": 100,
+   "peorCuadroMs": 50.2,
+   "modos": "pov",
+   "fuera": []
+  }
+ ],
+ "burbuja": [
+  {
+   "altoPct": 4.4,
+   "top": 355,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 355,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 133,
+   "bottom": 173,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 360,
+   "bottom": 385,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 361,
+   "bottom": 386,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 365,
+   "bottom": 390,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 365,
+   "bottom": 390,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 352,
+   "bottom": 392,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 350,
+   "bottom": 390,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 360,
+   "bottom": 401,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 358,
+   "bottom": 398,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 352,
+   "bottom": 393,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 348,
+   "bottom": 388,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 348,
+   "bottom": 388,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 349,
+   "bottom": 374,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 355,
+   "bottom": 380,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 369,
+   "bottom": 394,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 367,
+   "bottom": 392,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 390,
+   "bottom": 415,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 372,
+   "bottom": 396,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 375,
+   "bottom": 400,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 387,
+   "bottom": 412,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 356,
+   "bottom": 381,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 344,
+   "bottom": 369,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 379,
+   "bottom": 404,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 368,
+   "bottom": 408,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 341,
+   "bottom": 381,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 356,
+   "bottom": 381,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 363,
+   "bottom": 388,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 371,
+   "bottom": 396,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 358,
+   "bottom": 399,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 370,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 370,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 369,
+   "bottom": 394,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 369,
+   "bottom": 394,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 370,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 370,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 354,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 365,
+   "bottom": 390,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 365,
+   "bottom": 389,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 368,
+   "bottom": 393,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 373,
+   "bottom": 398,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 371,
+   "bottom": 396,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 356,
+   "bottom": 397,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 357,
+   "bottom": 398,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 357,
+   "bottom": 398,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 355,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 372,
+   "bottom": 397,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 370,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 355,
+   "bottom": 395,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 353,
+   "bottom": 394,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 4.4,
+   "top": 371,
+   "bottom": 411,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 388,
+   "bottom": 413,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 392,
+   "bottom": 416,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 406,
+   "bottom": 431,
+   "solape": false,
+   "centro": false
+  },
+  {
+   "altoPct": 2.7,
+   "top": 407,
+   "bottom": 431,
+   "solape": false,
+   "centro": false
+  }
+ ],
+ "shots": [
+  "movil_espalda_00_salida_0.25s_travel.jpg",
+  "movil_espalda_01_salida_1.2s_travel.jpg",
+  "movil_espalda_02_salida_2s_travel.jpg",
+  "movil_espalda_03_carretera_bocadillo_travel.jpg",
+  "movil_espalda_04_carretera_bocadillo_travel.jpg",
+  "movil_espalda_05_carretera_bocadillo_travel.jpg",
+  "movil_espalda_06_entrada_0.25s_toDest.jpg",
+  "movil_espalda_07_entrada_1.2s_travel.jpg"
+ ],
+ "errs": [
+  "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+  "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+ ],
+ "fueraCarretera": [
+  [
+   37478,
+   "pov",
+   "travel",
+   0.18,
+   -0.42,
+   1.58,
+   1.87,
+   0.5
+  ],
+  [
+   37507,
+   "pov",
+   "travel",
+   0.17,
+   -0.97,
+   1.39,
+   1.873,
+   0.5
+  ],
+  [
+   37549,
+   "pov",
+   "travel",
+   0.16,
+   -1.63,
+   1.17,
+   1.899,
+   0.5
+  ],
+  [
+   37574,
+   "pov",
+   "travel",
+   0.16,
+   -1.87,
+   1.1,
+   1.913,
+   0.5
+  ],
+  [
+   37594,
+   "pov",
+   "travel",
+   0.16,
+   -2.02,
+   1.08,
+   1.93,
+   0.5
+  ],
+  [
+   37633,
+   "pov",
+   "travel",
+   0.15,
+   -2.16,
+   1.17,
+   1.992,
+   0.5
+  ],
+  [
+   37668,
+   "pov",
+   "travel",
+   0.15,
+   -2.15,
+   1.21,
+   2.006,
+   0.5
+  ],
+  [
+   37702,
+   "pov",
+   "travel",
+   0.15,
+   -2.19,
+   1.33,
+   2.094,
+   0.5
+  ],
+  [
+   37730,
+   "pov",
+   "travel",
+   0.14,
+   -2.21,
+   1.26,
+   2.13,
+   0.5
+  ],
+  [
+   37762,
+   "pov",
+   "travel",
+   0.14,
+   -2.16,
+   1.21,
+   2.144,
+   0.5
+  ],
+  [
+   37792,
+   "pov",
+   "travel",
+   0.13,
+   -2.04,
+   1.26,
+   2.175,
+   0.5
+  ],
+  [
+   37827,
+   "pov",
+   "travel",
+   0.13,
+   -1.77,
+   1.45,
+   2.236,
+   0.5
+  ],
+  [
+   37852,
+   "pov",
+   "travel",
+   0.13,
+   -1.18,
+   1.73,
+   2.327,
+   0.5
+  ],
+  [
+   37872,
+   "pov",
+   "travel",
+   0.13,
+   -0.74,
+   1.85,
+   2.359,
+   0.5
+  ],
+  [
+   37911,
+   "pov",
+   "travel",
+   0.13,
+   0.18,
+   2.01,
+   2.414,
+   0.5
+  ],
+  [
+   37946,
+   "pov",
+   "travel",
+   0.13,
+   1.23,
+   2.02,
+   2.421,
+   0.5
+  ],
+  [
+   37987,
+   "pov",
+   "travel",
+   0.14,
+   2.19,
+   1.83,
+   2.357,
+   0.5
+  ],
+  [
+   38012,
+   "pov",
+   "travel",
+   0.14,
+   2.56,
+   1.62,
+   2.278,
+   0.5
+  ],
+  [
+   38051,
+   "pov",
+   "travel",
+   0.15,
+   2.74,
+   1.41,
+   2.196,
+   0.5
+  ],
+  [
+   38086,
+   "pov",
+   "travel",
+   0.15,
+   2.76,
+   1.21,
+   2.105,
+   0.5
+  ],
+  [
+   38141,
+   "pov",
+   "travel",
+   0.15,
+   2.62,
+   1.01,
+   2.006,
+   0.5
+  ],
+  [
+   38210,
+   "pov",
+   "travel",
+   0.16,
+   2.25,
+   0.9,
+   1.903,
+   0.5
+  ],
+  [
+   38285,
+   "pov",
+   "travel",
+   0.16,
+   1.71,
+   0.88,
+   1.821,
+   0.5
+  ],
+  [
+   38340,
+   "pov",
+   "travel",
+   0.17,
+   1.26,
+   0.93,
+   1.784,
+   0.5
+  ],
+  [
+   38368,
+   "pov",
+   "travel",
+   0.17,
+   1.13,
+   0.94,
+   1.775,
+   0.5
+  ],
+  [
+   38395,
+   "pov",
+   "travel",
+   0.17,
+   1.01,
+   0.95,
+   1.769,
+   0.5
+  ],
+  [
+   38418,
+   "pov",
+   "travel",
+   0.17,
+   0.89,
+   0.96,
+   1.764,
+   0.5
+  ],
+  [
+   38456,
+   "pov",
+   "travel",
+   0.17,
+   0.71,
+   0.98,
+   1.758,
+   0.5
+  ],
+  [
+   38550,
+   "pov",
+   "travel",
+   0.17,
+   0.41,
+   0.99,
+   1.746,
+   0.5
+  ],
+  [
+   38586,
+   "pov",
+   "travel",
+   0.17,
+   0.36,
+   0.98,
+   1.741,
+   0.5
+  ],
+  [
+   38623,
+   "pov",
+   "travel",
+   0.17,
+   0.31,
+   0.97,
+   1.736,
+   0.5
+  ],
+  [
+   38668,
+   "pov",
+   "travel",
+   0.17,
+   0.28,
+   0.96,
+   1.731,
+   0.5
+  ],
+  [
+   38691,
+   "pov",
+   "travel",
+   0.17,
+   0.28,
+   0.96,
+   1.728,
+   0.5
+  ],
+  [
+   38712,
+   "pov",
+   "travel",
+   0.17,
+   0.28,
+   0.95,
+   1.727,
+   0.5
+  ],
+  [
+   38761,
+   "pov",
+   "travel",
+   0.17,
+   0.29,
+   0.94,
+   1.724,
+   0.5
+  ],
+  [
+   38808,
+   "pov",
+   "travel",
+   0.17,
+   0.32,
+   0.93,
+   1.722,
+   0.5
+  ],
+  [
+   38831,
+   "pov",
+   "travel",
+   0.17,
+   0.34,
+   0.93,
+   1.722,
+   0.5
+  ],
+  [
+   38852,
+   "pov",
+   "travel",
+   0.17,
+   0.35,
+   0.93,
+   1.722,
+   0.5
+  ],
+  [
+   38873,
+   "pov",
+   "travel",
+   0.17,
+   0.36,
+   0.93,
+   1.722,
+   0.5
+  ],
+  [
+   38895,
+   "pov",
+   "travel",
+   0.17,
+   0.38,
+   0.93,
+   1.722,
+   0.5
+  ],
+  [
+   38919,
+   "pov",
+   "travel",
+   0.17,
+   0.39,
+   0.93,
+   1.723,
+   0.5
+  ],
+  [
+   38949,
+   "pov",
+   "travel",
+   0.17,
+   0.43,
+   0.93,
+   1.724,
+   0.5
+  ],
+  [
+   38972,
+   "pov",
+   "travel",
+   0.17,
+   0.45,
+   0.93,
+   1.725,
+   0.5
+  ],
+  [
+   38994,
+   "pov",
+   "travel",
+   0.17,
+   0.48,
+   0.93,
+   1.726,
+   0.5
+  ],
+  [
+   39034,
+   "pov",
+   "travel",
+   0.17,
+   0.52,
+   0.93,
+   1.726,
+   0.5
+  ],
+  [
+   39058,
+   "pov",
+   "travel",
+   0.17,
+   0.53,
+   0.92,
+   1.725,
+   0.5
+  ],
+  [
+   39102,
+   "pov",
+   "travel",
+   0.17,
+   0.53,
+   0.92,
+   1.724,
+   0.5
+  ],
+  [
+   39128,
+   "pov",
+   "travel",
+   0.17,
+   0.51,
+   0.92,
+   1.733,
+   0.49
+  ],
+  [
+   39158,
+   "pov",
+   "travel",
+   0.17,
+   0.5,
+   0.94,
+   1.756,
+   0.48
+  ]
+ ],
+ "total": {
+  "cuadros": 2279,
+  "enCuadroPct": 97.8,
+  "carretera": 97.8,
+  "planeta": 100
+ },
+ "burbujaResumen": {
+  "n": 56,
+  "altoMaxPct": 4.4,
+  "solapes": 0,
+  "tapaCentro": 0
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "vp": "movil",
+ "zoom": "espalda",
+ "eventos": [
+  {
+   "tipo": "salida",
+   "fase": "travel",
+   "cuadros": 166,
+   "enCuadroPct": 100,
+   "peorCuadroMs": 75.1,
+   "modos": "pov",
+   "fuera": []
+  }
+ ],
+ "burbuja": [],
+ "shots": [
+  "movil_espalda_00_salida_0.25s_travel.jpg",
+  "movil_espalda_01_salida_1.2s_travel.jpg",
+  "movil_espalda_02_salida_2s_travel.jpg"
+ ],
+ "errs": [
+  "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+  "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+ ],
+ "fueraCarretera": [],
+ "total": {
+  "cuadros": 558,
+  "enCuadroPct": 100,
+  "carretera": 100,
+  "planeta": 100
+ },
+ "burbujaResumen": {
+  "n": 0
+ }
+}
