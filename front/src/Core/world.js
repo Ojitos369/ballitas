@@ -490,8 +490,19 @@ export const ROLL_KINDS = ['plano', 'cabeza', 'lado_der', 'lado_izq', 'tirabuzon
 export function braidEnv(seg, u, hubs = true) {
   const L = seg.length; const x = clamp(Number.isFinite(u) ? u : 0, 0, 1) * L
   const [a, b] = braidDelay(seg, hubs)
+  const [ra, rb] = braidRamps(seg, hubs)
+  return smooth01((x - a) / ra) * smooth01((L - b - x) / rb)
+}
+// Largo (u) de la rampa de apertura en cada punta. Junto a un nodo (salida/llegada) la rampa real es LA MISMA que la del
+// envolvente de la búsqueda (BRAID_RAMP, ~128 u): los carriles nunca salen del envolvente que el reparto garantizó libre
+// (con OPEN_RAMP, 52 u, la fila se abría antes que su envolvente y asomaba hasta 22 u sobre los caminos vecinos del nodo)
+// y los vecinos pasan de fundidos a JOINT_SEP en ~78 u, dentro de JOINT_MAX.
+export function braidRamps(seg, hubs = true) {
+  const L = seg.length; const [a, b] = braidDelay(seg, hubs)
   const r = Math.max(4 * TK, Math.min(hubs ? OPEN_RAMP : BRAID_RAMP, (L - a - b) * 0.3))
-  return smooth01((x - a) / r) * smooth01((L - b - x) / r)
+  if (!hubs || (seg.kind !== 'salida' && seg.kind !== 'llegada')) return [r, r]
+  const [a0, b0] = braidDelay(seg, false); const r0 = Math.max(4 * TK, Math.min(BRAID_RAMP, (L - a0 - b0) * 0.3))
+  return seg.kind === 'salida' ? [r0, r] : [r, r0]
 }
 // Largo (u) en cada punta del tramo donde los carriles van juntos (una sola calzada) antes de abrirse la trenza. Los
 // carriles reales se abren en abanico poco después de la punta (NODE_OPEN junto al nodo, HUB_OPEN junto a una unión
@@ -938,8 +949,8 @@ function buildBraid(s) {
       }
     }
   }
-  const [da, db] = braidDelay(s)
-  s._braid = { N, P, env, rad, fila, row: !fila, ang, roll, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
+  const [da, db] = braidDelay(s); const [qa, qb] = braidRamps(s)
+  s._braid = { N, P, env, rad, fila, row: !fila, ang, roll, full: [Math.min(0.45, (da + qa) / s.length), Math.max(0.55, 1 - (db + qb) / s.length)], len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -1359,7 +1370,7 @@ export const SPREAD_K = 1.3 // separación lateral entre rutas de un mismo senti
 // Si dos rutas de una mitad se tocan (routeSlack < ROUTE_MARGIN) se prueba otra fila: otro orden de las rutas (PERMS) y luego más apertura.
 const SPREAD_STEPS = [1, 1.4, 1.9]
 const PERMS = { 2: [[0, 1], [1, 0]], 3: [[0, 1, 2], [2, 1, 0], [1, 0, 2], [0, 2, 1], [1, 2, 0], [2, 0, 1]] }
-const ROUTE_MARGIN = 1.5 * TK // (u) el muestreo de la búsqueda (cada ~5 u) es más grueso que el de tools/overlap.mjs
+const ROUTE_MARGIN = 1.5 * TK * AK // × ANCHO_K: los pasos de muestreo de la búsqueda crecieron en esa proporción (semilla 27: faltaban 1.42 u) // (u) el muestreo de la búsqueda (cada ~5 u) es más grueso que el de tools/overlap.mjs
 const FAN_D = 105 * TK * AK // distancia (u) del hub a los puntos de paso Q0/Q1: las rutas se abren en abanico en ese tramo
 
 // Par en zona de puerto: uno de los dos puntos está a menos de PORT_ZONE de un nodo al que también llega (o del que sale) el otro camino.
@@ -1951,7 +1962,10 @@ function judgePairs(S, pairs, hitD) {
   // desglose de la zona exenta por tipo de punta: nodo (puerto), unión de rutas (fork/cross/merge) y carriles de un mismo tramo
   const jointBy = { nodo: 0, union: 0, carril: 0 }
   // prefijo contiguo desde la punta e que sigue chocando con la otra cinta (la zona cerrada cuenta si es el mismo tramo)
-  const pre = (set, r, e, ss) => { let c = ss ? r.closed[e] : 0; while (c <= r.n && c < r.capI[e] && set.has(e ? r.n - c : c)) c++; return c }
+  // Carriles de un mismo tramo: el tope JOINT_MAX se cuenta desde el FIN de la calzada fundida (zona cerrada), no desde
+  // la punta: en salida/llegada la calzada única dura toda la zona de puerto (más que JOINT_MAX) y la apertura empieza
+  // después. Entre tramos distintos el tope sigue contando desde la punta.
+  const pre = (set, r, e, ss) => { const c0 = ss ? r.closed[e] : 0; let c = c0; while (c <= r.n && c < r.capI[e] + c0 && set.has(e ? r.n - c : c)) c++; return c }
   for (const l of pairs.values()) {
     const A = ribs[R[l[0]]]; const B = ribs[R[l[1]]]
     let zones = null
@@ -1960,7 +1974,7 @@ function judgePairs(S, pairs, hitD) {
       if (zones) {
         const inA = new Set(); const inB = new Set()
         for (let k = 0; k < l.length; k += 3) if (l[k + 2] < JOINT_SEP) { inA.add(l[k] - A.start); inB.add(l[k + 1] - B.start) }
-        zones = zones.map(([ea, eb, ss]) => [ea, pre(inA, A, ea, ss), eb, pre(inB, B, eb, ss)])
+        zones = zones.map(([ea, eb, ss]) => [ea, pre(inA, A, ea, ss), eb, pre(inB, B, eb, ss), ss])
       }
     }
     for (let k = 0; k < l.length; k += 3) {
@@ -1968,7 +1982,8 @@ function judgePairs(S, pairs, hitD) {
       const z = zones && zones.find(([ea, ca, eb, cb]) => (ea ? A.n - ia : ia) < ca && (eb ? B.n - ib : ib) < cb)
       if (z) {
         if (d < hitD) {
-          const ja = Math.max((z[0] ? A.n - ia : ia) * A.ds, (z[2] ? B.n - ib : ib) * B.ds)
+          // arco exento: desde la punta, o desde el fin de la calzada fundida si son carriles del mismo tramo
+          const ja = Math.max(((z[0] ? A.n - ia : ia) - (z[4] ? A.closed[z[0]] : 0)) * A.ds, ((z[2] ? B.n - ib : ib) - (z[4] ? B.closed[z[2]] : 0)) * B.ds)
           joint = Math.max(joint, ja)
           const t = A.ends[z[0]][0] === 'n' ? 'nodo' : A.seg === B.seg ? 'carril' : 'union'
           if (ja > jointBy[t]) jointBy[t] = ja
