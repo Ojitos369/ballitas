@@ -2,6 +2,8 @@
 import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/claude/16c39c74d688ef56/66ad59e0-d323-4be2-8707-8e648cba3105/scratchpad/pw/node_modules/playwright-core/index.mjs'
 const [url] = process.argv.slice(2)
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--ignore-gpu-blocklist'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const p = await b.newPage({ viewport: { width: 1000, height: 700 } })
 await p.goto(url)
 await p.waitForFunction(() => window.__ballitasDebug?.gl, null, { timeout: 90000 })
@@ -18,4 +20,7 @@ const r = await p.evaluate(() => {
   return out.slice(0, 3)
 })
 console.log(JSON.stringify(r, null, 1))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

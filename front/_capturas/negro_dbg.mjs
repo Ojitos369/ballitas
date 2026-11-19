@@ -6,6 +6,8 @@ const [url, dir, vueltas = '3'] = process.argv.slice(2)
 mkdirSync(dir, { recursive: true })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--ignore-gpu-blocklist'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const p = await b.newPage({ viewport: { width: 1000, height: 700 } })
 await p.goto(url)
 await p.waitForFunction(() => window.__ballitasDebug?.gl, null, { timeout: 90000 })
@@ -43,4 +45,7 @@ while (n < +vueltas && Date.now() - t0 < 150000) {
   i = (i + 1) % dots
   await p.locator('.puntos .punto').nth(i).click(); await sleep(1000)
 }
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

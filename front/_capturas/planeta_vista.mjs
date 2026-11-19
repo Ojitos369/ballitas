@@ -65,6 +65,8 @@ async function lisos(p, buf) {
 
 async function correr(vpName) {
   const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--window-size=1400,950', '--ignore-gpu-blocklist'] })
+  const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+  try {
   const ctx = await b.newContext(VPS[vpName])
   const p = await ctx.newPage()
   const errs = []
@@ -113,8 +115,11 @@ async function correr(vpName) {
       if (s3 && PLANET.has(s3.phase) && !planetas.has(s3.planeta)) { await sleep(2200); ultimoId = null }
     } else await sleep(250)
   }
-  await b.close()
   return { filas, errores: errs.slice(0, 8), nErr: errs.length }
+  } finally {
+    clearTimeout(__guardia)
+    await b.close().catch(() => {})
+  }
 }
 
 const out = {}

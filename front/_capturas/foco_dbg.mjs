@@ -6,6 +6,8 @@ const [url, dir, vp] = process.argv.slice(2)
 mkdirSync(dir, { recursive: true })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--ignore-gpu-blocklist'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const ctx = await b.newContext(vp === 'movil' ? { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true } : { viewport: { width: 1400, height: 900 } })
 const p = await ctx.newPage()
 const errs = []
@@ -41,4 +43,7 @@ while (Date.now() - t0 < 120000 && n < 3) {
   await sleep(1200)
 }
 console.log(JSON.stringify(errs.slice(0, 10)))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

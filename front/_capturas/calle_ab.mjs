@@ -4,6 +4,8 @@ const [url, dir = 'ab'] = process.argv.slice(2)
 import { mkdirSync } from 'node:fs'
 mkdirSync(dir, { recursive: true })
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--ignore-gpu-blocklist'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const p = await b.newPage({ viewport: { width: 1000, height: 700 } })
 await p.goto(url)
 await p.waitForFunction(() => window.__ballitasDebug?.gl, null, { timeout: 90000 })
@@ -27,4 +29,7 @@ const info = await p.evaluate(() => {
 await p.waitForTimeout(150)
 await p.screenshot({ path: `${dir}/sin_calle.jpg`, type: 'jpeg', quality: 70 })
 console.log('calles visibles:', JSON.stringify(info))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}

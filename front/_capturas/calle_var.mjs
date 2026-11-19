@@ -5,6 +5,8 @@ const [url, dir] = process.argv.slice(2)
 mkdirSync(dir, { recursive: true })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const b = await chromium.launch({ channel: 'msedge', headless: false, args: ['--ignore-gpu-blocklist'] })
+const __guardia = setTimeout(() => { b.close().catch(() => {}).finally(() => process.exit(2)) }, 15 * 60 * 1000) // nunca deja un navegador abierto
+try {
 const p = await b.newPage({ viewport: { width: 1000, height: 700 } })
 const errs = []
 p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errs.push(m.text().slice(0, 300)) })
@@ -43,4 +45,7 @@ for (const v of ['', 'oculta']) {
   await p.screenshot({ path: `${dir}/var_${v.replace(/ /g, '_') || 'base'}.jpg`, type: 'jpeg', quality: 70 })
 }
 console.log(JSON.stringify(errs.slice(0, 6)))
-await b.close()
+} finally {
+  clearTimeout(__guardia)
+  await b.close().catch(() => {})
+}
