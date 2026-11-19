@@ -1,6 +1,6 @@
 # REPORTE_GEO — pendientes de separación de caminos (2026-11-19)
 
-**Resultado: cuñas resueltas y medidas (13 015 → 0 en la semilla 369, 0 en 369-371); torsión en puntas de salida/llegada de 47-72° a < 5°; cinta diezmada en recta. NO se cumplen: `ways:union` ≤ 3 252, `tramo:libre` gálibo 0 y lateral ≤ 500, `ruta:libre` gálibo 0, torsión en puntas de espiral/embudo (sigue ~100° / ~80°).** Sin push ni deploy.
+**Resultado: cuñas resueltas y medidas (13 015 → 0 en la semilla 369; 0 también en la 370; no medido en más semillas); torsión en puntas de salida/llegada de 47-72° a < 5°; cinta diezmada en recta. NO se cumplen: `ways:union` ≤ 3 252, `tramo:libre` gálibo 0 y lateral ≤ 500, `ruta:libre` gálibo 0, torsión en puntas de espiral/embudo (sigue ~100° / ~80°).** Sin push ni deploy.
 
 ## Qué cambió
 1. **Cuñas (paso 1)** — `world.js` (`bermaIndice`, `bermaAdd`, `bermaLibre`, `bermaLibres`, `bermaPerfil`), `vida/pista.jsx`.
