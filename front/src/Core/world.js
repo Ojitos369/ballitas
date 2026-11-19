@@ -1309,8 +1309,8 @@ function trackPts(kind, A, B, Ta, Tb, opt) {
 }
 
 // Puntos interiores de una Bézier cúbica de P0 (rumbo T0) a P1 (rumbo T1): una sola curva amplia.
-function bezierPts(P0, T0, P1, T1) {
-  const d = P0.distanceTo(P1); const k = d * 0.42; const n = clamp(Math.round(d / (2.5 * TK)), 4, 80); const pts = []
+function bezierPts(P0, T0, P1, T1, kf = 0.42) {
+  const d = P0.distanceTo(P1); const k = d * kf; const n = clamp(Math.round(d / (2.5 * TK)), 4, 80); const pts = []
   const c1 = at(P0, T0, k); const c2 = at(P1, T1, -k)
   for (let i = 1; i < n; i++) {
     const t = i / n; const s = 1 - t
@@ -1353,6 +1353,9 @@ export const GRID_LEN = 14 * TK // recta de parrilla de la salida, en unidades d
 export const PORT_ZONE = NODE_R + GRID_LEN + BRAID_OPEN + BRAID_PAD
 export const FINISH_LEN = 10 * TK // recta final de meta de la llegada
 
+const LINK_K = 1 / (9 * TK) // (rad/u) curvatura admisible del enlace: 6.4° por muestra del medidor (4.7 u)
+const LINK_KS = [0.42, 0.62] // manija de la Bézier, fracción de la cuerda
+const NO_LINK_FIX =!!globalThis.process?.env?.NO_LINK_FIX // diagnóstico (Node)
 function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   const lead = Math.min(2.5 * WS, A.distanceTo(B) * 0.15); const air = KINDS[kind].air
   const cr = (pts) => new THREE.CatmullRomCurve3(pts, false, 'centripetal')
@@ -1382,15 +1385,49 @@ function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   }
   const leadA = Ta && !ownsStart(kind); const leadB = Tb && !air
   // la forma sin sus puntas (dentro del enlace); se une a A y B con una curva Bézier que respeta Ta/Tb
-  const body = SHAPES[kind](A, B, P).filter((p) => !(leadA && p.distanceTo(A) < lead * 1.1) && !(leadB && p.distanceTo(B) < lead * 1.1))
+  let body = SHAPES[kind](A, B, P).filter((p) => !(leadA && p.distanceTo(A) < lead * 1.1) && !(leadB && p.distanceTo(B) < lead * 1.1))
   const dirOf = (p, q) => q.clone().sub(p).normalize()
+  // Empalme sin retroceso (GEO2): el enlace Bézier va de la última muestra de la forma (con SU rumbo) a la punta (con el
+  // rumbo del tramo vecino). Si los rumbos van contra la cuerda del enlace, la curva rebasa la punta y vuelve: un giro
+  // de 80-130° en 5 u (la «torsión en la punta» de espirales y embudos; alargar el enlace no lo quita, el rumbo de la
+  // hélice sigue opuesto). Se MIDE la curvatura del enlace (giro entre cuerdas / paso, rad/u) recortando la forma muestra
+  // a muestra (hasta la mitad) y con dos largos de manija; se toma el primer enlace bajo LINK_K o, si ninguno, el mejor.
+  let kA = 0.42; let kB = 0.42
+  if (!NO_LINK_FIX && body.length >= 4) {
+    const va = new THREE.Vector3(); const vb = new THREE.Vector3()
+    const curv = (seq) => { let m = 0; for (let i = 1; i < seq.length - 1; i++) { va.subVectors(seq[i], seq[i - 1]); vb.subVectors(seq[i + 1], seq[i]); const l = (va.length() + vb.length()) / 2; if (l > 1e-6) m = Math.max(m, va.angleTo(vb) / l) } return m }
+    if (leadB) {
+      const max = Math.floor(body.length * 0.5); let best = Infinity; let bi = body.length - 1
+      busca: for (let c = 0; c <= max; c++) {
+        const i = body.length - 1 - c; if (i < 2) break
+        for (const k of LINK_KS) {
+          const bz = bezierPts(body[i], dirOf(body[i - 1], body[i]), B, Tb, k); const v = curv([body[i - 1], body[i], ...bz, B, at(B, Tb, B.distanceTo(bz[bz.length - 1]))])
+          if (v < best) { best = v; bi = i; kB = k }
+          if (v < LINK_K) break busca
+        }
+      }
+      body = body.slice(0, bi + 1)
+    }
+    if (leadA) {
+      const max = Math.floor(body.length * 0.5); let best = Infinity; let bi = 0
+      busca: for (let c = 0; c <= max; c++) {
+        const i = c; if (i > body.length - 3) break
+        for (const k of LINK_KS) {
+          const bz = bezierPts(A, Ta, body[i], dirOf(body[i], body[i + 1]), k); const v = curv([at(A, Ta, -A.distanceTo(bz[0])), A, ...bz, body[i], body[i + 1]])
+          if (v < best) { best = v; bi = i; kA = k }
+          if (v < LINK_K) break busca
+        }
+      }
+      body = body.slice(bi)
+    }
+  }
   const pts = [A]
   if (midPt) pts.push(midPt)
-  if (leadA && body.length >= 2) pts.push(...bezierPts(A, Ta, body[0], dirOf(body[0], body[1])))
+  if (leadA && body.length >= 2) pts.push(...bezierPts(A, Ta, body[0], dirOf(body[0], body[1]), kA))
   else if (leadA) pts.push(at(A, Ta, lead))
   pts.push(...body)
   const nb = body.length
-  if (leadB && nb >= 2) pts.push(...bezierPts(body[nb - 1], dirOf(body[nb - 2], body[nb - 1]), B, Tb))
+  if (leadB && nb >= 2) pts.push(...bezierPts(body[nb - 1], dirOf(body[nb - 2], body[nb - 1]), B, Tb, kB))
   else if (leadB) pts.push(at(B, Tb, -lead))
   pts.push(B)
   return new THREE.CatmullRomCurve3(pts, false, 'centripetal')
@@ -1417,6 +1454,26 @@ const FAN_D = 105 * TK * AK // distancia (u) del hub a los puntos de paso Q0/Q1:
 // Par en zona de puerto: uno de los dos puntos está a menos de PORT_ZONE de un nodo al que también llega (o del que sale) el otro camino.
 // Misma regla en tools/overlap.mjs.
 export const inPort = (p, q) => (p.zn >= 0 && (q.f === p.zn || q.t === p.zn)) || (q.zn >= 0 && (p.f === q.zn || p.t === q.zn))
+// Cruces dentro de la zona de puerto (GEO2). Allí los caminos de un mismo nodo no se miden por envolvente (salen juntos
+// del planeta), pero una salida no puede pasar POR ENCIMA de la llegada de otro camino a menos del gálibo: es lo que el
+// medidor cuenta como ways:union gálibo (2 cruces por mundo, a 23 u de 28). Prueba en el marco de la calzada: el otro eje
+// cae dentro del ancho de la cinta (PORT_X_LAT) y entre PORT_X_MIN y PORT_X_H a lo largo de la normal.
+const PORT_X_R0 = NODE_R + 0.5 * 14 * TK // (u, desde el centro del nodo) más cerca las bocas vecinas aún van lado a lado
+const PORT_X_LAT = 2 * RIBBON_HALF + 1.5 * TK * AK / 2 // dos semicintas + medio paso del muestreo fino
+const PORT_X_MIN = 1.5 * TK // por debajo las dos calzadas van a la par (no una sobre otra)
+const PORT_X_H = 6 * TK + 0.75 + 1 * TK // GALIBO_H + QUILLA + margen
+const PORT_X_SCORE = 0.6 * TK + 0.01 // = CLEAR de placeWay + un pelo: admisible, pero por debajo de TARGET_LOW
+const PORT_WF = {}
+const NO_PORT_X = !!globalThis.process?.env?.NO_PORT_X // diagnóstico (Node)
+const portCross = (a, b) => {
+  const dx = b.p.x - a.p.x; const dy = b.p.y - a.p.y; const dz = b.p.z - a.p.z; const d2 = dx * dx + dy * dy + dz * dz
+  if (d2 > PORT_X_H * PORT_X_H + PORT_X_LAT * PORT_X_LAT) return false
+  for (const u of [a.up, b.up]) {
+    const h = Math.abs(dx * u.x + dy * u.y + dz * u.z)
+    if (h > PORT_X_MIN && h < PORT_X_H && d2 - h * h < PORT_X_LAT * PORT_X_LAT) return true
+  }
+  return false
+}
 function sampleWayPoints(way, steps = 14) {
   const pts = []
   // arranque (head) o remate (tail) de cada mitad de ruta: ahí las rutas confluyen en la unión
@@ -1431,7 +1488,11 @@ function sampleWayPoints(way, steps = 14) {
       let hubD2 = Infinity
       for (const j of way.junctions) hubD2 = Math.min(hubD2, j.pos.distanceToSquared(p))
       const hubD = Math.sqrt(hubD2)
-      pts.push({ p, r: braidRadius(s, u), kind: s.kind, zn: zn < 0 ? -1 : way.ends[zn].idx, f: way.from, t: way.to, c: way.circuit.idx, route: s.route, hubD, ext: routeExtent(s, u), tube: s.radius })
+      const pt = { p, r: braidRadius(s, u), kind: s.kind, zn: zn < 0 ? -1 : way.ends[zn].idx, f: way.from, t: way.to, c: way.circuit.idx, route: s.route, hubD, ext: routeExtent(s, u), tube: s.radius }
+      // cruce en zona de puerto (GEO2): pasada la mitad de la recta de parrilla/meta se guarda la normal de la calzada
+      // para que evalCand rechace una salida que pase por encima de la llegada de otro camino del mismo nodo
+      if (steps === 28 && zn >= 0 && !NO_PORT_X && p.distanceToSquared(way.ends[zn].pos) > PORT_X_R0 ** 2) pt.up = wallFrame(s, 0, u, 0, PORT_WF).up.clone()
+      pts.push(pt)
     }
   }
   return pts
@@ -1442,6 +1503,7 @@ function sampleWayPoints(way, steps = 14) {
 // Celda ROUTE_CELL: todo par a menos de ROUTE_CELL se mide; más lejos la holgura ya pasa de ROUTE_CELL - 2·ext - 1.5·radio (> ROUTE_MARGIN).
 const ROUTE_CELL = 20 * TK * AK
 const SELF_ARC = 40 * TK * AK // (u de recorrido) por debajo, dos tramos de una misma ruta aún se están separando de su punta común
+const NO_SELF = !!globalThis.process?.env?.NO_SELF // diagnóstico (Node): apaga la comparación entre tramos de una misma ruta
 function routeSlack(pts, only = -1) {
   // borde de la unión medido 6 u antes: allí las rutas convergen y el muestreo grueso (~5 u) se saltaba el punto más cercano
   const grid = new Map(); const pool = pts.filter((q) => q.route >= 0 && q.hubD >= ROUTE_JOIN - 6 * TK * AK)
@@ -1457,7 +1519,7 @@ function routeSlack(pts, only = -1) {
         if (o.route === q.route) {
           // misma ruta (sesión 7): tramos DISTINTOS a más de SELF_ARC de recorrido (un rizo contra la espiral siguiente);
           // los vecinos comparten punta y un tramo consigo mismo (rizo, hélice) se cruza por diseño
-          if (only < 0 || q.g == null || o.g == null || (o.m === q.m && o.h === q.h) || Math.abs(o.g - q.g) < SELF_ARC) continue
+          if (NO_SELF || only < 0 || q.g == null || o.g == null || (o.m === q.m && o.h === q.h) || Math.abs(o.g - q.g) < SELF_ARC) continue
         } else if (only < 0 && o.route < q.route) continue
         const r = q.ext + o.ext + MIN_GAP_K * Math.max(q.tube, o.tube); const d2 = q.p.distanceToSquared(o.p)
         const lim = r + min
@@ -1540,7 +1602,16 @@ function placeWay(world, circuit, from, to, placed) {
       }
       for (const bucket of near) {
         for (const q of bucket) {
-          if (inPort(pt, q)) continue // puerto común (la ida y la vuelta de un circuito también deben guardar huelgo entre sí fuera de él)
+          if (inPort(pt, q)) { // puerto común (la ida y la vuelta de un circuito también deben guardar huelgo entre sí fuera de él)
+            // ...salvo que una calzada pase por encima de la otra a menos del gálibo (GEO2): el candidato queda con la
+            // holgura mínima admisible (CLEAR): cualquier otro sin cruce le gana y solo se toma si no hay ninguno (como
+            // rechazo duro dejaba mundos sin hueco: la vuelta de un circuito cruza a veces su ida en todos los candidatos)
+            if (pt.up && q.up && minTube > PORT_X_SCORE && portCross(pt, q)) {
+              rej('cruce_en_puerto'); minTube = PORT_X_SCORE; minAt = ['puerto:' + pt.kind, q.kind, pt.c === q.c]
+              if (minTube <= floor) return { minTube, minNode, minHub, minAt }
+            }
+            continue
+          }
           const r = pt.r + q.r + MIN_GAP_K * Math.max(pt.tube, q.tube); const d2 = pt.p.distanceToSquared(q.p) // holgura sobre 1.5 radios de pista (igual que tools/overlap.mjs)
           if (d2 < (r + TARGET) ** 2 && Math.sqrt(d2) - r < minTube) {
             minTube = Math.sqrt(d2) - r; minAt = [pt.kind, q.kind, pt.c === q.c]
