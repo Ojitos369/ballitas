@@ -153,6 +153,7 @@ const POV_TRANS_S = 0.9 // planeta → carretera: la cámara de seguimiento se d
 const POV_TRANS_CORTE = 14 // si la ballita saltó más lejos (puerto, portal), corte en vez de cruzar el mundo
 const povTransQ = new THREE.Quaternion()
 const povTransM = new THREE.Matrix4()
+const povTransD = new THREE.Vector3()
 const rotGoal = new THREE.Quaternion()
 const REL_DEFAULT = { yaw: 0, pitch: 0.42, dist: SEGUIR_DIST }
 const springA = new THREE.Vector3()
@@ -924,6 +925,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
   const planetaRef = useRef(false)
   const povZoomMem = useRef({ sel: null, zoom: null }) // zoom del POV que se recupera al volver a la carretera
   const povTrans = useRef(1) // 0→1: transición seguimiento→POV al salir de un planeta
+  const povTransPrev = useRef({ p: new THREE.Vector3(), hasPrev: false })
 
   useEffect(() => {
     onCanvasReady?.(gl.domElement)
@@ -1249,6 +1251,7 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
         const mem = povZoomMem.current
         if (mem.sel === selected && mem.zoom != null) st.zoom = st.zs = mem.zoom
         povTrans.current = desdeSeguir ? 0 : 1
+        povTransPrev.current.hasPrev = false
         povDragging.current = false
         keysRef.current.clear()
       }
@@ -1387,12 +1390,16 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
         // vuelta del planeta a la carretera: la cámara se desliza desde la de seguimiento (salvo salto: corte)
         if (camera.position.distanceTo(povEye) > POV_TRANS_CORTE) povTrans.current = 1
         else {
+          // la cámara acompaña el desplazamiento de la ballita (a la salida del puerto acelera mucho) y solo
+          // interpola el resto: no se queda atrás
+          if (povTransPrev.current.hasPrev) camera.position.add(povTransD.copy(selected.pos).sub(povTransPrev.current.p))
           povTrans.current = Math.min(1, povTrans.current + h / POV_TRANS_S)
           const s = povTrans.current * povTrans.current * (3 - 2 * povTrans.current)
           kPos = Math.max(1 - Math.exp(-5 * h), s * s)
         }
       }
       camera.position.lerp(povEye, kPos)
+      povTransPrev.current.p.copy(selected.pos); povTransPrev.current.hasPrev = true
       // en la transición hacia los ojos el cuerpo se ve hasta que la cámara llega a él (no desaparece de golpe a lo lejos)
       if (povTrans.current < 1 && camera.position.distanceTo(selected.pos) > 0.6) povView.body = true
       if (zv.back > 0.05) {
@@ -1447,6 +1454,10 @@ function CameraRig({ mundo, world, nodes, selected, follow, pov, enPlaneta = fal
         if (modo.current === 'pov' && ultima.current === selected && camera.position.distanceTo(bp) < 1.2 && selected.dir) {
           camera.position.copy(bp).addScaledVector(selected.dir, -1.2).addScaledVector(selected.up ?? Y_AXIS, 0.45)
           camera.lookAt(bp)
+        } else if (modo.current === 'pov' && ultima.current === selected) {
+          // la ballita saltó al llegar al planeta y quedó fuera de cuadro: la entrada arranca mirándola
+          povTransD.copy(bp).project(camera)
+          if (povTransD.z > 1 || Math.abs(povTransD.x) > 0.9 || Math.abs(povTransD.y) > 0.9) camera.lookAt(bp)
         }
         modo.current = 'entrando'
         hasPrevPos.current = false
