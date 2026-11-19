@@ -1,0 +1,637 @@
+[
+ {
+  "tanda": 1,
+  "nombre": "rama",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 52.3,
+  "tris": 943511,
+  "heapMB": 697,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 15.3,
+    "tris": 1022158,
+    "fps": 54.5
+   },
+   "caida": {
+    "s": 8,
+    "tris": 704263,
+    "fps": 56.1
+   },
+   "portal": {
+    "s": 3.5,
+    "tris": 610167,
+    "fps": 57.7
+   },
+   "canon": {
+    "s": 0.4,
+    "tris": 582047,
+    "fps": 58.8
+   },
+   "embudo": {
+    "s": 2.7,
+    "tris": 836203,
+    "fps": 61.7
+   },
+   "pantano": {
+    "s": 18,
+    "tris": 1008815,
+    "fps": 49
+   },
+   "hielo_resbaloso": {
+    "s": 0.1,
+    "tris": 719192,
+    "fps": 44
+   },
+   "espiral": {
+    "s": 4.7,
+    "tris": 897240,
+    "fps": 49.1
+   },
+   "geiser": {
+    "s": 1.3,
+    "tris": 779985,
+    "fps": 54.8
+   },
+   "turbina": {
+    "s": 6,
+    "tris": 1304112,
+    "fps": 46.5
+   },
+   "llegada": {
+    "s": 0,
+    "tris": 1364684,
+    "fps": 41.7
+   }
+  },
+  "errs": [],
+  "tomas": [
+   {
+    "tipo": "espiral",
+    "img": "desk_espiral_w18",
+    "pov": {
+     "id": 10,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 18
+    },
+    "pov2": {
+     "id": 10,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 18
+    }
+   },
+   {
+    "tipo": "embudo",
+    "img": "desk_embudo_w16",
+    "pov": {
+     "id": 7,
+     "phase": "travel",
+     "kind": "embudo",
+     "way": 16
+    },
+    "pov2": {
+     "id": 7,
+     "phase": "travel",
+     "kind": "embudo",
+     "way": 16
+    }
+   },
+   {
+    "tipo": "salida",
+    "img": "desk_salida_w3",
+    "pov": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 3
+    },
+    "pov2": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 3
+    }
+   }
+  ]
+ },
+ {
+  "tanda": 1,
+  "nombre": "rama",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 64,
+  "tris": 731442,
+  "heapMB": 760,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 18.2,
+    "tris": 707612,
+    "fps": 66.6
+   },
+   "caida": {
+    "s": 2.7,
+    "tris": 548080,
+    "fps": 79.3
+   },
+   "rampa": {
+    "s": 3.1,
+    "tris": 409293,
+    "fps": 71.6
+   },
+   "espiral": {
+    "s": 10.4,
+    "tris": 797092,
+    "fps": 53.6
+   },
+   "hielo_resbaloso": {
+    "s": 1.6,
+    "tris": 1157651,
+    "fps": 55
+   },
+   "pantano": {
+    "s": 18,
+    "tris": 765858,
+    "fps": 62.9
+   },
+   "trampolin": {
+    "s": 6,
+    "tris": 798889,
+    "fps": 68.6
+   },
+   "llegada": {
+    "s": 0,
+    "tris": 884420,
+    "fps": 78.7
+   }
+  },
+  "errs": [],
+  "tomas": [
+   {
+    "tipo": "espiral",
+    "img": "movil_espiral_w16",
+    "pov": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 16
+    },
+    "pov2": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "espiral",
+     "way": 16
+    }
+   },
+   {
+    "tipo": "embudo",
+    "img": "movil_embudo_w2",
+    "pov": {
+     "id": 8,
+     "phase": "travel",
+     "kind": "embudo",
+     "way": 2
+    },
+    "pov2": {
+     "id": 8,
+     "phase": "travel",
+     "kind": "embudo",
+     "way": 2
+    }
+   },
+   {
+    "tipo": "salida",
+    "img": "movil_salida_w16",
+    "pov": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 16
+    },
+    "pov2": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 16
+    }
+   }
+  ]
+ },
+ {
+  "tanda": 1,
+  "nombre": "main",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 51.9,
+  "tris": 862658,
+  "heapMB": 644,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 26.4,
+    "tris": 968857,
+    "fps": 50.3
+   },
+   "caida": {
+    "s": 3.6,
+    "tris": 859456,
+    "fps": 49.3
+   },
+   "pantano": {
+    "s": 18,
+    "tris": 686913,
+    "fps": 57.7
+   },
+   "rizo": {
+    "s": 6,
+    "tris": 891482,
+    "fps": 48
+   },
+   "geiser": {
+    "s": 6,
+    "tris": 983121,
+    "fps": 46.8
+   },
+   "espiral": {
+    "s": 0,
+    "tris": 638136,
+    "fps": 47.2
+   }
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 1,
+  "nombre": "main",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "toDest",
+   "kind": null
+  },
+  "fps": 55.9,
+  "tris": 697577,
+  "heapMB": 850,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 20,
+    "tris": 733240,
+    "fps": 59.8
+   },
+   "caida": {
+    "s": 6.3,
+    "tris": 543093,
+    "fps": 64.9
+   },
+   "canon": {
+    "s": 8.8,
+    "tris": 584544,
+    "fps": 61.4
+   },
+   "portal": {
+    "s": 5.9,
+    "tris": 702188,
+    "fps": 54.6
+   },
+   "erupcion": {
+    "s": 1,
+    "tris": 683511,
+    "fps": 56.9
+   },
+   "embudo": {
+    "s": 6,
+    "tris": 789243,
+    "fps": 50.4
+   },
+   "sacacorchos": {
+    "s": 3.8,
+    "tris": 572936,
+    "fps": 45
+   },
+   "trampolin": {
+    "s": 2.3,
+    "tris": 729979,
+    "fps": 55.5
+   },
+   "espiral": {
+    "s": 0.8,
+    "tris": 489421,
+    "fps": 49.1
+   },
+   "llegada": {
+    "s": 5.3,
+    "tris": 1093941,
+    "fps": 37.5
+   }
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "rama",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 49.7,
+  "tris": 893213,
+  "heapMB": 587,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 20.5,
+    "tris": 1011797,
+    "fps": 52.1
+   },
+   "caida": {
+    "s": 7.9,
+    "tris": 668518,
+    "fps": 60.8
+   },
+   "trampolin": {
+    "s": 3,
+    "tris": 873490,
+    "fps": 43.7
+   },
+   "espiral": {
+    "s": 9.7,
+    "tris": 737452,
+    "fps": 53.2
+   },
+   "portal": {
+    "s": 1.6,
+    "tris": 764283,
+    "fps": 49.3
+   },
+   "hielo_resbaloso": {
+    "s": 5.3,
+    "tris": 1059907,
+    "fps": 36.3
+   },
+   "rizo": {
+    "s": 0.7,
+    "tris": 1141883,
+    "fps": 42.1
+   },
+   "sacacorchos": {
+    "s": 5.5,
+    "tris": 736453,
+    "fps": 42
+   },
+   "llegada": {
+    "s": 5.8,
+    "tris": 1173383,
+    "fps": 43.5
+   },
+   "embudo": {
+    "s": 0,
+    "tris": 1256336,
+    "fps": 69.4
+   }
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "rama",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 56.6,
+  "tris": 737227,
+  "heapMB": 750,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 16.2,
+    "tris": 758815,
+    "fps": 57.7
+   },
+   "rampa": {
+    "s": 1.8,
+    "tris": 495189,
+    "fps": 60.5
+   },
+   "canon": {
+    "s": 1.4,
+    "tris": 604047,
+    "fps": 57.1
+   },
+   "cascada": {
+    "s": 10.6,
+    "tris": 681584,
+    "fps": 62.7
+   },
+   "embudo": {
+    "s": 6,
+    "tris": 923357,
+    "fps": 53.6
+   },
+   "espiral": {
+    "s": 12.3,
+    "tris": 829679,
+    "fps": 53.2
+   },
+   "hielo_resbaloso": {
+    "s": 5.7,
+    "tris": 742286,
+    "fps": 52
+   },
+   "geiser": {
+    "s": 6,
+    "tris": 533576,
+    "fps": 55.5
+   }
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "main",
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 49.4,
+  "tris": 840068,
+  "heapMB": 667,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 20.2,
+    "tris": 1082794,
+    "fps": 46.1
+   },
+   "horquilla": {
+    "s": 3.8,
+    "tris": 1284778,
+    "fps": 41.8
+   },
+   "pantano": {
+    "s": 18,
+    "tris": 677781,
+    "fps": 55
+   },
+   "caida": {
+    "s": 4.8,
+    "tris": 485165,
+    "fps": 48.1
+   },
+   "espiral": {
+    "s": 4.2,
+    "tris": 534035,
+    "fps": 52.4
+   },
+   "portal": {
+    "s": 3,
+    "tris": 442619,
+    "fps": 60.2
+   },
+   "llegada": {
+    "s": 6,
+    "tris": 1173554,
+    "fps": 42.3
+   },
+   "sacacorchos": {
+    "s": 0,
+    "tris": 1255177,
+    "fps": 43.5
+   }
+  },
+  "errs": [],
+  "tomas": []
+ },
+ {
+  "tanda": 2,
+  "nombre": "main",
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "seed": 369,
+   "viajan": []
+  },
+  "sel": {
+   "id": 1,
+   "phase": "at",
+   "kind": null
+  },
+  "fps": 56.5,
+  "tris": 758217,
+  "heapMB": 717,
+  "enViaje": 1,
+  "ballitas": 21,
+  "porTipo": {
+   "salida": {
+    "s": 21.5,
+    "tris": 871538,
+    "fps": 55.9
+   },
+   "trampolin": {
+    "s": 5.6,
+    "tris": 933756,
+    "fps": 45
+   },
+   "embudo": {
+    "s": 12,
+    "tris": 512049,
+    "fps": 72.6
+   },
+   "caida": {
+    "s": 2.4,
+    "tris": 1013412,
+    "fps": 48.4
+   },
+   "erupcion": {
+    "s": 3.6,
+    "tris": 1000658,
+    "fps": 44.2
+   },
+   "espiral": {
+    "s": 12.4,
+    "tris": 694934,
+    "fps": 54.4
+   },
+   "hielo_resbaloso": {
+    "s": 2.5,
+    "tris": 820856,
+    "fps": 48.1
+   },
+   "pantano": {
+    "s": 0,
+    "tris": 1134634,
+    "fps": 31.5
+   }
+  },
+  "errs": [],
+  "tomas": []
+ }
+]
