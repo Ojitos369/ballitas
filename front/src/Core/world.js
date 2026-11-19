@@ -1,4 +1,4 @@
-// Mundo de Ballitas, sin React ni render: lo usan la sim y el 3D.
+﻿// Mundo de Ballitas, sin React ni render: lo usan la sim y el 3D.
 //
 // ═══════════════════════════ CONTRATO DE DATOS ═══════════════════════════
 // Unidades de mundo; Y es "arriba" (la gravedad tira hacia -Y). Todo `pos`/`dir` es THREE.Vector3.
@@ -475,14 +475,20 @@ export function braidDelay(seg, hubs = true) {
 // HUB_OPEN, así sus elecciones no cambian y el envolvente queda del lado holgado).
 export const braidRadius = (seg, u) => Math.max(seg.radius, BRAID_A * braidEnv(seg, u, false) + BRAID_PAD)
 
+// Fracción de apertura con la que los carriles ya tienen aire entre sí: por debajo van planos (sin giro ni relieve).
+const FLAT_E0 = 0.55
+const flatEnv = (e) => smooth01((e - FLAT_E0) / (1 - FLAT_E0))
 // Giro propio (rad) del camino alrededor de su avance; 0 (mod 2π) en las puntas.
 function rollAt(seg, lane, u) {
   if (!lane || lane.roll === 'plano' || !seg._braid) return 0
-  const e = braidEnv(seg, u)
+  const br = seg._braid
+  // gira sólo cuando ya va separado de sus vecinos (unión coplanar) y donde cabe su hueco de gálibo (rollK)
+  const e = flatEnv(braidEnv(seg, u)) * (br.rollK ? lerpArr(br.rollK, u) : 1)
   if (lane.roll === 'cabeza') return Math.PI * e
   if (lane.roll === 'lado_der') return (Math.PI / 2) * e
   if (lane.roll === 'lado_izq') return (-Math.PI / 2) * e
-  const [a, b] = seg._braid.full
+  if (br.spin === false) return 0
+  const [a, b] = br.full
   return (lane.roll === 'tirabuzon' ? 1 : -1) * TAU * smooth01((clamp(u, 0, 1) - a) / (b - a))
 }
 export const laneRoll = (seg, laneId, u) => rollAt(seg, laneOf(seg, laneId), u)
@@ -682,7 +688,15 @@ const KICK_DROP = 0.9 * TK // largo (u) de la caída tras la cresta de una rampa
 
 // Curvatura suavizada, peralte y relieve de un tramo de tubo. Usa los marcos ya cacheados.
 function buildSurface(s, rng) {
-  s._curv = s._bank = s._relief = null
+  s._relief = null
+  if (s.air) { s._curv = s._bank = null; return }
+  if (!s._bank) buildBank(s)
+  const role = s.route >= 0 ? ROLES[s.route] : 'shared'
+  buildRelief(s, rng, role)
+}
+// Curvatura y peralte del eje (sólo dependen del eje: la cinta plana de carriles los usa antes de construirse).
+function buildBank(s) {
+  s._curv = s._bank = null
   if (s.air) return
   ensureFrames(s)
   const { n, T, D } = s._fr; const ds = s.length / n
@@ -723,6 +737,8 @@ function buildSurface(s, rng) {
   }
   pinMag()
   s._bank = { x: bx, y: by }
+}
+function buildRelief(s, rng, role) {
   // relieve por carril: lomas, badenes, rampa antes de cada mecanismo y saltos en la ruta espectacular
   const R = RELIEF[role]; const L = s.length; const hMax = 0.45 * (s.radius - BALL_R)
   const nr = clamp(Math.ceil(L / (0.5 * TK)), 32, 8000) // tramos largos (mapa grande) siguen muestreados a ~0.5 u (× TK)
@@ -747,7 +763,8 @@ function buildSurface(s, rng) {
         if (x > p - up && x <= p) h += kh * smooth01((x - p + up) / up)
         else if (x > p && x < p + KICK_DROP) h += kh * (1 - (x - p) / KICK_DROP)
       }
-      arr[i] = clamp(h, 0, hMax) * smooth01(x / (6 * TK)) * smooth01((L - x) / (6 * TK))
+      // nulo donde la cinta aún va pegada a sus vecinas (unión coplanar: misma calzada que se ensancha)
+      arr[i] = clamp(h, 0, hMax) * smooth01(x / (6 * TK)) * smooth01((L - x) / (6 * TK)) * flatEnv(braidEnv(s, i / nr))
     }
     s._relief.h.set(lane.id, arr)
   }
@@ -813,19 +830,40 @@ function buildBraid(s) {
   }
   const cap = braidCap(C, N, s.length / N)
   const rad = new Float32Array(N + 1)
-  for (let i = 0; i <= N; i++) rad[i] = Math.max(0, Math.min(BRAID_A * env[i], cap[i]))
+  const [da, db] = braidDelay(s)
+  const full = [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)]
+  // donde la cota (hélices, codos) no deja sitio al hueco de gálibo de un carril girado, el giro se atenúa (rollK):
+  // mejor un carril plano con aire que uno de lado contra su vecino
+  const nL0 = lanes.length; const W0 = ((nL0 - 1) * PITCH_L) / 2; const W1 = ((nL0 - 1) * ROLL_GAP) / 2
+  const rk = new Float32Array(N + 1); for (let i = 0; i <= N; i++) rk[i] = clamp((cap[i] - W0) / (W1 - W0), 0, 1)
+  const wk = Math.max(2, Math.ceil((10 * TK) / (s.length / N))); const rollK = new Float32Array(N + 1)
+  for (let i = 0; i <= N; i++) { let m = 1; for (let j = Math.max(0, i - wk); j <= Math.min(N, i + wk); j++) m = Math.min(m, rk[j]); rollK[i] = m }
+  const [fi0, fi1] = [Math.floor(full[0] * N), Math.ceil(full[1] * N)]; let kMin = 1; for (let i = fi0; i <= fi1; i++) kMin = Math.min(kMin, rollK[i])
+  s._braid = { full, rollK, spin: kMin >= 0.999 } // rollAt los necesita
+  buildBank(s)
+  // Cinta plana de carriles: todos en el plano del tramo (peralte del conjunto), uno junto a otro, sin pasar nadie por
+  // encima de nadie. Orden lateral: el central (plano) en medio, los demás alternando a cada lado.
+  const slot = []; for (const l of lanes) { if (l.id % 2) slot.push(l.id); else slot.unshift(l.id) }
+  const nL = slot.length; const xs = new Float64Array(nL); const sig = new Float64Array(nL)
+  const pf = {}; const lf = {}
   for (let i = 0; i <= N; i++) {
     const u = i / N
-    for (let j = 0; j < lanes.length; j++) {
-      const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3))
-      const ringCount = Math.max(1, lanes.length - 1)
-      const theta = id === 0 ? 0 : ((id - 1) * TAU / ringCount + u * TAU)
-      const radius = id === 0 ? 0 : rad[i]
-      for (let k = 0; k < 3; k++) dst[i * 3 + k] = C[i * 3 + k] + R[i * 3 + k] * Math.cos(theta) * radius + S[i * 3 + k] * Math.sin(theta) * radius
+    const bk = s._bank; let a0 = 0
+    if (bk) { const x = lerpArr(bk.x, u); const y = lerpArr(bk.y, u); const m = Math.hypot(x, y); if (m > 1e-6) a0 = m * Math.sin(angDiff(0, Math.atan2(y, x))) }
+    const sd = wallFrame(s, a0, u, 0, pf).side
+    // un carril girado (de lado, de cabeza, tirabuzón) apunta su «arriba» hacia un vecino: ese hueco crece hasta el gálibo
+    for (let k = 0; k < nL; k++) sig[k] = wallFrame(s, laneAngle(s, slot[k], u), u, 0, lf).up.dot(sd)
+    xs[0] = 0
+    for (let k = 1; k < nL; k++) xs[k] = xs[k - 1] + Math.max(PITCH_L, ROLL_GAP * Math.min(1, 1.5 * Math.max(sig[k - 1], -sig[k], 0)))
+    const mid = (xs[0] + xs[nL - 1]) / 2; const half = xs[nL - 1] - mid
+    const scale = half > 1e-6 ? Math.min(1, cap[i] / half) : 1
+    rad[i] = half * env[i] * scale
+    for (let k = 0; k < nL; k++) {
+      const id = slot[k]; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (xs[k] - mid) * env[i] * scale
+      dst[i * 3] = C[i * 3] + sd.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + sd.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + sd.z * off
     }
   }
-  const [da, db] = braidDelay(s)
-  s._braid = { N, P, env, rad, full: [Math.min(0.45, (da + OPEN_RAMP) / s.length), Math.max(0.55, 1 - (db + OPEN_RAMP) / s.length)], len: [], curves: [] }
+  s._braid = { N, P, env, rad, full, rollK, spin: s._braid.spin, len: [], curves: [] }
 }
 
 function buildLanes(way) {
@@ -890,7 +928,7 @@ const TERM_MIN_ANG = 0.58 // fallback de separación angular entre terminales si
 // con ellas buildWorld se salta la búsqueda cara y produce el mismo mundo.
 const PICKS = new Map()
 // shortcut: la caché de elecciones se invalida a mano; sube WORLD_GEN al cambiar cualquier cosa de la generación
-export const WORLD_GEN = 8
+export const WORLD_GEN = 9
 export const setWorldPicks = (seed, picks) => PICKS.set(seed, picks)
 // Si algún camino no encuentra hueco, se rehace el mundo con otra semilla de reparto (determinista).
 const MAX_ATTEMPTS = 6
@@ -1883,6 +1921,10 @@ export function ribbonHits(world, S = ribbonSamples(world)) {
 export const GALIBO_H = 6 * TK
 export const AIRE_LAT = 2 * RIBBON_HALF
 export const CALZADA_HALF = LANE_W / 2 + RIBBON_CURB
+// Cinta plana de carriles (buildBraid): paso lateral entre ejes vecinos = una cinta + un ancho de cinta de aire (M1);
+// si un carril gira su «arriba» hacia el vecino, el hueco crece hasta dejarle el gálibo completo (M2).
+export const PITCH_L = 2 * RIBBON_HALF + AIRE_LAT + 1.5 * TK
+const ROLL_GAP = GALIBO_H + RIBBON_HALF + 2 * TK
 export const QUILLA = 0.75 // quilla de la cinta bajo el firme (pista.jsx profile: 0.48 · k, k <= 1.55)
 export const COPLANAR_DOT = 0.98
 export const COPLANAR_Y = 0.25
