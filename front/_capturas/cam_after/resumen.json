@@ -1,0 +1,146 @@
+{
+ "movil": {
+  "filas": [
+   {
+    "img": "movil_00_Alba_toDest_600.jpg",
+    "id": 1,
+    "name": "Chito",
+    "phase": "toDest",
+    "node": 3,
+    "planeta": "Alba",
+    "bioma": "Archipiélago Azul",
+    "dest": "Spa",
+    "altoPct": 10.5,
+    "destVis": false,
+    "rotulo": null,
+    "sx": 154,
+    "sy": 548,
+    "card": [
+     8,
+     836,
+     396,
+     36
+    ],
+    "tapa": false,
+    "fps": 55.6,
+    "calls": 166,
+    "tris": 429890,
+    "lisoPct": 42.4,
+    "tag": "toDest"
+   },
+   {
+    "img": "movil_01_Alba_at_600.jpg",
+    "id": 1,
+    "name": "Chito",
+    "phase": "at",
+    "node": 3,
+    "planeta": "Alba",
+    "bioma": "Archipiélago Azul",
+    "dest": "Spa",
+    "altoPct": 12.2,
+    "destVis": true,
+    "rotulo": null,
+    "sx": 162,
+    "sy": 554,
+    "card": [
+     8,
+     836,
+     396,
+     36
+    ],
+    "tapa": false,
+    "fps": 74.7,
+    "calls": 134,
+    "tris": 456559,
+    "lisoPct": 37.2,
+    "tag": "at"
+   },
+   {
+    "img": "movil_02_Alba_toPort_2500.jpg",
+    "id": 1,
+    "name": "Chito",
+    "phase": "toPort",
+    "node": 3,
+    "planeta": "Alba",
+    "bioma": "Archipiélago Azul",
+    "dest": "Spa",
+    "altoPct": 22.3,
+    "destVis": false,
+    "rotulo": "entero",
+    "sx": 258,
+    "sy": 555,
+    "card": [
+     8,
+     836,
+     396,
+     36
+    ],
+    "tapa": false,
+    "fps": 40.4,
+    "calls": 134,
+    "tris": 720768,
+    "lisoPct": 27.3,
+    "tag": "at"
+   },
+   {
+    "img": "movil_03_Cima_toPort_600.jpg",
+    "id": 4,
+    "name": "Trupa",
+    "phase": "toPort",
+    "node": 1,
+    "planeta": "Cima",
+    "bioma": "Cumbre Glacial",
+    "dest": "Siesta",
+    "altoPct": 13.7,
+    "destVis": false,
+    "rotulo": "entero",
+    "sx": 190,
+    "sy": 533,
+    "card": [
+     8,
+     836,
+     396,
+     36
+    ],
+    "tapa": false,
+    "fps": 41.8,
+    "calls": 118,
+    "tris": 681394,
+    "lisoPct": 23.7,
+    "tag": "toPort"
+   },
+   {
+    "img": "movil_04_Delta_toPort_600.jpg",
+    "id": 5,
+    "name": "Morusa",
+    "phase": "toPort",
+    "node": 2,
+    "planeta": "Delta",
+    "bioma": "Arboleda Ancestral",
+    "dest": "Fuente",
+    "altoPct": 10.4,
+    "destVis": true,
+    "rotulo": "entero",
+    "sx": 153,
+    "sy": 566,
+    "card": [
+     8,
+     836,
+     396,
+     36
+    ],
+    "tapa": false,
+    "fps": 35.6,
+    "calls": 169,
+    "tris": 1108007,
+    "lisoPct": 22.4,
+    "tag": "toPort"
+   }
+  ],
+  "errores": [
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ],
+  "nErr": 2
+ }
+}
