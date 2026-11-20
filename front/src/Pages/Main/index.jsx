@@ -6,6 +6,7 @@ import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
 import ViewTabs from '../../Components/Panels/ViewTabs.jsx'
 import Llegada from '../../Components/Panels/Llegada.jsx'
+import Control from '../../Components/Control/index.jsx'
 import { setFocoBallita } from '../../Components/World3D/mundos/foco.js'
 import { StatsHud } from '../../Components/World3D/StatsOverlay.jsx'
 
@@ -35,7 +36,7 @@ export default function Main() {
 // `vista` ('mapa' | 'camino' | 'ballita') es la fuente de verdad; follow/pov se derivan de ella y de `punto`.
 function MainScene() {
   const [sim, setSim] = useState(null)
-  useEffect(() => { let vivo=true; crearMundo({semilla:369}).then(m=>{if(vivo)setSim(m)}); return ()=>{vivo=false} }, [])
+  useEffect(() => { let vivo=true; crearMundo({semilla:369}).then(m=>{if(vivo){setSim(m); window.__mundo=m}else m.cerrar?.()}); return ()=>{vivo=false} }, [])
   useEffect(() => () => sim?.cerrar?.(), [sim])
   if (!sim) return <div role="status" style={{position:'fixed',inset:0,display:'grid',placeItems:'center',background:'#0b1020',color:'#cfe3ff',font:'600 18px system-ui'}}>Conectando con el mundo…</div>
   return <LoadedScene sim={sim} />
@@ -132,6 +133,10 @@ function LoadedScene({ sim }) {
     setSelected(null)
   })
   const exitPov = useCallback(() => setVista('mapa'), [])
+  // Control se suscribe a eventos del mundo con este callback: debe ser estable entre renders.
+  const selectRef = useRef(select)
+  selectRef.current = select
+  const selectCtrl = useCallback((b) => selectRef.current(b), [])
 
   return (
     <div className="app">
@@ -143,6 +148,7 @@ function LoadedScene({ sim }) {
       <ViewTabs vista={vista} goVista={goVista} sim={sim} way={activeWay} routeIndex={routeIndex} setRouteIndex={(i) => { setRouteIndex(i); setSeek(null) }}
         paused={caminoPaused} setPaused={setCaminoPaused} caminoSpeed={caminoSpeed} setCaminoSpeed={setCaminoSpeed}
         seekTo={(i) => setSeek({ i, k: performance.now() })} onFollow={followBallita} progressRef={progressRef} />
+      <Control mundo={sim} selected={selected} onSelect={selectCtrl} />
       {enFoco && <Llegada b={enFoco} world={sim.world} />}
       {selected && vista !== 'camino' && (
         <Detail b={selected} sim={sim} pov={pov}

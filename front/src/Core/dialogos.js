@@ -431,7 +431,7 @@ export function actualizarDialogoVivo(b, sim, state) {
     // o respetar b.thought enriqueciéndolo si es un evento de obstáculo
     const ev = b.phase === 'travel' && b.seg?.kind ? b.seg.kind : null
     if (ev && EVENT_LINES[ev] && b.thought.until > t) {
-      const d = elegirDialogo(b, ev, { n: sim.world?.nodes?.[b.way?.to]?.name ?? '' }, sim.rng)
+      const d = elegirDialogo(b, ev, { n: sim.world?.nodes?.[b.way?.to]?.name ?? '' }, sim.rngDialogos ?? sim.rng)
       globos.set(b.id, { ...d, until: b.thought.until })
       return globos.get(b.id)
     }
@@ -446,7 +446,7 @@ export function actualizarDialogoVivo(b, sim, state) {
     if (evKey && EVENT_LINES[evKey] && evKey !== 'rampa') {
       const d = elegirDialogo(b, evKey, {
         n: sim.world?.nodes?.[b.way?.to]?.name ?? '',
-      }, sim.rng)
+      }, sim.rngDialogos ?? sim.rng)
       const bubble = { ...d, until: t + 3.4 }
       globos.set(b.id, bubble)
       return bubble
@@ -458,7 +458,7 @@ export function actualizarDialogoVivo(b, sim, state) {
   const razon = b.plan?.razon
   if (razon && razon !== state.lastPlanRazon) {
     state.lastPlanRazon = razon
-    const d = elegirDialogo(b, 'plan', { razon }, sim.rng)
+    const d = elegirDialogo(b, 'plan', { razon }, sim.rngDialogos ?? sim.rng)
     const bubble = { ...d, until: t + 3.6 }
     globos.set(b.id, bubble)
     return bubble
@@ -475,7 +475,7 @@ export function actualizarDialogoVivo(b, sim, state) {
       const other = sim.ballitas[i]
       if (other.id === b.id || other.phase === 'dying' || other.phase === 'gone') continue
       if (b.pos.distanceToSquared(other.pos) < 12.25) {
-        const d = elegirDialogo(b, 'cerca_ballita', { other: other.name }, sim.rng)
+        const d = elegirDialogo(b, 'cerca_ballita', { other: other.name }, sim.rngDialogos ?? sim.rng)
         const bubble = { ...d, until: t + 3.0 }
         globos.set(b.id, bubble)
         return bubble
@@ -489,13 +489,13 @@ export function actualizarDialogoVivo(b, sim, state) {
     const prof = b.route?.profile?.speed
     const sk = b.seg?.speedK ?? 1
     if (prof === 'rapida' || sk > 1.2 || b.speed > 20) {
-      const d = elegirDialogo(b, 'velocidad_rapida', {}, sim.rng)
+      const d = elegirDialogo(b, 'velocidad_rapida', {}, sim.rngDialogos ?? sim.rng)
       const bubble = { ...d, until: t + 2.8 }
       globos.set(b.id, bubble)
       return bubble
     }
     if (prof === 'lenta' || sk < 0.8 || (b.speed > 0 && b.speed < 4.5)) {
-      const d = elegirDialogo(b, 'velocidad_lenta', {}, sim.rng)
+      const d = elegirDialogo(b, 'velocidad_lenta', {}, sim.rngDialogos ?? sim.rng)
       const bubble = { ...d, until: t + 2.8 }
       globos.set(b.id, bubble)
       return bubble

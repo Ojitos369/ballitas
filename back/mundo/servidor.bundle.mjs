@@ -29,9 +29,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"], hasBlob = typeof Blob < "u";
     hasBlob && BINARY_TYPES.push("blob");
@@ -51,9 +51,9 @@ var require_constants = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { websocketMask, websocketUnmask } = __require("http"), { EMPTY_BUFFER } = require_constants(), FastBuffer = Buffer[Symbol.species];
     function concat(list, totalLength) {
@@ -108,9 +108,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = Symbol("kDone"), kRun = Symbol("kRun"), Limiter = class {
       /**
@@ -149,9 +149,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib = __require("zlib"), bufferUtil = require_buffer_util(), Limiter = require_limiter(), { kStatusCode } = require_constants(), FastBuffer = Buffer[Symbol.species], TRAILER = Buffer.from([0, 0, 255, 255]), kPerMessageDeflate = Symbol("permessage-deflate"), kTotalLength = Symbol("total-length"), kCallback = Symbol("callback"), kBuffers = Symbol("buffers"), kError = Symbol("error"), zlibLimiter, PerMessageDeflate2 = class {
       /**
@@ -409,9 +409,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer"), { hasBlob } = require_constants(), tokenChars = [
       0,
@@ -601,9 +601,9 @@ var require_validation = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream"), PerMessageDeflate2 = require_permessage_deflate(), {
       BINARY_TYPES,
@@ -1102,9 +1102,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream"), { randomFillSync } = __require("crypto"), {
       types: { isUint8Array }
@@ -1396,9 +1396,9 @@ var require_sender = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants(), kCode = Symbol("kCode"), kData = Symbol("kData"), kError = Symbol("kError"), kMessage = Symbol("kMessage"), kReason = Symbol("kReason"), kTarget = Symbol("kTarget"), kType = Symbol("kType"), kWasClean = Symbol("kWasClean"), Event = class {
       /**
@@ -1591,9 +1591,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -1676,11 +1676,11 @@ var require_extension = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
-    var EventEmitter = __require("events"), https = __require("https"), http2 = __require("http"), net = __require("net"), querystring = __require("querystring"), tls = __require("tls"), { randomBytes: randomBytes2, createHash: createHash2 } = __require("crypto"), { Duplex, Readable } = __require("stream"), { URL } = __require("url"), PerMessageDeflate2 = require_permessage_deflate(), Receiver2 = require_receiver(), Sender2 = require_sender(), { isBlob } = require_validation(), {
+    var EventEmitter = __require("events"), https = __require("https"), http2 = __require("http"), net = __require("net"), querystring = __require("querystring"), tls = __require("tls"), { randomBytes: randomBytes2, createHash: createHash2 } = __require("crypto"), { Duplex, Readable } = __require("stream"), { URL: URL2 } = __require("url"), PerMessageDeflate2 = require_permessage_deflate(), Receiver2 = require_receiver(), Sender2 = require_sender(), { isBlob } = require_validation(), {
       BINARY_TYPES,
       CLOSE_TIMEOUT,
       EMPTY_BUFFER,
@@ -2051,15 +2051,15 @@ var require_websocket = __commonJS({
           `Unsupported protocol version: ${opts.protocolVersion} (supported versions: ${protocolVersions.join(", ")})`
         );
       let parsedUrl;
-      if (address instanceof URL)
+      if (address instanceof URL2)
         parsedUrl = address;
       else
         try {
-          parsedUrl = new URL(address);
+          parsedUrl = new URL2(address);
         } catch {
           throw new SyntaxError(`Invalid URL: ${address}`);
         }
-      (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") && (parsedUrl = new URL(parsedUrl), parsedUrl.protocol = parsedUrl.protocol === "http:" ? "ws:" : "wss:"), websocket._url = parsedUrl.href;
+      (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") && (parsedUrl = new URL2(parsedUrl), parsedUrl.protocol = parsedUrl.protocol === "http:" ? "ws:" : "wss:"), websocket._url = parsedUrl.href;
       let isSecure = parsedUrl.protocol === "wss:", isIpcUrl = parsedUrl.protocol === "ws+unix:", invalidUrlMessage;
       if (parsedUrl.protocol !== "ws:" && !isSecure && !isIpcUrl ? invalidUrlMessage = `The URL's protocol must be one of "ws:", "wss:", "http:", "https:", or "ws+unix:"` : isIpcUrl && !parsedUrl.pathname ? invalidUrlMessage = "The URL's pathname is empty" : parsedUrl.hash && (invalidUrlMessage = "The URL contains a fragment identifier"), invalidUrlMessage) {
         let err = new SyntaxError(invalidUrlMessage);
@@ -2128,7 +2128,7 @@ var require_websocket = __commonJS({
           req.abort();
           let addr;
           try {
-            addr = new URL(location, address);
+            addr = new URL2(location, address);
           } catch {
             let err = new SyntaxError(`Invalid URL: ${location}`);
             emitErrorAndClose(websocket, err);
@@ -2284,9 +2284,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket(), { Duplex } = __require("stream");
     function emitClose(stream) {
@@ -2350,9 +2350,9 @@ var require_stream = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -2385,9 +2385,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events"), http2 = __require("http"), { Duplex } = __require("stream"), { createHash: createHash2 } = __require("crypto"), extension2 = require_extension(), PerMessageDeflate2 = require_permessage_deflate(), subprotocol2 = require_subprotocol(), WebSocket2 = require_websocket(), { CLOSE_TIMEOUT, GUID, kWebSocket } = require_constants(), keyRegex = /^[+/0-9A-Za-z]{22}==$/, RUNNING = 0, CLOSING = 1, CLOSED = 2, WebSocketServer2 = class extends EventEmitter {
       /**
@@ -2702,7 +2702,7 @@ var require_websocket_server = __commonJS({
   }
 });
 
-// back/mundo/servidor.mjs
+// ../back/mundo/servidor.mjs
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -2710,10 +2710,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { performance as performance2 } from "node:perf_hooks";
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/wrapper.mjs
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1), import_extension = __toESM(require_extension(), 1), import_permessage_deflate = __toESM(require_permessage_deflate(), 1), import_receiver = __toESM(require_receiver(), 1), import_sender = __toESM(require_sender(), 1), import_subprotocol = __toESM(require_subprotocol(), 1), import_websocket = __toESM(require_websocket(), 1), import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// front/node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.core.js
+// node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.core.js
 var NeverDepth = 0, AlwaysDepth = 1, LessDepth = 2, LessEqualDepth = 3, EqualDepth = 4, GreaterEqualDepth = 5, GreaterDepth = 6, NotEqualDepth = 7;
 var UVMapping = 300;
 var RepeatWrapping = 1e3, ClampToEdgeWrapping = 1001, MirroredRepeatWrapping = 1002;
@@ -9008,7 +9008,7 @@ typeof __THREE_DEVTOOLS__ < "u" && __THREE_DEVTOOLS__.dispatchEvent(new CustomEv
 } }));
 typeof window < "u" && (window.__THREE__ ? console.warn("WARNING: Multiple instances of Three.js being imported.") : window.__THREE__ = "180");
 
-// front/node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.module.js
+// node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.module.js
 var alphahash_fragment = `#ifdef USE_ALPHAHASH
 	if ( diffuseColor.a < getAlphaHashThreshold( vPosition ) ) discard;
 #endif`, alphahash_pars_fragment = `#ifdef USE_ALPHAHASH
@@ -13152,7 +13152,7 @@ var reversedFuncs = {
   [GreaterEqualDepth]: LessEqualDepth
 };
 
-// front/src/Core/world.js
+// src/Core/world.js
 var WORLD_SCALE = 2.8, TUBE_SCALE = 1.8, SIZE_K = 2.8 * 1.52, ANCHO_K = 1.52, AK = ANCHO_K, TRACK_K = 4.7, TK = TRACK_K, WS = WORLD_SCALE * TK, NODE_R = 8.5 * TK, BALL_R = 0.4, MIN_GAP_K = 1.5, Y = new Vector3(0, 1, 0), X = new Vector3(1, 0, 0), TAU = Math.PI * 2;
 var DIAG = { on: !1, rechazos: {} }, rej = (k) => (DIAG.on && (DIAG.rechazos[k] = (DIAG.rechazos[k] || 0) + 1), null);
 function mulberry32(a) {
@@ -13308,7 +13308,7 @@ function sampleChain(segs, pinEnd) {
     let n = clamp2(Math.ceil(s.length / (0.25 * TK)), 24, 2e3), Ts = new Float32Array((n + 1) * 3), Ds = new Float32Array((n + 1) * 3);
     for (let i = 0; i <= n; i++) {
       let t = s.curve.getUtoTmapping(i / n);
-      s.curve.getTangent(t, T), hasPrev ? (q.setFromUnitVectors(Tprev, T), D.applyQuaternion(q)) : (canonDown(T, D), hasPrev = !0), D.addScaledVector(T, -D.dot(T)), D.lengthSq() < 1e-8 && canonDown(T, D), D.normalize(), Ts[i * 3] = T.x, Ts[i * 3 + 1] = T.y, Ts[i * 3 + 2] = T.z, Ds[i * 3] = D.x, Ds[i * 3 + 1] = D.y, Ds[i * 3 + 2] = D.z, Tprev.copy(T);
+      s.curve.getPoint(Math.max(0, t - 1e-4), FRAME_TMP), s.curve.getPoint(Math.min(1, t + 1e-4), T), T.sub(FRAME_TMP).normalize(), hasPrev ? (q.setFromUnitVectors(Tprev, T), D.applyQuaternion(q)) : (canonDown(T, D), hasPrev = !0), D.addScaledVector(T, -D.dot(T)), D.lengthSq() < 1e-8 && canonDown(T, D), D.normalize(), Ts[i * 3] = T.x, Ts[i * 3 + 1] = T.y, Ts[i * 3 + 2] = T.z, Ds[i * 3] = D.x, Ds[i * 3 + 1] = D.y, Ds[i * 3 + 2] = D.z, Tprev.copy(T);
     }
     data.push({ s, n, Ts, Ds, start: total }), total += s.length;
   }
@@ -13341,11 +13341,11 @@ function wallFrame(seg, angle, u, rho = seg.air ? 0 : seg.radius - BALL_R, out =
   let fr = seg._fr, f = u * fr.n, i = Math.min(fr.n - 1, Math.floor(f)), k = f - i, A = fr.D, T = out.tangent || (out.tangent = new Vector3());
   T.fromArray(fr.T, i * 3), FRAME_TMP.fromArray(fr.T, (i + 1) * 3), T.lerp(FRAME_TMP, k).normalize();
   let w = out.dir || (out.dir = new Vector3());
-  w.set(
+  if (w.set(
     A[i * 3] + (A[i * 3 + 3] - A[i * 3]) * k,
     A[i * 3 + 1] + (A[i * 3 + 4] - A[i * 3 + 1]) * k,
     A[i * 3 + 2] + (A[i * 3 + 5] - A[i * 3 + 2]) * k
-  ), w.addScaledVector(T, -w.dot(T)), w.lengthSq() < 1e-8 && canonDown(T, w), w.normalize().applyAxisAngle(T, angle);
+  ), w.addScaledVector(T, -w.dot(T)), w.lengthSq() < 1e-8 && canonDown(T, w), w.normalize().applyAxisAngle(T, angle), out.soloDir) return out;
   let axis = out.axis || (out.axis = new Vector3()), curveU = arcParamAt(fr, u);
   return seg.curve.getPoint(curveU, axis), out.axis = axis, out.dir = w, out.angle = angle, out.tangent = T, out.pos = (out.pos || new Vector3()).copy(axis).addScaledVector(w, rho), out.wall = (out.wall || new Vector3()).copy(axis).addScaledVector(w, seg.radius), out.up = (out.up || new Vector3()).copy(w).negate(), out.side = (out.side || new Vector3()).crossVectors(T, out.up).normalize(), out;
 }
@@ -13425,9 +13425,9 @@ function roadAt(seg, laneId, u, out) {
   let P = br.P[laneOf(seg, laneId)?.id ?? 0] || br.P[0], f = clamp2(Number.isFinite(u) ? u : 0, 0, 1) * br.N, i = Math.min(br.N - 1, Math.floor(f)), k = f - i, j = i * 3;
   return out.set(P[j] + (P[j + 3] - P[j]) * k, P[j + 1] + (P[j + 4] - P[j + 1]) * k, P[j + 2] + (P[j + 5] - P[j + 2]) * k);
 }
-var LF_W = {}, LF_P0 = new Vector3(), LF_P1 = new Vector3();
+var LF_W = {}, LF_D = { soloDir: !0 }, LF_P0 = new Vector3(), LF_P1 = new Vector3();
 function surfAt(seg, laneId, u, out, up) {
-  let d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_W).dir;
+  let d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_D).dir;
   return up && up.copy(d).negate(), roadAt(seg, laneId, u, out), seg.air ? out : out.addScaledVector(d, -laneRelief(seg, laneId, u));
 }
 function laneFrame(seg, laneId, u, out = {}) {
@@ -13510,8 +13510,8 @@ var ROLES = ["rapida", "lenta", "media"], BANK_GAIN = { rapida: 14 * TK, lenta: 
   media: { n: [2, 3], h: [0.15, 0.32], jumps: 2 },
   shared: { n: [1, 2], h: [0.08, 0.18], jumps: 0 }
 }, RELIEF_BASE = 0.15 * TK, KICK_DROP = 0.9 * TK;
-function buildSurface(s, rng) {
-  if (s._curv = s._bank = s._relief = null, s.air) return;
+function buildBank(s) {
+  if (s._curv = s._bank = null, s.air) return;
   ensureFrames(s);
   let { n, T, D } = s._fr, ds = s.length / n, kx = new Float32Array(n + 1), ky = new Float32Array(n + 1), t = new Vector3(), d = new Vector3(), k = new Vector3(), b = new Vector3(), t0 = new Vector3();
   for (let i = 0; i <= n; i++) {
@@ -13545,7 +13545,14 @@ function buildSurface(s, rng) {
       l > step && (bx[i] = bx[i - dir] + dx * step / l, by[i] = by[i - dir] + dy * step / l);
     }
   pinMag(), s._bank = { x: bx, y: by };
-  let R = RELIEF[role], L = s.length, hMax = 0.45 * (s.radius - BALL_R), nr = clamp2(Math.ceil(L / (0.5 * TK)), 32, 8e3);
+}
+function buildSurface(s, rng) {
+  if (s._relief = null, s.air) {
+    s._curv = s._bank = null;
+    return;
+  }
+  s._bank || buildBank(s);
+  let role = s.route >= 0 ? ROLES[s.route] : "shared", R = RELIEF[role], L = s.length, hMax = 0.45 * (s.radius - BALL_R), nr = clamp2(Math.ceil(L / (0.5 * TK)), 32, 8e3);
   s._relief = { n: nr, h: /* @__PURE__ */ new Map() };
   for (let lane of s.lanes) {
     let feats = [], fila = !!s._braid?.fila;
@@ -13574,6 +13581,7 @@ function buildSurface(s, rng) {
   }
 }
 var LANE_SELF = 25 * TK, LANE_GAP = LANE_W * (1 + MIN_GAP_K / 2), RING_MIN = (RIBBON_CLEAR + 1.5 * TK) / (2 * Math.sin(Math.PI / 5)), LANE_MARGIN = LANE_W * 0.6;
+var NO_ROW_BANK = !!globalThis.process?.env?.NO_ROW_BANK;
 function buildBraid(s) {
   let N = clamp2(Math.ceil(s.length / (1.5 * TK)), 48, 1200), lanes = s.lanes, P = lanes.map(() => new Float32Array((N + 1) * 3)), env = new Float32Array(N + 1), tangent = new Vector3(), ref = new Vector3(), priorRef = new Vector3(), side = new Vector3(), center = new Vector3(), C = new Float32Array((N + 1) * 3), R = new Float32Array((N + 1) * 3), S = new Float32Array((N + 1) * 3), Tn = new Float32Array((N + 1) * 3), angDiffSigned = (a, b) => {
     let d = (a - b) % TAU;
@@ -13646,7 +13654,7 @@ function buildBraid(s) {
     }
     if (vote < 0) for (let b of B) b.negate();
     ang = new Float32Array(N + 1);
-    let WF = {}, up = new Vector3(), cr = new Vector3(), row = new Vector3();
+    let WF = { soloDir: !0 }, up = new Vector3(), cr = new Vector3(), row = new Vector3();
     for (let i = 0; i <= N; i++) {
       let T = V2(Tn, i), d0 = wallFrame(s, 0, i / N, 0, WF).dir;
       up.crossVectors(B[i], T).normalize().negate();
@@ -13671,9 +13679,9 @@ function buildBraid(s) {
       }
     }
   } else {
-    let gap = rowGap(nl), half = (nl - 1) / 2 * gap, WF = {}, row = new Vector3(), T = new Vector3();
+    let gap = rowGap(nl), half = (nl - 1) / 2 * gap, WF = { soloDir: !0 }, row = new Vector3(), T = new Vector3();
     for (let i = 0; i <= N; i++) {
-      rad[i] = half * env[i], T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]), row.crossVectors(wallFrame(s, 0, i / N, 0, WF).dir, T).normalize();
+      rad[i] = half * env[i], T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]), row.crossVectors(wallFrame(s, NO_ROW_BANK ? 0 : laneAngle(s, lanes[0].id, i / N), i / N, 0, WF).dir, T).normalize();
       for (let j = 0; j < nl; j++) {
         let id = lanes[j].id, dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)), off = (j - (nl - 1) / 2) * gap * env[i];
         dst[i * 3] = C[i * 3] + row.x * off, dst[i * 3 + 1] = C[i * 3 + 1] + row.y * off, dst[i * 3 + 2] = C[i * 3 + 2] + row.z * off;
@@ -13711,7 +13719,7 @@ function buildLanes(way) {
   };
   way.segments.forEach((s) => {
     let ids = Array.from({ length: laneCount }, (_, id) => id);
-    s.lanes = ids.map((id) => ({ id, roll: id === 0 ? "plano" : ROLL_KINDS[1 + (id - 1 + way.idx) % (ROLL_KINDS.length - 1)], angle: 0, offset: 0, width, name: LANE_NAMES[id] || `camino ${id + 1}` })), buildBraid(s), s.switches = [];
+    s.lanes = ids.map((id) => ({ id, roll: id === 0 ? "plano" : ROLL_KINDS[1 + (id - 1 + way.idx) % (ROLL_KINDS.length - 1)], angle: 0, offset: 0, width, name: LANE_NAMES[id] || `camino ${id + 1}` })), s._braid = null, buildBank(s), buildBraid(s), s.switches = [];
     let [fa, fb] = s._braid.full, a = fa + 0.02, b = Math.min(fb - 0.02, 0.9);
     b - a < 0.15 && (a = 0.2, b = 0.8);
     let pref = CAMBIOS[s.kind] ? s.kind : CAMBIOS[s.event] ? s.event : null;
@@ -14212,10 +14220,49 @@ var HELI_RMIN = +(globalThis.process?.env?.HELI_RMIN ?? 60), heliR = (r0) => r0 
   }
 };
 SHAPES.salida = SHAPES.llegada = () => [];
-var OUT_GATES = ["arco_salida", "parrilla_semaforo", "tunel_rampa", "lanzadera_aros", "puente_banderas"], IN_GATES = ["meta_cuadros", "embudo_llegada", "portal_llegada", "arco_meta", "tunel_frenado"], ownsStart = (k) => KINDS[k].air || k === "embudo", GRID_LEN = 14 * TK, PORT_ZONE = NODE_R + GRID_LEN + BRAID_OPEN + BRAID_PAD, FINISH_LEN = 10 * TK, LINK_K = 1 / (9 * TK), LINK_KS = [0.42, 0.62], EMPALME = { off: !!globalThis.process?.env?.NO_LINK_FIX };
+var OUT_GATES = ["arco_salida", "parrilla_semaforo", "tunel_rampa", "lanzadera_aros", "puente_banderas"], IN_GATES = ["meta_cuadros", "embudo_llegada", "portal_llegada", "arco_meta", "tunel_frenado"], ownsStart = (k) => KINDS[k].air || k === "embudo", GRID_LEN = 14 * TK, PORT_ZONE = NODE_R + GRID_LEN + BRAID_OPEN + BRAID_PAD, FINISH_LEN = 10 * TK, ONDULA = { off: !!globalThis.process?.env?.NO_ONDULA }, OND_L = +(globalThis.process?.env?.OND_L ?? 160), OND_RC = +(globalThis.process?.env?.OND_RC ?? 120), OND_PUERTO = +(globalThis.process?.env?.OND_PUERTO ?? 1.6), OND_KINDS = /* @__PURE__ */ new Set(["horquilla", "rizo", "salida", "llegada"]), OND_STEP = 12;
+function ondula(curve, kind) {
+  if (ONDULA.off || !OND_KINDS.has(kind)) return curve;
+  let src = curve.points, Lc = 0;
+  for (let i = 1; i < src.length; i++) Lc += src[i].distanceTo(src[i - 1]);
+  let M = Math.max(src.length - 1, Math.ceil(Lc / OND_STEP)), pts = new Array(M + 1), s = new Float32Array(M + 1);
+  for (let i = 0; i <= M; i++)
+    pts[i] = curve.getPoint(i / M), i && (s[i] = s[i - 1] + pts[i].distanceTo(pts[i - 1]));
+  let L = s[M], z0 = 0, z1 = L, r0 = 40, r1 = 40, rc = OND_RC;
+  if (kind === "salida" || kind === "llegada") {
+    let a0 = NODE_OPEN + Math.max(4 * TK, Math.min(BRAID_RAMP, (L - GRID_LEN - 2 * TK - BRAID_OPEN) * 0.3)), Lu = L - a0 - HUB_OPEN - OPEN_RAMP;
+    z0 = (kind === "salida" ? GRID_LEN : FINISH_LEN) + 2 * TK, rc = OND_RC * OND_PUERTO, Lu >= SIN_MIN && (z1 = a0 + 0.35 * clamp2(Lu * 0.3, 110, 540), r1 = 120);
+  }
+  let Z = z1 - z0;
+  if (Z < 150) return curve;
+  let lam = clamp2(Z / 1.5, 110, OND_L), k = TAU / lam, amp = 1 / (k * k * rc), rev = kind === "llegada", x = (i) => rev ? L - s[i] : s[i], T = new Array(M + 1);
+  for (let i = 0; i <= M; i++) T[i] = pts[Math.min(M, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize();
+  let w0 = new Float32Array(M + 1), w = new Float32Array(M + 1);
+  for (let i = 0; i <= M; i++) {
+    let p = Math.max(0, i - 2), q = Math.min(M, i + 2), kap = T[p].angleTo(T[q]) / Math.max(1e-3, s[q] - s[p]);
+    w0[i] = clamp2(1.3 - kap * 200, 0, 1);
+  }
+  let any = !1;
+  for (let i = 0; i <= M; i++) {
+    let m = 0, n = 0;
+    for (let j = Math.max(0, i - 3); j <= Math.min(M, i + 3); j++)
+      m += w0[j], n++;
+    let xi = x(i);
+    w[i] = m / n * smooth01((xi - z0) / r0) * smooth01((z1 - xi) / r1), w[i] > 0.05 && (any = !0);
+  }
+  if (!any) return curve;
+  let h = Math.abs(Math.round(src[0].x * 7.3 + src[0].y * 3.1 + src[0].z * 5.7 + src[src.length - 1].x * 1.9)), ph = h % 628 / 100, sg = h & 1 ? 1 : -1, n1 = new Vector3().crossVectors(T[0], Math.abs(T[0].y) < 0.9 ? Y : X).normalize(), n2 = new Vector3();
+  for (let i = 0; i <= M; i++) {
+    n1.addScaledVector(T[i], -n1.dot(T[i])).normalize(), n2.crossVectors(T[i], n1);
+    let a = ph + sg * k * s[i], g = w[i] * amp;
+    g > 0 && pts[i].addScaledVector(n1, g * Math.cos(a)).addScaledVector(n2, g * Math.sin(a));
+  }
+  return new CatmullRomCurve3(pts, !1, "centripetal");
+}
+var LINK_K = 1 / (9 * TK), LINK_KS = [0.42, 0.62], EMPALME = { off: !!globalThis.process?.env?.NO_LINK_FIX };
 function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   let lead = Math.min(2.5 * WS, A.distanceTo(B) * 0.15), air = KINDS[kind].air, cr = (pts2) => new CatmullRomCurve3(pts2, !1, "centripetal");
-  if (PLANS[kind]) return cr([A, ...trackPts(kind, A, B, Ta, Tb, opt), B]);
+  if (PLANS[kind]) return ondula(cr([A, ...trackPts(kind, A, B, Ta, Tb, opt), B]), kind);
   if (kind === "rizo") {
     let { C, L, c, u, v } = basis(A, B), r = Math.min(Math.max(3.4 * WS * AK * P.coil, 13 * TK * AK), L * 0.3), sh = Math.max(P.radius * 2.4, PITCH), loop = [];
     for (let k = 0; k <= 24; k++) {
@@ -14223,7 +14270,7 @@ function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
       loop.push(at(A, C, 0.5, c, r * Math.sin(a), v, r * (1 - Math.cos(a)), u, sh * (k / 24 - 0.5)));
     }
     let tIn = c.clone().addScaledVector(u, sh / (TAU * r)).normalize();
-    return cr([A, ...bezierPts(A, Ta || c, loop[0], tIn), ...loop, ...bezierPts(loop[24], tIn, B, Tb || c), B]);
+    return ondula(cr([A, ...bezierPts(A, Ta || c, loop[0], tIn), ...loop, ...bezierPts(loop[24], tIn, B, Tb || c), B]), kind);
   }
   if (kind === "salida" || kind === "llegada") {
     let out = kind === "salida", G0 = out ? at(A, Ta, GRID_LEN) : A, G1 = out ? B : at(B, Tb, -FINISH_LEN), T0 = out ? Ta : Ta.clone().normalize(), T1 = Tb.clone().normalize(), pts2 = out ? [A, at(A, Ta, GRID_LEN * 0.5), G0] : [A], P0 = G0, D0 = T0;
@@ -14231,7 +14278,7 @@ function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
       let D1 = W === G1 ? T1 : G1.clone().sub(P0).normalize();
       pts2.push(...bezierPts(P0, D0, W, D1)), pts2.push(W.clone()), P0 = W, D0 = D1;
     }
-    return out || pts2.push(at(B, Tb, -FINISH_LEN * 0.5), B), cr(pts2);
+    return out || pts2.push(at(B, Tb, -FINISH_LEN * 0.5), B), ondula(cr(pts2), kind);
   }
   let leadA = Ta && !ownsStart(kind), leadB = Tb && !air, body = SHAPES[kind](A, B, P).filter((p) => !(leadA && p.distanceTo(A) < lead * 1.1) && !(leadB && p.distanceTo(B) < lead * 1.1)), dirOf = (p, q) => q.clone().sub(p).normalize(), kA = 0.42, kB = 0.42;
   if (!EMPALME.off && body.length >= 4) {
@@ -15095,7 +15142,7 @@ function indexarColisiones(world, S = braidRibbons(world)) {
   return world.colision = { libre, cercano }, world.colision;
 }
 
-// front/src/Core/personality.js
+// src/Core/personality.js
 var TRAIT_LABEL = {
   valentia: ["Miedosa", "Valiente"],
   curiosidad: ["Rutinaria", "Curiosa"],
@@ -15168,7 +15215,7 @@ function moodOf(b) {
   return b.p < 18 && b.e < 18 ? "asustada" : b.p < 30 && b.e < 30 ? "mareada" : b.e < 30 ? "cansada" : b.p < 30 ? "preocupada" : b.p > 80 && b.e > 70 ? "euforica" : "feliz";
 }
 
-// front/src/Core/sim.js
+// src/Core/sim.js
 var POP = 10, TIME_SCALE = 4.5, TRAVEL_SLOW = 2.5 / TIME_SCALE, TRAITS = ["valentia", "curiosidad", "apetito", "sociabilidad", "animo", "velocidad"], GENES = ["prefs", "ways", "routes", "kinds"], DRAIN_E = 0.22, DRAIN_P = 0.25, MAX_SIN_DECIDIR = 3, MAX_FILA = 30, MAX_NOMBRE = 16, GRACIA_DESCONEXION = 60, MAX_CONTROL_POR_ESPECTADOR = 1, MAX_FILA_POR_ESPECTADOR = 1, limpiarNombre = (nombre) => String(nombre ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NOMBRE).trim(), TRAVEL_E_LEN = 55e-4 / TRACK_K, PPS_K = 0.35 / 2.5, MAP_SPEED_K = SIZE_K / 2.5 * 1.42 * 1.14, TUBE_SPEED_K = 2.4, GRAV2 = 24 * TRACK_K, FRIC = 0.14, VMAX = 48 * TRACK_K * MAP_SPEED_K, LANE_EASE = 3.5, RAIL_EASE = 6, G_WALL = 24 * TRACK_K, BOUNCE = 0.35, LAT_K = 30, LAT_C = 7, LAT_EDGE = 0.4, RACE_GAP = 2.5, WOW = ["canon", "trampolin", "rizo", "caida", "embudo", "geiser", "erupcion", "turbina", "hielo_resbaloso", "pantano", "portal", "cascada"], FALLBACK_VOICES = {
   geiser: ["\xA1Al chorro del g\xE9iser!", "\xA1Arriba voy!"],
   erupcion: ["\xA1Erupci\xF3n! \xA1A volar!", "\xA1El cr\xE1ter me lanza!"],
@@ -15709,7 +15756,7 @@ var Sim = class {
   }
 };
 
-// front/src/Core/protocolo.js
+// src/Core/protocolo.js
 var FASES = ["born", "toDest", "at", "toPort", "travel", "dying"], CLIENTE = ["hola", "formar", "salirFila", "tomar", "dejar", "decidir", "ping"];
 var B_AIRBORNE = 1, B_ONLANE = 2, B_VUELO = 4, B_FALLIDO = 8, r2 = (x) => Math.round(x * 100) / 100 || 0, r3 = (x) => Math.round(x * 1e3) / 1e3 || 0, r5 = (x) => Math.round(x * 1e5) / 1e5 || 0, v2 = (v) => [r2(v.x), r2(v.y), r2(v.z)], v3 = (v) => [r3(v.x), r3(v.y), r3(v.z)];
 function rapida(b) {
@@ -15834,7 +15881,7 @@ function validar(texto) {
   return mal();
 }
 
-// back/mundo/servidor.mjs
+// ../back/mundo/servidor.mjs
 var AQUI = path.dirname(fileURLToPath(import.meta.url)), ESTATICOS = /* @__PURE__ */ new Set(["name", "gen", "padres", "arch", "genome", "bornAt", "formadaPor"]), pct = (xs, q) => {
   let s = Float64Array.from(xs).sort();
   return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : 0;
@@ -15850,6 +15897,8 @@ async function crearServidor(o = {}) {
     gracia: Number(o.gracia ?? env.MUNDO_GRACIA_S ?? GRACIA_DESCONEXION),
     velocidad: Math.max(1, Math.round(Number(o.velocidad ?? env.MUNDO_VELOCIDAD ?? 1))),
     maxConexiones: Number(o.maxConexiones ?? env.MUNDO_MAX_CONEXIONES ?? 500),
+    prueba: !!(o.prueba ?? env.MUNDO_PRUEBA === "1"),
+    // ganchos HTTP de prueba (matar, velocidad); nunca en producción
     log: o.log ?? ((...a) => console.log((/* @__PURE__ */ new Date()).toISOString(), ...a))
   }, t0 = performance2.now(), archivoPicks = path.join(cfg.datos, `picks_${WORLD_GEN}_${cfg.semilla}.json`), conPicks = !1;
   try {
@@ -15915,6 +15964,15 @@ async function crearServidor(o = {}) {
   let conexiones = /* @__PURE__ */ new Set(), httpServer = http.createServer((req, res) => {
     if (req.url === "/salud") {
       res.writeHead(200, { "Content-Type": "application/json" }), res.end(JSON.stringify(salud()));
+      return;
+    }
+    if (cfg.prueba && req.url.startsWith("/prueba/")) {
+      let u = new URL(req.url, "http://x"), r = { ok: !1 };
+      if (u.pathname === "/prueba/matar") {
+        let b = sim.viva(Number(u.searchParams.get("b")));
+        b && (b.e = 0, r = { ok: !0, b: b.id, name: b.name });
+      }
+      u.pathname === "/prueba/velocidad" && (cfg.velocidad = Math.max(1, Math.min(60, Math.round(Number(u.searchParams.get("x")) || 1))), r = { ok: !0, velocidad: cfg.velocidad }), res.writeHead(200, { "Content-Type": "application/json" }), res.end(JSON.stringify(r));
       return;
     }
     res.writeHead(426, { "Content-Type": "text/plain" }), res.end("WebSocket");

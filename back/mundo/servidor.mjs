@@ -33,6 +33,7 @@ export async function crearServidor(o = {}) {
     gracia: Number(o.gracia ?? env.MUNDO_GRACIA_S ?? GRACIA_DESCONEXION),
     velocidad: Math.max(1, Math.round(Number(o.velocidad ?? env.MUNDO_VELOCIDAD ?? 1))),
     maxConexiones: Number(o.maxConexiones ?? env.MUNDO_MAX_CONEXIONES ?? 500),
+    prueba: Boolean(o.prueba ?? env.MUNDO_PRUEBA === '1'), // ganchos HTTP de prueba (matar, velocidad); nunca en producción
     log: o.log ?? ((...a) => console.log(new Date().toISOString(), ...a)),
   }
   const t0 = performance.now()
@@ -112,6 +113,15 @@ export async function crearServidor(o = {}) {
   const conexiones = new Set() // las que ya dijeron hola
   const httpServer = http.createServer((req, res) => {
     if (req.url === '/salud') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(salud())); return }
+    // Ganchos de PRUEBA (solo con MUNDO_PRUEBA=1; el puerto solo escucha en 127.0.0.1 y el relevo no reenvía HTTP):
+    //   /prueba/matar?b=<id>      deja sin energía a esa ballita (muere en el siguiente tick; entra la primera de la fila)
+    //   /prueba/velocidad?x=<n>   ticks de sim por tick real (1..60) sin reiniciar
+    if (cfg.prueba && req.url.startsWith('/prueba/')) {
+      const u = new URL(req.url, 'http://x'); let r = { ok: false }
+      if (u.pathname === '/prueba/matar') { const b = sim.viva(Number(u.searchParams.get('b'))); if (b) { b.e = 0; r = { ok: true, b: b.id, name: b.name } } }
+      if (u.pathname === '/prueba/velocidad') { cfg.velocidad = Math.max(1, Math.min(60, Math.round(Number(u.searchParams.get('x')) || 1))); r = { ok: true, velocidad: cfg.velocidad } }
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(r)); return
+    }
     res.writeHead(426, { 'Content-Type': 'text/plain' }); res.end('WebSocket')
   })
   const wss = new WebSocketServer({

@@ -1,22 +1,41 @@
-import { Sim, nombreUnico } from '../sim.js'
+import { Sim, nombreUnico, MAX_SIN_DECIDIR, MAX_FILA, MAX_NOMBRE } from '../sim.js'
 import { iniciarBack } from '../api.js'
+import { opcionesDe } from './opciones.js'
 
+const YO = 'local' // único espectador del mundo local
+
+// Adaptador local (docs/mundo_compartido.md, 2.4): una fachada cuyo prototipo es la Sim. Todo lo que la interfaz lee
+// (world, ballitas, t, stats, feed, rng, where, favorites…) cae en la sim viva; los métodos de control se definen
+// SOLO en la fachada, así las llamadas internas de la sim (`this.dejar(...)` en arrive) siguen usando las suyas.
 export function crearLocal({ semilla = 369, registrarBack = true } = {}) {
   const sim = new Sim({ seed: semilla })
   if (registrarBack) iniciarBack(sim)
   const listeners = new Map()
-  const emit = (e, x) => listeners.get(e)?.forEach((fn) => fn(x))
-  return Object.assign(sim, {
-    modo: 'local', estado: 'sin_servidor', yo: { corto: 'local' }, fila: [], espectadores: 1,
-    reglas: { maxSinDecidir: 3, maxFila: 30, maxNombre: 16 }, puede: { velocidad: true },
-    nombreSugerido: () => nombreUnico(Math.random, sim.nombres),
-    formar(nombre) { return sim.formar?.(nombre) ?? Promise.resolve({ ok: false, error: 'sin_soporte' }) },
-    salirFila: () => Promise.resolve({ ok: false, error: 'sin_soporte' }),
-    tomar: (b) => Promise.resolve(sim.tomar?.(b, 'local') ?? { ok: false, error: 'sin_soporte' }),
-    dejar: (b) => Promise.resolve(sim.dejar?.(b, 'local') ?? { ok: false, error: 'sin_soporte' }),
-    decidir: (b, d) => Promise.resolve(sim.decidir?.(b, 'local', d) ?? { ok: false, error: 'sin_soporte' }),
-    opciones(b) { return { origen: b.node, planetas: sim.world.destinos, rutas: sim.world.waysFrom[b.node] ?? [], carriles: [0, 1, 2, 3, 4] } },
+  const emit = (e, x) => listeners.get(e)?.forEach((fn) => { try { fn(x) } catch { /* un oyente roto no para la sim */ } })
+  const idDe = (b) => (b && typeof b === 'object' ? b.id : b)
+  const auto = (b) => { const a = b.ctrl ? sim.predecir(b) : null; b.auto = a ? { way: a.way.idx, r: a.route.r } : null }
+  const marcar = (b) => { b.mia = b.ctrl === YO; auto(b) }
+  sim.hooks.entra = (b, esp) => { marcar(b); emit('entra', { b, de: esp, nombre: b.name, mia: esp === YO }); emit('cambio') }
+  sim.hooks.libre = (b, motivo) => { b.mia = false; b.auto = null; emit('libre', { b, motivo, mia: true }); emit('cambio') }
+  sim.hooks.decide = (b) => { auto(b); emit('cambio') }
+  let tAuto = 0
+  const mundo = Object.create(sim)
+  Object.defineProperty(mundo, 'fila', { get: () => sim.fila.map((f) => ({ nombre: f.nombre, de: f.espectador, t: f.t, mia: f.espectador === YO })) })
+  return Object.assign(mundo, {
+    modo: 'local', estado: 'sin_servidor', yo: { corto: YO }, espectadores: 1,
+    reglas: { maxSinDecidir: MAX_SIN_DECIDIR, maxFila: MAX_FILA, maxNombre: MAX_NOMBRE }, puede: { velocidad: true },
+    tick(dt) {
+      sim.tick(dt)
+      if (sim.t - tAuto >= 1) { tAuto = sim.t; for (const b of sim.ballitas) if (b.ctrl) marcar(b) }
+    },
+    nombreSugerido: () => nombreUnico(Math.random, new Set([...sim.nombres, ...sim.fila.map((f) => f.nombre)])),
+    formar: async (nombre) => { const r = sim.formar(YO, nombre); if (r.ok) emit('cambio'); return r },
+    salirFila: async () => { const r = sim.salirFila(YO); emit('cambio'); return { ok: r.ok } },
+    tomar: async (b) => sim.tomar(idDe(b), YO),
+    dejar: async (b) => sim.dejar(idDe(b), YO),
+    decidir: async (b, dec) => sim.decidir(idDe(b), YO, dec),
+    opciones: (b) => opcionesDe(sim, b),
     on(e, fn) { if (!listeners.has(e)) listeners.set(e, new Set()); listeners.get(e).add(fn); return () => listeners.get(e)?.delete(fn) },
-    cerrar() {},
+    cerrar() { listeners.clear() },
   })
 }
