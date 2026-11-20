@@ -700,7 +700,7 @@ export function paisajeWarmup() {
 // ═══════════════════════════ CATÁLOGO POR TEMA ═══════════════════════════
 // ax: rango lateral en múltiplos de TERR desde el borde del bordillo; y: altura sobre el firme (u);
 // scale en u; foot: radio de huella relativo a la escala; cap: tope de instancias visibles.
-const PAISAJE = {
+export const PAISAJE = {
   bosque: {
     layers: [
       { geo: 'oak', mat: 'sway', step: 8, ax: [1.0, 3.2], scale: [6.5, 10.5], foot: 0.32, both: 0.8, cap: 90, range: 100, tints: ['#ffffff', '#e8f0d0', '#f4e6c0', '#d6e8d0'], ground: true },
@@ -900,6 +900,21 @@ export function paisajePaso(way, agotado) {
   return true
 }
 
+export function datosPaisajeMedidos(way) {
+  const spec = PAISAJE[way.theme?.id]
+  if (!spec) return []
+  const out = []
+  for (let si = 0; si < (way.segments ?? []).length; si++) {
+    const seg = way.segments[si]
+    if (seg.air) continue
+    buildSegStep(way, seg, si, spec, NUNCA)
+    const st = segCache.get(seg)
+    out.push({ si, length: seg.length ?? 1, layers: st.layers.map((items, li) => ({ geo: spec.layers[li].geo, cap: spec.layers[li].cap,
+      capacity: Math.max(spec.layers[li].cap, Math.ceil(560 / spec.layers[li].step * 2)), items })) })
+  }
+  return out
+}
+
 // Generador (planificación, no aspecto): cede al empezar cada muestra; mismo rng y mismo orden que de un tirón.
 function* buildLayer(way, seg, ly, out, { rng, col, local }) {
   const L = Math.max(seg.length ?? 1, 1)
@@ -940,7 +955,7 @@ function* buildLayer(way, seg, ly, out, { rng, col, local }) {
           const quat = basisQuat(f.up, f.tangent)
           quat.multiply(Q_YAW.setFromAxisAngle(Y_AXIS, ly.geo === 'school' ? 0 : rng() * TAU))
           if (ly.tilt) quat.multiply(Q_TILT.setFromAxisAngle(X_AXIS, ly.tilt * sg))
-          out.push({ pos: _cand.clone(), quat, scale: sc, color: tints[Math.floor(rng() * tints.length)] })
+          out.push({ pos: _cand.clone(), quat, scale: sc, color: tints[Math.floor(rng() * tints.length)], s, lane: lane.id })
           if (rng() > (ly.both ?? 0.5)) break
         }
       }
@@ -960,13 +975,18 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
   const nonAirSegs = useMemo(() => (way.segments ?? []).map((seg, si) => ({ seg, si })).filter((x) => !x.seg.air), [way])
   const waySphere = useMemo(() => getWayBoundingSphere(way, 18 * TRACK_K), [way])
   const meshes = useMemo(() => spec.layers.map((ly) => {
-    const m = new THREE.InstancedMesh(getGeo(ly.geo), pMat(ly.mat), ly.cap)
+    // La capacidad cubre el radio de recorte alargado hacia delante (280 u con K=2.8),
+    // con margen para dos lados y solape de tramos. `ly.cap` era global al cuadro y
+    // podía cortar la segunda mitad de una curva densa.
+    const cap = Math.max(ly.cap, Math.ceil(560 / ly.step * 2))
+    const m = new THREE.InstancedMesh(getGeo(ly.geo), pMat(ly.mat), cap)
     m.count = 0
     m.userData.noCull = true
+    m.userData.cap = cap
     m.boundingSphere = waySphere
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     const w = new THREE.Color('#ffffff')
-    for (let i = 0; i < ly.cap; i++) m.setColorAt(i, w)
+    for (let i = 0; i < cap; i++) m.setColorAt(i, w)
     if (ly.mat === 'ray' || ly.mat === 'motes' || ly.mat === 'bubbles') m.renderOrder = 3
     return m
   }), [spec, waySphere])
@@ -1042,12 +1062,13 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     lastFwd.current.copy(tmp.f)
     spec.layers.forEach((ly, li) => {
       const mesh = meshes[li]
-      const r2 = ly.range * ly.range
+      const drawRange = ly.range // como main: la capacidad ampliada ya evita cortes; ampliar el radio costaba FPS
+      const r2 = drawRange * drawRange
       let n = 0
       lejos.length = 0
       const cm = [Infinity, Infinity]
       const pon = (it, d2, dx, dy, dz) => {
-        const kb = kBorde(d2, ly.range)
+        const kb = kBorde(d2, drawRange)
         tmp.s.setScalar(it.scale * kb) // crece desde el borde de recorte
         mesh.setMatrixAt(n, tmp.m.compose(it.pos, it.quat, tmp.s))
         mesh.setColorAt(n, it.color)
@@ -1058,7 +1079,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
         const sd = segCache.get(seg)
         if (!sd) continue
         const list = sd.layers[li]
-        for (let i = 0; i < list.length && n < ly.cap; i++) {
+        for (let i = 0; i < list.length && n < mesh.userData.cap; i++) {
           const it = list[i]
           tmp.d.copy(it.pos).sub(cam)
           const d2r = tmp.d.lengthSq()
@@ -1070,7 +1091,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
           pon(it, d2, tmp.d.x, tmp.d.y, tmp.d.z)
         }
       }
-      for (let j = 0; j < lejos.length && n < ly.cap; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
+      for (let j = 0; j < lejos.length && n < mesh.userData.cap; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
       if (MIDE) publicaCrece(mesh, cm)
       mesh.count = n
       if (n) {

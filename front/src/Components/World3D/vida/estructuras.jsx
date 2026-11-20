@@ -20,8 +20,10 @@ const TALL_CULL_DIST = 96
 const MED_CULL_DIST = 58
 const ARCH_CULL_DIST = 104
 const OVERVIEW_DIST_SQ = 36 * 36 // > 36 u del tramo más cercano = vista general Camino -> LOD reducido
-const POOL_CAP = 128
-const ARCH_CAP = 48
+// Capacidad suficiente para el radio cercano de varios tramos; los objetos más lejanos
+// siguen filtrándose por distancia antes de escribirse en estos buffers.
+const POOL_CAP = 384
+const ARCH_CAP = 96
 const MOVE_RECOMPACT_SQ = 20 // recompila instancias visibles solo al moverse >= 4.5 u
 
 // ═══════════════════════════ ARCOS / TÚNELES TEMÁTICOS ═══════════════════════════
@@ -602,15 +604,15 @@ export default function Estructuras({ way, detail, focused, time }) {
       const rP = Math.sqrt(effRangeSq) // la pieza mide 0 en el borde y crece al acercarse (kBorde)
       const Kp = K
       let count = 0
-      let tinted = false
       lejos.length = 0
       const cm = [Infinity, Infinity]
       const pon = (it, d2, dx, dy, dz) => {
         const kb = kBorde(d2, rP)
         tmpS.setScalar(it.scale * kb)
         mesh.setMatrixAt(count, tmpM.compose(it.pos, it.quat, tmpS))
-        if (it.color) { mesh.setColorAt(count, it.color); tinted = true }
-        else if (tinted) mesh.setColorAt(count, white)
+        // Cada slot se reutiliza al recomponer la lista. Restablecer también los items
+        // sin tinte evita heredar un color antiguo (incluido negro) de otra instancia.
+        mesh.setColorAt(count, it.color ?? white)
         count++
         if (MIDE) creceDe(dx, dy, dz, camFwdTmp, kb, cm)
       }
@@ -634,7 +636,7 @@ export default function Estructuras({ way, detail, focused, time }) {
       mesh.count = count
       if (count > 0) {
         mesh.instanceMatrix.needsUpdate = true
-        if (tinted && mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
       }
     }
   })

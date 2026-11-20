@@ -841,8 +841,6 @@ export function buildUnionesData(way) {
 const PIANO_K = 0.072 / TRACK_K
 const BARRIER_K = 0.062 / TRACK_K
 const STRAIGHT_K = 0.025 / TRACK_K
-const MAX_PIANOS = 40
-const MAX_BARRIERS = 32
 const TUNNEL_RIBS = 7
 const TUNNEL_STEP = 1.9 * TRACK_K
 
@@ -1075,13 +1073,13 @@ function* kartGen(way) {
     }
   }
 
-  const pianoPicked = capStride(pianoCands, MAX_PIANOS)
+  const pianoPicked = pianoCands
   for (const c of pianoPicked) {
     if (nearAny(bordillos, c.pos, 1.32)) continue
     bordillos.push({ pos: c.pos, quat: c.quat, scale: c.scale })
   }
 
-  const barrierPicked = capStride(barrierCands, MAX_BARRIERS)
+  const barrierPicked = barrierCands
   for (const c of barrierPicked) {
     if (nearAny(barreras, c.want, 1.5)) continue
     const p = colocar(

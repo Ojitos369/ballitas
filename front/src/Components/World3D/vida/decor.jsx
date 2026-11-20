@@ -14,12 +14,10 @@ import { TRACK_K } from '../../../Core/world.js'
 const KIT_THEMES = new Set(['sombrio', 'bosque', 'mar', 'desierto', 'hielo', 'volcan', 'cristal', 'nubes', 'neon', 'jardin'])
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const Q_Y180 = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI)
-const SPACING = 2.8 * TRACK_K // ~13 u entre hitos/farolas/banderines de berma
-const FLORA_SPACING = 1.15 * TRACK_K // ~5.4 u entre matas de flora en ambas bermas
+const SPACING = 4 * TRACK_K // ~19 u entre hitos/farolas/banderines, proporcional a la longitud
+const FLORA_SPACING = 4 * TRACK_K // ~19 u entre puntos de flora: continuidad sin multiplicar instancias por 5
 const MAX_REBOTES_JUMP = 16
 const MAX_REBOTES_SIDE = 10
-const MAX_DECO_TOTAL = 150 // InstanceCuller recorta >= 48 a 60 u
-const MAX_FLORA_TOTAL = 200 // flora densa continua en bermas, recortada por InstanceCuller a 60 u
 
 function capStride(arr, max) {
   if (arr.length <= max) return arr
@@ -60,6 +58,10 @@ function buildDecorData(way) {
   return decorCache.get(way)
 }
 
+export function datosDecoracionMedidos(way) {
+  return buildDecorData(way).coverage
+}
+
 // Los `yield` van al final de cada muestra: el marco compartido F no se usa a medias entre dos reanudaciones.
 function* decorGen(way) {
   const rawTheme = way.theme?.id
@@ -74,6 +76,7 @@ function* decorGen(way) {
   const seenJump = new Set()
   const decoCands = []
   const floraCands = []
+  const coverage = []
 
   const segsW = way.segments ?? []
   for (let si = 0; si < segsW.length; si++) {
@@ -81,6 +84,8 @@ function* decorGen(way) {
     if (seg.air) continue
     const L = Math.max(seg.length ?? 1, 1)
     const lanes = lanesOf(seg)
+    const coverageSeg = { si, length: L, decor: [], flora: [], lanes: lanes.map((l) => ({ lane: l.id, decor: [], flora: [] })), descartes: { ocupada: 0, otraPista: 0, local: 0, lado: 0 } }
+    coverage.push(coverageSeg)
 
     // 1) Rebotantes en el punto de salto de los switches (style === 'salto')
     for (const sw of seg.switches ?? []) {
@@ -102,7 +107,9 @@ function* decorGen(way) {
     }
 
     // 2) Decoración continua en las bermas (proporcional al ancho de la calzada)
-    for (const lane of lanes) {
+    for (let li = 0; li < lanes.length; li++) {
+      const lane = lanes[li]
+      const laneCoverage = coverageSeg.lanes[li]
       const H = halfWidth(lane)
       const E = H + CURB
       const widthK = Math.max(1, H / 2.45)
@@ -112,7 +119,7 @@ function* decorGen(way) {
 
       let altSide = rng() < 0.5 ? -1 : 1
       for (let s = 5; s < L - 5; s += SPACING * (0.78 + rng() * 0.44)) {
-        if (busy.some((b) => Math.abs(b - s) < 4.5)) continue
+        if (busy.some((b) => Math.abs(b - s) < 4.5)) { coverageSeg.descartes.ocupada++; continue }
 
         const u = s / L
         const f = surfFrame(seg, lane.id, u, F)
@@ -149,15 +156,21 @@ function* decorGen(way) {
         const rChk = rad * 0.65
         let pos = null
         let chosenSign = sideSign
+        let vioLado = false; let vioPista = false; let vioLocal = false
         for (const sgn of [sideSign, -sideSign]) {
           const cand = o.clone().addScaledVector(side, sgn * ax).addScaledVector(up, bermY(ax, E) - 0.025)
-          if (!laneSideClear(seg, lane, u, cand, 0.35)) continue
-          if (col && !col.libre(cand, rChk, { way: way.idx })) continue
-          if (!local.libre(cand, rChk)) continue
+          if (!laneSideClear(seg, lane, u, cand, 0.35)) { vioLado = true; continue }
+          if (col && !col.libre(cand, rChk, { way: way.idx })) { vioPista = true; continue }
+          if (!local.libre(cand, rChk)) { vioLocal = true; continue }
           pos = colocar(world, { pos: cand, seed: way.idx * 9719 + si * 131 + lane.id * 17 + Math.floor(s * 10) }, rChk, { way: way.idx }, 0, local)
           if (pos) { chosenSign = sgn; break }
         }
-        if (!pos) continue
+        if (!pos) {
+          if (vioPista) coverageSeg.descartes.otraPista++
+          else if (vioLocal) coverageSeg.descartes.local++
+          else if (vioLado) coverageSeg.descartes.lado++
+          continue
+        }
 
         let quat = basisQuat(up, f.tangent)
         if (kind === 'farola' || kind === 'banderin') {
@@ -168,12 +181,14 @@ function* decorGen(way) {
 
         if (kind === 'rebote') rebotesSide.push({ pos, quat, scale: sc })
         else decoCands.push({ kind, pos, quat, scale: sc })
+        coverageSeg.decor.push({ s, kind, lane: lane.id })
+        laneCoverage.decor.push(s)
         yield
       }
 
       // 3) Flora densa en ambas bermas a lo largo de todo el tramo
       for (let s = 3.2; s < L - 3.2; s += FLORA_SPACING * (0.8 + rng() * 0.4)) {
-        if (busy.some((b) => Math.abs(b - s) < 3.6)) continue
+        if (busy.some((b) => Math.abs(b - s) < 3.6)) { coverageSeg.descartes.ocupada++; continue }
         const u = s / L
         const f = surfFrame(seg, lane.id, u, F)
         const o = f.pos.clone()
@@ -186,13 +201,15 @@ function* decorGen(way) {
           const rChk = 0.24 * sc
           const ax = E + 0.24 + rng() * Math.max(0.15, TERR * 0.82 - 0.24)
           const cand = o.clone().addScaledVector(side, sgn * ax).addScaledVector(up, bermY(ax, E) - 0.03)
-          if (!laneSideClear(seg, lane, u, cand, 0.3)) continue
-          if (col && !col.libre(cand, rChk, { way: way.idx })) continue
-          if (!local.libre(cand, rChk)) continue
+          if (!laneSideClear(seg, lane, u, cand, 0.3)) { coverageSeg.descartes.lado++; continue }
+          if (col && !col.libre(cand, rChk, { way: way.idx })) { coverageSeg.descartes.otraPista++; continue }
+          if (!local.libre(cand, rChk)) { coverageSeg.descartes.local++; continue }
           const pos = colocar(world, { pos: cand, seed: way.idx * 14983 + si * 211 + lane.id * 31 + Math.floor(s * 13) + (sgn > 0 ? 5 : 0) }, rChk, { way: way.idx }, 0, local)
           if (!pos) continue
           const quat = baseQuat.clone().multiply(YAW.setFromAxisAngle(Y_AXIS, rng() * Math.PI * 2))
           floraCands.push({ pos, quat, scale: sc })
+          coverageSeg.flora.push({ s, lane: lane.id })
+          laneCoverage.flora.push(s)
         }
         yield
       }
@@ -201,10 +218,12 @@ function* decorGen(way) {
 
   rebotesJump = capStride(rebotesJump, MAX_REBOTES_JUMP)
   const rebotes = [...rebotesJump, ...capStride(rebotesSide, MAX_REBOTES_SIDE)]
-  const decos = capStride(decoCands, MAX_DECO_TOTAL)
+  // No limitar por camino: los primeros tramos no deben consumir el cupo de los siguientes.
+  // InstanceCuller conserva el coste de dibujo acotado a las piezas cercanas.
+  const decos = decoCands
 
   const hito = []
-  const flora = capStride(floraCands, MAX_FLORA_TOTAL)
+  const flora = floraCands
   const farola = []
   const banderin = []
   for (const d of decos) {
@@ -227,14 +246,26 @@ function* decorGen(way) {
     flora,
     farola,
     banderin,
+    coverage,
   }
   return out
 }
 
-function KitPieza({ nombre, items }) {
+// Ruta enfocada: la generación es completa por longitud, pero lo DIBUJADO se acota por distancia a la cámara.
+// Hasta DRAW_NEAR (×K en el cono delantero) se dibuja todo; de ahí a DRAW_FAR solo 1 de cada `stride`
+// (la flora tiene ~2 matas por punto y paso ~19 u: 1/4 deja ~45 u; las piezas de berma se reparten entre tres
+// kits: 1/2 deja ~40 u entre piezas combinadas). Así no hay huecos de más de 150 u en ~300 u por delante.
+const DRAW_NEAR = 45
+const DRAW_FAR = 110
+
+function KitPieza({ nombre, items, focused, stride = 2 }) {
   const kit = useKit(nombre)
   if (!kit || !items.length) return null
-  return <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow />
+  return (
+    <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow
+      cullRadius={focused ? DRAW_FAR : null} cullBorder={focused ? 0.98 : null}
+      cullNear={focused ? DRAW_NEAR : null} cullStride={focused ? stride : null} />
+  )
 }
 
 export default function Decor({ way, focused }) {
@@ -262,18 +293,18 @@ export default function Decor({ way, focused }) {
         const d2 = minSegDistSq(nonAirSegs[i], cam)
         if (d2 < best) best = d2
       }
-      nearRef.current = best <= 62 * 62
+      nearRef.current = best <= (focused ? 310 * 310 : 62 * 62)
     }
     solidRef.current.visible = nearRef.current
   })
 
   return (
     <group ref={solidRef}>
-      <KitPieza nombre={names.rebote} items={rebotes} />
-      <KitPieza nombre={names.hito} items={hito} />
-      <KitPieza nombre={names.flora} items={flora} />
-      <KitPieza nombre="farola_pista" items={farola} />
-      <KitPieza nombre="banderin" items={banderin} />
+      <KitPieza nombre={names.rebote} items={rebotes} focused={focused} />
+      <KitPieza nombre={names.hito} items={hito} focused={focused} />
+      <KitPieza nombre={names.flora} items={flora} focused={focused} stride={4} />
+      <KitPieza nombre="farola_pista" items={farola} focused={focused} />
+      <KitPieza nombre="banderin" items={banderin} focused={focused} />
     </group>
   )
 }
