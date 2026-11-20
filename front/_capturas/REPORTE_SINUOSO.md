@@ -76,3 +76,69 @@ Umbral de recta: curvatura < 1/400 u⁻¹ (radio > 400 u), medida entre muestras
 1. `pnpm test` completo y arreglar los tres fallos (coste de la pasada primero).
 2. `node tools/diag_sin.mjs` con y sin relajación hasta dejar el quiebro máximo bajo 25°.
 3. `node tools/sinuoso.mjs 10`, `separacion.mjs`, `torsion.mjs`, `cunas.mjs`; luego build + capturas en el puerto 4301.
+
+---
+
+# Sesión 2 (continuación sobre el mismo worktree)
+
+Estado: **pruebas en verde (82/82), build correcto, cuñas 0; integrable en lo geométrico.** Quedan fuera de meta las rectas
+(paso 5). Navegador y FPS: ver «Navegador» al final de esta sección.
+
+Conocimiento consultado: separacion_visible_en_marco_local
+
+## Qué cambió en la sesión 2 (`front/src/Core/world.js`)
+1. **Causa real del rojo de separación:** no eran rutas ni caminos (ways) distintos (`ways:libre` y `rutas:libre` ya daban 0),
+   sino los **hermanos** (caminos del mismo tramo): `tramo:libre` gálibo 3 075 (main: 0). La comprobación entre hermanos era
+   isótropa (0.9 × hueco de fila) y no miraba la normal ya girada.
+   - `hermano()`: prueba en el **marco común de la fila** (lateral `RW` y normal `U0` con el peralte, por estación): prisma de
+     gálibo (semiancho calzada + cinta ajena, alto gálibo + quilla) y aire entre bordes (caja redondeada, como `relate` del
+     medidor), **solo con lo que va a la par** (|d·T| menor que un paso). Trampa encontrada: sin el filtro «a la par», en
+     las curvas la fila original se veía a sí misma en falta y se revertían 75 tramos.
+   - **Giro propio solo lejos de los hermanos:** a menos de `SIN_ROLLD` (51.7 u) de un hermano el camino conserva la normal de
+     la fila (así vale la prueba del marco común); el giro crece desde ahí con el ritmo limitado (envolvente 1-Lipschitz).
+   - **Reparto en zigzag que conserva el orden de la fila:** el camino j toma el ángulo ±α_j (cos α_j creciente con j, signos
+     alternos: quedan repartidos en la vuelta completa) respecto de la dirección de la fila en los centros de las dos rampas;
+     la hélice gira entre ambos un número entero de vueltas más lo que gire la fila. Al pasar de fila a hélice ningún camino
+     cruza a otro. Tres intentos por tramo (radio ×1, ×0.6, ×0.35); si ninguno cabe, el tramo se queda en fila.
+2. **Eventos (`ajustarEventos`):** la vía `caida`/`elevador` exige el desnivel del vuelo (u → uLand) **y** el de la prueba
+   (los dos caminos en la misma `u`, margen 1.5·TK); los eventos entre vecinos de tramos sinuosos se revalidan (si la
+   geometría nueva los contradice pasan a arco; si su vuelo corta una cinta, a portal).
+3. **Coste:** `choca` y los eventos comparten una sola rejilla y solo visitan las celdas que toca la esfera; descarte rápido
+   entre hermanos por la distancia en la misma estación. Cronómetros en `world.sinuosoT`.
+4. **Quiebros:** la causa no era `relaxRibbons` (mismo histograma con `NO_RELAX=1`), sino la amplificación de los pequeños
+   quiebros del eje a R del eje (R / paso). Alisado laplaciano (6 pasadas, 0.5) del camino ya desviado.
+5. Herramientas: `tools/diag_sin.mjs` (quiebros por zona), `tools/diag_rectas.mjs` (rectas por tipo), `tools/perfil_sin.mjs`
+   (coste con elecciones precalculadas), `_capturas/sinuoso_cap.mjs` (capturas POV de tramos sinuosos).
+
+## Métricas (10 semillas, 369-378, salvo donde se indica)
+| Métrica | main / antes | Sesión 1 | Sesión 2 | Meta | ¿Cumple? |
+|---|---|---|---|---|---|
+| `ways:libre` + `rutas:libre` (pares en falta) | 0 | 0 | **0 en 10/10** | 0 | sí |
+| `tramo:libre` gálibo (semilla 369) | 0 | 3 075 | **0** (10 semillas: 0) | 0 | sí |
+| `tramo:libre` lateral (semilla 369) | 25 (mín 5.9) | 3 417 (mín 4.7) | **25 (mín 5.9)**, igual que main | ≤ 150, ≥ 5 | sí |
+| `ruta:libre` gálibo / lateral | 0 / 0 | 0 / 0 | **0 / 0** | 0 / ≤ 20 | sí |
+| Separación mediana al camino vecino | 26.0 u | 168.0 u | **191.7 u (×7.4)** | ≥ ×4 | sí |
+| Separación mediana de todos los pares | 36.4 u | 192.8 u | **221.0 u** | — | sí |
+| Giro de la normal por 300 u | 60-65° | 131.9° | **128.5°** | ≥ 90° | sí |
+| Quiebro máx. en tramo abierto sinuoso (369) | — | 55-79° | **17.6°** (0 vértices ≥ 25°) | < 25° | sí |
+| Caminos completos / reducidos / en fila | — | 174 / 268 / 0 de 442 | **~400 / ~17 / ~25 de ~442** (90 % completos) | — | — |
+| Eventos inválidos en tramos sinuosos | — | 13 de 2 210 | **0-4 por semilla de ~2 100** (portales que aterrizan en calzada fundida, patrón que ya tiene main) | 0 | casi |
+| Eventos inválidos, total | ~11 % | 9.35 % | 8.81 % (el resto está en tramos no sinuosos, igual que main) | — | — |
+| Reconstrucción con elecciones (sola, 369) | ~1 640 ms | ~2 300 ms | **~2 100 ms (1.28 ×)**; en la batería 2 638 ms | ≤ 2 600 sola, ≤ 1.5 × | sí |
+| Tramos con > 15 % en recta | ~155/236 | 112/236 | **91/236 por semilla (910/2 360, 38.6 %)** | ≤ 10 % | **no** |
+| `pnpm test` | 76/76 | 78/82 | **82/82** | verde | sí |
+| `tools/cunas.mjs` (3 semillas) | 0 | sin medir | **0** | 0 | sí |
+
+La «torsión máx. de la normal» de `sinuoso.mjs` (54.3°) está en `salida @0.04`, zona de puerto que esta pieza no toca
+(main: 33-54°).
+
+## Qué NO se cumplió
+- **Rectas (paso 5): 38.6 % de los tramos con > 15 % en recta (meta ≤ 10 %).** Desglose de la semilla 369 (`diag_rectas.mjs`):
+  salida y llegada sinuosas 34 de 39 (en su tramo abierto solo 9-12 % de recta; lo recto es la parrilla/meta y la calzada
+  única del puerto, ~450 u), horquilla 21 de 21 y rizo 15 de 17 (calzada fundida, 37-39 %), rampa en fila 6.
+  Se probó una **ondulación común** (traslación rígida de toda la calzada por un tirabuzón de 24 u): bajaba a 130/472 pero
+  escalonaba los carriles fundidos (la fila deja de ser perpendicular al avance: `tramo:libre` lateral 213 → 9 750,
+  gálibo 0 → 3) y subía la reconstrucción a ~3 100 ms. **Revertida, no está en la rama.** Para hacerlo bien hay que
+  ondular el EJE antes de `buildBraid` (que la fila se construya ya sobre el eje ondulado) y revalidar el reparto.
+- **Eventos inválidos en sinuosos: 0-4 por semilla** (no 0): portales cuyo aterrizaje cae donde los caminos ya van fundidos.
+- Sin tocar `sim.js`: la duración del vuelo sigue acotada por el `clamp` de sim.js (0.35×-1× de `sw.duration`).
