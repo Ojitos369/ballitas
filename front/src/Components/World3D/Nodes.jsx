@@ -30,6 +30,13 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 // raíz del planeta (que escala escalaMapa), y las originales se ocultan: mismo material, misma geometría, mismo
 // sitio, así que se ve igual. Se rehornea al entrar al modo lejano (las piezas solo se animan de cerca o con hover).
 // Las originales siguen recibiendo hover (el raycast de three no mira `visible`). A/B: window.__opt.off = true.
+// Apagada por defecto: medida +10 % escritorio / +11 % móvil en la vista general (A/B, 2026-11-19), por debajo de la
+// meta (+15 % / +25 %). Se enciende con FUSION_LEJANA = true o, para medir, con window.__opt.off = false.
+const FUSION_LEJANA = false
+const fusionActiva = () => {
+  const o = typeof window !== 'undefined' ? window.__opt : undefined
+  return o && o.off !== undefined ? !o.off : FUSION_LEJANA
+}
 const OCULTAS = new WeakSet() // ocultadas por la fusión (no en userData: React lo reemplaza al re-renderizar)
 const _mInv = new THREE.Matrix4()
 const _mRel = new THREE.Matrix4()
@@ -1502,14 +1509,13 @@ function Planet({ node, world, tex }) {
     if (lj.grp) {
       let hov = false
       for (let i = 0; i < reg.destinos.length; i++) if (reg.destinos[i].hoverRef.current) { hov = true; break }
-      const quieto = !near && kAqui === 0 && !hov && !(typeof window !== 'undefined' && window.__opt?.off)
+      const quieto = !near && kAqui === 0 && !hov && fusionActiva()
       if (!quieto) lj.valido = false // algo de lo horneado pudo moverse o animarse: al volver se rehornea
       // withCameraFade desvanece cada pieza por la distancia de SU origen a la cámara; la malla fusionada tiene el
       // origen en el centro del planeta y no se desvanecería. Si alguna pieza puede quedar a < 3 u de la cámara se
       // vuelve a las piezas sueltas (sin rehornear: nada se movió).
       const s = rootRef.current ? rootRef.current.scale.x : 1
-      const on = quieto && dist - lj.rMax * s > 3
-      // cada ~30 cuadros (desfasado por planeta) se comprueba que lo horneado sigue vigente; si no, se rehornea
+      const on = quieto && dist - lj.rMax * s > 3      // cada ~30 cuadros (desfasado por planeta) se comprueba que lo horneado sigue vigente; si no, se rehornea
       if (on && lj.on && ++lj.n % 30 === node.idx % 30 && !lejosVigente(rootRef.current, lj.grp, lj.src, lj.geos)) {
         for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
         lj.on = false

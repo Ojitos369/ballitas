@@ -1,0 +1,264 @@
+{
+ "vp": "movil",
+ "modo": "ab",
+ "url": "http://localhost:4303/?stats=1",
+ "orbita": false,
+ "filas": [
+  {
+   "i": 0,
+   "modo": "off",
+   "hornea": 10,
+   "fps": 124.9,
+   "p5": 103.6,
+   "cpuMs": 22.38,
+   "maxMs": 24,
+   "calls": 275,
+   "tris": 192978,
+   "geos": 161,
+   "texs": 165,
+   "heapMB": 369,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 1,
+   "modo": "on",
+   "hornea": 15,
+   "fps": 140.3,
+   "p5": 123.2,
+   "cpuMs": 19.84,
+   "maxMs": 29,
+   "calls": 167,
+   "tris": 192372,
+   "geos": 165,
+   "texs": 164,
+   "heapMB": 284,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 2,
+   "modo": "off",
+   "hornea": 15,
+   "fps": 130.3,
+   "p5": 110.3,
+   "cpuMs": 21.53,
+   "maxMs": 22,
+   "calls": 270,
+   "tris": 191941,
+   "geos": 166,
+   "texs": 164,
+   "heapMB": 342,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 3,
+   "modo": "on",
+   "hornea": 20,
+   "fps": 147.6,
+   "p5": 135.2,
+   "cpuMs": 18.85,
+   "maxMs": 21,
+   "calls": 165,
+   "tris": 191940,
+   "geos": 166,
+   "texs": 164,
+   "heapMB": 406,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 4,
+   "modo": "off",
+   "hornea": 20,
+   "fps": 129.7,
+   "p5": 97.6,
+   "cpuMs": 21.16,
+   "maxMs": 145,
+   "calls": 269,
+   "tris": 191939,
+   "geos": 166,
+   "texs": 164,
+   "heapMB": 475,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 5,
+   "modo": "on",
+   "hornea": 25,
+   "fps": 133.7,
+   "p5": 94.8,
+   "cpuMs": 19.71,
+   "maxMs": 203,
+   "calls": 165,
+   "tris": 191941,
+   "geos": 166,
+   "texs": 164,
+   "heapMB": 545,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 6,
+   "modo": "off",
+   "hornea": 25,
+   "fps": 101.6,
+   "p5": 77,
+   "cpuMs": 26.91,
+   "maxMs": 197,
+   "calls": 269,
+   "tris": 191883,
+   "geos": 166,
+   "texs": 170,
+   "heapMB": 431,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 7,
+   "modo": "on",
+   "hornea": 30,
+   "fps": 121.3,
+   "p5": 108.7,
+   "cpuMs": 22.97,
+   "maxMs": 20,
+   "calls": 165,
+   "tris": 191942,
+   "geos": 166,
+   "texs": 170,
+   "heapMB": 463,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 8,
+   "modo": "off",
+   "hornea": 30,
+   "fps": 111.7,
+   "p5": 99.9,
+   "cpuMs": 25.11,
+   "maxMs": 21,
+   "calls": 270,
+   "tris": 191942,
+   "geos": 179,
+   "texs": 177,
+   "heapMB": 494,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 9,
+   "modo": "on",
+   "hornea": 35,
+   "fps": 118.3,
+   "p5": 107.2,
+   "cpuMs": 23.58,
+   "maxMs": 24,
+   "calls": 164,
+   "tris": 191940,
+   "geos": 179,
+   "texs": 177,
+   "heapMB": 545,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 10,
+   "modo": "off",
+   "hornea": 35,
+   "fps": 99.4,
+   "p5": 89.9,
+   "cpuMs": 27.97,
+   "maxMs": 32,
+   "calls": 271,
+   "tris": 191945,
+   "geos": 179,
+   "texs": 178,
+   "heapMB": 577,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  },
+  {
+   "i": 11,
+   "modo": "on",
+   "hornea": 40,
+   "fps": 112.3,
+   "p5": 105,
+   "cpuMs": 24.72,
+   "maxMs": 38,
+   "calls": 165,
+   "tris": 191942,
+   "geos": 179,
+   "texs": 177,
+   "heapMB": 625,
+   "dpr": 1,
+   "buf": [
+    412,
+    915
+   ]
+  }
+ ],
+ "resumen": {
+  "fps": {
+   "on": 128.92,
+   "off": 116.27,
+   "difPct": 10.9
+  },
+  "p5": {
+   "on": 112.35,
+   "off": 96.38,
+   "difPct": 16.6
+  },
+  "cpuMs": {
+   "on": 21.61,
+   "off": 24.18,
+   "difPct": -10.6
+  },
+  "calls": {
+   "on": 165.17,
+   "off": 270.67,
+   "difPct": -39
+  },
+  "tris": {
+   "on": 192012.83,
+   "off": 192104.67,
+   "difPct": 0
+  }
+ },
+ "errs": []
+}

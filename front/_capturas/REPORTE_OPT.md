@@ -70,3 +70,70 @@ y compilado, pero **sin medir**: la A/B (`_capturas/opt/ab3`) se quedó esperand
    objetos dibujados por planeta. Una alternativa más barata que hornear en cada transición: hornear una sola vez al
    montar (la geometría local no cambia de lejos) y alternar visibilidad, o usar InstancedMesh para iconos y halos de
    los destinos (2 materiales por planeta).
+
+## Sesión 2 (2026-11-19, 22:27-23:15)
+
+Conocimiento consultado: rendimiento_web/precarga_por_etapas_con_presupuesto, rendimiento_web/aparicion_gradual_en_el_borde_de_recorte, rendimiento_web/revelado_urgente_frente_a_calentado_de_fondo, medicion_y_pruebas/README.
+
+`git merge main` al empezar (d648dca). Todas las mediciones son A/B en la misma sesión (`opt_vista.mjs … ab`, tramos de 5 s
+alternos, 6 por modo, Edge real sin tope de FPS), respetando el candado de navegador.
+
+### Paso 1: el arreglo WeakSet (ab4)
+`hornea` sube exactamente 5 por tramo «on» (uno por planeta, al entrar) y no crece dentro del tramo: los rehorneos
+continuos de la sesión 1 eran la causa del −11 %.
+
+| | FPS on | FPS off | dif | p5 dif | calls on/off |
+|---|---|---|---|---|---|
+| escritorio | 106,9 | 97,2 | **+10,1 %** | +12,1 % | 199 / 275 (−28 %) |
+| móvil 412×915 | 95,4 | 87,3 | **+9,3 %** | +13,9 % | 195 / 271 (−28 %) |
+
+Meta no alcanzada → paso 2.
+
+### Paso 2: portales con color de vértice (ab5 y fin2)
+Reparto de draw calls con la fusión activa (`opt_vista.mjs … rep`, `opt/rep1`): cada planeta seguía con ~8 mallas
+«lejos» de 352 triángulos, cada una con su material: los portales, uno por terminal con el color de su ruta. Ahora van
+todos en una malla por planeta: copia del material con color y emisivo blancos, `vertexColors` y el emisivo
+multiplicado por el color de vértice (difuso = color, emisivo = color × intensidad, igual que antes); uno por
+intensidad (salida / entrada), compartido entre planetas.
+
+| corrida | | FPS on | FPS off | dif | p5 dif | calls on/off |
+|---|---|---|---|---|---|---|
+| ab5 | escritorio | 94,2 | 86,5 | **+9,0 %** | −1,3 % | 169 / 274 (−38 %) |
+| ab5 | móvil | 135,0 | 120,5 | **+12,1 %** | +15,8 % | 165 / 271 (−39 %) |
+| fin2 | escritorio | 108,2 | 98,2 | **+10,2 %** | +5,0 % | 170 / 275 (−38 %) |
+| fin2 | móvil | 128,9 | 116,3 | **+10,9 %** | +16,6 % | 165 / 271 (−39 %) |
+
+Las draw calls bajan un 38-39 %, pero los FPS solo un ~10-11 %. El techo medido en la sesión 1 (sin planetas en absoluto)
+era de +25-28 %, así que la meta de +25 % en móvil equivale a quitar los planetas; lo que queda por planeta (esfera
+con shader, contorno, atmósfera, ~8 mallas fusionadas de materiales distintos del monumento, conos transparentes,
+sprites) ya no es la mitad del coste.
+
+Además, una guarda: si una pieza fusionada pudiera quedar a menos de 3 u de la cámara (zona de `withCameraFade`, que mide
+la distancia desde el origen de cada pieza), se vuelve a las piezas sueltas sin rehornear. En la práctica no se
+activa (en las distancias de la fusión los planetas están a miles de unidades), pero evita un caso límite.
+
+### Paso 3: POV sin regresión (`opt_pov.mjs`, A/B siguiendo una ballita, escritorio)
+| tanda | FPS on | FPS off | dif |
+|---|---|---|---|
+| 1 | 56,7 | 55,0 | +3,1 % |
+| 2 | 61,4 | 62,2 | −1,4 % |
+Dentro del límite (≥ −3 %). (Arreglé un fallo de la sonda: faltaba un `;` antes de `(window.__opt ||= {})`.)
+
+### Paso 4: capturas (`opt_cerca.mjs`, `opt/fin2/cap`, `opt/dbginv/cap`)
+- Vista general, escritorio y 412×915 (`*_general_antes/despues.png`): se ven igual (planetas, iconos, portales,
+  caminos y rótulos); calls 289 → 171 y 270 → 167.
+- Planeta a 130 u (`*_media_*`): hay un casco de terminal que aparece desvanecido en una de las dos. Con el orden
+  invertido (`opt/dbginv`) el desvanecido pasa a la otra: siempre sale en la **primera** captura tras el salto de cámara.
+  Es convergencia temporal, no la fusión. Además, a esa distancia el planeta enfocado ya está en modo cercano
+  (`near`, fusión apagada para él; volcado en `opt/dbg/cap_desk.txt`).
+- Planeta a 70 u (`*_cerca_*`): solo cambia la rotación del planeta.
+
+### Paso 5: pruebas y build
+`pnpm test`: 81/82; falló solo `sim.test.js:446` (3048 ms, tope 3000). Repetida sola: pasa (2480 ms). `vite build` OK.
+`layout.test.js` 28/28 tras el último cambio.
+
+### Decisión
+La mejora es real y estable (+10 % escritorio, +11 % móvil, p5 en móvil +16 %, sin regresión en POV y con el mismo
+aspecto), pero **no alcanza la meta** (+15 % / +25 %). Según el brief, queda **apagada por defecto**: `FUSION_LEJANA = false`
+en Nodes.jsx. Para encenderla basta con `FUSION_LEJANA = true`; para medir, `window.__opt.off = false/true`. Los caminos
+no se tocaron (Paths.jsx intacto).

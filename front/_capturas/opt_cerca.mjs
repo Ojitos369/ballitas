@@ -50,12 +50,13 @@ try {
   const info = await p.evaluate(() => ({ ctl: !!window.__cer.ctl, planetas: window.__cer.planetas.length }))
   console.log(JSON.stringify(info))
   for (const modo of ['general', 'media', 'cerca']) {
-    for (const off of [true, false]) {
+    for (const off of (process.env.OPT_INV ? [false, true] : [true, false])) {
       await p.evaluate(([modo, off]) => { (window.__opt ||= {}).off = off; window.__cerPon(modo) }, [modo, off])
       await sleep(2500)
       await p.evaluate((modo) => window.__cerPon(modo), modo)
       await sleep(500)
       const calls = await p.evaluate(() => window.__ballitasDebug.gl.info.render.calls)
+      if (process.env.OPT_DBG) { await p.evaluate(() => { window.__opt.dbg = {} }); await sleep(300); console.log(JSON.stringify(await p.evaluate(() => window.__opt.dbg))) }
       writeFileSync(`${dir}/${vp}_${modo}_${off ? 'antes' : 'despues'}.png`, await p.screenshot({ type: 'png' }))
       console.log(modo, off ? 'antes' : 'despues', 'calls', calls)
     }
