@@ -55,6 +55,29 @@ function lejosVigente(root, dst, src, geos) {
   for (let i = 0; i < now.length; i++) if (now[i] !== src[i] || now[i].geometry !== geos[i]) return false
   return true
 }
+// Portales: cada terminal tiene el color de su ruta (un material por terminal, ~8 draw calls por planeta aunque se
+// fusionaran por valor). De lejos van todos en una malla con el color como color de vértice: el material es copia del
+// original con color y emisivo blancos, y el emisivo se multiplica por el color de vértice, así que
+// difuso = color y emisivo = color × intensidad, igual que antes. Uno por intensidad (salida / entrada), compartido.
+const portalVC = new Map()
+function materialPortalVC(m) {
+  const k = m.emissiveIntensity.toFixed(3)
+  let vm = portalVC.get(k)
+  if (vm) return vm
+  vm = new THREE.MeshStandardMaterial().copy(m)
+  vm.color.set(1, 1, 1)
+  vm.emissive.set(1, 1, 1)
+  vm.vertexColors = true
+  const prev = m.onBeforeCompile
+  const prevKey = m.customProgramCacheKey ? m.customProgramCacheKey() : ''
+  vm.onBeforeCompile = (sh, r) => {
+    if (prev) prev.call(m, sh, r)
+    sh.fragmentShader = sh.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = emissive * vColor.rgb;')
+  }
+  vm.customProgramCacheKey = () => `${prevKey}|portalVC`
+  portalVC.set(k, vm)
+  return vm
+}
 function hornearLejos(root, dst) {
   for (const m of dst.children) m.geometry.dispose()
   dst.clear()
@@ -66,11 +89,17 @@ function hornearLejos(root, dst) {
   for (const o of src) {
     const m = o.material
     // portales: un material por terminal con los mismos valores; se agrupan por valores (congelados de lejos)
-    const k = o.userData.lejos === 'portal' ? `p:${m.color.getHexString()}:${m.emissiveIntensity.toFixed(3)}` : m.uuid
+    const portal = o.userData.lejos === 'portal' && !(typeof window !== 'undefined' && window.__opt?.offVC)
+    const k = portal ? `p:${m.emissiveIntensity.toFixed(3)}` : m.uuid
     let e = grupos.get(k)
-    if (!e) grupos.set(k, (e = { mat: m, geos: [], rs: false }))
+    if (!e) grupos.set(k, (e = { mat: portal ? materialPortalVC(m) : m, geos: [], rs: false }))
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()
     g.applyMatrix4(_mRel.multiplyMatrices(_mInv, o.matrixWorld))
+    if (portal) {
+      const n = g.attributes.position.count; const col = new Float32Array(n * 3)
+      for (let i = 0; i < n; i++) { col[i * 3] = m.color.r; col[i * 3 + 1] = m.color.g; col[i * 3 + 2] = m.color.b }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    }
     e.geos.push(g)
     e.rs ||= o.receiveShadow
   }

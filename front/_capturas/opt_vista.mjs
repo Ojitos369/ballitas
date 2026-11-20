@@ -95,7 +95,7 @@ try {
       await p.evaluate(() => { for (const [o, v] of window.__snap) o.visible = v; window.__ballitasDebug.gl.setPixelRatio(window.__dprPrev); document.querySelectorAll('.tag').forEach((e) => { e.parentElement.style.display = '' }) })
       out.exp[k] = r; console.log(k, JSON.stringify(r))
     }
-  } else if (modo === 'base') {
+  } else if (modo === 'base' || modo === 'rep') {
     for (let t = 0; t < +tandasA; t++) { const r = await medir(+segA * 1000); out.filas.push({ tanda: t + 1, ...r }); console.log(JSON.stringify(out.filas.at(-1))) }
     // reparto de draw calls por capa en un cuadro
     out.reparto = await p.evaluate(() => new Promise((ok) => {
@@ -120,7 +120,21 @@ try {
     // coste por capa: apagar cada hijo de los grupos s* grandes 4 s y medir FPS frente al todo encendido
     const capas = await p.evaluate(() => { const s = window.__ballitasDebug.scene; const L = []; s.children.forEach((c, i) => { if (c.children.length > 4) c.children.forEach((h, j) => { let n = 0; h.traverse(() => n++); if (n > 3) L.push([i, j, n]) }); else L.push([i, -1, 1]) }); return L.slice(0, 40) })
     out.capas = []
-    const ref = await medir(4000)
+    if (modo === 'rep') {
+      // lista detallada de qué se dibuja: nombre de la malla, de su padre y del abuelo, material y geometría
+      out.lista = await p.evaluate(() => new Promise((ok) => {
+        const d = window.__ballitasDebug; const gl = d.gl; const orig = gl.renderBufferDirect.bind(gl); const agg = {}
+        gl.renderBufferDirect = (cam, scene, geo, mat, obj, group) => {
+          const k = `${obj.parent?.parent?.name || obj.parent?.parent?.type}/${obj.parent?.name || obj.parent?.type}/${obj.name || obj.type} geo=${geo.name || geo.type}:${geo.index ? geo.index.count / 3 : (geo.attributes.position?.count || 0) / 3} mat=${mat.type}:${mat.name || mat.uuid.slice(0, 4)} t=${mat.transparent ? 1 : 0}`
+          agg[k] = (agg[k] || 0) + 1
+          return orig(cam, scene, geo, mat, obj, group)
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => { gl.renderBufferDirect = orig; ok(Object.entries(agg).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k}`)) }))
+      }))
+      for (const x of out.lista) console.log(x)
+    }
+    const ref = modo === 'rep' ? null : await medir(4000)
+    if (modo === 'rep') capas.length = 0
     for (const [i, j, n] of capas) {
       await p.evaluate(([i, j]) => { const s = window.__ballitasDebug.scene; const o = j < 0 ? s.children[i] : s.children[i].children[j]; window.__apag = o; window.__apagVis = o.visible; o.visible = false }, [i, j])
       await sleep(300)
