@@ -12,7 +12,7 @@ import { opcionesDe } from './opciones.js'
 const ESPERAS = [1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 4000, 8000, 15000]
 const CAMPOS_MUNDO = { dest: 'destinos', way: 'ways', route: 'routes', plannedRoute: 'routes', nextDest: 'destinos' }
 
-function leerId() {
+export function leerId() {
   try {
     let x = localStorage.getItem('ballitas:espectador')
     if (!x) { x = crypto.randomUUID(); localStorage.setItem('ballitas:espectador', x) }

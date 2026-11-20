@@ -15,19 +15,41 @@ from fastapi import APIRouter, WebSocket
 MUNDO_WS_URL = os.environ.get("MUNDO_WS_URL", "ws://127.0.0.1:8379")
 MUNDO_WS_MAX = int(os.environ.get("MUNDO_WS_MAX", "300"))
 MAX_TRAMA = 4096  # el protocolo admite 512 B por mensaje; más que esto ni se reenvía
+# Orígenes aceptados (coma); los de desarrollo local se aceptan con cualquier puerto.
+MUNDO_ORIGENES = {o.strip() for o in os.environ.get("MUNDO_ORIGENES", "https://ballitas.ojitos3695.com").split(",") if o.strip()}
+MUNDO_WS_POR_IP = int(os.environ.get("MUNDO_WS_POR_IP", "8"))
 
 router = APIRouter()
 _abiertas = 0
+_por_ip: dict[str, int] = {}
+
+
+def _origen_valido(origen: str | None) -> bool:
+    if not origen:
+        return False
+    if origen in MUNDO_ORIGENES:
+        return True
+    return origen.startswith(("http://localhost:", "http://127.0.0.1:")) or origen in ("http://localhost", "http://127.0.0.1")
+
+
+def _ip(ws: WebSocket) -> str:
+    # detrás del túnel de Cloudflare la IP real llega en CF-Connecting-IP; en local, la del socket
+    return ws.headers.get("cf-connecting-ip") or (ws.client.host if ws.client else "?")
 
 
 @router.websocket("/ws")
 async def relevo(ws: WebSocket):
     global _abiertas
+    if not _origen_valido(ws.headers.get("origin")):
+        await ws.close(code=1008)  # antes de aceptar: el handshake se rechaza
+        return
+    ip = _ip(ws)
     await ws.accept()
-    if _abiertas >= MUNDO_WS_MAX:
+    if _abiertas >= MUNDO_WS_MAX or _por_ip.get(ip, 0) >= MUNDO_WS_POR_IP:
         await ws.close(code=1013, reason="lleno")
         return
     _abiertas += 1
+    _por_ip[ip] = _por_ip.get(ip, 0) + 1
     mundo = None
     codigo = 1011
     try:
@@ -68,6 +90,9 @@ async def relevo(ws: WebSocket):
                 codigo = t.result()
     finally:
         _abiertas -= 1
+        _por_ip[ip] -= 1
+        if _por_ip[ip] <= 0:
+            del _por_ip[ip]
         if mundo is not None:
             try:
                 await mundo.close()
