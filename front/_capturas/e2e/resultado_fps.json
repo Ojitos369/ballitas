@@ -1,0 +1,68 @@
+{
+  "fecha": "2026-11-20T05:06:03.431Z",
+  "pasos": {
+    "fps": {
+      "rondas": [
+        {
+          "main": {
+            "general": 30.3,
+            "pov": 42.3,
+            "modoMundo": "main",
+            "errores": []
+          },
+          "e2e": {
+            "general": 53.8,
+            "pov": 36,
+            "modoMundo": "remoto",
+            "errores": []
+          }
+        },
+        {
+          "main": {
+            "general": 63.4,
+            "pov": 32.8,
+            "modoMundo": "main",
+            "errores": []
+          },
+          "e2e": {
+            "general": 89.4,
+            "pov": 57,
+            "modoMundo": "remoto",
+            "errores": []
+          }
+        },
+        {
+          "main": {
+            "general": 105.7,
+            "pov": 64.8,
+            "modoMundo": "main",
+            "errores": []
+          },
+          "e2e": {
+            "general": 112.5,
+            "pov": 71,
+            "modoMundo": "remoto",
+            "errores": []
+          }
+        }
+      ],
+      "mediana": {
+        "general": {
+          "main": 63.4,
+          "e2e": 89.4,
+          "cambioPct": 41
+        },
+        "pov": {
+          "main": 42.3,
+          "e2e": 57,
+          "cambioPct": 34.8
+        }
+      }
+    }
+  },
+  "capturas": [],
+  "errores": {
+    "A": [],
+    "B": []
+  }
+}

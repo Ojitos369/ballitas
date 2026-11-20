@@ -1,0 +1,85 @@
+{
+  "fecha": "2026-11-20T05:03:58.296Z",
+  "pasos": {
+    "b_formar_y_fila": {
+      "sugerido": "Cherachi",
+      "filaVistaPorB": [
+        {
+          "nombre": "Luna E2E",
+          "mia": false
+        }
+      ],
+      "muerta": {
+        "ok": true,
+        "b": 1,
+        "name": "Pella"
+      },
+      "msHastaEntrar": 3038,
+      "idMia": 11,
+      "filaTrasEntrar": 0,
+      "avisoA": "¡Luna E2E entró al mundo! Ya tienes el control.\n×"
+    },
+    "c_decisiones": {
+      "planeta": {
+        "tarjetas": 4,
+        "detalle": "Cima 💎 Camino de Cristal · riesgo 40% · Sin explorar QUÉ SE GANA Edificios: hasta +19 ⭐ y hasta +30 ⚡ ⭐ Galería ⭐ +19 ⚡ Siesta ⚡ +30 ⚡ Picnic ⚡ +27 QUÉ SE PIERDE (EDIFICIOS Y VIAJE) Al usar Galería −11⚡ Al usar Siesta −7⭐ Al usar Picnic −4⭐ Viaje (mejor ruta "
+      },
+      "ruta": {
+        "tarjetas": 3,
+        "detalle": "Ruta B · Tranquila ❄️ Camino de Hielo → Cima · Lenta · emoción 46% QUÉ SE GANA / QUÉ SE PIERDE EN EL RECORRIDO Puntos estimados del camino −33 ⭐ Energía consumida −39.5 ⚡ Duración y longitud ~225 s · 20467 u Eventos de cambio 160 estaciones (8 tramos) OBSTÁCUL"
+      },
+      "carril": {
+        "tarjetas": 5,
+        "detalle": "Carril 4 de 5 (Derecha) Calculado sobre Camino de Hielo · Ruta B (tu ruta) PRIMER EVENTO QUE ENCONTRARÁ 🛗 Elevador (elevador) en 🚀 Lanzadera QUÉ SE GANA / QUÉ SE PIERDE SI LO USA Recompensa al completar +0.6 ⭐ +0.4 ⚡ Probabilidad de fallar 2% Si falla el eve"
+      },
+      "dec": {
+        "destino": 1,
+        "ruta": {
+          "way": 9,
+          "r": 1
+        },
+        "carril": 3
+      },
+      "bVeLasMismas": true,
+      "viaje": {
+        "consumida": false,
+        "rutasVistas": [],
+        "muestrasViaje": 0,
+        "fin": "murio",
+        "s": 47.1
+      },
+      "cumple": {
+        "planeta": false,
+        "ruta": false,
+        "carril": false
+      }
+    }
+  },
+  "capturas": [
+    "00_inicio_A_desk.jpg",
+    "00_inicio_A_movil.jpg",
+    "00_inicio_B_desk.jpg",
+    "01_formar_editado_A_desk.jpg",
+    "01_formar_editado_A_movil.jpg",
+    "02_en_fila_A_desk.jpg",
+    "02_en_fila_A_movil.jpg",
+    "02_en_fila_B_desk.jpg",
+    "02_en_fila_B_movil.jpg",
+    "03_entro_de_la_fila_A_desk.jpg",
+    "03_entro_de_la_fila_A_movil.jpg",
+    "03_entro_de_la_fila_B_desk.jpg",
+    "04_selector_planeta_hover_A_desk.jpg",
+    "04_selector_planeta_hover_A_movil.jpg",
+    "04_selector_ruta_hover_A_desk.jpg",
+    "04_selector_ruta_hover_A_movil.jpg",
+    "04_selector_carril_hover_A_desk.jpg",
+    "04_selector_carril_hover_A_movil.jpg",
+    "05_decisiones_fijadas_A_desk.jpg",
+    "05_decisiones_fijadas_A_movil.jpg",
+    "06_tras_cumplir_A_desk.jpg"
+  ],
+  "errores": {
+    "A": [],
+    "B": []
+  }
+}

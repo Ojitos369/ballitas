@@ -1,0 +1,107 @@
+{
+  "fecha": "2026-11-20T05:12:27.655Z",
+  "pasos": {
+    "c_decisiones": {
+      "intentos": [
+        {
+          "id": 30,
+          "planeta": {
+            "tarjetas": 4,
+            "detalle": "Eco 🌊 Camino del Mar · riesgo 50% · Sin explorar QUÉ SE GANA Edificios: hasta +24 ⭐ y hasta +27 ⚡ ⭐ Concurso ⭐ +22 ⚡ Spa ⚡ +24 ⚡ Picnic ⚡ +27 ⭐ Feria ⭐ +18 ⭐ Mercado ⭐ +24 ⭐ Galería ⭐ +16 ⭐ Torneo ⭐ +14 ⚡ Siesta ⚡ +25 QUÉ SE PIERDE (EDIFICIOS Y VIAJE) Al usar"
+          },
+          "ruta": {
+            "tarjetas": 3,
+            "detalle": "Ruta A · Veloz y arriesgada 🌑 Camino Sombrío → Eco · Rápida · emoción 79% QUÉ SE GANA / QUÉ SE PIERDE EN EL RECORRIDO Puntos estimados del camino −14.4 ⭐ Energía consumida −27.8 ⚡ Duración y longitud ~81 s · 12741 u Eventos de cambio 120 estaciones (8 tramos)"
+          },
+          "carril": {
+            "tarjetas": 5,
+            "detalle": "Carril 4 de 5 (Derecha) Calculado sobre Camino Sombrío · Ruta A (tu ruta) PRIMER EVENTO QUE ENCONTRARÁ 🦘 Salto (salto) en 🚀 Lanzadera QUÉ SE GANA / QUÉ SE PIERDE SI LO USA Recompensa al completar +1.4 ⭐ −0.4 ⚡ Probabilidad de fallar 8% Si falla el evento −30"
+          },
+          "dec": {
+            "destino": 0,
+            "ruta": {
+              "way": 1,
+              "r": 0
+            },
+            "carril": 3
+          },
+          "bVeLasMismas": true,
+          "viaje": {
+            "consumida": false,
+            "rutasVistas": [],
+            "muestrasViaje": 0,
+            "fin": "sin_control",
+            "s": 20.9
+          },
+          "cumple": {
+            "planeta": false,
+            "ruta": false,
+            "carril": "no aplicó (salió antes de elegirlo)"
+          }
+        },
+        {
+          "id": 35,
+          "planeta": {
+            "tarjetas": 4,
+            "detalle": "Cima 🌑 Camino Sombrío · riesgo 90% · Sin explorar QUÉ SE GANA Edificios: hasta +19 ⭐ y hasta +30 ⚡ ⭐ Galería ⭐ +19 ⚡ Siesta ⚡ +30 ⚡ Picnic ⚡ +27 QUÉ SE PIERDE (EDIFICIOS Y VIAJE) Al usar Galería −11⚡ Al usar Siesta −7⭐ Al usar Picnic −4⭐ Viaje (mejor ruta A, "
+          },
+          "ruta": {
+            "tarjetas": 3,
+            "detalle": "Ruta A · Veloz y arriesgada 🌑 Camino Sombrío → Eco · Rápida · emoción 79% QUÉ SE GANA / QUÉ SE PIERDE EN EL RECORRIDO Puntos estimados del camino −12.7 ⭐ Energía consumida −26.6 ⚡ Duración y longitud ~71 s · 12741 u Eventos de cambio 120 estaciones (8 tramos)"
+          },
+          "carril": {
+            "tarjetas": 5,
+            "detalle": "Carril 4 de 5 (Derecha) Calculado sobre Camino Sombrío · Ruta A (tu ruta) PRIMER EVENTO QUE ENCONTRARÁ 🦘 Salto (salto) en 🚀 Lanzadera QUÉ SE GANA / QUÉ SE PIERDE SI LO USA Recompensa al completar +1.4 ⭐ −0.4 ⚡ Probabilidad de fallar 7% Si falla el evento −30"
+          },
+          "dec": {
+            "ruta": {
+              "way": 1,
+              "r": 0
+            },
+            "destino": 0,
+            "carril": 3
+          },
+          "bVeLasMismas": true,
+          "viaje": {
+            "consumida": true,
+            "rutasVistas": [
+              3
+            ],
+            "muestrasViaje": 531,
+            "manual": [
+              "destino",
+              "ruta",
+              "carril"
+            ],
+            "razon": "lo decidió quien me controla",
+            "planTexto": "Eco · Mercado / Camino Sombrío · Ruta A",
+            "way": 1,
+            "wayTo": 0,
+            "plannedRoute": 3,
+            "rutaEsperada": 3,
+            "carrilInicial": 3,
+            "primerTramo": 0,
+            "llegoA": 0,
+            "fin": "llego",
+            "s": 49.1
+          },
+          "cumple": {
+            "planeta": true,
+            "ruta": true,
+            "carril": true
+          }
+        }
+      ]
+    }
+  },
+  "capturas": [
+    "00_inicio_A_desk.jpg",
+    "00_inicio_A_movil.jpg",
+    "00_inicio_B_desk.jpg",
+    "06_tras_cumplir_A_desk.jpg"
+  ],
+  "errores": {
+    "A": [],
+    "B": []
+  }
+}

@@ -77,8 +77,8 @@ export function opcionesDe(s, b) {
       probFallo: sw ? Math.max(0, Math.min(1, sw.fail * (1.25 - valentia * 0.5))) : 0,
       penalizacion: sw ? { velPct: 30, puntos: +(1 + 3 * sw.risk).toFixed(1) } : null,
       rutaBase: rutaRef ? {
-        wayIdx: rutaRef.way, r: rutaRef.r, name: rutaRef.name, themeName: world.ways[rutaRef.way]?.theme?.name || '',
-        toName: world.nodes[world.ways[rutaRef.way]?.to]?.name || '', esElegida,
+        wayIdx: rutaRef.way.idx, r: rutaRef.r, name: rutaRef.name, themeName: rutaRef.way.theme?.name || '', // route.way es el objeto del sentido
+        toName: world.nodes[rutaRef.way.to]?.name || '', esElegida,
       } : null,
     }
   })

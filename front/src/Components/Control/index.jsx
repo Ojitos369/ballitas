@@ -47,7 +47,8 @@ export default function Control({ mundo, selected, onSelect }) {
     const offEntra = mundo.on('entra', (ev) => {
       bump()
       if (ev?.mia && ev.b) {
-        setAviso(`¡${ev.nombre} entró al mundo! Ya tienes el control.`)
+        // 'entra' llega tanto al nacer de la fila como al tomar una ballita que ya vivía
+        setAviso((ev.b.age ?? 0) < 5 ? `¡${ev.nombre} entró al mundo! Ya tienes el control.` : `Ahora controlas a ${ev.nombre}.`)
         onSelect?.(ev.b)
       }
     })

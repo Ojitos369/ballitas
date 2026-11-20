@@ -1,0 +1,18 @@
+﻿04:59:02 paso a_mismas_posiciones
+04:59:07   → {"muestrasA":296,"muestrasB":309,"comparaciones":2694,"ballitas":10,"mismasBallitas":true,"media":0.0099,"p99":0.102,"max":4.938}
+04:59:07 paso b_formar_y_fila
+04:59:17   → {"sugerido":"Zuralla","filaVistaPorB":[{"nombre":"Luna E2E","mia":false}],"muerta":{"ok":true,"b":1,"name":"Boruña"},"msHastaEntrar":3052,"idMia":12,"filaTrasEntrar":0,"avisoA":"¡Luna E2E entró al mundo! Ya tienes el control.\n×"}
+04:59:17 paso c_decisiones
+05:01:44   ✖ Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'ways' -> object with constructor 'Array'
+    |     index 0 -> object with constructor 'Object'
+    --- property 'circuit' closes the circle
+05:01:44 paso d_dejar_y_tomar
+05:01:51   → {"porInterfaz":true,"intentoDeA":{"ok":false,"error":"ocupada"},"barraDeA":"Pirati G2 Controlada por otro espectador"}
+05:01:51 paso e_inactividad
+05:02:10   → {"intentos":[{"id":14,"motivo":"muerte","segundosDeSim":159},{"id":31,"motivo":"inactivo","segundosDeSim":311}],"aviso":"Perdiste el control tras 3 rutas sin decidir.\n×","sinControl":true}
+05:02:10 paso f_reconexion
+05:02:21   → {"epocaAntes":"mwoiab1x-32cf0f","epocaDespues":"mwoiinlc-ccd613","mundoNuevo":true,"arranqueServidorMs":4643,"msRecuperaA":180,"msRecuperaB":259,"mismasBallitas":true,"ballitas":10}
+05:02:21 paso g_consola
+05:02:21   → {"erroresAntesDeReiniciar":{"A":0,"B":0},"erroresTotales":{"A":0,"B":0},"muestra":[]}
