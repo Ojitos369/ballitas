@@ -1399,7 +1399,7 @@ function Planet({ node, world, tex }) {
   const moonsGroupRef = useRef()
   const moonPivotsRef = useRef([])
   const animRegRef = useRef({ destinos: [], terminals: [], monument: null })
-  const lejosRef = useRef({ grp: null, on: false, src: [], geos: [], n: 0 })
+  const lejosRef = useRef({ grp: null, on: false, src: [], geos: [], n: 0, valido: false, rMax: 0 })
   useEffect(() => () => {
     const lj = lejosRef.current
     for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
@@ -1502,14 +1502,27 @@ function Planet({ node, world, tex }) {
     if (lj.grp) {
       let hov = false
       for (let i = 0; i < reg.destinos.length; i++) if (reg.destinos[i].hoverRef.current) { hov = true; break }
-      let on = !near && kAqui === 0 && !hov && !(typeof window !== 'undefined' && window.__opt?.off)
+      const quieto = !near && kAqui === 0 && !hov && !(typeof window !== 'undefined' && window.__opt?.off)
+      if (!quieto) lj.valido = false // algo de lo horneado pudo moverse o animarse: al volver se rehornea
+      // withCameraFade desvanece cada pieza por la distancia de SU origen a la cámara; la malla fusionada tiene el
+      // origen en el centro del planeta y no se desvanecería. Si alguna pieza puede quedar a < 3 u de la cámara se
+      // vuelve a las piezas sueltas (sin rehornear: nada se movió).
+      const s = rootRef.current ? rootRef.current.scale.x : 1
+      const on = quieto && dist - lj.rMax * s > 3
       // cada ~30 cuadros (desfasado por planeta) se comprueba que lo horneado sigue vigente; si no, se rehornea
       if (on && lj.on && ++lj.n % 30 === node.idx % 30 && !lejosVigente(rootRef.current, lj.grp, lj.src, lj.geos)) {
         for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
         lj.on = false
+        lj.valido = false
       }
       if (on !== lj.on) {
-        if (on) { lj.src = hornearLejos(rootRef.current, lj.grp); lj.geos = lj.src.map((o) => o.geometry) }
+        if (on && !lj.valido) {
+          lj.src = hornearLejos(rootRef.current, lj.grp); lj.geos = lj.src.map((o) => o.geometry); lj.valido = true
+          // radio (en unidades locales de la raíz) del origen de pieza más alejado del centro del planeta
+          let r = 0; const v = new THREE.Vector3()
+          for (const o of lj.src) { o.getWorldPosition(v); rootRef.current.worldToLocal(v); r = Math.max(r, v.length()) }
+          lj.rMax = r
+        }
         for (const o of lj.src) { o.visible = !on; if (on) OCULTAS.add(o); else OCULTAS.delete(o) }
         lj.grp.visible = on
         lj.on = on

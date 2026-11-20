@@ -26,16 +26,26 @@ try {
     const d = window.__ballitasDebug
     const planetas = []
     d.scene.traverse((o) => { if (o.isMesh && o.material?.uniforms?.uDistBoost) { const v = new d.camera.position.constructor(); o.getWorldPosition(v); planetas.push(v) } })
-    window.__cer = { ctl, planetas, T0: ctl ? ctl.target.clone() : null, P0: d.camera.position.clone() }
+    // sin OrbitControls a mano: objetivo = punto a la distancia del planeta más cercano en la dirección de la vista
+    const fw = new d.camera.position.constructor(); d.camera.getWorldDirection(fw)
+    const dmin = Math.min(...planetas.map((v) => v.distanceTo(d.camera.position)))
+    const T0 = ctl ? ctl.target.clone() : d.camera.position.clone().addScaledVector(fw, dmin)
+    window.__cer = { ctl, planetas, T0, P0: d.camera.position.clone() }
     window.__cerPon = (modo) => {
       const c = window.__cer; const cam = d.camera
-      if (modo === 'general') { cam.position.copy(c.P0); if (c.ctl) c.ctl.target.copy(c.T0) } else {
+      let mira = c.T0
+      if (modo === 'general') { cam.position.copy(c.P0) } else {
         const pl = c.planetas[0]; const dist = modo === 'media' ? 130 : 70
         const dir = c.P0.clone().sub(pl).normalize()
-        cam.position.copy(pl).addScaledVector(dir, dist); if (c.ctl) c.ctl.target.copy(pl)
+        cam.position.copy(pl).addScaledVector(dir, dist); mira = pl
       }
-      cam.lookAt(c.ctl ? c.ctl.target : c.T0); if (c.ctl) c.ctl.update()
+      if (c.ctl) { c.ctl.target.copy(mira) }
+      cam.lookAt(mira); if (c.ctl) c.ctl.update()
+      c.modo = modo
     }
+    // se reaplica cada cuadro (sin OrbitControls hallado, otro control podría mover la cámara)
+    const fija = () => { if (window.__cer.modo) { const m = window.__cer.modo; window.__cer.modo = null; window.__cerPon(m) } requestAnimationFrame(fija) }
+    requestAnimationFrame(fija)
   })
   const info = await p.evaluate(() => ({ ctl: !!window.__cer.ctl, planetas: window.__cer.planetas.length }))
   console.log(JSON.stringify(info))

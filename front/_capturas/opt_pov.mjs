@@ -48,7 +48,7 @@ try {
     const r = await p.evaluate(({ off, ms }) => new Promise((ok) => {
       const st = window.__ab; const d = window.__ballitasDebug
       if (!st.b || st.b.phase !== 'travel') st.elegir() // solo se re-elige al empezar un tramo, no cada cuadro
-      (window.__opt ||= {}).off = off
+      ;(window.__opt ||= {}).off = off
       const t0 = performance.now(); let n = 0; let tris = 0; let vis = 0; let m = 0; let tIni = 0
       const f = () => {
         const t = performance.now() - t0
