@@ -30,15 +30,38 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 // raíz del planeta (que escala escalaMapa), y las originales se ocultan: mismo material, misma geometría, mismo
 // sitio, así que se ve igual. Se rehornea al entrar al modo lejano (las piezas solo se animan de cerca o con hover).
 // Las originales siguen recibiendo hover (el raycast de three no mira `visible`). A/B: window.__opt.off = true.
+const OCULTAS = new WeakSet() // ocultadas por la fusión (no en userData: React lo reemplaza al re-renderizar)
 const _mInv = new THREE.Matrix4()
 const _mRel = new THREE.Matrix4()
+// userData.lejos en la malla, o lejosTodo en un grupo (monumento: todas sus mallas visibles). Se saltan las ocultas
+// (LOD; las que oculta la propia fusión cuentan como visibles) y las transparentes no aditivas (fusionadas cambiaría
+// su orden de mezcla).
+function candidatasLejos(root, dst) {
+  const src = []
+  const walk = (o, todo) => {
+    if ((!o.visible && !OCULTAS.has(o)) || o === dst) return
+    const t = todo || Boolean(o.userData.lejosTodo)
+    if (o.isMesh && !o.isInstancedMesh && (o.userData.lejos || t) && !Array.isArray(o.material) && o.material
+      && (!o.material.transparent || o.material.blending === THREE.AdditiveBlending)) src.push(o)
+    for (const c of o.children) walk(c, t)
+  }
+  walk(root, false)
+  return src
+}
+// ¿Sigue valiendo lo horneado? (un modelo que llega tarde cambia geometrías o añade mallas)
+function lejosVigente(root, dst, src, geos) {
+  const now = candidatasLejos(root, dst)
+  if (now.length !== src.length) return false
+  for (let i = 0; i < now.length; i++) if (now[i] !== src[i] || now[i].geometry !== geos[i]) return false
+  return true
+}
 function hornearLejos(root, dst) {
   for (const m of dst.children) m.geometry.dispose()
   dst.clear()
   root.updateWorldMatrix(true, true)
   _mInv.copy(root.matrixWorld).invert()
-  const src = []
-  root.traverse((o) => { if (o.isMesh && o.userData.lejos && o !== dst) src.push(o) })
+  const src = candidatasLejos(root, dst)
+  if (typeof window !== 'undefined') { const o = (window.__opt ||= {}); o.hornea = (o.hornea || 0) + 1 }
   const grupos = new Map()
   for (const o of src) {
     const m = o.material
@@ -1347,10 +1370,10 @@ function Planet({ node, world, tex }) {
   const moonsGroupRef = useRef()
   const moonPivotsRef = useRef([])
   const animRegRef = useRef({ destinos: [], terminals: [], monument: null })
-  const lejosRef = useRef({ grp: null, on: false, src: [] })
+  const lejosRef = useRef({ grp: null, on: false, src: [], geos: [], n: 0 })
   useEffect(() => () => {
     const lj = lejosRef.current
-    for (const o of lj.src) o.visible = true
+    for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
     if (lj.grp) for (const m of lj.grp.children) m.geometry.dispose()
   }, [])
 
@@ -1450,10 +1473,15 @@ function Planet({ node, world, tex }) {
     if (lj.grp) {
       let hov = false
       for (let i = 0; i < reg.destinos.length; i++) if (reg.destinos[i].hoverRef.current) { hov = true; break }
-      const on = !near && kAqui === 0 && !hov && !(typeof window !== 'undefined' && window.__opt?.off)
+      let on = !near && kAqui === 0 && !hov && !(typeof window !== 'undefined' && window.__opt?.off)
+      // cada ~30 cuadros (desfasado por planeta) se comprueba que lo horneado sigue vigente; si no, se rehornea
+      if (on && lj.on && ++lj.n % 30 === node.idx % 30 && !lejosVigente(rootRef.current, lj.grp, lj.src, lj.geos)) {
+        for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
+        lj.on = false
+      }
       if (on !== lj.on) {
-        if (on) lj.src = hornearLejos(rootRef.current, lj.grp)
-        for (const o of lj.src) o.visible = !on
+        if (on) { lj.src = hornearLejos(rootRef.current, lj.grp); lj.geos = lj.src.map((o) => o.geometry) }
+        for (const o of lj.src) { o.visible = !on; if (on) OCULTAS.add(o); else OCULTAS.delete(o) }
         lj.grp.visible = on
         lj.on = on
       }
@@ -1572,7 +1600,9 @@ function Planet({ node, world, tex }) {
       <mesh ref={roadRef} geometry={city.roadGeo} material={roadMat} visible={false} raycast={() => null} />
 
       {/* Monumento único del bioma como silueta reconocible */}
-      <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />
+      <group userData={{ lejosTodo: 1 }}>
+        <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />
+      </group>
 
       {node.destinos.map((d) => <Destino key={d.idx} d={d} tex={tex} animRegRef={animRegRef} surfaceR={surfaceR} />)}
       {city.terminals.map((t, i) => (

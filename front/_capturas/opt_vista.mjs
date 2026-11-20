@@ -137,7 +137,7 @@ try {
       const off = i % 2 === 0
       await p.evaluate((off) => { (window.__opt ||= {}).off = off }, off)
       await sleep(600)
-      const r = await medir(tramo); out.filas.push({ i, modo: off ? 'off' : 'on', ...r }); console.log(JSON.stringify(out.filas.at(-1)))
+      const r = await medir(tramo); const hornea = await p.evaluate(() => window.__opt?.hornea || 0); out.filas.push({ i, modo: off ? 'off' : 'on', hornea, ...r }); console.log(JSON.stringify(out.filas.at(-1)))
       if (i < 2) writeFileSync(`${dir}/${vp}_ab_${off ? 'off' : 'on'}.jpg`, await p.screenshot({ type: 'jpeg', quality: 85 }))
     }
     const med = (m, k) => { const xs = out.filas.filter((x) => x.modo === m).map((x) => x[k]); return xs.reduce((a, x) => a + x, 0) / xs.length }
