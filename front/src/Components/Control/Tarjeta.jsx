@@ -83,6 +83,7 @@ export default function Tarjeta({
   elegida,
   esAuto,
   cardRef,
+  onPointerDownCard,
   onFocusCard,
   onSelectCard,
   onKeyDown,
@@ -95,6 +96,7 @@ export default function Tarjeta({
       aria-selected={elegida}
       data-activa={activa ? 'true' : 'false'}
       className={`ctrl-tarjeta${activa ? ' activa' : ''}${elegida ? ' elegida' : ''}${item.muere ? ' peligro' : ''}`}
+      onPointerDown={(e) => onPointerDownCard?.(item, e)}
       onMouseEnter={() => onFocusCard(item)}
       onFocus={() => onFocusCard(item)}
       onClick={(e) => onSelectCard(item, e)}

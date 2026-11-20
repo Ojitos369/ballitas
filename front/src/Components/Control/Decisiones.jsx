@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { themeColor } from './previas.js'
 
 const colorDe = (b) => `hsl(${Math.round((b?.genome?.hue ?? 0.5) * 360)} 75% 60%)`
@@ -13,6 +13,27 @@ export default function Decisiones({
 }) {
   const [ocupado, setOcupado] = useState(false)
   const [err, setErr] = useState('')
+  const barRef = useRef(null)
+
+  // Publicar la altura real de la barra inferior para elevar .tarjeta y .pov-joy-wrap sin solapes (360px+).
+  useEffect(() => {
+    const el = barRef.current
+    if (!el || typeof document === 'undefined') {
+      document?.documentElement?.style?.removeProperty('--ctrl-bar-top')
+      return undefined
+    }
+    const sync = () => {
+      const h = el.offsetHeight
+      if (h > 0) document.documentElement.style.setProperty('--ctrl-bar-top', `${h + 46}px`)
+    }
+    sync()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null
+    ro?.observe(el)
+    return () => {
+      ro?.disconnect()
+      document.documentElement.style.removeProperty('--ctrl-bar-top')
+    }
+  }, [miBallita?.id, selected?.id, miBallita?.sinDecidir])
 
   const tomar = async () => {
     if (!selected || ocupado) return
@@ -47,7 +68,7 @@ export default function Decisiones({
   if (!miBallita) {
     if (!selected || selected.phase === 'dying' || selected.phase === 'gone') return null
     return (
-      <div className="ctrl-barra-tomar" role="region" aria-label="Control de ballita seleccionada">
+      <div ref={barRef} className="ctrl-barra-tomar" role="region" aria-label="Control de ballita seleccionada">
         <span className="punto" style={{ background: colorDe(selected) }} />
         <span className="ctrl-tomar-nom">{selected.name}</span>
         {selected.ctrl ? (
@@ -95,7 +116,7 @@ export default function Decisiones({
     : 'Automático: al azar'
 
   return (
-    <section className="ctrl-barra-dec" aria-label="Decisiones de control para el siguiente viaje">
+    <section ref={barRef} className="ctrl-barra-dec" aria-label="Decisiones de control para el siguiente viaje">
       <div className="ctrl-barra-dec-top">
         <button
           type="button"

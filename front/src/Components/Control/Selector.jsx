@@ -236,6 +236,7 @@ export default function Selector({ tipo, mundo, ballita, opciones, onClose }) {
   const origenNombre = mundo.world.nodes[opciones.origen]?.name || 'Planeta'
   const dec = ballita.dec || {}
   const lastPointerType = useRef('mouse')
+  const wasActiveOnPointerDown = useRef(true)
   const cardRefs = useRef([])
   const gridRef = useRef(null)
   const [mostrarTodasRutas, setMostrarTodasRutas] = useState(false)
@@ -276,26 +277,16 @@ export default function Selector({ tipo, mundo, ballita, opciones, onClose }) {
 
   const activa = items.find((it) => keyOf(tipo, it) === activaKey) || items[0] || null
 
-  // Enfocar la primera tarjeta activa al abrir para navegación por teclado inmediata.
+  // Enfocar la primera tarjeta activa al abrir y devolver foco al botón origen al cerrar.
   useEffect(() => {
+    const prevFocus = document.activeElement
     const idx = items.findIndex((it) => keyOf(tipo, it) === activaKey)
     const el = cardRefs.current[Math.max(0, idx)]
     el?.focus({ preventScroll: true })
-  }, [tipo]) // solo al abrir o cambiar tipo
-
-  // Esc cierra el selector con prioridad sobre otros listeners globales (POV).
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        e.stopImmediatePropagation()
-        onClose()
-      }
+    return () => {
+      if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus({ preventScroll: true })
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
+  }, [tipo]) // solo al abrir o cambiar tipo
 
   const confirmar = useCallback(async (item) => {
     if (!item) return
@@ -314,7 +305,7 @@ export default function Selector({ tipo, mundo, ballita, opciones, onClose }) {
 
   const onSelectCard = (item) => {
     const k = keyOf(tipo, item)
-    if (lastPointerType.current === 'touch' && activaKey !== k) {
+    if (lastPointerType.current === 'touch' && !wasActiveOnPointerDown.current) {
       setActivaKey(k)
       return
     }
@@ -370,6 +361,10 @@ export default function Selector({ tipo, mundo, ballita, opciones, onClose }) {
         elegida={isElegida(tipo, item, dec)}
         esAuto={Boolean(item.esAuto)}
         cardRef={(el) => { cardRefs.current[idx] = el }}
+        onPointerDownCard={(it, e) => {
+          lastPointerType.current = e.pointerType || 'mouse'
+          wasActiveOnPointerDown.current = activaKey === keyOf(tipo, it)
+        }}
         onFocusCard={(it) => setActivaKey(keyOf(tipo, it))}
         onSelectCard={onSelectCard}
         onKeyDown={(e) => {
@@ -385,6 +380,13 @@ export default function Selector({ tipo, mundo, ballita, opciones, onClose }) {
   return (
     <div
       className="ctrl-modal-fondo"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          onClose()
+        }
+      }}
       onPointerDown={(e) => {
         lastPointerType.current = e.pointerType || 'mouse'
         if (e.target === e.currentTarget) onClose()

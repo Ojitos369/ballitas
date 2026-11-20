@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Formar from './Formar.jsx'
 import Fila from './Fila.jsx'
 import Decisiones from './Decisiones.jsx'
@@ -21,6 +21,24 @@ export default function Control({ mundo, selected, onSelect }) {
   const [panelAbierto, setPanelAbierto] = useState(() => !esMovilInicial())
   const [selector, setSelector] = useState(null) // 'planeta' | 'ruta' | 'carril' | null
   const [aviso, setAviso] = useState(null)
+  const selectorRef = useRef(null)
+  selectorRef.current = selector
+  const cerrarSelector = useCallback(() => setSelector(null), [])
+
+  // Listener persistente en fase de captura: se registra al montar (antes que el Esc de POV en Scene)
+  // para cerrar primero el selector sin sacar al usuario de la vista POV.
+  useEffect(() => {
+    const onEsc = (e) => {
+      if (e.key === 'Escape' && selectorRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        setSelector(null)
+      }
+    }
+    window.addEventListener('keydown', onEsc, true)
+    return () => window.removeEventListener('keydown', onEsc, true)
+  }, [])
 
   useEffect(() => {
     if (!mundo?.on) return undefined
@@ -137,7 +155,7 @@ export default function Control({ mundo, selected, onSelect }) {
           mundo={mundo}
           ballita={miBallita}
           opciones={opciones}
-          onClose={() => setSelector(null)}
+          onClose={cerrarSelector}
         />
       )}
     </>

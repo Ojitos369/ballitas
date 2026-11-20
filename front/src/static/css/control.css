@@ -501,11 +501,9 @@ body:has(.pov-panel) .ctrl-hub {
     min-width: 0;
     width: min(560px, calc(100vw - 24px));
   }
-  body:has(.ctrl-barra-dec) .tarjeta {
-    bottom: 132px;
-  }
+  body:has(.ctrl-barra-dec) .tarjeta,
   body:has(.ctrl-barra-dec) .pov-joy-wrap {
-    bottom: 132px;
+    bottom: var(--ctrl-bar-top, 148px);
   }
 }
 
@@ -523,32 +521,30 @@ body:has(.pov-panel) .ctrl-hub {
     bottom: 38px;
   }
   body:has(.ctrl-barra-dec) .tarjeta {
-    bottom: 132px;
-    max-height: 34%;
+    bottom: var(--ctrl-bar-top, 148px);
+    max-height: 32%;
   }
   body:has(.ctrl-barra-dec) .pov-joy-wrap {
-    bottom: 132px;
+    bottom: var(--ctrl-bar-top, 148px);
   }
-  body:has(.ctrl-barra-tomar) .tarjeta {
-    bottom: 84px;
-  }
+  body:has(.ctrl-barra-tomar) .tarjeta,
   body:has(.ctrl-barra-tomar) .pov-joy-wrap {
-    bottom: 84px;
+    bottom: var(--ctrl-bar-top, 88px);
   }
 }
 
 @media (max-width: 520px) {
   .ctrl-hub {
-    top: 74px;
+    top: 38px;
     right: 8px;
     max-width: calc(100vw - 16px);
   }
   body:has(.pov-panel) .ctrl-hub {
-    top: 128px;
+    top: 38px;
   }
   .ctrl-panel {
     width: calc(100vw - 16px);
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 220px);
   }
   .ctrl-barra-botones {
     gap: 4px;
@@ -564,7 +560,14 @@ body:has(.pov-panel) .ctrl-hub {
   }
 }
 
-/* Modal selector de tarjetas */
+@media (max-width: 390px) {
+  .ctrl-hub,
+  body:has(.pov-panel) .ctrl-hub {
+    top: 72px;
+  }
+}
+
+/* Modal selector de tarjetas (sin backdrop-filter a pantalla completa para no frenar el lienzo WebGL) */
 .ctrl-modal-fondo {
   position: fixed;
   inset: 0;
@@ -572,8 +575,7 @@ body:has(.pov-panel) .ctrl-hub {
   display: grid;
   place-items: center;
   padding: 12px;
-  background: rgba(5, 6, 15, 0.72);
-  backdrop-filter: blur(6px);
+  background: rgba(5, 6, 15, 0.82);
 }
 
 .ctrl-modal {
@@ -581,7 +583,7 @@ body:has(.pov-panel) .ctrl-hub {
   max-height: calc(100vh - 24px);
   display: flex;
   flex-direction: column;
-  background: rgba(11, 14, 34, 0.94);
+  background: rgba(11, 14, 34, 0.97);
   border: 1px solid rgba(138, 167, 255, 0.35);
   border-radius: 14px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
@@ -677,22 +679,23 @@ body:has(.pov-panel) .ctrl-hub {
 
 .ctrl-tarjeta:hover,
 .ctrl-tarjeta.activa {
-  background: rgba(138, 167, 255, 0.15);
-  border-color: rgba(138, 167, 255, 0.7);
+  background: rgba(138, 167, 255, 0.2);
+  border-color: #8aa7ff;
+  box-shadow: inset 0 0 0 1px rgba(138, 167, 255, 0.5);
 }
 
 .ctrl-tarjeta.elegida {
-  background: rgba(138, 167, 255, 0.24);
-  border-color: #8aa7ff;
-  box-shadow: 0 0 0 1px rgba(138, 167, 255, 0.45);
+  background: rgba(138, 167, 255, 0.28);
+  border-color: #a4bdff;
+  box-shadow: 0 0 0 1px rgba(164, 189, 255, 0.65);
 }
 
 .ctrl-tarjeta.peligro {
-  border-color: rgba(255, 118, 118, 0.55);
+  border-color: rgba(255, 118, 118, 0.65);
 }
 
 .ctrl-tarjeta:focus-visible {
-  outline: 2px solid #99b8ff;
+  outline: 2px solid #ffd584;
   outline-offset: 2px;
 }
 
@@ -898,9 +901,13 @@ body:has(.pov-panel) .ctrl-hub {
 }
 
 .ctrl-btn-elegir {
+  position: sticky;
+  bottom: 0;
   width: 100%;
   padding: 8px 12px;
   font-size: 12px;
+  background: rgba(42, 58, 118, 0.96);
+  box-shadow: 0 -6px 14px rgba(7, 9, 24, 0.85);
 }
 
 .pos { color: #7dffbe; }
