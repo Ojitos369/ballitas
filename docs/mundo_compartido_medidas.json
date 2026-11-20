@@ -1,0 +1,183 @@
+{
+  "node": "v24.19.0",
+  "semilla": 369,
+  "hz": 30,
+  "minutosSimulados": 10,
+  "buildWorldFrioMs": 9311,
+  "picksBytes": {
+    "json": 1560,
+    "gzip": 340,
+    "deflate": 322,
+    "brotli": 313
+  },
+  "buildWorldConPicksMs": 2745,
+  "tick": {
+    "n": 17400,
+    "mediaMs": 0.1261,
+    "p50": 0.1183,
+    "p99": 0.2697,
+    "maxMs": 43.726,
+    "cpuPct30Hz": 0.38,
+    "ticksPorSegundo": 7930
+  },
+  "serializarMs": {
+    "media": 0.0331,
+    "p99": 0.0764
+  },
+  "instantaneaRapida": {
+    "ballitas": 10,
+    "jsonMedia": 1640,
+    "jsonMax": 1718,
+    "gzipMedia": 749,
+    "deflateMedia": 731,
+    "kbPorSegundo10Hz": {
+      "json": 16,
+      "deflate": 7.1
+    }
+  },
+  "estadoLento": {
+    "porBallita": {
+      "json": 3853,
+      "gzip": 2038,
+      "deflate": 2020,
+      "brotli": 1755
+    },
+    "las10": {
+      "json": 37833,
+      "gzip": 14939,
+      "deflate": 14921,
+      "brotli": 12387
+    }
+  },
+  "instantaneaCompleta": {
+    "json": 40214,
+    "gzip": 16044,
+    "deflate": 16026,
+    "brotli": 13338
+  },
+  "ingenuo": {
+    "json": 50863,
+    "gzip": 18075,
+    "deflate": 18057,
+    "brotli": 14891
+  },
+  "poblacion": {
+    "muertas": 6,
+    "nacidas": 16,
+    "muertesPorMinuto": 0.6,
+    "segundosEntreMuertes": 100
+  },
+  "control": {
+    "entraronDeLaFila": 6,
+    "liberadasPorInactividad": 0,
+    "filaAlFinal": 2
+  },
+  "decisiones": {
+    "viajes": 5,
+    "destinoOk": 5,
+    "rutaOk": 5,
+    "rutaTotal": 5,
+    "carrilOk": 5,
+    "carrilTotal": 5
+  },
+  "inactividad": [
+    {
+      "llegadas": 3,
+      "segundos": 219
+    },
+    {
+      "llegadas": 3,
+      "segundos": 197
+    },
+    {
+      "llegadas": 3,
+      "segundos": 339
+    }
+  ],
+  "determinismo": {
+    "ticks": 9000,
+    "corridaA": "ebb6c5f2d9c20866",
+    "corridaB": "ebb6c5f2d9c20866",
+    "iguales": true,
+    "entradaUnTickDespues": "2de02059e764c546",
+    "divergeConEntradaDistinta": true,
+    "otraSemilla": "52b7dd0fa35b287a",
+    "divergeConOtraSemilla": true
+  },
+  "interpolacion": {
+    "5Hz": {
+      "muestras": 44350,
+      "linealTodo": {
+        "media": 0.699,
+        "p99": 8.171,
+        "max": 385.064
+      },
+      "linealEnViaje": {
+        "media": 0.704,
+        "p99": 8.285,
+        "max": 385.064
+      },
+      "parametrica": {
+        "media": 0.232,
+        "p99": 5.251,
+        "max": 120.748
+      },
+      "parametricaSinRespaldo": {
+        "media": 0.048,
+        "p99": 0.447,
+        "max": 1.891
+      },
+      "pctRespaldoLineal": 3.71
+    },
+    "10Hz": {
+      "muestras": 35574,
+      "linealTodo": {
+        "media": 0.274,
+        "p99": 2.764,
+        "max": 288.695
+      },
+      "linealEnViaje": {
+        "media": 0.277,
+        "p99": 2.805,
+        "max": 288.695
+      },
+      "parametrica": {
+        "media": 0.062,
+        "p99": 1.49,
+        "max": 14.353
+      },
+      "parametricaSinRespaldo": {
+        "media": 0.016,
+        "p99": 0.188,
+        "max": 1.29
+      },
+      "pctRespaldoLineal": 1.86
+    },
+    "15Hz": {
+      "muestras": 26700,
+      "linealTodo": {
+        "media": 0.176,
+        "p99": 1.42,
+        "max": 288.786
+      },
+      "linealEnViaje": {
+        "media": 0.178,
+        "p99": 1.429,
+        "max": 288.786
+      },
+      "parametrica": {
+        "media": 0.035,
+        "p99": 0.454,
+        "max": 11.465
+      },
+      "parametricaSinRespaldo": {
+        "media": 0.009,
+        "p99": 0.103,
+        "max": 1.146
+      },
+      "pctRespaldoLineal": 1.24
+    },
+    "radioBallita": 0.4,
+    "velocidadMaxVista": 536.2
+  }
+}
