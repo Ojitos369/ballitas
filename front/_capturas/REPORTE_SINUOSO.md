@@ -63,7 +63,16 @@ Umbral de recta: curvatura < 1/400 u⁻¹ (radio > 400 u), medida entre muestras
    torsion.mjs en 10 semillas, `layout.test.js`, `sim.js` (la duración del vuelo sigue acotada por el `clamp` de sim.js:729:
    los eventos lejanos vuelan entre 0.35× y 1× de `sw.duration`), `git merge main`. No se abrió navegador ni se creó el candado.
 
+## Fallos exactos de `pnpm test` (segunda corrida: 82 pruebas, 78 pasan, 4 fallan)
+- «separación visible: 0 pares de caminos o rutas distintas en falta fuera de uniones» (semilla 1 y semilla 369; en la
+  primera corrida una dio 3 075 pares): el medidor en marco local (`ribbonClearance`) SÍ ve caminos de rutas o ways
+  distintos por debajo del gálibo/aire. La comprobación isotrópica de 47.7 u de `sinuarCaminos` no basta (salta
+  vértices de dos en dos y no mira el prisma a lo largo de la normal girada): es una regresión real de la meta 4.
+- «elecciones precalculadas (worker/caché)»: 3 034 y 3 344 ms contra el tope de 3 000 ms.
+- «carriles: ... kind según la geometría»: «elevador sólo hacia uno más alto».
+
 ## Siguiente paso concreto
+0. Validar el resultado de la pasada con `ribbonClearance` por clase (tools/separacion.mjs) y endurecer `choca`.
 1. `pnpm test` completo y arreglar los tres fallos (coste de la pasada primero).
 2. `node tools/diag_sin.mjs` con y sin relajación hasta dejar el quiebro máximo bajo 25°.
 3. `node tools/sinuoso.mjs 10`, `separacion.mjs`, `torsion.mjs`, `cunas.mjs`; luego build + capturas en el puerto 4301.
