@@ -54,7 +54,7 @@ reposo. Lo que depende del tiempo debe repetirse con el equipo libre.
 
 | Meta | Resultado | ¿Cumple? |
 |---|---|---|
-| `pnpm test` completo en verde | 87 pruebas (76 + 6 que ya había en otros archivos + 5 nuevas): **86 pasan, 1 falla**: `sim.test.js:446`, la del tope de 3000 ms, con 3056, 3703 y 3103 ms en tres intentos. No toqué el tope ni `world.js` (`git diff` vacío). `buildWorld(369)` con elecciones, medido aparte en ese momento: 3437, 3254 y 3144 ms (el diseño midió 2,7 s en reposo) | **No en esta máquina cargada**; repetir en reposo |
+| `pnpm test` completo en verde | 87 pruebas (las 82 que ya corría la rama, aunque el encargo hablaba de 76, más 5 nuevas): **86 pasan, 1 falla**: `sim.test.js:446`, la del tope de 3000 ms, con 3056, 3703 y 3103 ms en tres intentos. No toqué el tope ni `world.js` (`git diff` vacío). `buildWorld(369)` con elecciones, medido aparte en ese momento: 3437, 3254 y 3144 ms (el diseño midió 2,7 s en reposo) | **No en esta máquina cargada**; repetir en reposo |
 | Huella idéntica sin entradas (semilla 369, 18 000 ticks) | Antes de mis cambios `adeb1c63fc36c666`, después `adeb1c63fc36c666` (`node back/mundo/huella.mjs`; la huella incluye `feed` y `plan.razon`, y excluye fila y control, que antes no existían). Repetida al final con el mismo resultado | Sí |
 | Tick p99 < 1 ms | Sin red, 17 400 ticks con fila y decisiones (`medir.mjs`): media 0,154 · p50 0,138 · **p99 0,428** · máx 9,97 ms. En el servidor vivo con 50 clientes y el equipo cargado: media 0,48 · **p99 1,43** · máx 382 ms | Sí sin red; **no en vivo con el equipo cargado** |
 | Instantánea ≤ 1 800 B (10 ballitas) | media 1 644 B, máx 1 718 B, 732 B con deflate | Sí |
