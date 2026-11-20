@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends supervisor tzda
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /usr/src/logs
 
+# Node para el servidor del mundo compartido (mundo/servidor.bundle.mjs): solo el binario, sin npm.
+COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
+
 WORKDIR /usr/src/app
 
 COPY requirements.txt .
