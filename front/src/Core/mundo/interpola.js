@@ -12,7 +12,7 @@ export function decodificarRapida(r) {
 export function crearInterpolador(world, ballitas, registry) {
   const F = {}, P = {}, tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3()
   let A = null, B = null
-  const ingestar = (frame) => { A = B; B = { ...frame, byId: new Map(frame.b.map((r) => [r[0], decodificarRapida(r)])) } }
+  const ingestar = (frame) => { A = B; B = { ...frame, byId: new Map(frame.b.map((r) => { const d=decodificarRapida(r), b=registry.get(r[0]); d.way=b?.way?.idx??null; d.node=b?.node??null; return [r[0],d] })) } }
   const cuadro = (now) => {
     if (!A || !B) return
     const t = Math.max(A.t, Math.min(B.t, now - 0.15)), u = B.t > A.t ? (t - A.t) / (B.t - A.t) : 1
@@ -27,20 +27,23 @@ export function crearInterpolador(world, ballitas, registry) {
       b.flight = z.flags & 4 ? { sw:b.seg?.switches[z.event]||null, t:z.flightT, failed:!!(z.flags&8) } : null
       b.sw = b.seg && z.event >= 0 ? { s:b.seg.switches[z.event], failed:!!(z.flags&8) } : null
       if(z.walkI>=0) b.walk={path:b.walk?.path||[],i:z.walkI,t:z.walkT}; else b.walk=null
-      if (z.phase === 'travel' && a.seg === z.seg && a.lane === z.lane && !(a.flags & 4) && !(z.flags & 4)) {
+      if (z.phase === 'travel' && a.way === z.way && a.seg === z.seg && a.lane === z.lane && !(a.flags & 4) && !(z.flags & 4)) {
         const seg = b.way?.segments[z.seg]
         if (seg) { const f = laneFrame(seg, z.lane, mix(a.segT,z.segT,u), F); b.pos.copy(f.pos).addScaledVector(f.side,mix(a.lat,z.lat,u)).addScaledVector(f.up,mix(a.hy,z.hy,u)); b.dir.copy(f.tangent); b.up.copy(f.up) }
         else b.pos.fromArray(r[6])
-      } else if (z.phase === 'travel' && a.seg !== z.seg) {
+      } else if (z.phase === 'travel' && a.way === z.way && a.seg !== z.seg) {
         const w = b.way, sa = w?.segments[a.seg], sb = w?.segments[z.seg]
         if (sa && sb && sa.route === sb.route) {
           const la=laneLength(sa,a.lane), lb=laneLength(sb,z.lane), left=(1-a.segT)*la, total=left+z.segT*lb, d=u*total
           const s=d<=left?sa:sb, lane=d<=left?a.lane:z.lane, st=d<=left?a.segT+d/la:(d-left)/lb
           const f=laneFrame(s,lane,st,F); b.pos.copy(f.pos).addScaledVector(f.side,mix(a.lat,z.lat,u)).addScaledVector(f.up,mix(a.hy,z.hy,u)); b.dir.copy(f.tangent); b.up.copy(f.up)
         } else b.pos.fromArray(r[6])
-      } else if (z.phase === 'travel' && (a.flags & 4) && (z.flags & 4) && a.seg === z.seg && a.event === z.event) {
+      } else if (z.phase === 'travel' && a.way === z.way && (a.flags & 4) && (z.flags & 4) && a.seg === z.seg && a.event === z.event) {
         const s=b.way?.segments[z.seg], sw=s?.switches[z.event]
         if (sw) { const f=switchPath(s,sw,mix(a.flightT,z.flightT,u),P); b.pos.copy(f.pos); b.dir.copy(f.tangent); b.up.copy(f.up) }
+        else b.pos.fromArray(a.pos).lerp(vec(z.pos,tmp),u)
+      } else if (z.phase === 'travel') {
+        b.pos.fromArray(a.pos).lerp(vec(z.pos,tmp),u)
       } else {
         const node=world.nodes[z.node ?? b.node]
         b.pos.fromArray(a.pos).lerp(vec(z.pos,tmp),u)
