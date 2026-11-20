@@ -1,7 +1,7 @@
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { TRACK_K } from '../../Core/world.js'
+import { TRACK_K, laneCurve, laneLength } from '../../Core/world.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mulberry32 } from '../../Core/world.js'
 import { VISUALS } from './themes.js'
@@ -1163,6 +1163,20 @@ function getSegFrames(seg) {
   return f
 }
 
+const laneFramesCache = new WeakMap()
+function getLaneFrames(seg, lane) {
+  let byLane = laneFramesCache.get(seg)
+  if (!byLane) laneFramesCache.set(seg, byLane = new Map())
+  let frames = byLane.get(lane.id)
+  if (!frames) {
+    // El mapa solo necesita conservar el dibujo de los giros: el LOD de cerca mantiene su muestreo completo.
+    // buildCurveFrames pondera longitud y cambio de tangente, con tope para controlar el coste de todos los carriles.
+    frames = buildCurveFrames(laneCurve(seg, lane.id), laneLength(seg, lane.id), { maxSteps: 16, density: 0.055 })
+    byLane.set(lane.id, frames)
+  }
+  return frames
+}
+
 function buildExteriorBase(way) {
   const themeId = way.theme.id
   const V = VISUALS[themeId]
@@ -1171,14 +1185,18 @@ function buildExteriorBase(way) {
   for (const s of way.segments) {
     if (s.air) continue
     const R = s.radius
-    const frames = getSegFrames(s)
     const ev = s.event || (EVENT_ACCENTS[s.kind] ? s.kind : null)
     const tubeTint = ev ? WHITE_COL.clone().lerp(new THREE.Color(EVENT_ACCENTS[ev]), 0.62) : null
-    tubes.push(buildFramesTubeGeo(frames, R, 8, { uvScaleX: 0.25, color: WHITE_COL, eventColor: tubeTint }))
-    const coreRad = Math.max(0.145, R * 0.148)
-    const coreBase = routeColor(extNeonHex, s.route, 1.45)
-    const coreCol = ev ? coreBase.clone().lerp(hot(EVENT_ACCENTS[ev], 1.4), 0.45) : coreBase
-    extCores.push(buildFramesTubeGeo(frames, coreRad, 4, { offsetUp: -R * 0.12, uvScaleX: 0.25, color: coreCol }))
+    for (const lane of s.lanes || []) {
+      const frames = getLaneFrames(s, lane)
+      const laneRadius = Math.max(0.72, Math.min(R * 0.12, lane.width * 0.34))
+      tubes.push(buildFramesTubeGeo(frames, laneRadius, 4, { uvScaleX: 0.25, color: WHITE_COL, eventColor: tubeTint }))
+      const coreRad = Math.max(0.12, Math.min(0.8, lane.width * 0.07))
+      const coreBase = routeColor(extNeonHex, s.route, 1.45)
+      coreBase.offsetHSL((lane.id - ((s.lanes.length - 1) * 0.5)) * 0.018, 0.025, 0)
+      const coreCol = ev ? coreBase.clone().lerp(hot(EVENT_ACCENTS[ev], 1.4), 0.45) : coreBase
+      extCores.push(buildFramesTubeGeo(frames, coreRad, 3, { offsetUp: 0.12, uvScaleX: 0.25, color: coreCol }))
+    }
   }
   return { tube: mergeAndDispose(tubes), extCore: mergeAndDispose(extCores) }
 }
