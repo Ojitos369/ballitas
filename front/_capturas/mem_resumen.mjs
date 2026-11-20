@@ -1,10 +1,10 @@
-﻿// Resume una instantánea de montón por constructor (lector por bytes: admite archivos > 512 MB).
+// Resume una instantánea de montón por constructor (lector por bytes: admite archivos > 512 MB).
 // uso: node --max-old-space-size=12000 mem_resumen.mjs a.heapsnapshot b.heapsnapshot [filtro]
 import { readFileSync } from 'node:fs'
 function nums(buf, start) { // lee un arreglo JSON de enteros desde '[' en start
-  const out = []; let i = start + 1, v = 0, en = false
-  for (; ; i++) { const c = buf[i]; if (c >= 48 && c <= 57) { v = v * 10 + c - 48; en = true } else { if (en) { out.push(v); v = 0; en = false } if (c === 93) break } }
-  return { out, fin: i }
+  let cap = 1 << 24; let out = new Uint32Array(cap); let n = 0; let i = start + 1, v = 0, en = false
+  for (; ; i++) { const c = buf[i]; if (c >= 48 && c <= 57) { v = v * 10 + c - 48; en = true } else { if (en) { if (n === cap) { const o = new Uint32Array(cap *= 2); o.set(out); out = o } out[n++] = v; v = 0; en = false } if (c === 93) break } }
+  return { out: out.subarray(0, n), fin: i }
 }
 function resumen(f) {
   const buf = readFileSync(f)

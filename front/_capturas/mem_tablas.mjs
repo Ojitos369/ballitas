@@ -1,8 +1,9 @@
-﻿// Atribuye tamaño propio a la WeakMap/Map (y propiedad del valor) por la que pasa la primera ruta de retención.
+// Atribuye tamaño propio a la WeakMap/Map (y propiedad del valor) por la que pasa la primera ruta de retención.
 // uso: node --max-old-space-size=14000 mem_tablas.mjs snap.heapsnapshot
 import { readFileSync } from 'node:fs'
-function nums(buf, start) { const out = []; let i = start + 1, v = 0, en = false
-  for (; ; i++) { const c = buf[i]; if (c >= 48 && c <= 57) { v = v * 10 + c - 48; en = true } else { if (en) { out.push(v); v = 0; en = false } if (c === 93) break } } return { out, fin: i } }
+function nums(buf, start) { let cap = 1 << 24; let out = new Uint32Array(cap); let n = 0; let i = start + 1, v = 0, en = false
+  for (; ; i++) { const c = buf[i]; if (c >= 48 && c <= 57) { v = v * 10 + c - 48; en = true } else { if (en) { if (n === cap) { const o = new Uint32Array(cap *= 2); o.set(out); out = o } out[n++] = v; v = 0; en = false } if (c === 93) break } }
+  return { out: out.subarray(0, n), fin: i } }
 const [f] = process.argv.slice(2)
 const buf = readFileSync(f)
 const head = buf.subarray(0, 4000).toString(); const mm = JSON.parse(head.slice(head.indexOf('"meta":') + 7, head.indexOf(',"node_count"')))

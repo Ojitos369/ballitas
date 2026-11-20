@@ -1453,7 +1453,7 @@ const FONDO_CUADRO_MS = 1.5 // por cuadro, el resto del mundo, solo si el cuadro
 const DESCARGA_S = 6 // un camino que deja de hacer falta se oculta ya y se desmonta pasado este tiempo (histéresis)
 // MEM: como mucho tantos caminos con su vida calculada en memoria (montados, cercanos y urgentes cuentan y nunca se
 // expulsan); el resto del mundo y las demás ballitas solo se precargan con hueco. Antes se guardaba todo el mundo.
-const VIDA_CACHE_MAX = 8
+const VIDA_CACHE_MAX = 6
 const vidaLlena = () => caminosConVida().size >= VIDA_CACHE_MAX
 // Rutas dinámicas (sim.activas): solo se montan los caminos activos. Uno que aparece crece desde su planeta de origen
 // y uno que desaparece se recoge hacia él, en RUTA_APARECE_S; al terminar de recogerse se desmonta. Es una escala del

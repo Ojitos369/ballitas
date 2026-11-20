@@ -1,8 +1,8 @@
-﻿import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/ballitas-playwright/node_modules/playwright-core/index.mjs'
+import { chromium } from 'file:///C:/Users/ojito/AppData/Local/Temp/ballitas-playwright/node_modules/playwright-core/index.mjs'
 const b = await chromium.launch({ channel: 'msedge', args: ['--js-flags=--expose-gc', '--enable-precise-memory-info'] })
 try {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } })
-  await p.goto('http://localhost:4310/?local=1')
+  await p.goto('http://localhost:4307/?local=1')
   await p.waitForTimeout(12000)
   await p.evaluate(() => document.querySelector('[aria-label="Velocidad por ocho"]')?.click())
   const out = []
