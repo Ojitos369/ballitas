@@ -1648,6 +1648,7 @@ export const FINISH_LEN = 10 * TK // recta final de meta de la llegada
 export const ONDULA = { off: !!globalThis.process?.env?.NO_ONDULA }
 const OND_L = +(globalThis.process?.env?.OND_L ?? 160) // (u) paso del tirabuzón del eje
 const OND_RC = +(globalThis.process?.env?.OND_RC ?? 120) // (u) radio de curvatura que aporta (amplitud = paso² / (4π²·radio) = 5.4 u; con paso 220 (10.2 u) el reparto necesitaba 18 intentos en 10 semillas en vez de 13)
+const OND_PUERTO = +(globalThis.process?.env?.OND_PUERTO ?? 1.6) // factor del radio en salidas/llegadas (con 1: semilla 2 a 0.30 u de las dos calzadas entre llegadas vecinas y tramo:libre lateral 204 en la semilla 1)
 const OND_KINDS = new Set(['horquilla', 'rizo', 'salida', 'llegada'])
 const OND_STEP = 12 // (u) paso del remuestreo del eje
 function ondula(curve, kind) {
@@ -1657,14 +1658,15 @@ function ondula(curve, kind) {
   for (let i = 0; i <= M; i++) { pts[i] = curve.getPoint(i / M); if (i) s[i] = s[i - 1] + pts[i].distanceTo(pts[i - 1]) }
   const L = s[M]
   // zona ondulada [z0, z1] con rampas r0 y r1
-  let z0 = 0; let z1 = L; let r0 = 40; let r1 = 40
+  let z0 = 0; let z1 = L; let r0 = 40; let r1 = 40; let rc = OND_RC
   if (kind === 'salida' || kind === 'llegada') {
     const a0 = NODE_OPEN + Math.max(4 * TK, Math.min(BRAID_RAMP, (L - GRID_LEN - 2 * TK - BRAID_OPEN) * 0.3)); const Lu = L - a0 - HUB_OPEN - OPEN_RAMP
     z0 = (kind === 'salida' ? GRID_LEN : FINISH_LEN) + 2 * TK
+    rc = OND_RC * OND_PUERTO // junto al nodo las salidas y llegadas vecinas van muy juntas: menos amplitud (3.4 u)
     if (Lu >= SIN_MIN) { z1 = a0 + 0.35 * clamp(Lu * 0.3, 110, 540); r1 = 120 }
   }
   const Z = z1 - z0; if (Z < 150) return curve
-  const lam = clamp(Z / 1.5, 110, OND_L); const k = TAU / lam; const amp = 1 / (k * k * OND_RC)
+  const lam = clamp(Z / 1.5, 110, OND_L); const k = TAU / lam; const amp = 1 / (k * k * rc)
   const rev = kind === 'llegada'; const x = (i) => (rev ? L - s[i] : s[i])
   // rumbo por diferencias centradas, curvatura local (±2 muestras) y peso
   const T = new Array(M + 1); for (let i = 0; i <= M; i++) T[i] = pts[Math.min(M, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize()
