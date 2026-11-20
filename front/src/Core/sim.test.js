@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Sim, POP, TIME_SCALE, TRAVEL_SLOW, MAX_SIN_DECIDIR, MAX_FILA, MAX_NOMBRE } from './sim.js'
+import { Sim, POP, TIME_SCALE, TRAVEL_SLOW, MAX_SIN_DECIDIR, MAX_FILA, MAX_NOMBRE, MIN_SALIDAS, RUTAS_FRAC_MIN, RUTAS_FRAC_MAX, T_SIN_USO, T_APARECE } from './sim.js'
 import { voice } from './personality.js'
 import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
@@ -548,7 +548,7 @@ test('cada kind deja a la ballita en el camino destino, con su trayectoria', () 
   assert.ok(seen.size >= 7)
 })
 test('probWays: ordena los caminos del nodo sin consumir la RNG ni cambiar la elección', () => {
-  const mk = () => new Sim({ rng: mulberry32(7) })
+  const mk = () => new Sim({ rng: mulberry32(7), rutas: false }) // todas las rutas: con rutas dinámicas solo ordena las activas
   const a = mk(); const b = mk()
   for (let i = 0; i < 600; i++) {
     a.tick(0.05); b.tick(0.05)
@@ -611,7 +611,7 @@ test('mundo compartido: formar valida, la fila es FIFO y la primera entra al mor
 
 test('mundo compartido: tomar, dejar y decidir validan; las decisiones se cumplen y son de un solo uso', () => {
   const c = contada(12)
-  const sim = new Sim({ rng: c.rng })
+  const sim = new Sim({ rng: c.rng, rutas: false }) // elige entre TODAS las rutas del nodo (las dinámicas tienen sus pruebas abajo)
   const libres = []; sim.hooks.libre = (b, m) => libres.push([b.id, m])
   const [a, b2] = sim.ballitas
   assert.equal(sim.tomar(9999, 'yo').error, 'no_existe')
@@ -680,4 +680,137 @@ test('mundo compartido: tomar, dejar y decidir validan; las decisiones se cumple
   sim.decidir(a.id, 'otro', { carril: 2 })
   assert.equal(sim.dejar(a.id, 'otro').ok, true)
   assert.deepEqual([a.ctrl, a.dec], [null, {}]); assert.deepEqual(libres.at(-1), [a.id, 'dejar'])
+})
+
+// ───────────── rutas dinámicas (docs/mundo_compartido.md, sección 9) ─────────────
+const salidas = (sim, n) => new Set(sim.world.waysFrom[n].filter((w) => sim.activas.has(w.idx)).map((w) => w.to)).size
+const registrar = (sim) => { const ev = []; sim.hooks.rutas = (e) => ev.push({ ...e, t: sim.t, n: sim.activas.size }); return ev }
+
+test('rutas dinámicas: apagadas no cambian nada; encendidas, arranque válido y determinista', () => {
+  const off = new Sim({ rng: mulberry32(5), rutas: false })
+  assert.equal(off.activas, null); assert.equal(off.salidasActivas(0).length, off.world.waysFrom[0].length)
+  const N = world.ways.length; const min = Math.ceil(RUTAS_FRAC_MIN * N); const max = Math.floor(RUTAS_FRAC_MAX * N)
+  const corre = (s) => {
+    const sim = new Sim({ rng: mulberry32(s) }); const ev = registrar(sim)
+    assert.ok(sim.activas.size >= min && sim.activas.size <= max, `arranque con ${sim.activas.size} activas`)
+    for (const n of sim.world.nodes) assert.ok(salidas(sim, n.idx) >= MIN_SALIDAS)
+    for (let i = 0; i < 6000; i++) sim.tick(1 / 30)
+    return JSON.stringify([[...sim.activas], ev.map((e) => [e.on, e.off, e.motivo, e.t]), sim.ballitas.map((b) => [b.id, b.phase, b.p, b.e, b.pos.x])])
+  }
+  assert.equal(corre(21), corre(21)); assert.notEqual(corre(21), corre(22))
+})
+
+test('rutas dinámicas: 30 min con 10 ballitas en 5 semillas, ningún planeta baja de 2 salidas y nadie queda sin camino', () => {
+  const N = world.ways.length; const max = Math.floor(RUTAS_FRAC_MAX * N)
+  const motivos = new Set(); let cambios = 0
+  for (const semilla of [1, 2, 3, 4, 5]) {
+    const sim = new Sim({ rng: mulberry32(semilla) }); const ev = registrar(sim)
+    assert.equal(sim.ballitas.length, 10)
+    let viajes = 0
+    for (let i = 0; i < 36000; i++) { // 36 000 × 0,05 s = 30 min
+      const antes = sim.ballitas.map((b) => b.phase)
+      sim.tick(0.05)
+      for (const n of sim.world.nodes) if (salidas(sim, n.idx) < MIN_SALIDAS) assert.fail(`semilla ${semilla}, t=${sim.t.toFixed(1)}: ${n.name} con ${salidas(sim, n.idx)} salidas`)
+      if (sim.activas.size > max) assert.fail(`semilla ${semilla}: ${sim.activas.size} activas, más que el máximo ${max}`)
+      for (let k = 0; k < sim.ballitas.length; k++) {
+        const b = sim.ballitas[k]
+        // quien va por una ruta (rumbo al puerto o dentro) la conserva activa hasta terminarla
+        if (b.way && b.phase !== 'dying' && b.phase !== 'gone' && !sim.activas.has(b.way.idx)) assert.fail(`semilla ${semilla}: ${b.name} va por una ruta inactiva (${b.phase})`)
+        if (antes[k] === 'at' && b.phase === 'toPort') viajes++
+      }
+    }
+    assert.ok(viajes > 50, `semilla ${semilla}: solo ${viajes} viajes`)
+    assert.ok(ev.length > 20, `semilla ${semilla}: el mapa casi no cambió (${ev.length} cambios)`)
+    for (const e of ev) motivos.add(e.motivo)
+    cambios += ev.length
+  }
+  assert.deepEqual([...motivos].sort(), ['terminada', 'tiempo'].concat(motivos.has('sin_uso') ? ['sin_uso'] : []).sort())
+  assert.ok(cambios > 150)
+})
+
+test('rutas dinámicas: se quita la que lleva T_SIN_USO sin tomarse; aparece otra si baja del rango y cada T_APARECE', () => {
+  // sin ballitas y con margen sobre el mínimo: las que sobran se quitan al cumplir T_SIN_USO, nunca antes
+  let sim = new Sim({ rng: mulberry32(3), pop: 0, rutas: { fracMax: 0.9, tAparece: Infinity } }); let ev = registrar(sim)
+  const n0 = sim.activas.size; assert.ok(n0 > 10)
+  while (sim.t < T_SIN_USO - 1) sim.tick(0.05)
+  assert.equal(ev.length, 0); assert.equal(sim.activas.size, n0)
+  while (sim.t < T_SIN_USO + 5) sim.tick(0.05)
+  assert.ok(ev.length > 0 && ev.every((e) => e.motivo === 'sin_uso' && e.off.length === 1 && e.t > T_SIN_USO))
+  assert.equal(sim.activas.size, 10) // el tope lo pone la regla de salidas: 5 planetas × 2
+  for (const n of sim.world.nodes) assert.equal(salidas(sim, n.idx), MIN_SALIDAS)
+  // aparición por rango: con MIN_SALIDAS = 1 las activas pueden bajar del mínimo (8) y entonces aparece otra al azar
+  sim = new Sim({ rng: mulberry32(3), pop: 0, rutas: { minSalidas: 1, tSinUso: 5, tAparece: Infinity } }); ev = registrar(sim)
+  const min = sim.rutasCfg.min; assert.equal(min, Math.ceil(RUTAS_FRAC_MIN * world.ways.length))
+  for (let i = 0; i < 1200; i++) { sim.tick(0.05); assert.ok(sim.activas.size >= min, `bajó a ${sim.activas.size}`) }
+  const rango = ev.filter((e) => e.motivo === 'rango')
+  assert.ok(rango.length >= 3, `apariciones por rango: ${rango.length}`)
+  for (const e of rango) { const quitada = ev[ev.indexOf(e) - 1]; assert.equal(quitada.motivo, 'sin_uso'); assert.notEqual(e.on[0], quitada.off[0]); assert.equal(e.n, min) }
+  for (const n of sim.world.nodes) assert.ok(salidas(sim, n.idx) >= 1)
+  // aparición por tiempo: una cada T_APARECE hasta el máximo del rango
+  sim = new Sim({ rng: mulberry32(3), pop: 0, rutas: { tSinUso: Infinity } }); ev = registrar(sim)
+  const max = sim.rutasCfg.max; const ini = sim.activas.size
+  while (sim.t < T_APARECE * (max - ini + 3)) sim.tick(0.05)
+  assert.equal(sim.activas.size, max); assert.equal(ev.length, max - ini)
+  assert.ok(ev.every((e, i) => e.motivo === 'tiempo' && e.on.length === 1 && Math.abs(e.t - T_APARECE * (i + 1)) < 0.2))
+})
+
+test('rutas dinámicas: la terminada se quita solo si no está en los planes de otra ballita', () => {
+  const sim = new Sim({ rng: mulberry32(8), rutas: { tSinUso: Infinity, tAparece: 5 } }); const ev = registrar(sim)
+  let vistas = 0; let protegidas = 0
+  sim.hooks.rutas = (e) => {
+    ev.push(e)
+    if (e.motivo !== 'terminada') return
+    const w = sim.world.ways[e.off[0]]; vistas++
+    assert.ok(!sim.ballitas.some((b) => b.way === w && b.phase !== 'dying'), 'se quitó una ruta con ballitas dentro')
+  }
+  const arrive = sim.arrive.bind(sim)
+  sim.arrive = (b) => { // llegadas por una ruta que comparte con otra ballita: no se puede quitar
+    const L = b.way; const otra = sim.ballitas.some((o) => o !== b && o.way === L && o.phase !== 'dying')
+    arrive(b)
+    if (otra) { protegidas++; assert.ok(sim.activas.has(L.idx), 'se quitó una ruta que otra ballita tenía tomada') }
+  }
+  for (let i = 0; i < 24000 && (vistas < 5 || protegidas < 2); i++) { mantener(sim); sim.tick(0.05) }
+  assert.ok(vistas >= 5, `terminadas quitadas: ${vistas}`); assert.ok(protegidas >= 2, `llegadas con la ruta compartida: ${protegidas}`)
+  // reglas una a una sobre una ruta que sobra (su planeta tiene más de MIN_SALIDAS salidas)
+  for (const b of sim.ballitas) { b.way = null; b.dec = {}; b.ctrl = null; b.phase = 'at'; b.timer = 99 }
+  for (const w of sim.world.ways) sim.activas.add(w.idx)
+  const [a, o] = sim.ballitas; const w = sim.world.waysFrom[a.node][0]
+  assert.equal(sim.puedeQuitarRuta(w), true)
+  o.way = w; o.phase = 'toPort'; assert.equal(sim.puedeQuitarRuta(w), false, 'otra ballita va hacia ella') // la trampa: planeada y aún sin empezar
+  o.phase = 'dying'; assert.equal(sim.puedeQuitarRuta(w), true); o.way = null; o.phase = 'at'
+  assert.equal(sim.tomar(a.id, 'yo').ok, true)
+  assert.equal(sim.decidir(a.id, 'yo', { ruta: { way: w.idx, r: 0 } }).ok, true); assert.equal(sim.puedeQuitarRuta(w), false, 'ruta decidida por un controlador')
+  assert.equal(sim.decidir(a.id, 'yo', { ruta: null }).ok, true); assert.deepEqual(a.dec, { destino: w.to }); assert.equal(sim.puedeQuitarRuta(w), false, 'planeta decidido que se alcanza por ella')
+  assert.equal(sim.decidir(a.id, 'yo', { destino: null }).ok, true); assert.equal(sim.puedeQuitarRuta(w), true)
+  // la regla cuenta SALIDAS: aunque lleguen 4 rutas al planeta, con 2 salidas no se quita ninguna de ellas
+  for (const x of sim.world.waysFrom[a.node].slice(MIN_SALIDAS)) assert.equal(sim.quitarRuta(x, 'prueba'), true)
+  assert.equal(sim.world.ways.filter((x) => x.to === a.node && sim.activas.has(x.idx)).length, 4)
+  for (const x of sim.world.waysFrom[a.node]) assert.equal(sim.quitarRuta(x, 'prueba'), false)
+  assert.equal(salidas(sim, a.node), MIN_SALIDAS)
+})
+
+test('rutas dinámicas: solo se deciden rutas activas y una decisión que queda inválida cae a la automática con aviso', () => {
+  const sim = new Sim({ rng: mulberry32(12), rutas: { tSinUso: Infinity, tAparece: Infinity } })
+  const avisos = []; sim.hooks.invalida = (b, que) => avisos.push([b.id, que])
+  const a = sim.ballitas[0]
+  assert.equal(sim.tomar(a.id, 'yo').ok, true)
+  while (a.phase !== 'at') { mantener(sim); sim.tick(1 / 30) }
+  const todas = sim.world.waysFrom[a.node]; const act = todas.filter((w) => sim.activas.has(w.idx)); const ina = todas.filter((w) => !sim.activas.has(w.idx))
+  assert.ok(act.length >= MIN_SALIDAS && ina.length > 0)
+  assert.equal(sim.decidir(a.id, 'yo', { ruta: { way: ina[0].idx, r: 0 } }).error, 'ruta')
+  assert.equal(sim.decidir(a.id, 'yo', { destino: ina[0].to }).error, 'destino')
+  assert.deepEqual(sim.probWays(a).sort((x, y) => x - y), act.map((w) => w.idx).sort((x, y) => x - y))
+  assert.ok(sim.activas.has(sim.predecir(a).way.idx))
+  // decide una activa y la ruta desaparece antes de salir (forzado: las reglas la protegerían mientras esté decidida)
+  assert.equal(sim.decidir(a.id, 'yo', { ruta: { way: act[0].idx, r: 0 }, carril: 2 }).ok, true)
+  assert.equal(sim.quitarRuta(act[0], 'prueba'), false, 'una ruta decidida no se quita')
+  sim.activas.add(ina[0].idx); sim.activas.delete(act[0].idx)
+  while (a.phase === 'at') { mantener(sim); sim.tick(1 / 30) }
+  assert.equal(a.phase, 'toPort'); assert.ok(sim.activas.has(a.way.idx) && a.way !== act[0], 'salió por una ruta activa')
+  assert.deepEqual(avisos, [[a.id, ['ruta', 'destino']]])
+  assert.ok(a.plan.aviso.length > 0); assert.deepEqual(a.plan.manual, ['carril']); assert.deepEqual(a.dec, {})
+  // sin decisiones no hay aviso
+  while (a.phase !== 'at') { mantener(sim); sim.tick(1 / 30) }
+  while (a.phase === 'at') { mantener(sim); sim.tick(1 / 30) }
+  assert.equal(avisos.length, 1); assert.equal(a.plan.aviso, undefined)
 })

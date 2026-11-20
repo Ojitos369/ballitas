@@ -77,6 +77,14 @@ export const MAX_NOMBRE = 16
 export const GRACIA_DESCONEXION = 60 // s; la aplica el servidor (la sim no sabe de conexiones)
 export const MAX_CONTROL_POR_ESPECTADOR = 1
 export const MAX_FILA_POR_ESPECTADOR = 1
+// Rutas dinámicas (docs/mundo_compartido.md, sección 9): solo un subconjunto de los sentidos (world.ways: la ida o la
+// vuelta de un circuito) está ACTIVO a la vez; el resto no se monta ni se puede elegir.
+export const RUTAS_DINAMICAS = true // false: todas las rutas activas siempre (la sim de antes, misma huella)
+export const MIN_SALIDAS = 2 // cada planeta conserva rutas de SALIDA activas hacia al menos estos planetas distintos (las que llegan no cuentan)
+export const RUTAS_FRAC_MIN = 0.4 // rango objetivo de rutas activas, como fracción del total
+export const RUTAS_FRAC_MAX = 0.6
+export const T_SIN_USO = 90 // s de sim sin que ninguna ballita la tome: se quita (si la regla de salidas lo permite)
+export const T_APARECE = 30 // s de sim: cada tanto aparece una inactiva al azar mientras no se llegue al máximo del rango
 // Limpia un nombre propuesto: letras, números, espacio, _ y -; '' si no queda nada.
 export const limpiarNombre = (nombre) => String(nombre ?? '').replace(/[^\p{L}\p{N} _-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NOMBRE).trim()
 export const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
@@ -153,7 +161,9 @@ export function nombreUnico(rng, usados) {
 }
 
 export class Sim {
-  constructor({ rng = Math.random, pop = POP, seed, rngDialogos = Math.random } = {}) {
+  // rutas: false = todas activas siempre; true = constantes de arriba; objeto = las sustituye
+  //   { minSalidas, fracMin, fracMax, tSinUso, tAparece }
+  constructor({ rng = Math.random, pop = POP, seed, rngDialogos = Math.random, rutas = RUTAS_DINAMICAS } = {}) {
     this.rng = rng
     // Azar SOLO cosmético (globos de diálogo del render): nunca avanza la secuencia de la sim, así una sim con
     // semilla sigue siendo determinista aunque se dibuje. Los consumidores de render deben usar este, no `rng`.
@@ -172,7 +182,94 @@ export class Sim {
     this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }
     this.feed = [] // eventos globales recientes
     this.nombres = new Set() // nombres ya usados: nunca se repiten
+    this.activas = null // Set de way.idx activos; null = rutas dinámicas apagadas (todas valen)
+    this.rutasRev = 0 // sube con cada cambio de `activas` (el render lo sondea)
+    if (rutas) this.iniciarRutas(rutas === true ? {} : rutas)
     for (let i = 0; i < pop; i++) this.spawn()
+  }
+
+  // ───────────── rutas dinámicas: qué sentidos están activos (docs/mundo_compartido.md, sección 9) ─────────────
+  // Arranque determinista: MIN_SALIDAS salidas al azar por planeta (a planetas distintos) y, si falta para el centro
+  // del rango objetivo, más al azar.
+  iniciarRutas(cfg) {
+    const W = this.world.ways; const N = W.length
+    const c = this.rutasCfg = { minSalidas: MIN_SALIDAS, fracMin: RUTAS_FRAC_MIN, fracMax: RUTAS_FRAC_MAX, tSinUso: T_SIN_USO, tAparece: T_APARECE, ...cfg }
+    c.min = Math.ceil(c.fracMin * N); c.max = Math.max(c.min, Math.floor(c.fracMax * N))
+    this.activas = new Set()
+    this.usoRuta = new Array(N).fill(0) // t de sim de la última vez que una ballita la tuvo tomada (o de su aparición)
+    this.tAparicion = 0
+    for (const salen of this.world.waysFrom) {
+      const resto = [...salen]; const vistos = new Set()
+      while (vistos.size < c.minSalidas && resto.length) {
+        const w = resto.splice(Math.floor(this.rng() * resto.length), 1)[0]
+        if (!vistos.has(w.to)) { vistos.add(w.to); this.activas.add(w.idx) }
+      }
+    }
+    const meta = Math.round((c.min + c.max) / 2)
+    while (this.activas.size < meta && this.activas.size < N) {
+      const ina = W.filter((w) => !this.activas.has(w.idx))
+      this.activas.add(ina[Math.floor(this.rng() * ina.length)].idx)
+    }
+  }
+
+  activa(way) { return !this.activas || this.activas.has(way.idx) }
+  // Sentidos activos que salen de `nodo` (todos si las rutas dinámicas están apagadas).
+  salidasActivas(nodo) {
+    const ws = this.world.waysFrom[nodo] ?? []
+    if (!this.activas) return ws
+    const act = ws.filter((w) => this.activas.has(w.idx))
+    return act.length ? act : ws // nunca debería quedar vacío (MIN_SALIDAS); por si acaso, no deja a nadie sin camino
+  }
+  // Planetas distintos a los que `nodo` puede SALIR por rutas activas, sin contar la ruta `sin` (las que llegan no cuentan).
+  salidasDistintas(nodo, sin = -1) {
+    const a = new Set()
+    for (const w of this.world.waysFrom[nodo]) if (w.idx !== sin && this.activas.has(w.idx)) a.add(w.to)
+    return a.size
+  }
+  // ¿Alguna ballita viva va por ella (rumbo al puerto o dentro: b.way, con su plannedRoute) o la tiene en sus
+  // decisiones pendientes (ruta decidida, o planeta decidido que se alcanza por ella)?
+  rutaEnUso(way) {
+    for (const b of this.ballitas) {
+      if (b.phase === 'dying' || b.phase === 'gone') continue
+      if (b.way === way) return true
+      if (!b.ctrl) continue
+      if (b.dec.ruta?.way === way.idx) return true
+      if (b.dec.destino === way.to && this.origenSiguiente(b) === way.from) return true
+    }
+    return false
+  }
+  puedeQuitarRuta(way) {
+    return !!this.activas && this.activas.has(way.idx) && !this.rutaEnUso(way) && this.salidasDistintas(way.from, way.idx) >= this.rutasCfg.minSalidas
+  }
+  // Quita la ruta si las reglas lo permiten; si las activas bajan del mínimo del rango aparece otra al azar.
+  quitarRuta(way, motivo) {
+    if (!this.puedeQuitarRuta(way)) return false
+    this.activas.delete(way.idx); this.rutasRev++
+    this.hooks.rutas?.({ on: [], off: [way.idx], motivo })
+    if (this.activas.size < this.rutasCfg.min) this.aparecerRuta('rango', way.idx)
+    return true
+  }
+  // Activa una inactiva al azar (rng de la sim), distinta de `sin` si hay otra.
+  aparecerRuta(motivo, sin = -1) {
+    let ina = this.world.ways.filter((w) => !this.activas.has(w.idx) && w.idx !== sin)
+    if (!ina.length) ina = this.world.ways.filter((w) => !this.activas.has(w.idx))
+    if (!ina.length) return null
+    const w = ina[Math.floor(this.rng() * ina.length)]
+    this.activas.add(w.idx); this.usoRuta[w.idx] = this.t; this.tAparicion = this.t; this.rutasRev++
+    this.hooks.rutas?.({ on: [w.idx], off: [], motivo })
+    return w
+  }
+  tickRutas() {
+    const c = this.rutasCfg
+    for (const b of this.ballitas) if (b.way && b.phase !== 'dying' && b.phase !== 'gone') this.usoRuta[b.way.idx] = this.t
+    // (a) sin uso: como mucho una por tick (el orden del Set es el de activación: determinista)
+    for (const i of this.activas) {
+      if (this.t - this.usoRuta[i] > c.tSinUso && this.quitarRuta(this.world.ways[i], 'sin_uso')) break
+    }
+    // el mapa cambia aunque no se quite nada: cada T_APARECE aparece una, hasta el máximo del rango
+    if (this.t - this.tAparicion >= c.tAparece) {
+      if (this.activas.size < c.max) this.aparecerRuta('tiempo'); else this.tAparicion = this.t
+    }
   }
 
   genomeForNewborn() {
@@ -275,7 +372,7 @@ export class Sim {
   decidir(id, espectador, dec) {
     const b = this.viva(id)
     if (!b || !b.ctrl || b.ctrl !== espectador) return { ok: false, error: 'no_controlas' }
-    const ways = this.world.waysFrom[this.origenSiguiente(b)]
+    const ways = this.salidasActivas(this.origenSiguiente(b)) // solo rutas activas: una inactiva da `destino` o `ruta`
     const n = { ...b.dec }
     if (dec && 'destino' in dec) {
       if (dec.destino == null) { delete n.destino; delete n.ruta }
@@ -303,7 +400,7 @@ export class Sim {
 
   // Sentidos y ruta que admite el siguiente viaje desde `nodo` según las decisiones `d` (lo que no vale se ignora).
   restringir(nodo, d) {
-    let ways = this.world.waysFrom[nodo]; let ruta = null; const usado = []
+    let ways = this.salidasActivas(nodo); let ruta = null; const usado = []
     if (d.ruta) {
       const w = ways.find((x) => x.idx === d.ruta.way)
       if (w?.routes[d.ruta.r]) { ways = [w]; ruta = w.routes[d.ruta.r]; usado.push('destino', 'ruta') }
@@ -366,6 +463,7 @@ export class Sim {
     // reaparece una nueva por cada muerta, tras un respiro
     while (this.ballitas.length + this.spawnQueue.length < this.pop) this.spawnQueue.push(this.t + 1.5)
     this.spawnQueue = this.spawnQueue.filter((at) => (at <= this.t ? (this.spawn(), false) : true))
+    if (this.activas) this.tickRutas()
   }
 
   step(b, dt) {
@@ -574,7 +672,7 @@ export class Sim {
   // su media). No consume la RNG ni toca a la ballita: la elección real sigue ocurriendo en goWay, al salir del nodo,
   // y puede diferir (energía, puntos y compañeras cambian hasta ese instante). Solo sirve para precargar en orden.
   probWays(b, node = b.node) {
-    const ways = this.world.waysFrom[node] ?? []
+    const ways = this.salidasActivas(node)
     if (ways.length < 2) return ways.map((w) => w.idx)
     const peers = this.peerCounts(b)
     const sc = new Map()
@@ -620,6 +718,11 @@ export class Sim {
       razon: usado.length ? 'lo decidió quien me controla' : best.razon,
     }
     if (usado.length) b.plan.manual = usado
+    // decisión que ya no vale (la ruta desapareció, o no sale de aquí): decide la sim y se avisa
+    const invalidas = []
+    if (d.ruta && !usado.includes('ruta')) invalidas.push('ruta')
+    if (d.destino != null && !usado.includes('destino')) invalidas.push('destino')
+    if (invalidas.length) { b.plan.aviso = 'la ruta decidida ya no está disponible: eligió sola'; this.hooks.invalida?.(b, invalidas) }
     this.walkTo(b, this.world.nodes[b.node].portTo[best.way.to].out, 'toPort')
     this.say(b, 'camino', { c: best.way.theme.name, n: destNode.name })
   }
@@ -902,6 +1005,8 @@ export class Sim {
     b.sw = null; b.lane = 0; b.ang = 0
     this.say(b, 'llega', { n: node.name })
     this.goDest(b)
+    // (b) ruta terminada: se quita si no está en los planes de ninguna otra ballita (y la regla de salidas lo permite)
+    if (this.activas) this.quitarRuta(L, 'terminada')
   }
 
   // Para el panel: lo que más le gusta (genes más altos).
