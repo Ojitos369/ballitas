@@ -41,7 +41,7 @@ pista. Node en el mismo contenedor (supervisord), FastAPI reenvía `/ws`; túnel
 
 ## Pruebas
 
-PRUEBAS_PENDIENTE
+`pnpm test` (sin cambios en `front/src`): primera corrida con 1 fallo en `sim.test.js:446` (tope de 3000 ms; el equipo estaba cargado, la corrida duró 404 s); corrida repetida: 82 pruebas, 82 pasan, 0 fallan (381 s). El brief hablaba de 76 pruebas; el repo tiene hoy 82. No se corrió `vite build`: la pieza no toca el front.
 
 ## Decisiones abiertas para el usuario
 
