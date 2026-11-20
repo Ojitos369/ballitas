@@ -21,8 +21,10 @@ Antes y después: `lejos_antes/{desk,movil}_libre.png` y `lejos_despues/{desk,mo
 
 En escritorio y móvil se distinguen caminos paralelos separados que se retuercen; en el acercamiento de escritorio se ve la calzada y un ramal vecino cerca de un cambio.
 
-## Verificación
+## Verificación final
 
-`pnpm test` y `npx vite build`: pendientes de la validación final. La integración de `main` queda pendiente.
+`npx vite build`: pasó. La ejecución paralela `pnpm test` dio 81/82; solo falló `sim.test.js:446` al medir 4 301 ms frente al límite de 3 000 ms. Tres reintentos aislados quedaron entre 3 028 y 4 036 ms. La suite completa pasó 82/82 al ejecutarla serialmente con `pnpm exec node --test --test-concurrency=1 ...` (537 488 ms); la reconstrucción sensible tardó 2 419 ms.
+
+`main` sigue en `dd36440`, el mismo commit base de esta rama; la mezcla final no aporta cambios adicionales a `world.js`.
 
 Conocimiento consultado: `ui_visual/mds/vista_limpia_con_jerarquia_de_foco.md`; `rendimiento_web/mds/aparicion_gradual_en_el_borde_de_recorte.md`.
