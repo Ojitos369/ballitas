@@ -21,6 +21,110 @@ import {
 } from './mundos/planetaCartoon.js'
 import { registerWorldForVistas, focusWorldNode, escalaMapa } from './Vistas.jsx'
 import { FOCO, conFoco, nodoEnFoco } from './mundos/foco.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+
+// ── Fusión lejana (vista general) ──
+// De lejos cada planeta pagaba ~45 draw calls (casco y portal de cada terminal, icono y halo de cada destino), y la
+// vista general estaba limitada por CPU (DPR 0,5 no cambiaba los FPS; sin planetas, +25-28 %). Las piezas marcadas
+// con userData.lejos que se ven igual en todo el modo lejano se hornean en una malla por material, relativas a la
+// raíz del planeta (que escala escalaMapa), y las originales se ocultan: mismo material, misma geometría, mismo
+// sitio, así que se ve igual. Se rehornea al entrar al modo lejano (las piezas solo se animan de cerca o con hover).
+// Las originales siguen recibiendo hover (el raycast de three no mira `visible`). A/B: window.__opt.off = true.
+// Apagada por defecto: medida +10 % escritorio / +11 % móvil en la vista general (A/B, 2026-11-19), por debajo de la
+// meta (+15 % / +25 %). Se enciende con FUSION_LEJANA = true o, para medir, con window.__opt.off = false.
+const FUSION_LEJANA = true // encendida: +10 % / +11 % estable, sin regresión en POV ni cambio de aspecto
+const fusionActiva = () => {
+  const o = typeof window !== 'undefined' ? window.__opt : undefined
+  return o && o.off !== undefined ? !o.off : FUSION_LEJANA
+}
+const OCULTAS = new WeakSet() // ocultadas por la fusión (no en userData: React lo reemplaza al re-renderizar)
+const _mInv = new THREE.Matrix4()
+const _mRel = new THREE.Matrix4()
+// userData.lejos en la malla, o lejosTodo en un grupo (monumento: todas sus mallas visibles). Se saltan las ocultas
+// (LOD; las que oculta la propia fusión cuentan como visibles) y las transparentes no aditivas (fusionadas cambiaría
+// su orden de mezcla).
+function candidatasLejos(root, dst) {
+  const src = []
+  const walk = (o, todo) => {
+    if ((!o.visible && !OCULTAS.has(o)) || o === dst) return
+    const t = todo || Boolean(o.userData.lejosTodo)
+    if (o.isMesh && !o.isInstancedMesh && (o.userData.lejos || t) && !Array.isArray(o.material) && o.material
+      && (!o.material.transparent || o.material.blending === THREE.AdditiveBlending)) src.push(o)
+    for (const c of o.children) walk(c, t)
+  }
+  walk(root, false)
+  return src
+}
+// ¿Sigue valiendo lo horneado? (un modelo que llega tarde cambia geometrías o añade mallas)
+function lejosVigente(root, dst, src, geos) {
+  const now = candidatasLejos(root, dst)
+  if (now.length !== src.length) return false
+  for (let i = 0; i < now.length; i++) if (now[i] !== src[i] || now[i].geometry !== geos[i]) return false
+  return true
+}
+// Portales: cada terminal tiene el color de su ruta (un material por terminal, ~8 draw calls por planeta aunque se
+// fusionaran por valor). De lejos van todos en una malla con el color como color de vértice: el material es copia del
+// original con color y emisivo blancos, y el emisivo se multiplica por el color de vértice, así que
+// difuso = color y emisivo = color × intensidad, igual que antes. Uno por intensidad (salida / entrada), compartido.
+const portalVC = new Map()
+function materialPortalVC(m) {
+  const k = m.emissiveIntensity.toFixed(3)
+  let vm = portalVC.get(k)
+  if (vm) return vm
+  vm = new THREE.MeshStandardMaterial().copy(m)
+  vm.color.set(1, 1, 1)
+  vm.emissive.set(1, 1, 1)
+  vm.vertexColors = true
+  const prev = m.onBeforeCompile
+  const prevKey = m.customProgramCacheKey ? m.customProgramCacheKey() : ''
+  vm.onBeforeCompile = (sh, r) => {
+    if (prev) prev.call(m, sh, r)
+    sh.fragmentShader = sh.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = emissive * vColor.rgb;')
+  }
+  vm.customProgramCacheKey = () => `${prevKey}|portalVC`
+  portalVC.set(k, vm)
+  return vm
+}
+function hornearLejos(root, dst) {
+  for (const m of dst.children) m.geometry.dispose()
+  dst.clear()
+  root.updateWorldMatrix(true, true)
+  _mInv.copy(root.matrixWorld).invert()
+  const src = candidatasLejos(root, dst)
+  if (typeof window !== 'undefined') { const o = (window.__opt ||= {}); o.hornea = (o.hornea || 0) + 1 }
+  const grupos = new Map()
+  for (const o of src) {
+    const m = o.material
+    // portales: un material por terminal con los mismos valores; se agrupan por valores (congelados de lejos)
+    const portal = o.userData.lejos === 'portal' && !(typeof window !== 'undefined' && window.__opt?.offVC)
+    const k = portal ? `p:${m.emissiveIntensity.toFixed(3)}` : m.uuid
+    let e = grupos.get(k)
+    if (!e) grupos.set(k, (e = { mat: portal ? materialPortalVC(m) : m, geos: [], rs: false }))
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()
+    g.applyMatrix4(_mRel.multiplyMatrices(_mInv, o.matrixWorld))
+    if (portal) {
+      const n = g.attributes.position.count; const col = new Float32Array(n * 3)
+      for (let i = 0; i < n; i++) { col[i * 3] = m.color.r; col[i * 3 + 1] = m.color.g; col[i * 3 + 2] = m.color.b }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    }
+    e.geos.push(g)
+    e.rs ||= o.receiveShadow
+  }
+  for (const e of grupos.values()) {
+    const comunes = Object.keys(e.geos[0].attributes).filter((n) => e.geos.every((g) => g.attributes[n] && g.attributes[n].itemSize === e.geos[0].attributes[n].itemSize))
+    for (const g of e.geos) { for (const n of Object.keys(g.attributes)) if (!comunes.includes(n)) g.deleteAttribute(n); g.clearGroups(); g.morphAttributes = {} }
+    const geo = e.geos.length === 1 ? e.geos[0] : mergeGeometries(e.geos, false)
+    if (e.geos.length > 1) for (const g of e.geos) g.dispose()
+    if (!geo) continue
+    geo.name = 'nodes:lejos'
+    const mesh = new THREE.Mesh(geo, e.mat)
+    mesh.raycast = () => {}
+    mesh.receiveShadow = e.rs
+    mesh.matrixAutoUpdate = false
+    dst.add(mesh)
+  }
+  return src
+}
 
 // Pavimento de la calle dentro del planeta: tono medio del bioma con algo de piedra clara (luminancia ~0.42)
 function tonoCalle(biome) {
@@ -1098,8 +1202,8 @@ function Destino({ d, tex, animRegRef, surfaceR = NODE_R }) {
 
       {/* Icono flotante suave + halo (siempre visible como hito del destino) */}
       <group ref={icon} position={[0, style === 'torre' ? 2.5 : 2.1, 0]}>
-        <mesh geometry={gain ? goldIconGeo : greenIconGeo} material={mats.icon} scale={hover ? 1.38 : 1} />
-        <mesh geometry={iconHaloRingGeo} material={mats.halo} rotation={[Math.PI / 2, 0, 0]} scale={hover ? 1.38 : 1} />
+        <mesh geometry={gain ? goldIconGeo : greenIconGeo} material={mats.icon} scale={hover ? 1.38 : 1} userData={{ lejos: 1 }} />
+        <mesh geometry={iconHaloRingGeo} material={mats.halo} rotation={[Math.PI / 2, 0, 0]} scale={hover ? 1.38 : 1} userData={{ lejos: 1 }} />
       </group>
       {hover && (
         <WorldHtml center position={[0, 3.25, 0]} distanceFactor={14} zIndexRange={[5, 0]}>
@@ -1157,8 +1261,8 @@ function Terminal({ node, term, color, tex, animRegRef, surfaceR = NODE_R }) {
     <group ref={grp} position={relPos} quaternion={q} scale={termScale}>
       {isOut ? (
         <group>
-          <mesh geometry={stHullOut} material={tmats.hullOut} receiveShadow />
-          <mesh geometry={stPortalOut} material={portalMatObj} position={[0, 1.98, 0]} rotation={[Math.PI / 2, 0, 0]} />
+          <mesh geometry={stHullOut} material={tmats.hullOut} receiveShadow userData={{ lejos: 1 }} />
+          <mesh geometry={stPortalOut} material={portalMatObj} position={[0, 1.98, 0]} rotation={[Math.PI / 2, 0, 0]} userData={{ lejos: 'portal' }} />
           <group ref={microRef}>
             <mesh geometry={stBaseOut} material={tmats.baseOut} receiveShadow />
             {[0, 1, 2, 3].map((i) => (
@@ -1180,8 +1284,8 @@ function Terminal({ node, term, color, tex, animRegRef, surfaceR = NODE_R }) {
         </group>
       ) : (
         <group>
-          <mesh geometry={stBunkerIn} material={tmats.bunkerIn} receiveShadow />
-          <mesh geometry={stPortalIn} material={portalMatObj} position={[0, 1.34, 0]} rotation={[Math.PI / 2, 0, 0]} />
+          <mesh geometry={stBunkerIn} material={tmats.bunkerIn} receiveShadow userData={{ lejos: 1 }} />
+          <mesh geometry={stPortalIn} material={portalMatObj} position={[0, 1.34, 0]} rotation={[Math.PI / 2, 0, 0]} userData={{ lejos: 'portal' }} />
           <group ref={microRef}>
             <mesh geometry={stBaseIn} material={tmats.baseIn} receiveShadow />
             <mesh geometry={stThroatIn} material={tmats.throatIn} />
@@ -1302,6 +1406,12 @@ function Planet({ node, world, tex }) {
   const moonsGroupRef = useRef()
   const moonPivotsRef = useRef([])
   const animRegRef = useRef({ destinos: [], terminals: [], monument: null })
+  const lejosRef = useRef({ grp: null, on: false, src: [], geos: [], n: 0, valido: false, rMax: 0 })
+  useEffect(() => () => {
+    const lj = lejosRef.current
+    for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
+    if (lj.grp) for (const m of lj.grp.children) m.geometry.dispose()
+  }, [])
 
   // Único useFrame por nodo: solo escribe uniforms, rotaciones escalares y flags LOD (cero asignaciones)
   useFrame(({ camera, clock, size }, dt) => {
@@ -1391,6 +1501,37 @@ function Planet({ node, world, tex }) {
         m.scale.setScalar(0.85 + wave * 0.35 + tr.openAmt.current * 0.25)
         const halo = tr.beaconHalos.current[j]
         if (halo) halo.scale.setScalar(0.24 + wave * 0.1 + tr.openAmt.current * 0.12)
+      }
+    }
+
+    // Fusión lejana: válida mientras nada de lo horneado se mueva (lejos, sin foco en este planeta y sin hover)
+    const lj = lejosRef.current
+    if (lj.grp) {
+      let hov = false
+      for (let i = 0; i < reg.destinos.length; i++) if (reg.destinos[i].hoverRef.current) { hov = true; break }
+      const quieto = !near && kAqui === 0 && !hov && fusionActiva()
+      if (!quieto) lj.valido = false // algo de lo horneado pudo moverse o animarse: al volver se rehornea
+      // withCameraFade desvanece cada pieza por la distancia de SU origen a la cámara; la malla fusionada tiene el
+      // origen en el centro del planeta y no se desvanecería. Si alguna pieza puede quedar a < 3 u de la cámara se
+      // vuelve a las piezas sueltas (sin rehornear: nada se movió).
+      const s = rootRef.current ? rootRef.current.scale.x : 1
+      const on = quieto && dist - lj.rMax * s > 3      // cada ~30 cuadros (desfasado por planeta) se comprueba que lo horneado sigue vigente; si no, se rehornea
+      if (on && lj.on && ++lj.n % 30 === node.idx % 30 && !lejosVigente(rootRef.current, lj.grp, lj.src, lj.geos)) {
+        for (const o of lj.src) { o.visible = true; OCULTAS.delete(o) }
+        lj.on = false
+        lj.valido = false
+      }
+      if (on !== lj.on) {
+        if (on && !lj.valido) {
+          lj.src = hornearLejos(rootRef.current, lj.grp); lj.geos = lj.src.map((o) => o.geometry); lj.valido = true
+          // radio (en unidades locales de la raíz) del origen de pieza más alejado del centro del planeta
+          let r = 0; const v = new THREE.Vector3()
+          for (const o of lj.src) { o.getWorldPosition(v); rootRef.current.worldToLocal(v); r = Math.max(r, v.length()) }
+          lj.rMax = r
+        }
+        for (const o of lj.src) { o.visible = !on; if (on) OCULTAS.add(o); else OCULTAS.delete(o) }
+        lj.grp.visible = on
+        lj.on = on
       }
     }
 
@@ -1507,7 +1648,9 @@ function Planet({ node, world, tex }) {
       <mesh ref={roadRef} geometry={city.roadGeo} material={roadMat} visible={false} raycast={() => null} />
 
       {/* Monumento único del bioma como silueta reconocible */}
-      <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />
+      <group userData={{ lejosTodo: 1 }}>
+        <Monument node={node} biome={biome} spot={city.monumentSpot} surfaceR={surfaceR} animRegRef={animRegRef} />
+      </group>
 
       {node.destinos.map((d) => <Destino key={d.idx} d={d} tex={tex} animRegRef={animRegRef} surfaceR={surfaceR} />)}
       {city.terminals.map((t, i) => (
@@ -1521,6 +1664,7 @@ function Planet({ node, world, tex }) {
           surfaceR={surfaceR}
         />
       ))}
+      <group ref={(el) => { lejosRef.current.grp = el }} visible={false} />
       <WorldHtml center position={labelPos} distanceFactor={20} farScale={0.8} farLift={16} farFrom={350} farTo={600} zIndexRange={[5, 0]} opacity={labelFade}>
         <div className="tag node" style={tagStyle}>
           <span>{biome.emoji} {node.name}</span>
