@@ -1,0 +1,18 @@
+{
+  "mode": "desk",
+  "before": {
+    "fps": 37.6,
+    "triangles": 217628,
+    "n": 1131,
+    "elapsed": 31066
+  },
+  "after": {
+    "fps": 42.1,
+    "triangles": 210609,
+    "n": 1264,
+    "elapsed": 31014
+  },
+  "fpsDeltaPct": 12,
+  "trianglesDeltaPct": -3.2,
+  "errors": []
+}
