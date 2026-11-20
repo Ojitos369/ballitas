@@ -1,0 +1,18 @@
+{
+  "mode": "movil",
+  "before": {
+    "fps": 64.5,
+    "triangles": 209165,
+    "n": 1936,
+    "elapsed": 31003
+  },
+  "after": {
+    "fps": 94.7,
+    "triangles": 197448,
+    "n": 2842,
+    "elapsed": 31006
+  },
+  "fpsDeltaPct": 46.8,
+  "trianglesDeltaPct": -5.6,
+  "errors": []
+}
