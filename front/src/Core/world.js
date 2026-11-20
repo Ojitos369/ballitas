@@ -1257,7 +1257,7 @@ function ajustarEventos(world, segs, wayOf) {
   const CELL = 24; const grid = new Map(); const PX = []; const PO = []
   const key = (x, y, z) => ((Math.floor(x / CELL) + 512) * 1024 + (Math.floor(y / CELL) + 512)) * 1024 + (Math.floor(z / CELL) + 512)
   segs.forEach((s, sg) => { for (const l of s.lanes) { const P = s._braid.P[l.id]; for (let i = 0; i <= s._braid.N; i++) { const k = key(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(PX.length / 3); PX.push(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); PO.push(sg * 8 + l.id) } } })
-  const EV = RIBBON_HALF + 3.2; const out = {}; const fA = {}; const fB = {}
+  const EV = RIBBON_HALF + 3.2; const out = {}; const fA = {}; const fB = {}; const fC = {}
   const libre = (s, sw, sg) => {
     const oa = sg * 8 + sw.from; const ob = sg * 8 + sw.to
     for (let q = 0; q <= 24; q++) {
@@ -1277,19 +1277,24 @@ function ajustarEventos(world, segs, wayOf) {
     const arcos = ARCO_KINDS.filter((k) => mechs[k]); if (!arcos.length) arcos.push('salto')
     for (const sw of s.switches) {
       delete sw._arc
-      const a = laneFrame(s, sw.from, sw.u, fA).pos; const b = laneFrame(s, sw.to, sw.uLand, fB).pos
-      const dy = b.y - a.y; const dist = a.distanceTo(b)
-      if (dist <= 1.6 * ROW_GAP) continue
-      const vias = dy < -0.45 * dist ? ['caida', 'arco', 'portal'] : dy > 0.45 * dist ? ['elevador', 'arco', 'portal'] : rng() < 0.3 ? ['portal'] : ['arco', 'portal']
-      const base = sw.duration
-      for (const via of vias) {
+      const a = laneFrame(s, sw.from, sw.u, fA).pos; const b = laneFrame(s, sw.to, sw.uLand, fB).pos; const dy0 = laneFrame(s, sw.to, sw.u, fC).pos.y - a.y
+      const dy = b.y - a.y; const dist = a.distanceTo(b); const base = sw.duration; const lejos = dist > 1.6 * ROW_GAP
+      const pone = (via) => {
         const kind = via === 'arco' ? arcos[Math.floor(rng() * arcos.length)] : via; const M = MECHANISMS[kind]
-        Object.assign(sw, { kind, via, style: via, name: mechs[kind] || M.name, emoji: M.emoji, risk: M.risk, fail: M.fail, reward: { ...M.reward }, boost: M.boost, lejos: via !== 'portal', dist: +dist.toFixed(1) })
-        sw.apex = +((3.5 * TK + 0.22 * dist)).toFixed(2)
-        sw.duration = via === 'portal' ? Math.min(base, M.dur) : +clamp(dist / SIN_FLY, 0.9, 4.5).toFixed(2)
+        Object.assign(sw, { kind, via, style: via, name: mechs[kind] || M.name, emoji: M.emoji, risk: M.risk, fail: M.fail, reward: { ...M.reward }, boost: M.boost, lejos: lejos && via !== 'portal', dist: +dist.toFixed(1) })
+        if (lejos) sw.apex = +((3.5 * TK + 0.22 * dist)).toFixed(2)
+        sw.duration = via === 'portal' ? Math.min(base, M.dur) : lejos ? +clamp(dist / SIN_FLY, 0.9, 4.5).toFixed(2) : base
         delete sw._arc
-        if (via === 'portal' || libre(s, sw, sg)) break
       }
+      // desnivel: el del vuelo (origen en u, destino en uLand) y el de los dos caminos a la misma altura del recorrido (u)
+      const cae = dy < -0.45 * dist && dy0 < -1.5 * TK; const sube = dy > 0.45 * dist && dy0 > 1.5 * TK
+      if (!lejos) { // vecinos: se conserva el evento salvo que la geometría nueva lo contradiga o su vuelo corte una cinta
+        if ((sw.kind === 'caida' && !cae) || (sw.kind === 'elevador' && !sube)) pone('arco')
+        if (sw.via !== 'portal' && !libre(s, sw, sg)) pone('portal')
+        delete sw._arc; continue
+      }
+      const vias = cae ? ['caida', 'arco', 'portal'] : sube ? ['elevador', 'arco', 'portal'] : rng() < 0.3 ? ['portal'] : ['arco', 'portal']
+      for (const via of vias) { pone(via); if (via === 'portal' || libre(s, sw, sg)) break }
       delete sw._arc
     }
     s.switchesByLane = new Map(s.lanes.map((l) => [l.id, s.switches.filter((sw) => sw.from === l.id).sort((x, y) => x.u - y.u)]))
