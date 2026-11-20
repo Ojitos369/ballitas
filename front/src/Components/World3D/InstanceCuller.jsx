@@ -162,28 +162,31 @@ export default function InstanceCuller({ active, radius = 60 }) {
         if (!s) { s = { vers: [], n: -1, cam: [Infinity, 0, 0], near: 0, idx: null, backup: [], gpuCompact: false }; state.set(mesh, s) }
         if (s.revSitio) { s.revSitio = false; s.n = -1 }
         const giro = K > 1 && (s.fx * FWD.x + s.fy * FWD.y + s.fz * FWD.z < 0.985)
-        const dirty = s.n !== n || s.on !== on || s.K !== K || giro || rev < 1 || s.rev < 1 || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
+        const meshRadius = mesh.userData.cullRadius ?? radius
+        const meshBorder = mesh.userData.cullBorder ?? BORDE
+        const dirty = s.n !== n || s.on !== on || s.K !== K || s.radius !== meshRadius || s.border !== meshBorder || giro || rev < 1 || s.rev < 1 || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
           (cx - s.cam[0]) ** 2 + (cy - s.cam[1]) ** 2 + (cz - s.cam[2]) ** 2 > MOVE2
         if (!dirty) {
           if (s.gpuCompact) { restore.push(mesh, n, null); mesh.count = s.near }
           continue
         }
-        s.on = on; s.rev = rev; s.K = K; s.fx = FWD.x; s.fy = FWD.y; s.fz = FWD.z
+        s.on = on; s.rev = rev; s.K = K; s.radius = meshRadius; s.border = meshBorder; s.fx = FWD.x; s.fy = FWD.y; s.fz = FWD.z
         // posición mundial de cada instancia: matrixWorld × traslación de su matriz
         const m = mesh.instanceMatrix.array; const w = mesh.matrixWorld.elements
         if (!s.idx || s.idx.length < n) { s.idx = new Int32Array(n); s.k = new Float32Array(n) }
         let near = 0; let escala = false; const cm = [Infinity, Infinity]
         if (on) {
-          const b2 = (radius * BORDE) ** 2; const d0 = radius * BORDE; const dd = radius - d0
+          const r2 = meshRadius * meshRadius
+          const b2 = (meshRadius * meshBorder) ** 2; const d0 = meshRadius * meshBorder; const dd = meshRadius - d0
           for (let i = 0; i < n; i++) {
             const o = i * 16; const x = m[o + 12]; const y = m[o + 13]; const z = m[o + 14]
             const dx = w[0] * x + w[4] * y + w[8] * z + w[12] - cx
             const dy = w[1] * x + w[5] * y + w[9] * z + w[13] - cy
             const dz = w[2] * x + w[6] * y + w[10] * z + w[14] - cz
             const d2 = K > 1 ? d2Delante(dx, dy, dz, FWD, K) : dx * dx + dy * dy + dz * dz
-            if (d2 >= R2) continue
+            if (d2 >= r2) continue
             let k = rev
-            if (d2 > b2) { const c = (Math.sqrt(d2) - d0) / dd; k *= 1 - c * c * (3 - 2 * c) }
+            if (d2 > b2 && dd > 0) { const c = (Math.sqrt(d2) - d0) / dd; k *= 1 - c * c * (3 - 2 * c) }
             if (k < 1) { escala = true; if (MIDE) creceDe(dx, dy, dz, FWD, k, cm) }
             s.k[near] = k
             s.idx[near++] = i

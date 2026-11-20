@@ -408,13 +408,15 @@ const IDENT_Q = new THREE.Quaternion()
  * useInstanced(geo, mat, items) -> THREE.InstancedMesh (estable mientras geo/mat/longitud no cambien).
  * items: { pos, quat?, scale? (número | [x,y,z] | Vector3), color? }. Renderízalo con <primitive object={mesh} />.
  */
-export function useInstanced(geo, mat, items, { dynamic = false } = {}) {
+export function useInstanced(geo, mat, items, { dynamic = false, cullRadius = null, cullBorder = null } = {}) {
   const cap = Math.max(1, items?.length ?? 0)
   const mesh = useMemo(() => {
     const m = new THREE.InstancedMesh(geo, mat, cap)
     m.frustumCulled = !dynamic
+    if (cullRadius != null) m.userData.cullRadius = cullRadius
+    if (cullBorder != null) m.userData.cullBorder = cullBorder
     return m
-  }, [geo, mat, cap, dynamic])
+  }, [geo, mat, cap, dynamic, cullRadius, cullBorder])
   useLayoutEffect(() => {
     const list = items ?? []
     mesh.count = list.length
@@ -431,8 +433,8 @@ export function useInstanced(geo, mat, items, { dynamic = false } = {}) {
 }
 
 /** Atajo declarativo de useInstanced. */
-export function Instanced({ geo, mat, items, castShadow = false, receiveShadow = false }) {
-  const mesh = useInstanced(geo, mat, items)
+export function Instanced({ geo, mat, items, castShadow = false, receiveShadow = false, cullRadius = null, cullBorder = null }) {
+  const mesh = useInstanced(geo, mat, items, { cullRadius, cullBorder })
   if (!items?.length) return null
   return <primitive object={mesh} castShadow={castShadow} receiveShadow={receiveShadow} />
 }
