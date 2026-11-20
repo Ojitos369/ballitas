@@ -1065,13 +1065,19 @@ const SIN_SLOPE = 0.4 // pendiente máxima (desvío lateral por u de avance) de 
 const SIN_WA = 24 // (u) radio del tirabuzón corto
 const SIN_WL = 330 // (u) paso del tirabuzón corto: pendiente 2π·24/330 = 0.46, radio de curvatura ~115 u
 const SIN_CLEAR = 6 * TK + 2 * RIBBON_HALF + 0.75 + 1.5 * TK // (u) centro a centro: gálibo + cintas + quilla + margen = 47.7
+const SIN_LAT = 2 * RIBBON_HALF + 0.2 // (u) hermanos con la normal de la fila: suma de semianchos de las dos cintas (+ margen) por la lateral
+const SIN_ALTO = 0.75 + 0.25 // (u) ... y canto de la cinta (quilla + margen) por la normal
+const SIN_AIRE = 2 * RIBBON_HALF + 0.25 // (u) aire exigido entre bordes (AIRE_LAT + margen); la fila (ROW_GAP) lo cumple
+const SIN_PRISMA = LANE_W / 2 + RIBBON_CURB + RIBBON_HALF + 2.5 // (u) semiancho del prisma de gálibo (calzada + cinta ajena + margen)
+const SIN_GALIBO = 6 * TK + 0.75 + 4 // (u) alto del prisma (gálibo + quilla + margen)
+const SIN_ROLLD = SIN_CLEAR + 4 // (u) con un hermano más cerca que esto, el camino conserva la normal de la fila
 const SIN_BLEND = 210 // (u) semilargo de la rampa con que se reduce el desvío junto a un choque
 const SIN_MIN = 260 // (u) tramo abierto mínimo para desviar
 const SIN_ROLL = 0.035 // (rad/u) ritmo máximo del giro de la normal (9.4° por muestra de 4.7 u)
 const SIN_FLY = 120 // (u/s) velocidad de vuelo de un evento entre caminos lejanos
 function sinuarCaminos(world) {
   if (SINUOSO.off) return
-  const st = world.sinuoso = { caminos: 0, completos: 0, reducidos: 0, nulos: 0 }
+  const st = world.sinuoso = { caminos: 0, completos: 0, reducidos: 0, nulos: 0, reintentos: 0, revertidos: 0 }
   const segs = world.ways.flatMap((w) => w.segments.filter((s) => !s.air && s.lanes && s._braid)); const wayOf = new Map(); for (const w of world.ways) for (const s of w.segments) wayOf.set(s, w)
   // rejilla de obstáculos (clave entera < 2^30): [x, y, z, tramo, camino, vértice] por punto; fijos = posiciones originales
   const CELL = SIN_CLEAR; const key = (x, y, z) => ((Math.floor(x / CELL) + 512) * 1024 + (Math.floor(y / CELL) + 512)) * 1024 + (Math.floor(z / CELL) + 512)
@@ -1088,7 +1094,7 @@ function sinuarCaminos(world) {
   const movido = new Set() // tramo * 8 + camino ya procesado: sus puntos fijos dejan de contar (cuentan los finales)
   const nodes = world.nodes.map((n) => [n.pos.x, n.pos.y, n.pos.z, (NODE_R + 150) ** 2])
   // ¿choca el punto (x, y, z) del camino `ln` del tramo `sg`? `near`: distancia mínima exigida a sus hermanos ya movidos
-  const choca = (x, y, z, sg, near) => {
+  const choca = (x, y, z, sg) => {
     const r2 = x * x + y * y + z * z; if (r2 < rLo * rLo || r2 > rHi * rHi) return true
     for (const n of nodes) if ((x - n[0]) ** 2 + (y - n[1]) ** 2 + (z - n[2]) ** 2 < n[3]) return true
     const cx = Math.floor(x / CELL) + 512; const cy = Math.floor(y / CELL) + 512; const cz = Math.floor(z / CELL) + 512; const C2 = SIN_CLEAR * SIN_CLEAR
@@ -1097,14 +1103,14 @@ function sinuarCaminos(world) {
       for (let q = 0; q < b.length; q++) {
         const j = b[q]; const d2 = (x - OX[j]) ** 2 + (y - OY[j]) ** 2 + (z - OZ[j]) ** 2
         if (d2 >= C2) continue
-        if (OS[j] === sg) { if (OD[j] && d2 < near * near) return true; continue } // hermanos: nunca más cerca que en la fila
+        if (OS[j] === sg) continue // hermanos: aparte, en el marco común de la fila (`hermano`)
         if (!OD[j] && movido.has(OS[j] * 8 + OL[j])) continue
         return true
       }
     }
     return false
   }
-  const WF = {}; const T = new THREE.Vector3(); const s0 = new THREE.Vector3()
+  const WF = {}; const T = new THREE.Vector3(); const s0 = new THREE.Vector3(); const v1 = new THREE.Vector3(); const v2 = new THREE.Vector3()
   segs.forEach((s, sg) => {
     const br = s._braid; if (!br.row) return
     const N = br.N; const L = s.length; const step = L / N; const nl = s.lanes.length
@@ -1112,68 +1118,133 @@ function sinuarCaminos(world) {
     if (Lu < SIN_MIN) return
     const rng = mulberry32(77000 + wayOf.get(s).idx * 977 + wayOf.get(s).segments.indexOf(s) * 131)
     const rw = clamp(Lu * 0.3, 110, 540); const R = Math.min(SIN_R, 0.45 * rw)
-    const om = (rng() < 0.5 ? -1 : 1) * Math.min(SIN_SLOPE / (1.2 * R), TAU / 500); const th0 = rng() * TAU
-    // marco del eje y tope por curvatura del eje (el desvío no pasa de 0.6 radios de curvatura)
+    const mir = rng() < 0.5 ? -1 : 1; const pref = rng() < 0.5 ? -1 : 1
+    // marco del eje SIN torsión (transporte paralelo: el de wallFrame gira alrededor del avance y, a 200 u del eje, plegaba
+    // la cinta), marco COMÚN de la fila (U0: normal con el peralte; RW: lateral) y ángulo de la fila en el marco del eje (FI)
     const C = new Float32Array((N + 1) * 3); const D0 = new Float32Array((N + 1) * 3); const S0 = new Float32Array((N + 1) * 3); const Tn = new Float32Array((N + 1) * 3); const AW = new Float32Array(N + 1); const ref = new THREE.Vector3()
+    const U0 = new Float32Array((N + 1) * 3); const RW = new Float32Array((N + 1) * 3); const FI = new Float32Array(N + 1); const l0 = s.lanes[0].id; br.sroll = null
     for (let i = 0; i <= N; i++) {
-      // marco SIN torsión (transporte paralelo): el de wallFrame gira alrededor del avance y, a 200 u del eje, plegaba la cinta
       const f = wallFrame(s, 0, i / N, 0, WF); T.copy(f.tangent)
       if (i) ref.addScaledVector(T, -ref.dot(T)); else ref.copy(f.dir)
       if (ref.lengthSq() < 1e-8) ref.copy(f.dir)
       ref.normalize(); s0.crossVectors(T, ref).normalize()
       f.axis.toArray(C, i * 3); ref.toArray(D0, i * 3); s0.toArray(S0, i * 3); T.toArray(Tn, i * 3)
-      const cs = f.dir.dot(ref); const sn = T.dot(s0.crossVectors(f.dir, ref)); let a = Math.atan2(sn, cs); if (i) { let d = (a - AW[i - 1]) % TAU; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU; a = AW[i - 1] + d }
+      const cs = f.dir.dot(ref); const sn = T.dot(v1.crossVectors(f.dir, ref)); let a = Math.atan2(sn, cs); if (i) { let d = (a - AW[i - 1]) % TAU; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU; a = AW[i - 1] + d }
       AW[i] = a // ángulo (convención de wallFrame) del marco transportado respecto del marco del eje
+      v1.crossVectors(f.dir, T).normalize(); let fi = Math.atan2(v1.dot(s0), v1.dot(ref)); if (i) { let d = (fi - FI[i - 1]) % TAU; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU; fi = FI[i - 1] + d }
+      FI[i] = fi // dirección de la fila (del primer camino al último) en el marco transportado
+      v2.copy(f.dir).applyAxisAngle(T, laneAngle(s, l0, i / N)) // normal común de la fila (peralte incluido; aún sin giro propio)
+      v1.crossVectors(v2, T).normalize(); v1.toArray(RW, i * 3); v2.negate().toArray(U0, i * 3)
     }
     const w2 = Math.max(2, Math.round(28 / step)); const rho = new Float32Array(N + 1)
     for (let i = 0; i <= N; i++) {
       const p = Math.max(0, i - w2) * 3; const q = Math.min(N, i + w2) * 3
       const an = Math.acos(clamp(Tn[p] * Tn[q] + Tn[p + 1] * Tn[q + 1] + Tn[p + 2] * Tn[q + 2], -1, 1)); rho[i] = an > 1e-4 ? ((q - p) / 3 * step) / an : 1e6
     }
-    const w = Math.max(3, Math.ceil(SIN_BLEND / step))
-    const suave = (a) => { // mínimo extendido y luego media móvil: baja antes del choque y nunca sube de golpe
-      const lo = new Float32Array(N + 1); const out = new Float32Array(N + 1); const h = Math.max(2, Math.round(w / 3))
-      for (let i = 0; i <= N; i++) { let m = 1; for (let j = Math.max(0, i - 2 * h); j <= Math.min(N, i + 2 * h); j++) if (a[j] < m) m = a[j]; lo[i] = m } // mínimo en ±2h: las dos medias de ±h quedan por debajo del dato
-      const pre = new Float64Array(N + 2); for (let i = 0; i <= N; i++) pre[i + 1] = pre[i] + lo[i]
+    const w = Math.max(3, Math.ceil(SIN_BLEND / step)); const h = Math.max(2, Math.round(w / 3))
+    const lo = new Float32Array(N + 1); const pre = new Float64Array(N + 2)
+    const suave = (a, out) => { // mínimo extendido y luego media móvil: baja antes del choque y nunca sube de golpe
+      for (let i = 0; i <= N; i++) { let m = 1; const j1 = Math.min(N, i + 2 * h); for (let j = Math.max(0, i - 2 * h); j <= j1; j++) if (a[j] < m) m = a[j]; lo[i] = m } // mínimo en ±2h: las dos medias de ±h quedan por debajo del dato
+      for (let i = 0; i <= N; i++) pre[i + 1] = pre[i] + lo[i]
       for (let i = 0; i <= N; i++) { const p = Math.max(0, i - h); const q = Math.min(N, i + h); out[i] = (pre[q + 1] - pre[p]) / (q - p + 1) }
       return out
     }
-    const gap = rowGap(nl); br.sroll = []; let hecho = false
-    s.lanes.forEach((lane, j) => {
-      const id = lane.id; const P = br.P[id]; st.caminos++
-      const Rj = R * (0.8 + 0.45 * rng()); const aj = Math.min(SIN_WA * (0.8 + 0.4 * rng()), 0.3 * rw)
-      const nu = (rng() < 0.5 ? -1 : 1) * TAU / (SIN_WL * (0.8 + 0.5 * rng())); const ph = rng() * TAU; const thj = th0 + (TAU * j) / nl
-      // objetivo (posición sobre la hélice) y peso base (rampa de entrada/salida y tope por curvatura)
-      const O = new Float32Array((N + 1) * 3); const base = new Float32Array(N + 1); const th = new Float32Array(N + 1)
-      for (let i = 0; i <= N; i++) {
-        const x = i * step; const t = thj + om * (x - a0); const ps = ph + nu * x; th[i] = t
-        const c = Rj * Math.cos(t) + aj * Math.cos(ps); const sn = Rj * Math.sin(t) + aj * Math.sin(ps); const q = i * 3
-        O[q] = C[q] + D0[q] * c + S0[q] * sn - P[q]; O[q + 1] = C[q + 1] + D0[q + 1] * c + S0[q + 1] * sn - P[q + 1]; O[q + 2] = C[q + 2] + D0[q + 2] * c + S0[q + 2] * sn - P[q + 2]
-        base[i] = smooth01((x - a0) / rw) * smooth01((b0 - x) / rw) 
-      }
-      let cap = new Float32Array(N + 1).fill(1); for (let i = 0; i <= N; i++) cap[i] = Math.min(1, (0.6 * rho[i]) / (Rj + aj)); let ks = suave(cap); let k = base.map((v, i) => v * ks[i]); let ok = false; let red = false
-      for (let it = 0; it < 7 && !ok; it++) {
-        ok = true
-        for (let i = 0; i <= N; i += 2) {
-          if (k[i] < 0.02) continue
-          const q = i * 3; const near = Math.min(SIN_CLEAR, 0.9 * gap * br.env[i])
-          if (choca(P[q] + O[q] * k[i], P[q + 1] + O[q + 1] * k[i], P[q + 2] + O[q + 2] * k[i], sg, near)) { ok = false; red = true; cap[i] = it < 4 ? ks[i] * 0.5 : 0; if (i < N) cap[i + 1] = cap[i] }
+    // estaciones del tramo abierto (peso base > 0) y de los centros de las rampas de entrada y salida
+    const xA = a0 + rw / 2; const xB = b0 - rw / 2; const iA = clamp(Math.round(xA / step), 0, N); const iB = clamp(Math.round(xB / step), 0, N)
+    const i0 = Math.max(0, Math.ceil(a0 / step)); const i1 = Math.min(N, Math.floor(b0 / step))
+    const C2 = SIN_CLEAR * SIN_CLEAR; const ks2 = []
+    // Hermanos (caminos del mismo tramo ya colocados en este intento), en el MARCO COMÚN de la fila en la estación i: a
+    // menos de SIN_CLEAR los dos conservan la normal de la fila (el giro propio se anula ahí, ver `giro`), así que basta
+    // la cruz «caja lateral ∪ prisma de gálibo» medida por la lateral (RW) y la normal (U0) comunes.
+    const hermano = (i, x, y, z, hechos, ki) => {
+      const q = i * 3; const j0 = Math.max(i0, i - 5); const j1 = Math.min(i1, i + 5)
+      for (let b = 0; b < hechos.length; b++) {
+        const Q = hechos[b]; const kb = ks2[b]
+        for (let j = j0; j <= j1; j++) {
+          if (ki < 0.02 && kb[j] < 0.02) continue // los dos en su sitio de la fila: el reparto ya la dio por buena
+          const dx = Q[j * 3] - x; const dy = Q[j * 3 + 1] - y; const dz = Q[j * 3 + 2] - z
+          if (dx * dx + dy * dy + dz * dz >= C2) continue
+          if (Math.abs(dx * Tn[q] + dy * Tn[q + 1] + dz * Tn[q + 2]) > 0.8 * step + 1.5) continue // solo lo que va a la par (como el medidor)
+          const lat = Math.abs(dx * RW[q] + dy * RW[q + 1] + dz * RW[q + 2]); const alto = Math.abs(dx * U0[q] + dy * U0[q + 1] + dz * U0[q + 2])
+          if (lat < SIN_PRISMA && alto < SIN_GALIBO) return true
+          const gx = Math.max(0, lat - SIN_LAT); const gy = Math.max(0, alto - SIN_ALTO); if (gx * gx + gy * gy < SIN_AIRE * SIN_AIRE) return true // aire entre bordes (la fila con peralte queda escalonada: cuenta la diagonal)
         }
-        if (!ok) { ks = suave(cap); k = base.map((v, i) => v * ks[i]) }
       }
-      if (!ok) { k = new Float32Array(N + 1); st.nulos++ } else if (red) st.reducidos++; else st.completos++
-      // giro de la normal: la calzada mira al eje (dir = hacia fuera) y se mece con el tirabuzón; ritmo limitado
-      const roll = new Float32Array(N + 1); const tA = thj + om * (0 - a0) + AW[0]; const t0 = thj - (tA - TAU * Math.round(tA / TAU)) - 0 // la rama del ángulo más cercana a 0 en la punta
-      for (let i = 0; i <= N; i++) roll[i] = k[i] > 0 ? Math.min(1, k[i] / Math.max(0.05, base[i]) ) * smooth01(k[i] * 3) * (th[i] + AW[i] - TAU * Math.round(tA / TAU) + 0.45 * Math.sin(ph + nu * i * step)) : 0
-      const lim = SIN_ROLL * step
+      return false
+    }
+    // un intento con radio Rr: caminos colocados { id, Q (posiciones), k, base, th, ph, nu } o null si dos hermanos no caben
+    const intenta = (Rr) => {
+      // giro de la hélice entre los centros de las rampas: en los dos el reparto de ángulos conserva el ORDEN de la fila
+      // (zigzag: ángulos ±α_j con cos α_j creciente con j), así al pasar de la fila a la hélice ningún camino cruza a otro
+      const omMax = Math.min(SIN_SLOPE / (1.2 * Rr), TAU / 500); const dfi = FI[iB] - FI[iA]; const Dx = Math.max(1, xB - xA); let om = null
+      for (let m = -3; m <= 3; m++) { const o = (dfi + TAU * m) / Dx; if (Math.abs(o) <= omMax && (om == null || Math.abs(o) > Math.abs(om) + 1e-9 || (Math.abs(Math.abs(o) - Math.abs(om)) <= 1e-9 && o * pref > 0))) om = o }
+      if (om == null) { for (let m = -1; m <= 1; m++) { const o = (dfi + TAU * m) / Dx; if (om == null || Math.abs(o) < Math.abs(om)) om = o }; Rr = Math.max(0.55 * Rr, SIN_SLOPE / (1.2 * Math.abs(om))); om = clamp(om, -SIN_SLOPE / (1.2 * Rr), SIN_SLOPE / (1.2 * Rr)) }
+      const hechos = []; const res = []; ks2.length = 0
+      for (let j = 0; j < nl; j++) {
+        const id = s.lanes[j].id; const P = br.P[id]
+        const Rj = Rr * (0.8 + 0.45 * rng()); const aj = Math.min(SIN_WA * (0.8 + 0.4 * rng()), 0.3 * rw)
+        const nu = (rng() < 0.5 ? -1 : 1) * TAU / (SIN_WL * (0.8 + 0.5 * rng())); const ph = rng() * TAU
+        const thj = FI[iA] + mir * (j & 1 ? -1 : 1) * Math.PI * (1 - (j + 0.5) / nl)
+        // objetivo (posición sobre la hélice) y peso base (rampa de entrada/salida y tope por curvatura)
+        const O = new Float32Array((N + 1) * 3); const base = new Float32Array(N + 1); const th = new Float32Array(N + 1); const Q = new Float32Array(P)
+        for (let i = 0; i <= N; i++) {
+          const x = i * step; const t = thj + om * (x - xA); const ps = ph + nu * x; th[i] = t
+          const c = Rj * Math.cos(t) + aj * Math.cos(ps); const sn = Rj * Math.sin(t) + aj * Math.sin(ps); const q = i * 3
+          O[q] = C[q] + D0[q] * c + S0[q] * sn - P[q]; O[q + 1] = C[q + 1] + D0[q + 1] * c + S0[q + 1] * sn - P[q + 1]; O[q + 2] = C[q + 2] + D0[q + 2] * c + S0[q + 2] * sn - P[q + 2]
+          base[i] = smooth01((x - a0) / rw) * smooth01((b0 - x) / rw)
+        }
+        const cap = new Float32Array(N + 1); for (let i = 0; i <= N; i++) cap[i] = Math.min(1, (0.6 * rho[i]) / (Rj + aj))
+        const ks = suave(cap, new Float32Array(N + 1)); const k = new Float32Array(N + 1); for (let i = 0; i <= N; i++) k[i] = base[i] * ks[i]
+        let ok = false; let red = false
+        for (let it = 0; it < 7 && !ok; it++) {
+          ok = true
+          for (let i = i0; i <= i1; i++) {
+            const ki = k[i]; if (ki < 0.02 && !hechos.length) continue
+            const q = i * 3; const x = P[q] + O[q] * ki; const y = P[q + 1] + O[q + 1] * ki; const z = P[q + 2] + O[q + 2] * ki
+            if (hermano(i, x, y, z, hechos, ki) || (ki >= 0.02 && !(i & 1) && choca(x, y, z, sg))) {
+              if (ki < 0.02) return null // en su sitio de la fila y aun así pegado a un hermano ya desviado: el intento no vale
+              ok = false; red = true; cap[i] = it < 4 ? ks[i] * 0.5 : 0; if (i < N && cap[i + 1] > cap[i]) cap[i + 1] = cap[i]; if (i && cap[i - 1] > cap[i]) cap[i - 1] = cap[i]
+            }
+          }
+          if (!ok) { suave(cap, ks); for (let i = 0; i <= N; i++) k[i] = base[i] * ks[i] }
+        }
+        if (!ok) { // sin desvío: vuelve a la fila; vale solo si ningún hermano ya desviado pasa por ahí
+          k.fill(0)
+          for (let i = i0; i <= i1; i++) if (hermano(i, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], hechos, 0)) return null
+        }
+        for (let i = 0; i <= N; i++) { const q = i * 3; Q[q] += O[q] * k[i]; Q[q + 1] += O[q + 1] * k[i]; Q[q + 2] += O[q + 2] * k[i] }
+        hechos.push(Q); ks2.push(k); res.push({ id, Q, k, base, th, ph, nu, est: !ok ? 0 : red ? 1 : 2 })
+      }
+      return res
+    }
+    let res = null
+    for (const f of [1, 0.6, 0.35]) { res = intenta(R * f); if (res) break; st.reintentos++ }
+    if (!res) { st.caminos += nl; st.nulos += nl; st.revertidos++; return }
+    // giro de la normal: la calzada mira al eje (dir = hacia fuera) y se mece con el tirabuzón. Se anula donde un hermano
+    // queda a menos de SIN_CLEAR (ahí mandan la normal común y la cruz de `hermano`) y crece desde ahí a ritmo limitado.
+    const lim = SIN_ROLL * step; br.sroll = []
+    const giro = (L) => {
+      const M = new Float32Array(N + 1).fill(1e6); M[0] = 0; M[N] = 0
+      for (let i = i0; i <= i1; i++) {
+        const q = i * 3; const x = L.Q[q]; const y = L.Q[q + 1]; const z = L.Q[q + 2]; const j0 = Math.max(i0, i - 7); const j1 = Math.min(i1, i + 7)
+        cerca: for (const o of res) { if (o === L) continue; for (let j = j0; j <= j1; j++) if ((o.Q[j * 3] - x) ** 2 + (o.Q[j * 3 + 1] - y) ** 2 + (o.Q[j * 3 + 2] - z) ** 2 < SIN_ROLLD * SIN_ROLLD) { M[i] = 0; break cerca } }
+      }
+      for (let i = 0; i <= N; i++) if (i < i0 || i > i1) M[i] = 0
+      for (let i = 1; i <= N; i++) if (M[i] > M[i - 1] + lim) M[i] = M[i - 1] + lim
+      for (let i = N - 1; i >= 0; i--) if (M[i] > M[i + 1] + lim) M[i] = M[i + 1] + lim
+      const roll = new Float32Array(N + 1); const t0 = TAU * Math.round((L.th[iA] + AW[iA]) / TAU)
+      for (let i = 0; i <= N; i++) { const k = L.k[i]; roll[i] = k > 0 ? clamp(Math.min(1, k / Math.max(0.05, L.base[i])) * smooth01(k * 3) * (L.th[i] + AW[i] - t0 + 0.45 * Math.sin(L.ph + L.nu * i * step)), -M[i], M[i]) : 0 }
       for (let i = 1; i <= N; i++) roll[i] = clamp(roll[i], roll[i - 1] - lim, roll[i - 1] + lim)
-      roll[N] = 0; for (let i = N - 1; i >= 0; i--) roll[i] = clamp(roll[i], roll[i + 1] - lim, roll[i + 1] + lim)
-      roll[0] = 0; for (let i = 1; i <= N; i++) roll[i] = clamp(roll[i], roll[i - 1] - lim, roll[i - 1] + lim)
-      br.sroll[id] = roll
-      for (let i = 0; i <= N; i++) { const q = i * 3; P[q] += O[q] * k[i]; P[q + 1] += O[q + 1] * k[i]; P[q + 2] += O[q + 2] * k[i] }
-      movido.add(sg * 8 + id); hecho = true
-      for (let i = 0; i <= N; i += 2) add(P[i * 3], P[i * 3 + 1], P[i * 3 + 2], sg, id, i, 1)
+      for (let i = N - 1; i >= 0; i--) roll[i] = clamp(roll[i], roll[i + 1] - lim, roll[i + 1] + lim)
+      return roll
+    }
+    const rolls = res.map(giro)
+    res.forEach((L, j) => {
+      st.caminos++; if (L.est === 2) st.completos++; else if (L.est === 1) st.reducidos++; else st.nulos++
+      br.P[L.id].set(L.Q); br.sroll[L.id] = rolls[j]; movido.add(sg * 8 + L.id)
+      for (let i = 0; i <= N; i += 2) add(L.Q[i * 3], L.Q[i * 3 + 1], L.Q[i * 3 + 2], sg, L.id, i, 1)
     })
+    const hecho = true
     if (hecho) { br.len = []; br.curves = []; br.sin = true }
   })
   ajustarEventos(world, segs, wayOf)
