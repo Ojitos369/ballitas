@@ -31,25 +31,26 @@ Base: `dd36440` (main, producción). Rama `cambio/20261119-191536-rectas`. Sin p
 ## Métricas (10 semillas, 369-378)
 | Métrica | main (dd36440) | Rama | Meta | ¿Cumple? |
 |---|---|---|---|---|
-| Tramos con > 15 % en recta | 910/2 360 (38.6 %) | RECTAS_FINAL | ≤ 10 % | RECTAS_OK |
-| … salida / llegada / horquilla / rizo (rectos) | 34 de 39, 21 de 21, 15 de 17 (semilla 369) | **6/200, 9/200, 1/210, 0/170** | — | sí |
+| Tramos con > 15 % en recta | 910/2 360 (38.6 %) | **234/2 360 (9.9 %)** | ≤ 10 % | sí (justo) |
+| … salida / llegada / horquilla / rizo (rectos) | 34 de 39, 21 de 21, 15 de 17 (semilla 369) | **11/200, 26/200, 1/210, 0/170** | — | sí |
 | `ways:libre` + `rutas:libre` | 0 | **0 en 10/10** | 0 | sí |
 | `ruta:libre` gálibo / lateral | 0 / 0 | **0 / 0** | — | sí |
 | `tramo:libre` gálibo | 0 | **0** | 0 | sí |
-| `tramo:libre` lateral (10 semillas) | 907 (mín 5.9 u) | **3 362 (mín 2.7 u)** | (prueba: semilla 369 ≤ 150, ≥ 5) | 369: 132 / 5.9, pasa; **regresión en otras semillas** |
+| `tramo:libre` lateral (10 semillas) | 907 (mín 5.9 u) | **2 922 (mín 2.4 u)** | (prueba: semilla 369 ≤ 150, ≥ 5) | 369: 132 / 5.9, pasa; **regresión en otras semillas** |
 | Intentos de reparto (suma de 10 semillas) | 13 | **13** (mismos por semilla) | — | sí |
 | Quiebro máx. en tramo abierto sinuoso (369) | 17.6° | **19.0°** (0 ≥ 25°) | < 25° | sí |
 | Torsión en puntas (normal máx., `torsion.mjs`, 10 semillas) | 35.1° (horquilla) | **34.1°** (espiral; horquilla 33.6°, rizo 31.6°, salida 14.6°, llegada 4.2°) | < 45° | sí |
 | Cuñas (`cunas.mjs`, semillas 369-371) | 0 | **0** | 0 | sí |
-| Generación (misma tanda) | GEN_MAIN | GEN_RAMA | ≤ 1.15 × | GEN_OK |
+| Generación (misma tanda) | 10.92 s (`tiempos.mjs`, equipo libre) | **10.30 s (0.94 ×)** | ≤ 1.15 × | sí |
 | `pnpm test` | 82/82 | **79/82 en la última corrida completa** (ver abajo) | 82/82 | **no** |
 | FPS escritorio / móvil (`geo3.mjs`, 2 tandas) | 31.2 / 31.85 | **29.55 / 36.55** (−5.3 % / +14.8 %) | ≥ −5 % | escritorio **no** por 0.3 puntos (dentro del ruido); móvil sí |
 
-Lo que queda en recta tras el cambio (212): rampa 87/190, embudo 32/260, pantano 21/200, turbina 16/180, sacacorchos
-15/140, hielo 11/120, espiral 10/440 (tipos que esta pieza no ondula).
+Lo que queda en recta tras el cambio (234): rampa 86/190, embudo 32/260, llegada 26/200, pantano 22/200, turbina 16/180,
+sacacorchos 14/140, hielo 12/120, salida 11/200, espiral 10/440, cascada 4/50, horquilla 1/210, rizo 0/170. Con amplitud
+5.4 u también en puertos eran 212 (9.0 %), pero fallaba la envolvente visual de la semilla 2.
 
 ## Qué NO se cumplió
-- **`tramo:libre` lateral sube de 907 a 3 362 muestras en 10 semillas (mínimo 5.9 → 2.7 u).** Gálibo sigue en 0 y la
+- **`tramo:libre` lateral sube de 907 a 2 922 muestras en 10 semillas (mínimo 5.9 → 2.4 u, `salida @0.19` en la semilla 370).** Gálibo sigue en 0 y la
   prueba (semilla 369) pasa, pero en otras semillas hay más muestras de aire lateral corto entre hermanos. El peor caso
   está en la rampa de apertura de las llegadas (`llegada @0.89-0.90`, carriles 1 y 4): la fila se abre mientras el eje
   hace el tirabuzón. Siguiente paso: abrir la fila con el peralte ya estabilizado (limitar el giro del peralte dentro de
@@ -101,9 +102,13 @@ el A/B con el equipo libre antes de integrar. Resultados en `_capturas/rectas_fp
      la fila. No baja al reducir la amplitud en puertos (×2.4 → 161), así que viene de horquillas/rizos o de la rampa de
      apertura. Es la misma regresión de aire lateral descrita arriba.
   3. `elecciones precalculadas` (`sim.test.js:446`, tope 3 000 ms): 3 077 y 4 068 ms, las dos veces con el equipo cargado
-     (navegador y baterías a la vez). **No la pude repetir con el equipo libre**: pendiente de confirmar que no es del cambio.
-- **Generación ≤ 1.15 ×: sin medir en la misma tanda** (no hubo equipo libre). Indicio: con paso 160 u el reparto usa los
-  mismos intentos que main en las 10 semillas, y en una tanda con la misma carga dio 13.14 s frente a 12.26 s (1.07 ×).
+     (navegador y baterías a la vez). Repetida sola después: depende de la carga del equipo (hay otra pieza trabajando en
+     paralelo), no del cambio. En cuatro corridas seguidas: rama 2 272 ms (pasa), con los dos cambios apagados 2 139 ms,
+     solo `NO_ONDULA` 2 872 ms, solo `NO_ROW_BANK` 2 815 ms; main en su carpeta 2 550 ms; y la rama llegó a dar 3 038 y
+     3 119 ms en otro momento. `tools/perfil_sin.mjs`: reconstrucción 2 589-2 635 ms con el eje ondulado y 2 414-2 530 ms sin
+     él (+4 %): el margen sobre el tope de 3 000 ms se estrecha.
+- **Generación:** medida después con el equipo libre y en la misma tanda (`tools/tiempos.mjs`): main 10.92 s, rama 10.30 s
+  (0.94 ×), con los mismos intentos de reparto por semilla.
 - `git merge main`: main sigue en `dd36440`, la base de la rama (nada que mezclar).
 - `npx vite build`: correcto (en `960b8f8`). Navegador y `vite preview` cerrados, candado borrado, puerto 4301 libre.
 - **No integrable todavía.** Por orden: (1) bajar el aire lateral entre hermanos en las rampas de apertura sobre eje
