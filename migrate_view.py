@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import subprocess
 
 class Migrate:
     def replace_media(self, file):
@@ -71,6 +72,14 @@ class Migrate:
         for file_name in css_files:
             print(file_name)
             css = self.replace_media(f"{media_dir}/assets/{file_name}")
+
+        # --------------------------------   mundo compartido   -----------------
+        # El servidor de la sim (Node) va en un solo archivo, back/mundo/servidor.bundle.mjs, generado desde
+        # back/mundo/servidor.mjs + la sim del front. Se comitea junto con back/media/dist.
+        try:
+            subprocess.run(['node', os.path.join('back', 'mundo', 'empaquetar.mjs')], check=True)
+        except Exception as e:
+            print(f'AVISO: no se generó back/mundo/servidor.bundle.mjs ({e}); corre "cd front && pnpm build:mundo"')
 
         print('Done')
 

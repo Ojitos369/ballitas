@@ -40,7 +40,7 @@ class Cliente {
       if (m.espectadores != null) this.espectadores = m.espectadores
       for (const e of m.ev || []) this.ev.push(e)
     } else if (m.k === 'hola') { this.hola = m; this.yo = m.yo; this.fila = m.fila; this.stats = m.stats; this.espectadores = m.espectadores; this.b = new Map(m.b.map((l) => [l.id, l])) }
-    if (m.k === 'hola' || m.k === 'ok' || m.k === 'error' || m.k === 'pong') { const p = this.pend.get(m.q); if (p) { this.pend.delete(m.q); p(m) } else this.sueltos.push(m) }
+    if (m.k === 'hola' || m.k === 'ok' || m.k === 'error' || m.k === 'pong') { const q = m.q ?? (m.k === 'error' ? this.pend.keys().next().value : undefined); const p = this.pend.get(q); if (p) { m.q = q; this.pend.delete(q); p(m) } else this.sueltos.push(m) }
     this.avisar()
   }
   avisar() { for (const f of this.oyentes) f() }
@@ -161,34 +161,35 @@ async function pruebaCompleta() {
     let hecho = false
     for (let intento = 0; intento < 6 && !hecho; intento++) {
       await b.hasta(() => b.libre(), 20000, 'alguna libre'); const l = b.libre()
-      if ((await b.pide({ k: 'tomar', b: l.id })).k !== 'ok') continue
+      const rt = await b.pide({ k: 'tomar', b: l.id }); if (rt.k !== 'ok') { console.log(`  (tomar ${l.id}: ${rt.error}; reintento)`); await espera(500); continue }
       try {
         await b.hasta(() => !b.b.has(l.id) || b.b.get(l.id).auto, 5000, 'auto')
         const auto = b.b.get(l.id).auto; const dec = { ruta: { way: auto.way, r: (auto.r + 1) % 3 }, carril: 3 }
-        const r = await b.pide({ k: 'decidir', b: l.id, ...dec }); if (r.k !== 'ok') continue
+        const r = await b.pide({ k: 'decidir', b: l.id, ...dec }); if (r.k !== 'ok') { console.log(`  (decidir: ${r.error}, la previsión ya era vieja a 30x; reintento)`); await b.pide({ k: 'dejar', b: l.id }); await espera(500); continue }
         const destino = r.dec.destino
         await b.hasta(() => !b.b.has(l.id) || b.b.get(l.id).plan?.manual?.includes('ruta'), 60000, 'decisión consumida')
-        const o = b.b.get(l.id); if (!o) continue
+        const o = b.b.get(l.id); if (!o) { console.log('  (murió antes de salir; reintento)'); continue }
         ok(o.way === dec.ruta.way && o.plan.manual.includes('carril') && o.plan.razon === 'lo decidió quien me controla' && Object.keys(o.dec).length === 0, `la decisión se consume al salir: plan = ${o.plan.ruta}, manual = ${o.plan.manual}`)
         const rutas = new Set(); let carril0 = null
         const mira = () => { const t = b.rapidas?.find((x) => x[R.id] === l.id); if (!t) return; const rr = leerRapida(t); if (rr.phase === 'travel') { if (b.b.get(l.id)?.route != null) rutas.add(b.b.get(l.id).route); if (carril0 == null && !rr.enVuelo) carril0 = rr.carril } }
         b.oyentes.add(mira)
         await b.hasta(() => !b.b.has(l.id) || (b.b.get(l.id).node === destino && b.b.get(l.id).way === null), 90000, 'llegada')
         b.oyentes.delete(mira)
-        if (!b.b.has(l.id)) continue
+        if (!b.b.has(l.id)) { console.log('  (murió en el viaje; reintento)'); continue }
         ok(true, `llegó al planeta decidido (${destino})`)
         ok(carril0 === 3, `salió por el carril decidido (visto ${carril0})`)
         ok(rutas.size === 1, `recorrió una sola ruta (${[...rutas]})`)
         ok(b.b.get(l.id).ctrl === b.yo.corto && b.b.get(l.id).sinDecidir === 0, 'tras decidir, sinDecidir = 0 y conserva el control')
         await b.pide({ k: 'dejar', b: l.id }); hecho = true
-      } catch (e) { console.log(`  (reintento: ${e.message})`) }
+      } catch (e) { console.log(`  (reintento: ${e.message})`); await b.pide({ k: 'dejar', b: l.id }).catch(() => {}) }
     }
     ok(hecho, 'viaje con decisiones comprobado')
     // 2) tres rutas sin decidir: C toma y no decide nunca
     hecho = false
     for (let intento = 0; intento < 8 && !hecho; intento++) {
       await c.hasta(() => c.libre(), 20000, 'alguna libre'); const l = c.libre()
-      if ((await c.pide({ k: 'tomar', b: l.id })).k !== 'ok') continue
+      const rt = await c.pide({ k: 'tomar', b: l.id }); if (rt.k !== 'ok') { console.log(`  (tomar ${l.id}: ${rt.error}; reintento)`); await espera(500); continue }
+      await c.hasta(() => !c.b.has(l.id) || c.b.get(l.id).ctrl === c.yo.corto, 5000, 'control visible')
       const vistos = new Set(); const mira = () => { const o = c.b.get(l.id); if (o) vistos.add(o.sinDecidir) }
       c.oyentes.add(mira); const t0 = c.t
       try { await c.hasta(() => !c.b.has(l.id) || c.b.get(l.id).ctrl === null, 120000, 'pierde el control') } finally { c.oyentes.delete(mira) }
