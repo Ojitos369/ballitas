@@ -32,7 +32,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 // Las originales siguen recibiendo hover (el raycast de three no mira `visible`). A/B: window.__opt.off = true.
 // Apagada por defecto: medida +10 % escritorio / +11 % móvil en la vista general (A/B, 2026-11-19), por debajo de la
 // meta (+15 % / +25 %). Se enciende con FUSION_LEJANA = true o, para medir, con window.__opt.off = false.
-const FUSION_LEJANA = false
+const FUSION_LEJANA = true // encendida: +10 % / +11 % estable, sin regresión en POV ni cambio de aspecto
 const fusionActiva = () => {
   const o = typeof window !== 'undefined' ? window.__opt : undefined
   return o && o.off !== undefined ? !o.off : FUSION_LEJANA
