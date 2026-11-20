@@ -357,7 +357,8 @@ function sampleChain(segs, pinEnd) {
     const Ts = new Float32Array((n + 1) * 3); const Ds = new Float32Array((n + 1) * 3)
     for (let i = 0; i <= n; i++) {
       const t = s.curve.getUtoTmapping(i / n)
-      s.curve.getTangent(t, T)
+      // = s.curve.getTangent(t, T) de three (diferencia central de ±1e-4, mismos números) sin crear dos vectores por muestra
+      s.curve.getPoint(Math.max(0, t - 1e-4), FRAME_TMP); s.curve.getPoint(Math.min(1, t + 1e-4), T); T.sub(FRAME_TMP).normalize()
       if (!hasPrev) { canonDown(T, D); hasPrev = true }
       else { q.setFromUnitVectors(Tprev, T); D.applyQuaternion(q) }
       D.addScaledVector(T, -D.dot(T))
@@ -418,6 +419,7 @@ export function wallFrame(seg, angle, u, rho = seg.air ? 0 : seg.radius - BALL_R
   w.addScaledVector(T, -w.dot(T))
   if (w.lengthSq() < 1e-8) canonDown(T, w)
   w.normalize().applyAxisAngle(T, angle)
+  if (out.soloDir) return out // solo `dir` y `tangent` (surfAt, buildBraid): se ahorra el punto del eje (getPoint del spline, lo más caro)
   const axis = out.axis || (out.axis = new THREE.Vector3())
   const curveU = arcParamAt(fr, u)
   seg.curve.getPoint(curveU, axis)
@@ -583,10 +585,10 @@ function roadAt(seg, laneId, u, out) {
   const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * br.N; const i = Math.min(br.N - 1, Math.floor(f)); const k = f - i; const j = i * 3
   return out.set(P[j] + (P[j + 3] - P[j]) * k, P[j + 1] + (P[j + 4] - P[j + 1]) * k, P[j + 2] + (P[j + 5] - P[j + 2]) * k)
 }
-const LF_W = {}; const LF_P0 = new THREE.Vector3(); const LF_P1 = new THREE.Vector3()
+const LF_W = {}; const LF_D = { soloDir: true }; const LF_P0 = new THREE.Vector3(); const LF_P1 = new THREE.Vector3()
 // Punto de la superficie (relieve incluido) y normal cruda (`up`, sin ortogonalizar) del camino en `u`.
 function surfAt(seg, laneId, u, out, up) {
-  const d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_W).dir
+  const d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_D).dir
   if (up) up.copy(d).negate()
   roadAt(seg, laneId, u, out)
   return seg.air ? out : out.addScaledVector(d, -laneRelief(seg, laneId, u))
@@ -739,9 +741,11 @@ const RELIEF = {
 const RELIEF_BASE = 0.15 * TK // altura base del firme (así caben los badenes sin atravesar el cristal)
 const KICK_DROP = 0.9 * TK // largo (u) de la caída tras la cresta de una rampa: ahí la ballita despega
 
-// Curvatura suavizada, peralte y relieve de un tramo de tubo. Usa los marcos ya cacheados.
-function buildSurface(s, rng) {
-  s._curv = s._bank = s._relief = null
+// Curvatura suavizada y peralte del eje. Solo depende de los marcos del eje (sin azar): buildLanes lo llama ANTES de
+// buildBraid para que la fila paralela se tienda por la lateral ya peraltada (si se calcula después, la fila queda
+// fuera del plano de la calzada: escalón de ~4 u entre hermanos al final de la rampa de apertura sobre eje ondulado).
+function buildBank(s) {
+  s._curv = s._bank = null
   if (s.air) return
   ensureFrames(s)
   const { n, T, D } = s._fr; const ds = s.length / n
@@ -782,6 +786,13 @@ function buildSurface(s, rng) {
   }
   pinMag()
   s._bank = { x: bx, y: by }
+}
+// Relieve de un tramo (y, si falta, su curvatura y peralte).
+function buildSurface(s, rng) {
+  s._relief = null
+  if (s.air) { s._curv = s._bank = null; return }
+  if (!s._bank) buildBank(s) // buildLanes ya lo calcula antes de buildBraid
+  const role = s.route >= 0 ? ROLES[s.route] : 'shared'
   // relieve por carril: lomas, badenes, rampa antes de cada mecanismo y saltos en la ruta espectacular
   const R = RELIEF[role]; const L = s.length; const hMax = 0.45 * (s.radius - BALL_R)
   const nr = clamp(Math.ceil(L / (0.5 * TK)), 32, 8000) // tramos largos (mapa grande) siguen muestreados a ~0.5 u (× TK)
@@ -860,6 +871,7 @@ function braidCap(C, N, step) {
 }
 
 // Carriles y mecanismos de un way (rng propio: no altera la generación de las rutas).
+const NO_ROW_BANK = !!globalThis.process?.env?.NO_ROW_BANK // diagnóstico (Node): fila paralela sin el peralte
 function buildBraid(s) {
   const N = clamp(Math.ceil(s.length / (1.5 * TK)), 48, 1200)
   const lanes = s.lanes; const P = lanes.map(() => new Float32Array((N + 1) * 3)); const env = new Float32Array(N + 1)
@@ -947,7 +959,7 @@ function buildBraid(s) {
     }
     if (vote < 0) for (const b of B) b.negate() // la normal de la fila mira al centro de la curva en la mayor parte del tramo
     // ángulo (convención de wallFrame) cuya normal es B × T; desenrollado para que sea continuo
-    ang = new Float32Array(N + 1); const WF = {}; const up = new THREE.Vector3(); const cr = new THREE.Vector3(); const row = new THREE.Vector3()
+    ang = new Float32Array(N + 1); const WF = { soloDir: true }; const up = new THREE.Vector3(); const cr = new THREE.Vector3(); const row = new THREE.Vector3()
     for (let i = 0; i <= N; i++) {
       const T = V(Tn, i); const d0 = wallFrame(s, 0, i / N, 0, WF).dir
       up.crossVectors(B[i], T).normalize().negate() // -up: la dirección eje -> firme que debe dar wallFrame
@@ -979,10 +991,10 @@ function buildBraid(s) {
   } else {
     // fila paralela: carriles lado a lado a lo largo de la lateral de la calzada (T × up del suelo, ángulo 0), todos con
     // la misma normal; la apertura (env) escala el hueco de 0 (una sola calzada en las puntas) a ROW_GAP.
-    const gap = rowGap(nl); const half = ((nl - 1) / 2) * gap; const WF = {}; const row = new THREE.Vector3(); const T = new THREE.Vector3()
+    const gap = rowGap(nl); const half = ((nl - 1) / 2) * gap; const WF = { soloDir: true }; const row = new THREE.Vector3(); const T = new THREE.Vector3()
     for (let i = 0; i <= N; i++) {
       rad[i] = half * env[i]
-      T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]); row.crossVectors(wallFrame(s, 0, i / N, 0, WF).dir, T).normalize()
+      T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]); row.crossVectors(wallFrame(s, NO_ROW_BANK ? 0 : laneAngle(s, lanes[0].id, i / N), i / N, 0, WF).dir, T).normalize() // lateral CON el peralte común: los carriles quedan coplanares también donde el eje gira (eje ondulado); sin él se escalonaban (tramo:libre lateral)
       for (let j = 0; j < nl; j++) {
         const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * gap * env[i]
         dst[i * 3] = C[i * 3] + row.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + row.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + row.z * off
@@ -1026,6 +1038,7 @@ function buildLanes(way) {
   way.segments.forEach((s) => {
     const ids = Array.from({ length: laneCount }, (_, id) => id)
     s.lanes = ids.map((id) => ({ id, roll: id === 0 ? 'plano' : ROLL_KINDS[1 + ((id - 1 + way.idx) % (ROLL_KINDS.length - 1))], angle: 0, offset: 0, width, name: LANE_NAMES[id] || `camino ${id + 1}` }))
+    s._braid = null; buildBank(s) // peralte ANTES de la trenza (y sin trenza vieja: laneAngle da solo el peralte del eje)
     buildBraid(s)
     s.switches = []
     // tramo abierto de la trenza (los caminos separados): ahí van los eventos, uno por carril de cada camino
@@ -1637,20 +1650,66 @@ export const GRID_LEN = 14 * TK // recta de parrilla de la salida, en unidades d
 export const PORT_ZONE = NODE_R + GRID_LEN + BRAID_OPEN + BRAID_PAD
 export const FINISH_LEN = 10 * TK // recta final de meta de la llegada
 
+// ───────────────────────── eje ondulado (ningún camino directo) ─────────────────────────
+// Los trozos rectos del EJE de salidas, llegadas, horquillas y rizos se convierten en un tirabuzón suave (desvío lateral
+// y en altura a la vez: curvatura casi constante 1 / OND_RC, sin puntos de inflexión rectos). Se hace sobre el eje, ANTES
+// del reparto y de buildBraid: la búsqueda de huecos valida ya la curva ondulada y la fila/calzada fundida se construye
+// sobre ella (ondular la calzada ya abierta escalonaba los carriles, ver REPORTE_SINUOSO). El peso es 0 en las puntas de
+// unión (posición y rumbo intactos), en la parrilla/meta, donde el eje ya gira (radio < ~150 u: no se pliega) y, en
+// salidas/llegadas, donde empieza la hélice ancha de sinuarCaminos (que limita su desvío por el radio del eje).
+export const ONDULA = { off: !!globalThis.process?.env?.NO_ONDULA }
+const OND_L = +(globalThis.process?.env?.OND_L ?? 160) // (u) paso del tirabuzón del eje
+const OND_RC = +(globalThis.process?.env?.OND_RC ?? 120) // (u) radio de curvatura que aporta (amplitud = paso² / (4π²·radio) = 5.4 u; con paso 220 (10.2 u) el reparto necesitaba 18 intentos en 10 semillas en vez de 13)
+const OND_PUERTO = +(globalThis.process?.env?.OND_PUERTO ?? 1.6) // factor del radio en salidas/llegadas (con 1: semilla 2 a 0.30 u de las dos calzadas entre llegadas vecinas y tramo:libre lateral 204 en la semilla 1)
+const OND_KINDS = new Set(['horquilla', 'rizo', 'salida', 'llegada'])
+const OND_STEP = 12 // (u) paso del remuestreo del eje
+function ondula(curve, kind) {
+  if (ONDULA.off || !OND_KINDS.has(kind)) return curve
+  const src = curve.points; let Lc = 0; for (let i = 1; i < src.length; i++) Lc += src[i].distanceTo(src[i - 1])
+  const M = Math.max(src.length - 1, Math.ceil(Lc / OND_STEP)); const pts = new Array(M + 1); const s = new Float32Array(M + 1)
+  for (let i = 0; i <= M; i++) { pts[i] = curve.getPoint(i / M); if (i) s[i] = s[i - 1] + pts[i].distanceTo(pts[i - 1]) }
+  const L = s[M]
+  // zona ondulada [z0, z1] con rampas r0 y r1
+  let z0 = 0; let z1 = L; let r0 = 40; let r1 = 40; let rc = OND_RC
+  if (kind === 'salida' || kind === 'llegada') {
+    const a0 = NODE_OPEN + Math.max(4 * TK, Math.min(BRAID_RAMP, (L - GRID_LEN - 2 * TK - BRAID_OPEN) * 0.3)); const Lu = L - a0 - HUB_OPEN - OPEN_RAMP
+    z0 = (kind === 'salida' ? GRID_LEN : FINISH_LEN) + 2 * TK
+    rc = OND_RC * OND_PUERTO // junto al nodo las salidas y llegadas vecinas van muy juntas: menos amplitud (3.4 u)
+    if (Lu >= SIN_MIN) { z1 = a0 + 0.35 * clamp(Lu * 0.3, 110, 540); r1 = 120 }
+  }
+  const Z = z1 - z0; if (Z < 150) return curve
+  const lam = clamp(Z / 1.5, 110, OND_L); const k = TAU / lam; const amp = 1 / (k * k * rc)
+  const rev = kind === 'llegada'; const x = (i) => (rev ? L - s[i] : s[i])
+  // rumbo por diferencias centradas, curvatura local (±2 muestras) y peso
+  const T = new Array(M + 1); for (let i = 0; i <= M; i++) T[i] = pts[Math.min(M, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize()
+  const w0 = new Float32Array(M + 1); const w = new Float32Array(M + 1)
+  for (let i = 0; i <= M; i++) { const p = Math.max(0, i - 2); const q = Math.min(M, i + 2); const kap = T[p].angleTo(T[q]) / Math.max(1e-3, s[q] - s[p]); w0[i] = clamp(1.3 - kap * 200, 0, 1) }
+  let any = false
+  for (let i = 0; i <= M; i++) { let m = 0; let n = 0; for (let j = Math.max(0, i - 3); j <= Math.min(M, i + 3); j++) { m += w0[j]; n++ } const xi = x(i); w[i] = (m / n) * smooth01((xi - z0) / r0) * smooth01((z1 - xi) / r1); if (w[i] > 0.05) any = true }
+  if (!any) return curve
+  const h = Math.abs(Math.round(src[0].x * 7.3 + src[0].y * 3.1 + src[0].z * 5.7 + src[src.length - 1].x * 1.9)); const ph = (h % 628) / 100; const sg = h & 1 ? 1 : -1
+  const n1 = new THREE.Vector3().crossVectors(T[0], Math.abs(T[0].y) < 0.9 ? Y : X).normalize(); const n2 = new THREE.Vector3()
+  for (let i = 0; i <= M; i++) {
+    n1.addScaledVector(T[i], -n1.dot(T[i])).normalize(); n2.crossVectors(T[i], n1)
+    const a = ph + sg * k * s[i]; const g = w[i] * amp
+    if (g > 0) pts[i].addScaledVector(n1, g * Math.cos(a)).addScaledVector(n2, g * Math.sin(a))
+  }
+  return new THREE.CatmullRomCurve3(pts, false, 'centripetal')
+}
 const LINK_K = 1 / (9 * TK) // (rad/u) curvatura admisible del enlace: 6.4° por muestra del medidor (4.7 u)
 const LINK_KS = [0.42, 0.62] // manija de la Bézier, fracción de la cuerda
 export const EMPALME = { off: !!globalThis.process?.env?.NO_LINK_FIX } // interruptor de diagnóstico y de la prueba negativa (layout.test.js)
 function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
   const lead = Math.min(2.5 * WS, A.distanceTo(B) * 0.15); const air = KINDS[kind].air
   const cr = (pts) => new THREE.CatmullRomCurve3(pts, false, 'centripetal')
-  if (PLANS[kind]) return cr([A, ...trackPts(kind, A, B, Ta, Tb, opt), B])
+  if (PLANS[kind]) return ondula(cr([A, ...trackPts(kind, A, B, Ta, Tb, opt), B]), kind)
   if (kind === 'rizo') {
     // curva de entrada, círculo vertical (desplazado de lado lo justo para no cortarse) y curva de salida
     const { C, L, c, u, v } = basis(A, B); const r = Math.min(Math.max(3.4 * WS * AK * P.coil, 13 * TK * AK), L * 0.3); const sh = Math.max(P.radius * 2.4, PITCH) // el paso del rizo deja pasar los carriles de la trenza
     const loop = []
     for (let k = 0; k <= 24; k++) { const a = (k / 24) * TAU; loop.push(at(A, C, 0.5, c, r * Math.sin(a), v, r * (1 - Math.cos(a)), u, sh * (k / 24 - 0.5))) }
     const tIn = c.clone().addScaledVector(u, sh / (TAU * r)).normalize()
-    return cr([A, ...bezierPts(A, Ta || c, loop[0], tIn), ...loop, ...bezierPts(loop[24], tIn, B, Tb || c), B])
+    return ondula(cr([A, ...bezierPts(A, Ta || c, loop[0], tIn), ...loop, ...bezierPts(loop[24], tIn, B, Tb || c), B]), kind)
   }
   if (kind === 'salida' || kind === 'llegada') {
     // salida: recta de parrilla que sale del planeta y una sola curva amplia hasta la unión;
@@ -1665,7 +1724,7 @@ function shape(kind, A, B, P, Ta, Tb, midPt = null, opt = {}) {
       pts.push(...bezierPts(P0, D0, W, D1)); pts.push(W.clone()); P0 = W; D0 = D1
     }
     if (!out) pts.push(at(B, Tb, -FINISH_LEN * 0.5), B)
-    return cr(pts)
+    return ondula(cr(pts), kind)
   }
   const leadA = Ta && !ownsStart(kind); const leadB = Tb && !air
   // la forma sin sus puntas (dentro del enlace); se une a A y B con una curva Bézier que respeta Ta/Tb
