@@ -11,7 +11,7 @@ import path from 'node:path'
 const [rama, dir, pw, lock, puerto = '4301'] = process.argv.slice(2)
 const { chromium } = await import(pathToFileURL(pw).href)
 mkdirSync(dir, { recursive: true })
-const ZONAS = ['puerto', 'horquilla', 'rizo']
+const ZONAS = ['rizo', 'puerto', 'horquilla'] // la primera toma entra en POV (tecla 3) con calma; el puerto dura ~2 s
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const VPS = { desk: { viewport: { width: 1400, height: 900 } }, movil: { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } }
 async function servidor(front) {
@@ -28,7 +28,7 @@ const enganchar = (p) => p.evaluate(() => {
   let root = div[k]; while (root.return) root = root.return
   const seg = (b) => (b.seg && typeof b.seg === 'object' ? b.seg : null)
   // en tramo sinuoso, en la parte media, y con el camino girado (giro propio distinto de 0)
-  const zona = (b, q) => { const s = seg(b); if (!s || b.flight) return false; const x = b.segT * s.length; if (q === 'puerto') return (s.kind === 'salida' && x > 90 && x < 420) || (s.kind === 'llegada' && s.length - x > 110 && s.length - x < 450); if (q === 'horquilla') return s.kind === 'horquilla' && b.segT > 0.12 && b.segT < 0.8; return s.kind === 'rizo' && ((b.segT > 0.06 && b.segT < 0.24) || (b.segT > 0.72 && b.segT < 0.9)) }
+  const zona = (b, q) => { const s = seg(b); if (!s || b.flight) return false; const x = b.segT * s.length; if (q === 'puerto') return (s.kind === 'salida' && x > 20 && x < 260) || (s.kind === 'llegada' && s.length - x > 260 && s.length - x < 560); if (q === 'horquilla') return s.kind === 'horquilla' && b.segT > 0.12 && b.segT < 0.8; return s.kind === 'rizo' && ((b.segT > 0.06 && b.segT < 0.24) || (b.segT > 0.72 && b.segT < 0.9)) }
   const sinuoso = (b) => { const s = seg(b); const r = s?._braid?.sroll?.[b.lane]; if (!s?._braid?.sin || !r || b.flight) return null; const g = r[Math.round(b.segT * (r.length - 1))]; return b.segT > 0.25 && b.segT < 0.7 && Math.abs(g) > 0.5 ? g : null }
   window.__sn = { sim, follow: find(root), sinuoso, zona, info: (b) => b && ({ id: b.id, phase: b.phase, kind: seg(b)?.kind, way: b.way?.idx, lane: b.lane, t: +(b.segT ?? 0).toFixed(2), giro: sinuoso(b) }) }
   const w = sim.world; return { n: sim.ballitas.length, sinuoso: w?.sinuoso ?? null, tramosSin: w?.ways?.reduce((a, x) => a + x.segments.filter((s) => s._braid?.sin).length, 0) }
@@ -52,10 +52,10 @@ async function corrida(vp, tomas) {
       }
       if (!h) { r.tomas.push({ falta: true }); continue }
       usados.push(h.way)
-      if (k === 0) { await sleep(300); await p.keyboard.press('3'); await sleep(900) } else await sleep(900)
+      if (k === 0) { await sleep(800); await p.keyboard.press('3'); await sleep(2500) } else await sleep(ZONAS[k] === 'puerto' ? 600 : 1200)
       const base = `${vp}_${ZONAS[k]}_w${h.way}_${h.kind}`
       const q1 = await p.evaluate(() => window.__sn.info(window.__sn.b)); writeFileSync(`${dir}/${base}_a.jpg`, await p.screenshot({ type: 'jpeg', quality: 82 }))
-      await sleep(1100); const q2 = await p.evaluate(() => window.__sn.info(window.__sn.b)); writeFileSync(`${dir}/${base}_b.jpg`, await p.screenshot({ type: 'jpeg', quality: 82 }))
+      await sleep(ZONAS[k] === 'puerto' ? 700 : 1300); const q2 = await p.evaluate(() => window.__sn.info(window.__sn.b)); writeFileSync(`${dir}/${base}_b.jpg`, await p.screenshot({ type: 'jpeg', quality: 82 }))
       r.tomas.push({ img: base, a: q1, b: q2, tris: await p.evaluate(() => window.__ballitasDebug.gl.info.render.triangles) })
     }
     console.log(JSON.stringify(r)); return r

@@ -860,6 +860,7 @@ function braidCap(C, N, step) {
 }
 
 // Carriles y mecanismos de un way (rng propio: no altera la generación de las rutas).
+const NO_ROW_BANK = !!globalThis.process?.env?.NO_ROW_BANK // diagnóstico (Node): fila paralela sin el peralte
 function buildBraid(s) {
   const N = clamp(Math.ceil(s.length / (1.5 * TK)), 48, 1200)
   const lanes = s.lanes; const P = lanes.map(() => new Float32Array((N + 1) * 3)); const env = new Float32Array(N + 1)
@@ -982,7 +983,7 @@ function buildBraid(s) {
     const gap = rowGap(nl); const half = ((nl - 1) / 2) * gap; const WF = {}; const row = new THREE.Vector3(); const T = new THREE.Vector3()
     for (let i = 0; i <= N; i++) {
       rad[i] = half * env[i]
-      T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]); row.crossVectors(wallFrame(s, 0, i / N, 0, WF).dir, T).normalize()
+      T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]); row.crossVectors(wallFrame(s, NO_ROW_BANK ? 0 : laneAngle(s, lanes[0].id, i / N), i / N, 0, WF).dir, T).normalize() // lateral CON el peralte común: los carriles quedan coplanares también donde el eje gira (eje ondulado); sin él se escalonaban (tramo:libre lateral)
       for (let j = 0; j < nl; j++) {
         const id = lanes[j].id; const dst = P[id] || (P[id] = new Float32Array((N + 1) * 3)); const off = (j - (nl - 1) / 2) * gap * env[i]
         dst[i * 3] = C[i * 3] + row.x * off; dst[i * 3 + 1] = C[i * 3 + 1] + row.y * off; dst[i * 3 + 2] = C[i * 3 + 2] + row.z * off
@@ -1645,8 +1646,8 @@ export const FINISH_LEN = 10 * TK // recta final de meta de la llegada
 // unión (posición y rumbo intactos), en la parrilla/meta, donde el eje ya gira (radio < ~150 u: no se pliega) y, en
 // salidas/llegadas, donde empieza la hélice ancha de sinuarCaminos (que limita su desvío por el radio del eje).
 export const ONDULA = { off: !!globalThis.process?.env?.NO_ONDULA }
-const OND_L = +(globalThis.process?.env?.OND_L ?? 220) // (u) paso del tirabuzón del eje
-const OND_RC = +(globalThis.process?.env?.OND_RC ?? 120) // (u) radio de curvatura que aporta (amplitud = paso² / (4π²·radio) = 10.2 u)
+const OND_L = +(globalThis.process?.env?.OND_L ?? 160) // (u) paso del tirabuzón del eje
+const OND_RC = +(globalThis.process?.env?.OND_RC ?? 120) // (u) radio de curvatura que aporta (amplitud = paso² / (4π²·radio) = 5.4 u; con paso 220 (10.2 u) el reparto necesitaba 18 intentos en 10 semillas en vez de 13)
 const OND_KINDS = new Set(['horquilla', 'rizo', 'salida', 'llegada'])
 const OND_STEP = 12 // (u) paso del remuestreo del eje
 function ondula(curve, kind) {
