@@ -1,4 +1,4 @@
-﻿import { resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { createServer } from 'vite'
@@ -24,6 +24,10 @@ try {
     const coverage = decor.datosDecoracionMedidos(way)
     const decorAll = coverage.flatMap(seg => seg.decor.map(x => ({ ...x, si: seg.si })))
     const floraAll = coverage.flatMap(seg => seg.flora.map(x => ({ ...x, si: seg.si })))
+    // DET s2: subconjunto que dibuja el LOD lejano (InstanceCuller cullStride): 1/2 por kit de berma, 1/4 de flora
+    const porKit = {}; const lodSet = new Set()
+    decorAll.forEach((x) => { if (x.kind === 'rebote') { lodSet.add(x); return } const k = (porKit[x.kind] = (porKit[x.kind] ?? 0) + 1) - 1; if (k % 2 === 0) lodSet.add(x) })
+    floraAll.forEach((x, i) => { if (i % 4 === 0) lodSet.add(x) })
     const baseDecor = stride(decorAll, 150)
     const baseFlora = stride(floraAll, 200)
     const segments = coverage.map(seg => ({
@@ -33,7 +37,8 @@ try {
         const f = seg.flora.filter(x => x.lane === l.lane).map(x => x.s)
         const bd = baseDecor.filter(x => x.si === seg.si && x.lane === l.lane).map(x => x.s)
         const bf = baseFlora.filter(x => x.si === seg.si && x.lane === l.lane).map(x => x.s)
-        return { lane: l.lane, decor: d.length, flora: f.length, baseDecor: bd.length, baseFlora: bf.length,
+        const lodPts = [...lodSet].filter(x => x.si === seg.si && x.lane === l.lane).map(x => x.s)
+        return { lane: l.lane, lodDrawn: lodPts.length, lodGaps150: gaps(lodPts, seg.length), decor: d.length, flora: f.length, baseDecor: bd.length, baseFlora: bf.length,
           decorGaps150: gaps(d, seg.length), floraGaps150: gaps(f, seg.length), baseDecorGaps150: gaps(bd, seg.length), baseFloraGaps150: gaps(bf, seg.length) }
       }),
     }))
@@ -53,6 +58,8 @@ try {
   writeFileSync(output, JSON.stringify(result, null, 1))
   const summary = ways.map(w => ({ way:w.way, theme:w.theme, length:w.length, decor:w.candidatesDecor, flora:w.candidatesFlora,
     baseGaps:w.segments.reduce((n,s)=>n+s.lanes.filter(l=>l.baseDecorGaps150.length||l.baseFloraGaps150.length).length,0),
+    lodGaps:w.segments.reduce((n,s)=>n+s.lanes.filter(l=>l.lodGaps150.length).length,0),
+    lodMaxGap:Math.max(0,...w.segments.flatMap(s=>s.lanes.flatMap(l=>l.lodGaps150.map(g=>g[2])))),
     afterGaps:w.segments.reduce((n,s)=>n+s.lanes.filter(l=>l.decorGaps150.length||l.floraGaps150.length).length,0),
     particles:w.particles.reduce((n,p)=>n+p.count,0), particleGaps:w.particles.reduce((n,p)=>n+p.lanes.filter(l=>l.gaps150.length).length,0) }))
   console.log(JSON.stringify({ output, seed:result.seed, routes:summary, structuralVolumes:result.structuralVolumes, placementStats:result.placementStats }))
