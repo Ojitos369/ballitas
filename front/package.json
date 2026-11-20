@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test src/Core/sim.test.js src/Core/nombres.test.js src/Core/layout.test.js src/Components/World3D/povLook.test.js src/Components/World3D/camColision.test.js src/Components/World3D/ecosistema.test.js src/Components/World3D/colisionObjetos.test.js src/Components/World3D/mundos/superficieGen.test.js"
+    "build:mundo": "node ../back/mundo/empaquetar.mjs",
+    "mundo": "node ../back/mundo/servidor.mjs",
+    "test": "node --test src/Core/sim.test.js src/Core/protocolo.test.js src/Core/nombres.test.js src/Core/layout.test.js src/Components/World3D/povLook.test.js src/Components/World3D/camColision.test.js src/Components/World3D/ecosistema.test.js src/Components/World3D/colisionObjetos.test.js src/Components/World3D/mundos/superficieGen.test.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",
@@ -14,7 +16,8 @@
     "@react-three/postprocessing": "^3.2.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",

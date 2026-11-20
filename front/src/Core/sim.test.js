@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Sim, POP, TIME_SCALE, TRAVEL_SLOW } from './sim.js'
+import { Sim, POP, TIME_SCALE, TRAVEL_SLOW, MAX_SIN_DECIDIR, MAX_FILA, MAX_NOMBRE } from './sim.js'
 import { voice } from './personality.js'
 import { actualizarDialogoVivo, elegirDialogo, obtenerGlobo } from './dialogos.js'
 import {
@@ -559,4 +559,125 @@ test('probWays: ordena los caminos del nodo sin consumir la RNG ni cambiar la el
     }
   }
   assert.deepEqual(a.ballitas.map((x) => [x.id, x.phase, x.way?.idx ?? null, +x.e.toFixed(6)]), b.ballitas.map((x) => [x.id, x.phase, x.way?.idx ?? null, +x.e.toFixed(6)]))
+})
+// ───────────── mundo compartido: fila, control y decisiones (docs/mundo_compartido.md, secciones 3 y 4) ─────────────
+const contada = (semilla) => { const r = mulberry32(semilla); const o = { n: 0 }; o.rng = () => { o.n++; return r() }; return o }
+const mantener = (sim) => { for (const x of sim.ballitas) if (x.phase !== 'dying') { x.e = Math.max(x.e, 50); x.p = Math.max(x.p, 50) } }
+
+test('mundo compartido: formar valida, la fila es FIFO y la primera entra al morir otra', () => {
+  const sim = new Sim({ rng: mulberry32(11) })
+  const ev = []
+  sim.hooks.entra = (b, e) => ev.push(['entra', b.id, e, b.name]); sim.hooks.libre = (b, m) => ev.push(['libre', b.id, m])
+  for (const b of sim.ballitas) assert.deepEqual([b.ctrl, b.formadaPor, b.dec, b.sinDecidir], [null, null, {}, 0])
+  assert.deepEqual(sim.formar('ana', '  Mi <b>Bola</b>!!  '), { ok: true, puesto: 1 })
+  assert.equal(sim.fila[0].nombre, 'Mi bBolab')
+  assert.equal(sim.formar('ana', 'Otra').error, 'ya_en_fila')
+  assert.equal(sim.formar('beto', '¡¡!!').error, 'nombre')
+  assert.equal(sim.formar('beto', '').error, 'nombre')
+  assert.equal(sim.formar('beto', 'x'.repeat(40)).ok, true)
+  assert.equal(sim.fila[1].nombre.length, MAX_NOMBRE)
+  assert.deepEqual(sim.formar('caro', sim.ballitas[0].name), { ok: true, puesto: 3 }) // nombre ya vivo: recibirá sufijo
+  const repetido = sim.ballitas[0].name
+  assert.equal(sim.salirFila('beto').ok, true)
+  assert.deepEqual(sim.fila.map((f) => f.espectador), ['ana', 'caro'])
+  for (let i = 0; i < 40; i++) sim.formar(`e${i}`, `N${i}`)
+  assert.equal(sim.fila.length, MAX_FILA)
+  assert.equal(sim.formar('zeta', 'Zeta').error, 'fila_llena')
+  // sin muertes no entra nadie
+  for (let i = 0; i < 90; i++) { mantener(sim); sim.tick(1 / 30) }
+  assert.equal(sim.fila.length, MAX_FILA); assert.equal(ev.length, 0)
+  // muere una: 1.5 s después nace la primera de la fila, con su nombre y controlada por quien la formó
+  const victima = sim.ballitas[3]; victima.e = 0; sim.tick(1 / 30)
+  for (let i = 0; i < 120; i++) { mantener(sim); sim.tick(1 / 30) }
+  const nueva = sim.ballitas.find((b) => b.formadaPor === 'ana')
+  assert.ok(nueva, 'entró la primera de la fila'); assert.equal(nueva.name, 'Mi bBolab'); assert.equal(nueva.ctrl, 'ana')
+  assert.equal(sim.fila.length, MAX_FILA - 1); assert.equal(sim.fila[0].espectador, 'caro')
+  assert.deepEqual(ev[0], ['entra', nueva.id, 'ana', 'Mi bBolab'])
+  assert.equal(nueva.log.at(-1).text.length > 0, true)
+  // la segunda: nombre repetido recibe sufijo; muere la controlada: se libera con motivo 'muerte'
+  nueva.p = 0; sim.tick(1 / 30)
+  for (let i = 0; i < 120; i++) { mantener(sim); sim.tick(1 / 30) }
+  assert.deepEqual(ev.find((e) => e[0] === 'libre'), ['libre', nueva.id, 'muerte'])
+  const segunda = sim.ballitas.find((b) => b.formadaPor === 'caro')
+  assert.equal(segunda.name, `${repetido} 2`); assert.equal(segunda.ctrl, 'caro')
+  assert.equal(sim.ballitas.length, POP)
+  // quien ya controla una no recibe el control de otra formada suya
+  sim.fila.unshift({ espectador: 'caro', nombre: 'Tercera', t: sim.t })
+  sim.ballitas.find((b) => !b.ctrl && b.phase !== 'dying').e = 0; sim.tick(1 / 30)
+  for (let i = 0; i < 120; i++) { mantener(sim); sim.tick(1 / 30) }
+  const tercera = sim.ballitas.find((b) => b.name === 'Tercera')
+  assert.equal(tercera.formadaPor, 'caro'); assert.equal(tercera.ctrl, null)
+})
+
+test('mundo compartido: tomar, dejar y decidir validan; las decisiones se cumplen y son de un solo uso', () => {
+  const c = contada(12)
+  const sim = new Sim({ rng: c.rng })
+  const libres = []; sim.hooks.libre = (b, m) => libres.push([b.id, m])
+  const [a, b2] = sim.ballitas
+  assert.equal(sim.tomar(9999, 'yo').error, 'no_existe')
+  assert.equal(sim.decidir(a.id, 'yo', { carril: 1 }).error, 'no_controlas')
+  assert.equal(sim.dejar(a.id, 'yo').error, 'no_controlas')
+  assert.equal(sim.tomar(a.id, 'yo').ok, true)
+  assert.equal(sim.tomar(a.id, 'otro').error, 'ocupada')
+  assert.equal(sim.tomar(b2.id, 'yo').error, 'ya_controlas')
+  assert.equal(sim.decidir(a.id, 'otro', { carril: 1 }).error, 'no_controlas')
+  const origen = sim.origenSiguiente(a); const ways = sim.world.waysFrom[origen]
+  const ajeno = sim.world.ways.find((w) => w.from !== origen)
+  assert.equal(sim.decidir(a.id, 'yo', { destino: origen }).error, 'destino')
+  assert.equal(sim.decidir(a.id, 'yo', { destino: 99 }).error, 'destino')
+  assert.equal(sim.decidir(a.id, 'yo', { ruta: { way: ajeno.idx, r: 0 } }).error, 'ruta')
+  assert.equal(sim.decidir(a.id, 'yo', { ruta: { way: ways[0].idx, r: 9 } }).error, 'ruta')
+  assert.equal(sim.decidir(a.id, 'yo', { carril: 5 }).error, 'carril')
+  assert.equal(sim.decidir(a.id, 'yo', { carril: 1.5 }).error, 'carril')
+  assert.deepEqual(a.dec, {})
+  // ruta fija también el planeta; cambiar el planeta borra la ruta; null borra
+  assert.deepEqual(sim.decidir(a.id, 'yo', { ruta: { way: ways[1].idx, r: 1 } }).dec, { ruta: { way: ways[1].idx, r: 1 }, destino: ways[1].to })
+  assert.deepEqual(sim.decidir(a.id, 'yo', { destino: ways[0].to }).dec, { destino: ways[0].to })
+  assert.deepEqual(sim.decidir(a.id, 'yo', { carril: 3 }).dec, { destino: ways[0].to, carril: 3 })
+  assert.deepEqual(sim.decidir(a.id, 'yo', { destino: null, carril: null }).dec, {})
+  // predecir y prevision no consumen la rng
+  const n0 = c.n
+  const auto = sim.predecir(a); assert.ok(auto.way.from === origen && auto.way.routes.includes(auto.route))
+  const pv = sim.prevision(a, auto.way, auto.route); assert.ok(pv.seg > 5 && pv.dE < 0 && Number.isFinite(pv.dP))
+  sim.decidir(a.id, 'yo', { destino: ways[2].to }); assert.equal(sim.predecir(a).way.to, ways[2].to)
+  sim.decidir(a.id, 'yo', { destino: null })
+  assert.equal(c.n, n0)
+  // 4 viajes con ruta y carril decididos: llega al planeta, recorre solo esa ruta y sale por ese carril
+  let viajes = 0; let v = null; let fase = a.phase
+  for (let i = 0; i < 40000 && viajes < 4; i++) {
+    if (a.phase === 'at' && !v) {
+      const ws = sim.world.waysFrom[a.node]; const w = ws[viajes % ws.length]; const r = viajes % w.routes.length
+      assert.equal(sim.decidir(a.id, 'yo', { ruta: { way: w.idx, r }, carril: viajes % 5 }).ok, true)
+      v = { to: w.to, r, carril: viajes % 5, vistas: new Set(), carril0: null }
+    }
+    mantener(sim); fase = a.phase; sim.tick(1 / 30)
+    if (!v) continue
+    if (fase === 'at' && a.phase === 'toPort') {
+      assert.deepEqual(a.dec, {}, 'un solo uso'); assert.deepEqual(a.plan.manual, ['destino', 'ruta', 'carril'])
+      assert.equal(a.plan.razon, 'lo decidió quien me controla'); assert.equal(a.way.to, v.to)
+    }
+    if (a.phase === 'travel') {
+      if (a.seg.route >= 0) v.vistas.add(a.seg.route)
+      if (v.carril0 == null && !a.flight) v.carril0 = a.carril
+    }
+    if (fase === 'travel' && a.phase !== 'travel') {
+      assert.equal(a.node, v.to); assert.deepEqual([...v.vistas], [v.r]); assert.equal(v.carril0, v.carril)
+      assert.equal(a.ctrl, 'yo'); assert.equal(a.sinDecidir, 0); assert.equal(a.rutaFija, null); assert.equal(a.carrilFijo, null)
+      viajes++; v = null
+    }
+  }
+  assert.equal(viajes, 4)
+  // sin decidir: pierde el control exactamente en la tercera llegada
+  let llegadas = 0
+  for (let i = 0; i < 60000 && a.ctrl; i++) {
+    mantener(sim); fase = a.phase; sim.tick(1 / 30)
+    if (fase === 'travel' && a.phase !== 'travel') { llegadas++; if (a.ctrl) assert.equal(a.sinDecidir, llegadas) }
+  }
+  assert.equal(llegadas, MAX_SIN_DECIDIR); assert.equal(a.ctrl, null)
+  assert.deepEqual(libres, [[a.id, 'inactivo']])
+  // libre: otro la toma; una decisión pendiente (aunque no se haya usado) reinicia la cuenta; dejar borra decisiones
+  assert.equal(sim.tomar(a.id, 'otro').ok, true)
+  sim.decidir(a.id, 'otro', { carril: 2 })
+  assert.equal(sim.dejar(a.id, 'otro').ok, true)
+  assert.deepEqual([a.ctrl, a.dec], [null, {}]); assert.deepEqual(libres.at(-1), [a.id, 'dejar'])
 })

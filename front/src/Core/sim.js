@@ -68,13 +68,22 @@ export const TRAVEL_SLOW = 2.5 / TIME_SCALE
 const TRAITS = ['valentia', 'curiosidad', 'apetito', 'sociabilidad', 'animo', 'velocidad']
 const GENES = ['prefs', 'ways', 'routes', 'kinds']
 // Equilibrio: un ciclo destino + viaje dura ~60-65 s (el viaje ~2.5x más largo) y sólo rinde un destino.
-const DRAIN_E = 0.22 // energía/s siempre
-const DRAIN_P = 0.25 // puntos/s siempre
-const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
-const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
+export const DRAIN_E = 0.22 // energía/s siempre
+export const DRAIN_P = 0.25 // puntos/s siempre
+// Mundo compartido (docs/mundo_compartido.md, sección 3): control de ballitas por espectadores.
+export const MAX_SIN_DECIDIR = 3 // llegadas seguidas sin decisión antes de perder el control
+export const MAX_FILA = 30
+export const MAX_NOMBRE = 16
+export const GRACIA_DESCONEXION = 60 // s; la aplica el servidor (la sim no sabe de conexiones)
+export const MAX_CONTROL_POR_ESPECTADOR = 1
+export const MAX_FILA_POR_ESPECTADOR = 1
+// Limpia un nombre propuesto: letras, números, espacio, _ y -; '' si no queda nada.
+export const limpiarNombre = (nombre) => String(nombre ?? '').replace(/[^\p{L}\p{N} _-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NOMBRE).trim()
+export const TRAVEL_E_LEN = 0.0055 / TRACK_K // energía por unidad de distancia recorrida en tubo (× ecost del tema); el trazado mide TRACK_K veces más
+export const PPS_K = 0.35 / 2.5 // escala de los puntos/s del tema
 const MAP_SPEED_K = (SIZE_K / 2.5) * 1.42 * 1.14 // SIZE_K ya lleva ANCHO_K (1.52); 1.14 = el extra de `spread` de las rutas en world.js (los viajes duraban 142.6 s; meta: la duración de main) // compensa la ampliación de arcos, alturas y desvíos de rutas
 // Física del tubo. Distancias, velocidades y aceleraciones escalan con el trazado (TRACK_K): mismos tiempos de carrera.
-const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
+export const TUBE_SPEED_K = 2.4 // escala la velocidad base dentro de los tubos largos (~900u)
 const GRAV = 24 * TRACK_K
 const FRIC = 0.14
 const VMAX = 48 * TRACK_K * MAP_SPEED_K
@@ -148,7 +157,9 @@ export class Sim {
     this.rng = rng
     this.world = buildWorld(seed)
     this.seed = seed ?? 369 // misma semilla por defecto que buildWorld; se registra en el back
-    this.hooks = {} // { nace(b), muere(b) }: observadores opcionales (Core/api.js); no afectan a la sim
+    // { nace(b), muere(b), entra(b, espectador), libre(b, motivo), decide(b, dec) }: observadores opcionales; no afectan a la sim
+    this.hooks = {}
+    this.fila = [] // { espectador, nombre, t }: ballitas formadas que esperan a que muera otra (FIFO)
     this.pop = pop
     this.t = 0
     this.nextId = 1
@@ -181,9 +192,20 @@ export class Sim {
     const node = this.world.nodes[Math.floor(this.rng() * this.world.nodes.length)]
     const vert = Math.floor(this.rng() * node.verts.length)
     const up = node.verts[vert].dir.clone()
+    // la primera de la fila entra ANTES de generar el nombre (say('nace') y hooks.nace ven el nombre real)
+    const f = this.fila.length ? this.fila.shift() : null
+    let name
+    if (f) {
+      name = f.nombre
+      for (let i = 2; this.nombres.has(name) || this.ballitas.some((o) => o.name === name); i++) name = `${f.nombre} ${i}`
+      this.nombres.add(name)
+    } else name = `${nombreUnico(this.rng, this.nombres)} ${gen > 1 ? 'G' + gen : ''}`.trim()
     const b = {
       id: this.nextId++, gen, genome, padres, node: node.idx, vert, p: 60, e: 60, age: 0, visits: 0, score: 0,
-      name: `${nombreUnico(this.rng, this.nombres)} ${gen > 1 ? 'G' + gen : ''}`.trim(),
+      name,
+      // control (mundo compartido): quién la controla, quién la formó y sus decisiones «para la siguiente»
+      ctrl: f && this.controladas(f.espectador) < MAX_CONTROL_POR_ESPECTADOR ? f.espectador : null,
+      formadaPor: f ? f.espectador : null, dec: {}, sinDecidir: 0, viajeDecidido: false, rutaFija: null, carrilFijo: null,
       phase: 'born', timer: 0.8, dur: 0.8, bornAt: this.t,
       dest: null, way: null, route: null, seg: null, segT: 0, walk: null,
       visited: [node.idx], visitedRoutes: {}, plannedRoute: null, nextDest: null, plan: null,
@@ -202,7 +224,118 @@ export class Sim {
     this.stats.genMax = Math.max(this.stats.genMax, gen)
     this.say(b, 'nace')
     this.hooks.nace?.(b)
+    if (f) this.hooks.entra?.(b, f.espectador)
     return b
+  }
+
+  // ───────────── mundo compartido: fila, control y decisiones (docs/mundo_compartido.md, secciones 3 y 4) ─────────────
+  viva(id) { const b = this.ballitas.find((o) => o.id === id); return b && b.phase !== 'dying' && b.phase !== 'gone' ? b : null }
+  controladas(espectador) { let n = 0; for (const o of this.ballitas) if (o.ctrl === espectador) n++; return n }
+
+  formar(espectador, nombre) {
+    if (this.fila.filter((f) => f.espectador === espectador).length >= MAX_FILA_POR_ESPECTADOR) return { ok: false, error: 'ya_en_fila' }
+    const limpio = limpiarNombre(nombre)
+    if (!limpio) return { ok: false, error: 'nombre' }
+    if (this.fila.length >= MAX_FILA) return { ok: false, error: 'fila_llena' }
+    this.fila.push({ espectador, nombre: limpio, t: this.t })
+    return { ok: true, puesto: this.fila.length }
+  }
+
+  salirFila(espectador) {
+    const n = this.fila.length
+    this.fila = this.fila.filter((f) => f.espectador !== espectador)
+    return { ok: true, quitadas: n - this.fila.length }
+  }
+
+  tomar(id, espectador) {
+    const b = this.viva(id)
+    if (!b) return { ok: false, error: 'no_existe' }
+    if (b.ctrl) return { ok: false, error: b.ctrl === espectador ? 'ya_controlas' : 'ocupada' }
+    if (this.controladas(espectador) >= MAX_CONTROL_POR_ESPECTADOR) return { ok: false, error: 'ya_controlas' }
+    b.ctrl = espectador; b.sinDecidir = 0; b.dec = {}
+    this.hooks.entra?.(b, espectador)
+    return { ok: true }
+  }
+
+  dejar(id, espectador, motivo = 'dejar') {
+    const b = this.ballitas.find((o) => o.id === id)
+    if (!b || !b.ctrl || b.ctrl !== espectador) return { ok: false, error: 'no_controlas' }
+    b.ctrl = null; b.dec = {}; b.sinDecidir = 0
+    this.hooks.libre?.(b, motivo)
+    return { ok: true }
+  }
+
+  // Nodo desde el que saldrá el siguiente viaje: el actual, o el de llegada si ya va de camino.
+  origenSiguiente(b) { return (b.phase === 'toPort' || b.phase === 'travel') && b.way ? b.way.to : b.node }
+
+  // dec = { destino?: idx de nodo | null, ruta?: { way, r } | null, carril?: 0..4 | null }; null borra; lo ausente no cambia.
+  decidir(id, espectador, dec) {
+    const b = this.viva(id)
+    if (!b || !b.ctrl || b.ctrl !== espectador) return { ok: false, error: 'no_controlas' }
+    const ways = this.world.waysFrom[this.origenSiguiente(b)]
+    const n = { ...b.dec }
+    if (dec && 'destino' in dec) {
+      if (dec.destino == null) { delete n.destino; delete n.ruta }
+      else if (!ways.some((w) => w.to === dec.destino)) return { ok: false, error: 'destino' }
+      else n.destino = dec.destino
+    }
+    if (dec && 'ruta' in dec) {
+      if (dec.ruta == null) delete n.ruta
+      else {
+        const w = typeof dec.ruta === 'object' ? ways.find((x) => x.idx === dec.ruta.way) : null
+        if (!w || !Number.isInteger(dec.ruta.r) || !w.routes[dec.ruta.r]) return { ok: false, error: 'ruta' }
+        n.ruta = { way: w.idx, r: dec.ruta.r }; n.destino = w.to // elegir ruta fija también el planeta
+      }
+    }
+    if (dec && 'carril' in dec) {
+      if (dec.carril == null) delete n.carril
+      else if (!Number.isInteger(dec.carril) || dec.carril < 0 || dec.carril >= CARRILES) return { ok: false, error: 'carril' }
+      else n.carril = dec.carril
+    }
+    if (n.ruta && n.destino !== this.world.ways[n.ruta.way].to) delete n.ruta // cambió el planeta: la ruta ya no aplica
+    b.dec = n
+    this.hooks.decide?.(b, n)
+    return { ok: true, dec: { ...n } }
+  }
+
+  // Sentidos y ruta que admite el siguiente viaje desde `nodo` según las decisiones `d` (lo que no vale se ignora).
+  restringir(nodo, d) {
+    let ways = this.world.waysFrom[nodo]; let ruta = null; const usado = []
+    if (d.ruta) {
+      const w = ways.find((x) => x.idx === d.ruta.way)
+      if (w?.routes[d.ruta.r]) { ways = [w]; ruta = w.routes[d.ruta.r]; usado.push('destino', 'ruta') }
+    }
+    if (!ruta && d.destino != null) {
+      const w = ways.filter((x) => x.to === d.destino)
+      if (w.length) { ways = w; usado.push('destino') }
+    }
+    return { ways, ruta, usado }
+  }
+
+  // Decisión automática que tomaría hoy la sim para el siguiente viaje, con las decisiones pendientes aplicadas.
+  // Sin ruido y sin consumir la rng (como probWays): la elección real ocurre en goWay y puede diferir.
+  predecir(b) {
+    if (b.phase === 'dying' || b.phase === 'gone') return null
+    const { ways, ruta } = this.restringir(this.origenSiguiente(b), b.ctrl ? b.dec : {})
+    const peers = this.peerCounts(b)
+    let best = null; let bs = -Infinity
+    for (const way of ways) {
+      for (const route of ruta ? [ruta] : way.routes) {
+        for (const nextDest of this.world.nodes[way.to].destinos) {
+          const u = this.planUtility(b, way, route, nextDest, peers, 1, false).total
+          if (u > bs) { bs = u; best = { way, route } }
+        }
+      }
+    }
+    return best
+  }
+
+  // Previsión de un viaje (fórmulas de planUtility): duración real en s, y cambio de energía y puntos.
+  prevision(b, way, route) {
+    const obs = route.segments.slice(1, -1)
+    const vel = obs.reduce((s, o) => s + (o.speedK ?? 1), 0) / Math.max(1, obs.length)
+    const eta = route.length / (this.cruise(b) * TUBE_SPEED_K * vel + 8 * TRACK_K)
+    return { seg: eta / TRAVEL_SLOW, dE: -(eta * DRAIN_E + route.length * TRAVEL_E_LEN * way.theme.ecost), dP: eta * (way.theme.pps * PPS_K - DRAIN_P) }
   }
 
   say(b, event, ctx = {}) {
@@ -276,6 +409,7 @@ export class Sim {
       this.pool.sort((x, y) => y.fitness - x.fitness)
       this.pool.length = Math.min(this.pool.length, 24)
       this.stats.muertas++
+      if (b.ctrl) { b.ctrl = null; b.dec = {}; this.hooks.libre?.(b, 'muerte') } // al morir se acaba el control
       this.hooks.muere?.(b)
       this.stats.mejorEdad = Math.max(this.stats.mejorEdad, b.age)
       this.feed.unshift({ t: this.t, text: `${b.name} murió por falta de ${b.cause} (${Math.round(b.age)}s)` })
@@ -455,11 +589,14 @@ export class Sim {
   }
 
   goWay(b) {
+    // mismo optimizador de siempre, restringido a lo que decidió quien la controla (un solo uso; lo inválido se ignora)
+    const d = b.ctrl ? b.dec : {}
+    const { ways, ruta, usado } = this.restringir(b.node, d)
     const peers = this.peerCounts(b)
     let best = null; let bs = -Infinity
-    for (const way of this.world.waysFrom[b.node]) {
+    for (const way of ways) {
       const dests = this.world.nodes[way.to].destinos
-      for (const route of way.routes) {
+      for (const route of ruta ? [ruta] : way.routes) {
         for (const nextDest of dests) {
           const u = this.planUtility(b, way, route, nextDest, peers, 1)
           if (u.total > bs) { bs = u.total; best = { way, route, nextDest, razon: u.razon } }
@@ -469,12 +606,17 @@ export class Sim {
     b.way = best.way
     b.plannedRoute = best.route
     b.nextDest = best.nextDest
+    b.rutaFija = ruta
+    b.carrilFijo = d.carril ?? null; if (d.carril != null) usado.push('carril')
+    b.viajeDecidido = usado.length > 0
+    if (b.ctrl) b.dec = {}
     const destNode = this.world.nodes[best.way.to]
     b.plan = {
       destino: `${destNode.name} · ${best.nextDest.name}`,
       ruta: `${best.way.theme.name} · Ruta ${best.route.name}`,
-      razon: best.razon,
+      razon: usado.length ? 'lo decidió quien me controla' : best.razon,
     }
+    if (usado.length) b.plan.manual = usado
     this.walkTo(b, this.world.nodes[b.node].portTo[best.way.to].out, 'toPort')
     this.say(b, 'camino', { c: best.way.theme.name, n: destNode.name })
   }
@@ -500,7 +642,10 @@ export class Sim {
       this.resetSurface(b)
     }
     // al entrar a una ruta (o al principio del viaje) toma un carril al azar: él marca el camino que seguirá
-    if (!prev || seg.route !== prev.route) b.carril = Math.floor(this.rng() * CARRILES)
+    if (!prev || seg.route !== prev.route) {
+      b.carril = Math.floor(this.rng() * CARRILES)
+      if (b.carrilFijo != null) b.carril = b.carrilFijo // carril decidido: vale hasta el primer evento
+    }
     b.seg = seg; b.segT = 0
     if (!b.sw && !seg.lanes?.some((l) => l.id === b.lane)) b.lane = nearestLane(seg, b.ang)
     if (seg.route >= 0) {
@@ -514,6 +659,10 @@ export class Sim {
   // En cada bifurcación (fork/cross): evalúa la utilidad del tramo restante hasta llegar al destino planeado.
   pickNext(b) {
     if (b.seg.next.length === 1) return b.way.segments[b.seg.next[0]]
+    if (b.rutaFija) { // ruta decidida: se impone en fork y en cross
+      const i = b.seg.next.find((j) => b.way.segments[j].route === b.rutaFija.r)
+      if (i != null) return b.way.segments[i]
+    }
     const g = b.genome; const way = b.way
     const peers = this.peerCounts(b)
     const halfFactor = b.seg.kind === 'salida' ? 1 : 0.5
@@ -591,6 +740,7 @@ export class Sim {
     if (f.t < 1) return
     b.lane = f.sw.to; b.segT = f.sw.uLand; b.flight = null; b.sw = null; b.impact = 1; b.vis = 1
     b.carril = Math.floor(this.rng() * CARRILES) // cae en un carril al azar del camino destino
+    b.carrilFijo = null // el carril decidido valía hasta el primer evento
     b.lastSwitch = { kind: f.sw.kind, name: f.sw.name, lane: b.seg.lanes?.find((l) => l.id === f.sw.to)?.name ?? 'carril', carril: b.carril, until: this.t + 8 }
     if (f.failed) { b.speed *= 0.7; b.p -= 1 + f.sw.risk * 3; b.react = { mood: 'asustada', until: this.t + 1.2 }; this.say(b, 'falla', { m: f.sw.name }) }
     else { b.p += f.sw.reward.p; b.e += f.sw.reward.e; b.score += Math.max(0, f.sw.reward.p) }
@@ -736,6 +886,12 @@ export class Sim {
   }
   arrive(b) {
     const L = b.way; const node = this.world.nodes[L.to]
+    // inactividad: una llegada sin decisión usada ni pendiente cuenta; a la tercera pierde el control
+    if (b.ctrl) {
+      if (b.viajeDecidido || Object.keys(b.dec).length > 0) b.sinDecidir = 0
+      else if (++b.sinDecidir >= MAX_SIN_DECIDIR) this.dejar(b.id, b.ctrl, 'inactivo')
+    }
+    b.viajeDecidido = false; b.rutaFija = null; b.carrilFijo = null
     b.node = L.to; b.vert = node.portTo[L.from].in
     b.visited = [L.to, ...b.visited].slice(0, 3)
     b.speed = 0; b.roll = b.off = b.rail = 0
