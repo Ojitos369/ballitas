@@ -18,6 +18,9 @@ export function crearLocal({ semilla = 369, registrarBack = true } = {}) {
   sim.hooks.entra = (b, esp) => { marcar(b); emit('entra', { b, de: esp, nombre: b.name, mia: esp === YO }); emit('cambio') }
   sim.hooks.libre = (b, motivo) => { b.mia = false; b.auto = null; emit('libre', { b, motivo, mia: true }); emit('cambio') }
   sim.hooks.decide = (b) => { auto(b); emit('cambio') }
+  // rutas dinámicas: `mundo.activas` y `mundo.rutasRev` son los de la sim (por prototipo); aquí solo se avisa
+  sim.hooks.rutas = (c) => { emit('rutas', { on: c.on, off: c.off }); emit('cambio') }
+  sim.hooks.invalida = (b, que) => { emit('invalida', { b, que, mia: b.ctrl === YO }); emit('cambio') }
   let tAuto = 0
   const mundo = Object.create(sim)
   Object.defineProperty(mundo, 'fila', { get: () => sim.fila.map((f) => ({ nombre: f.nombre, de: f.espectador, t: f.t, mia: f.espectador === YO })) })

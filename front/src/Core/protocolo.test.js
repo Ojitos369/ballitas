@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Sim } from './sim.js'
 import { mulberry32 } from './world.js'
-import { rapida, leerRapida, lenta, difLenta, aplicarLenta, instantanea, filaPublica, validar, R, FASES, MAX_BYTES, MAX_LOG, V } from './protocolo.js'
+import { rapida, leerRapida, lenta, difLenta, aplicarLenta, instantanea, filaPublica, validar, R, FASES, MAX_BYTES, MAX_LOG, V, rutasActivas, acumularRutas, aplicarRutas } from './protocolo.js'
 
 const sim = new Sim({ rng: mulberry32(369), seed: 369 })
 const cortoDe = (e) => `c-${e.length}`
@@ -75,4 +75,30 @@ test('protocolo: validar acepta el contrato y rechaza lo demás', () => {
   assert.equal(j({ k: 'decidir', b: 1, ruta: { way: 'a', r: 0 } }).error, 'ruta')
   assert.equal(j({ k: 'decidir', b: 1, destino: 'x' }).error, 'destino'); assert.equal(j({ k: 'decidir', b: 1, carril: [] }).error, 'carril')
   assert.deepEqual(j({ k: 'ping', c: 12.5 }).m, { k: 'ping', q: undefined, c: 12.5 })
+})
+
+test('protocolo: rutas activas en la bienvenida y cambios en d.rutas; el cliente reconstruye el mismo conjunto', () => {
+  assert.equal(rutasActivas(new Sim({ rng: mulberry32(2), seed: 369, rutas: false })), null)
+  const s = new Sim({ rng: mulberry32(2), seed: 369 })
+  const hola = JSON.parse(JSON.stringify({ activas: rutasActivas(s) }))
+  assert.ok(hola.activas.length >= 8 && hola.activas.every((i, k) => Number.isInteger(i) && (k === 0 || i > hola.activas[k - 1])))
+  const cliente = new Set(hola.activas); let pend = null; let enviados = 0; let bytes = 0
+  s.hooks.rutas = (c) => { pend = acumularRutas(pend, c) }
+  for (let i = 0; i < 18000; i++) {
+    s.tick(1 / 30)
+    if (i % 3 || !pend) continue
+    if (pend.on.length || pend.off.length) {
+      const txt = JSON.stringify({ k: 'd', n: i, rutas: pend }); bytes = Math.max(bytes, Buffer.byteLength(txt)); enviados++
+      const c = aplicarRutas(cliente, JSON.parse(txt).rutas)
+      assert.deepEqual(c, pend)
+    }
+    pend = null
+    assert.deepEqual([...cliente].sort((a, b) => a - b), rutasActivas(s))
+  }
+  assert.ok(enviados > 5, `cambios enviados: ${enviados}`); assert.ok(bytes < 80, `d.rutas pesa ${bytes} B`)
+  // lo que aparece y desaparece en el mismo intervalo no viaja; aplicar dos veces no duplica
+  let a = acumularRutas(null, { on: [3], off: [] }); a = acumularRutas(a, { on: [], off: [3] }); a = acumularRutas(a, { on: [5], off: [1] })
+  assert.deepEqual(a, { on: [5], off: [1] })
+  const set = new Set([1, 2]); assert.deepEqual(aplicarRutas(set, a), { on: [5], off: [1] }); assert.deepEqual(aplicarRutas(set, a), { on: [], off: [] })
+  assert.deepEqual(aplicarRutas(set, { on: ['x', 2.5] }), { on: [], off: [] }); assert.deepEqual([...set], [2, 5])
 })

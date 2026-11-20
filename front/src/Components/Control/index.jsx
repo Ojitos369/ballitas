@@ -58,7 +58,15 @@ export default function Control({ mundo, selected, onSelect }) {
         setAviso(MOTIVOS_LIBRE[ev.motivo])
       }
     })
+    // rutas dinámicas: las tarjetas solo muestran rutas activas (se recalculan al cambiar) y se avisa si la decidida desapareció
+    const offRutas = mundo.on('rutas', bump)
+    const offInvalida = mundo.on('invalida', (ev) => {
+      bump()
+      if (ev?.mia) setAviso('La ruta que decidiste ya no está disponible: tu ballita eligió sola.')
+    })
     return () => {
+      offRutas?.()
+      offInvalida?.()
       offCambio?.()
       offEntra?.()
       offLibre?.()
@@ -84,7 +92,7 @@ export default function Control({ mundo, selected, onSelect }) {
   const opciones = useMemo(() => {
     if (!selector || !miBallita || !mundo?.opciones) return null
     return mundo.opciones(miBallita)
-  }, [selector, miBallita, mundo, miBallita?.node, miBallita?.phase, miBallita?.way?.idx, miBallita?.dec, miBallita?.auto])
+  }, [selector, miBallita, mundo, miBallita?.node, miBallita?.phase, miBallita?.way?.idx, miBallita?.dec, miBallita?.auto, mundo?.rutasRev])
 
   if (!mundo) return null
 

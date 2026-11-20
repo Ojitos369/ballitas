@@ -11,9 +11,9 @@ export function opcionesDe(s, b) {
   if (!s?.world || !b || typeof b !== 'object' || b.phase === 'dying' || b.phase === 'gone' || !b.genome?.traits) return VACIO
   const world = s.world
   // vista con los métodos de Sim (sin construir una): solo lee world y ballitas
-  const v = Object.assign(Object.create(Sim.prototype), { world, ballitas: s.ballitas || [] })
+  const v = Object.assign(Object.create(Sim.prototype), { world, ballitas: s.ballitas || [], activas: s.activas ?? null })
   const origen = v.origenSiguiente(b)
-  const ways = world.waysFrom[origen] || []
+  const ways = v.salidasActivas(origen) // rutas dinámicas: solo se ofrecen las activas
   const peers = v.peerCounts(b)
   const auto = b.auto || null // { way: idx, r }
 
@@ -56,7 +56,7 @@ export function opcionesDe(s, b) {
     const w = ways.find((x) => x.to === b.dec.destino)
     if (w) rutaRef = auto && auto.way === w.idx ? w.routes[auto.r] : w.routes[0]
   }
-  if (!rutaRef && auto) rutaRef = world.ways[auto.way]?.routes[auto.r] || null
+  if (!rutaRef && auto && v.activa(world.ways[auto.way] ?? { idx: -1 })) rutaRef = world.ways[auto.way]?.routes[auto.r] || null
   if (!rutaRef) rutaRef = ways[0]?.routes[0] || null
 
   const valentia = b.genome.traits.valentia ?? 0.5

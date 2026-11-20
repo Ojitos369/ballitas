@@ -3,7 +3,7 @@
 import * as THREE from 'three'
 import { buildWorld, setWorldPicks, WORLD_GEN, KINDS, OBSTACLES, CARRILES } from '../world.js'
 import { nombreUnico } from '../sim.js'
-import { V, PING_CADA } from '../protocolo.js'
+import { V, PING_CADA, aplicarRutas } from '../protocolo.js'
 import { crearInterpolador } from './interpola.js'
 import { opcionesDe } from './opciones.js'
 
@@ -43,6 +43,7 @@ export function conectarRemoto({ url, semilla = 369, timeout = 5000 } = {}) {
       world: null, ballitas, t: 0, stats: {}, feed: [], seed: semilla, pop: 0, rng: Math.random, rngDialogos: Math.random,
       modo: 'remoto', get estado() { return estado }, yo: { corto: '' }, fila: [], espectadores: 0,
       reglas: { maxSinDecidir: 3, maxFila: 30, maxNombre: 16 }, puede: { velocidad: false },
+      activas: null, rutasRev: 0, // rutas dinámicas: Set de way.idx activos (null = todas) y contador de cambios
       get tDibujo() { return interp?.tDibujo ?? 0 }, // segundos de sim que se están dibujando (sondas)
       tick() { // el dt no importa: el reloj es el del servidor
         const ahora = performance.now() / 1000 + desfase
@@ -110,6 +111,8 @@ export function conectarRemoto({ url, semilla = 369, timeout = 5000 } = {}) {
       api.seed = m.semilla; epoca = m.epoca; api.yo = m.yo || api.yo
       api.stats = m.stats || {}; api.feed = m.feed || []; api.espectadores = m.espectadores || 0; api.reglas = m.reglas || api.reglas
       api.fila = filaDe(m.fila)
+      api.activas = Array.isArray(m.activas) ? new Set(m.activas) : null; api.rutasRev++
+      emitir('rutas', { on: api.activas ? [...api.activas] : [], off: [], todo: true })
       const vivos = new Set(m.b.map((l) => l.id))
       for (let i = ballitas.length - 1; i >= 0; i--) if (!vivos.has(ballitas[i].id)) quitar(i) // murieron mientras no había conexión
       for (const l of m.b) aplicarLenta(l)
@@ -145,10 +148,12 @@ export function conectarRemoto({ url, semilla = 369, timeout = 5000 } = {}) {
       if (m.stats) api.stats = m.stats
       if (m.feed) api.feed = m.feed
       if (m.espectadores != null) api.espectadores = m.espectadores
+      if (m.rutas && api.activas) { const c = aplicarRutas(api.activas, m.rutas); if (c.on.length || c.off.length) { api.rutasRev++; emitir('rutas', c) } }
       for (const ev of m.ev || []) { // cambio de contrato de P1: eventos de control
         const b = registry.get(ev.b)
         if (ev.k === 'entra') emitir('entra', { b, de: ev.de, nombre: b?.name ?? '', mia: ev.de === api.yo.corto })
         else if (ev.k === 'libre') emitir('libre', { b, motivo: ev.motivo, mia: mias.has(ev.b) })
+        else if (ev.k === 'invalida') emitir('invalida', { b, que: ev.que, mia: mias.has(ev.b) })
       }
       emitir('cambio', api)
     }

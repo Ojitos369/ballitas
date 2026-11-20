@@ -90,6 +90,24 @@ export const aplicarLenta = (obj, parcial) => Object.assign(obj, parcial)
 export const filaPublica = (fila, cortoDe) => fila.map((f) => ({ nombre: f.nombre, de: cortoDe(f.espectador), t: r2(f.t) }))
 export const instantanea = (n, t, ballitas) => ({ k: 'i', n, t: r3(t), b: ballitas.map(rapida) })
 
+// ── rutas dinámicas: qué sentidos (way.idx) están activos ──
+// `hola.activas`: lista ordenada, o null si la sim las tiene apagadas (todas valen).
+export const rutasActivas = (sim) => (sim.activas ? [...sim.activas].sort((a, b) => a - b) : null)
+// Acumula cambios `{ on, off }` entre dos `d`: lo que aparece y desaparece en el mismo intervalo se anula.
+export function acumularRutas(acc, cambio) {
+  const a = acc || { on: [], off: [] }
+  for (const i of cambio.on || []) { const k = a.off.indexOf(i); if (k >= 0) a.off.splice(k, 1); else if (!a.on.includes(i)) a.on.push(i) }
+  for (const i of cambio.off || []) { const k = a.on.indexOf(i); if (k >= 0) a.on.splice(k, 1); else if (!a.off.includes(i)) a.off.push(i) }
+  return a
+}
+// Aplica `d.rutas` sobre el Set del cliente; devuelve lo que cambió de verdad (para el evento y la animación).
+export function aplicarRutas(set, cambio) {
+  const on = []; const off = []
+  for (const i of cambio?.on || []) if (Number.isInteger(i) && !set.has(i)) { set.add(i); on.push(i) }
+  for (const i of cambio?.off || []) if (set.delete(i)) off.push(i)
+  return { on, off }
+}
+
 const UUID = /^[0-9a-zA-Z_-]{8,64}$/
 const entero = (x) => Number.isInteger(x)
 

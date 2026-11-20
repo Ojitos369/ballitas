@@ -82,6 +82,10 @@ export async function crearServidor(o = {}) {
     if (b.ctrl === esp) eventos.push({ k: 'entra', b: b.id, de: cortoDe(esp) })
   }
   sim.hooks.libre = (b, motivo) => { eventos.push({ k: 'libre', b: b.id, motivo }); autos.delete(b.id) }
+  // rutas dinámicas: los cambios de `sim.activas` viajan en `d.rutas`; una decisión que quedó inválida, como evento
+  let rutasPend = null
+  sim.hooks.rutas = (c) => { rutasPend = P.acumularRutas(rutasPend, c) }
+  sim.hooks.invalida = (b, que) => { eventos.push({ k: 'invalida', b: b.id, que }) }
 
   // ── registro en el back (lo que antes hacía cada navegador con iniciarBack); tolerante a fallos ──
   let caidoHasta = 0; let mundoBack = null
@@ -145,7 +149,7 @@ export async function crearServidor(o = {}) {
       k: 'hola', q, v: P.V, epoca, semilla: cfg.semilla, worldGen: WORLD_GEN, picks: sim.world.picks, hz: P.HZ, cada: P.CADA,
       n, t: Math.round(sim.t * 1000) / 1000, yo: { corto: c.corto },
       b: sim.ballitas.map((b) => ({ ...lentaDe(b), r: P.rapida(b) })), fila: P.filaPublica(sim.fila, cortoDe),
-      stats: sim.stats, feed: feedPublico(), espectadores: nConectados(), reglas,
+      stats: sim.stats, feed: feedPublico(), espectadores: nConectados(), reglas, activas: P.rutasActivas(sim),
     }
   }
 
@@ -240,6 +244,7 @@ export async function crearServidor(o = {}) {
     const feed = JSON.stringify(feedPublico()); if (feed !== ultimo.feed) { ultimo.feed = feed; d.feed = JSON.parse(feed); hay = true }
     const esp = nConectados(); if (esp !== ultimo.espectadores) { ultimo.espectadores = esp; d.espectadores = esp; hay = true }
     if (eventos.length) { d.ev = eventos; eventos = []; hay = true }
+    if (rutasPend) { if (rutasPend.on.length || rutasPend.off.length) { d.rutas = rutasPend; hay = true } rutasPend = null }
     return hay ? d : null
   }
   // estado inicial ya «enviado»: quien conecta lo recibe en la bienvenida
@@ -276,7 +281,7 @@ export async function crearServidor(o = {}) {
     const ts = msTick.subarray(0, Math.min(nTick, msTick.length)); const ds = msDif.subarray(0, Math.min(nDif, msDif.length))
     return {
       ok: true, epoca, semilla: cfg.semilla, worldGen: WORLD_GEN, n, t: Math.round(sim.t), arranqueMs, conPicks, velocidad: cfg.velocidad,
-      conexiones: conexiones.size, espectadores: nConectados(), ballitas: sim.ballitas.length, fila: sim.fila.length, stats: sim.stats,
+      conexiones: conexiones.size, espectadores: nConectados(), ballitas: sim.ballitas.length, rutasActivas: sim.activas ? sim.activas.size : sim.world.ways.length, rutas: sim.world.ways.length, fila: sim.fila.length, stats: sim.stats,
       tickMs: { n: nTick, media: +(ts.reduce((a, b) => a + b, 0) / Math.max(1, ts.length)).toFixed(4), p50: +pct(ts, 0.5).toFixed(4), p99: +pct(ts, 0.99).toFixed(4), max: +maxTick.toFixed(3) },
       difusionMs: { n: nDif, media: +(ds.reduce((a, b) => a + b, 0) / Math.max(1, ds.length)).toFixed(4), p99: +pct(ds, 0.99).toFixed(4) },
       cpuPct: +(((cpu.user + cpu.system) / 1000 / (performance.now() - reloj0)) * 100).toFixed(2), cpuMs: Math.round((cpu.user + cpu.system) / 1000),
