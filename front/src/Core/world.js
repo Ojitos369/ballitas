@@ -1071,6 +1071,7 @@ const SIN_AIRE = 2 * RIBBON_HALF + 0.25 // (u) aire exigido entre bordes (AIRE_L
 const SIN_PRISMA = LANE_W / 2 + RIBBON_CURB + RIBBON_HALF + 2.5 // (u) semiancho del prisma de gálibo (calzada + cinta ajena + margen)
 const SIN_GALIBO = 6 * TK + 0.75 + 4 // (u) alto del prisma (gálibo + quilla + margen)
 const SIN_ROLLD = SIN_CLEAR + 4 // (u) con un hermano más cerca que esto, el camino conserva la normal de la fila
+const SIN_ALISA = +(globalThis.process?.env?.SIN_ALISA ?? 6) // pasadas de alisado (laplaciano, 0.5) del camino ya desviado
 const SIN_BLEND = 210 // (u) semilargo de la rampa con que se reduce el desvío junto a un choque
 const SIN_MIN = 260 // (u) tramo abierto mínimo para desviar
 const SIN_ROLL = 0.035 // (rad/u) ritmo máximo del giro de la normal (9.4° por muestra de 4.7 u)
@@ -1231,6 +1232,14 @@ function sinuarCaminos(world) {
           for (let i = i0; i <= i1; i++) if (hermano(i, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], hechos, 0)) return null
         }
         for (let i = 0; i <= N; i++) { const q = i * 3; Q[q] += O[q] * k[i]; Q[q + 1] += O[q + 1] * k[i]; Q[q + 2] += O[q + 2] * k[i] }
+        // alisado: un quiebro pequeño del eje, a Rj del eje, se amplifica (Rj / paso) y plegaba la cinta hasta 55° en un vértice
+        for (let it = 0; it < SIN_ALISA; it++) {
+          let px = Q[i0 * 3]; let py = Q[i0 * 3 + 1]; let pz = Q[i0 * 3 + 2]
+          for (let i = i0 + 1; i < i1; i++) {
+            const q = i * 3; const wt = 0.5 * Math.min(1, k[i] * 8); const x = Q[q]; const y = Q[q + 1]; const z = Q[q + 2]
+            Q[q] += wt * ((px + Q[q + 3]) / 2 - x); Q[q + 1] += wt * ((py + Q[q + 4]) / 2 - y); Q[q + 2] += wt * ((pz + Q[q + 5]) / 2 - z); px = x; py = y; pz = z
+          }
+        }
         hechos.push(Q); ks2.push(k); res.push({ id, Q, k, base, th, ph, nu, est: !ok ? 0 : red ? 1 : 2 })
       }
       return res
