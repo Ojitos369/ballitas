@@ -8,7 +8,9 @@ const YO = 'local' // único espectador del mundo local
 // (world, ballitas, t, stats, feed, rng, where, favorites…) cae en la sim viva; los métodos de control se definen
 // SOLO en la fachada, así las llamadas internas de la sim (`this.dejar(...)` en arrive) siguen usando las suyas.
 export function crearLocal({ semilla = 369, registrarBack = true } = {}) {
-  const sim = new Sim({ seed: semilla })
+  // ?rutas=0: rutas dinámicas apagadas (todas activas, como antes); sirve para comparar
+  const sinRutas = typeof location !== 'undefined' && new URLSearchParams(location.search).get('rutas') === '0'
+  const sim = new Sim({ seed: semilla, ...(sinRutas ? { rutas: false } : {}) })
   if (registrarBack) iniciarBack(sim)
   const listeners = new Map()
   const emit = (e, x) => listeners.get(e)?.forEach((fn) => { try { fn(x) } catch { /* un oyente roto no para la sim */ } })

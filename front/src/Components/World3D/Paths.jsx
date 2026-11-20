@@ -1450,6 +1450,16 @@ const PRECARGA_ENTRADA_MS = 6 // por cuadro, si falta el camino que la cámara y
 const PRECARGA_CUADRO_MS = 3 // por cuadro, para los caminos que vienen
 const FONDO_CUADRO_MS = 1.5 // por cuadro, el resto del mundo, solo si el cuadro deja margen
 const DESCARGA_S = 6 // un camino que deja de hacer falta se oculta ya y se desmonta pasado este tiempo (histéresis)
+// Rutas dinámicas (sim.activas): solo se montan los caminos activos. Uno que aparece crece desde su planeta de origen
+// y uno que desaparece se recoge hacia él, en RUTA_APARECE_S; al terminar de recogerse se desmonta. Es una escala del
+// grupo del camino (sin materiales ni programas nuevos: ver «aparición gradual» en la base de conocimiento).
+const RUTA_APARECE_S = 1.2
+const RUTA_ESCALA_MIN = 0.002
+const suave = (k) => k * k * (3 - 2 * k)
+function escalarRuta(g, way, k) {
+  const s = Math.max(RUTA_ESCALA_MIN, suave(k)); const p = way.ends[0].pos
+  g.scale.setScalar(s); g.position.set(p.x * (1 - s), p.y * (1 - s), p.z * (1 - s))
+}
 
 function reconcileLodSet(curSet, desiredSet, maxAdds = Infinity) {
   let changed = false
@@ -1505,6 +1515,12 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
   // acercarse. Orden: `urgentes` (el camino de la cámara, el planeado y los candidatos de la ballita seguida, que se
   // llenan en useFrame) con unos ms por cuadro aunque no haya hueco; luego, en huecos libres, el camino de cada
   // ballita viva (la primera es la que abre la tecla 3) y por último el resto del mundo.
+  // Caminos montados = activos + los que se están recogiendo (+ el enfocado, que no se quita mientras se mira).
+  const todas = useMemo(() => new Set(world.ways.map((w) => w.idx)), [world])
+  const [rutas, setRutas] = useState(() => new Set(sim?.activas ?? todas))
+  // anim: idx -> { k (0..1), dir (+1 aparece, -1 se recoge) }; grupos: idx -> THREE.Group del camino
+  const rutasRef = useRef(null)
+  if (!rutasRef.current) rutasRef.current = { rev: sim?.rutasRev ?? 0, foco: focusWay, mundo: world, montadas: rutas, anim: new Map(), grupos: new Map(), peor: 0, cambios: 0, forzarTodas: false, forzado: false }
   const urgentesRef = useRef([])
   const fondoRef = useRef(null) // paso de fondo por cuadro (ver useFrame): sin huecos libres, el idle solo daba 4 ms/s
   useEffect(() => {
@@ -1519,7 +1535,8 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
         const w = b.phase === 'dying' || b.phase === 'gone' ? null : (b.seg?.way ?? b.way)
         if (w && !vidaCompleta(w)) return w
       }
-      return world.ways.find((w) => !vidaCompleta(w))
+      // el resto del mundo: solo los caminos montados (las rutas inactivas no se precargan)
+      return world.ways.find((w) => rutasRef.current.montadas.has(w.idx) && !vidaCompleta(w))
     }
     const paso = (dl) => {
       if (!vivo) return
@@ -1564,6 +1581,45 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     EXT_PX.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height)
     VIDA_BUS.sim = sim
 
+    // Rutas dinámicas: reconcilia los montados con sim.activas (sondeo de sim.rutasRev: vale en local y en remoto).
+    const RU = rutasRef.current
+    const rev = sim?.rutasRev ?? 0
+    // RU.forzarTodas (sondas A/B en la misma sesión): monta todas las rutas, como antes de las rutas dinámicas
+    if (rev !== RU.rev || RU.foco !== focusWay || RU.mundo !== world || !!RU.forzarTodas !== RU.forzado) {
+      const cambioMundo = RU.mundo !== world
+      RU.rev = rev; RU.foco = focusWay; RU.mundo = world; RU.forzado = !!RU.forzarTodas
+      const act = RU.forzado ? todas : (sim?.activas ?? todas)
+      const sig = new Set(cambioMundo ? [] : RU.montadas); let cambio = cambioMundo
+      if (cambioMundo) RU.anim.clear()
+      for (const i of act) {
+        if (!sig.has(i)) { sig.add(i); if (!cambioMundo) RU.anim.set(i, { k: 0, dir: 1 }); cambio = true }
+        else if (RU.anim.get(i)?.dir === -1) RU.anim.get(i).dir = 1 // volvió antes de terminar de recogerse
+      }
+      for (const i of sig) {
+        if (act.has(i) || i === focusWay) continue
+        const a = RU.anim.get(i)
+        if (!a) RU.anim.set(i, { k: 1, dir: -1 }); else a.dir = -1
+      }
+      if (cambio) { RU.montadas = sig; RU.cambios++; startTransition(() => setRutas(sig)) }
+    }
+    if (RU.anim.size) {
+      let fuera = null
+      for (const [i, a] of RU.anim) {
+        const g = RU.grupos.get(i)
+        if (!g) { if (a.dir < 0) (fuera || (fuera = [])).push(i); continue } // aún no montado: la aparición espera a su grupo
+        a.k = Math.min(1, Math.max(0, a.k + (a.dir * h) / RUTA_APARECE_S))
+        escalarRuta(g, world.ways[i], a.k)
+        if (a.dir > 0 && a.k >= 1) { g.scale.setScalar(1); g.position.set(0, 0, 0); RU.anim.delete(i) }
+        else if (a.dir < 0 && a.k <= 0) (fuera || (fuera = [])).push(i)
+      }
+      if (fuera) {
+        const sig = new Set(RU.montadas)
+        for (const i of fuera) { sig.delete(i); RU.anim.delete(i) }
+        RU.montadas = sig; startTransition(() => setRutas(sig))
+      }
+      if (dt * 1000 > RU.peor) RU.peor = dt * 1000 // peor cuadro mientras una ruta aparece o se recoge (sondas)
+    }
+    if (typeof window !== 'undefined') window.__RUTAS = RU
     const focusChanged = prevFocusRef.current !== focusWay || prevForceRef.current !== forceFocusDetail || prevPrefetchRef.current !== prefetchWays
     if (focusChanged || t - lastEvalRef.current >= 0.12) {
       lastEvalRef.current = t
@@ -1583,6 +1639,7 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
       const faltan = []
       for (let i = 0; i < wayMetas.length; i++) {
         const m = wayMetas[i]
+        if (!RU.montadas.has(m.idx)) { dists[m.idx] = Infinity; continue } // ruta inactiva: ni se mide ni se monta
         const isFocus = focusWay === m.idx
         // Precarga: los caminos que siguen a la ballita seguida se montan (ocultos y compilados) antes de entrar.
         const preIdx = !isFocus && prefetchWays != null ? prefetchWays.indexOf(m.idx) : -1
@@ -1698,9 +1755,17 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
 
   return (
     <>
-      {world.ways.map((w) => (
-        <Way
+      {world.ways.map((w) => rutas.has(w.idx) && (
+        <group
           key={w.idx}
+          ref={(g) => {
+            const RU = rutasRef.current
+            if (!g) { RU.grupos.delete(w.idx); return }
+            RU.grupos.set(w.idx, g)
+            const a = RU.anim.get(w.idx); if (a) escalarRuta(g, w, a.k) // nace recogida: sin un cuadro a tamaño completo
+          }}
+        >
+        <Way
           way={w}
           world={world}
           focused={focusWay == null || focusWay === w.idx}
@@ -1711,12 +1776,16 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
           controllersRef={controllersRef}
           onPickWay={onPickWay}
         />
+        </group>
       ))}
       <Puertas world={world} />
       <Precalentar />
       {world.circuits.map((c) => {
         const isFocusedCircuit = focusWay == null || c.ways.some((w) => w.idx === focusWay)
         if (cameraOnBall && !isFocusedCircuit) return null
+        // rutas dinámicas: sin ningún sentido montado el rótulo del circuito no se muestra; el clic va a uno montado
+        const montado = c.ways.find((w) => rutas.has(w.idx))
+        if (!montado) return null
         return (
           <WorldHtml key={c.idx} position={[c.mid.x, c.mid.y + 2.4, c.mid.z]} center distanceFactor={22} zIndexRange={[5, 0]}>
             <div
@@ -1728,7 +1797,7 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
                 transition: 'opacity 0.25s ease, filter 0.25s ease',
                 ...(onPickWay ? { pointerEvents: 'auto', cursor: 'pointer' } : null),
               }}
-              onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(c.ways[0]) } : undefined}
+              onClick={onPickWay ? (e) => { e.stopPropagation(); onPickWay(montado) } : undefined}
             >
               {c.theme.emoji} {c.theme.name.replace('Camino ', '')}
             </div>

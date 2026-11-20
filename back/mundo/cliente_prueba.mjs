@@ -11,7 +11,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import WebSocket from '../../front/node_modules/ws/wrapper.mjs'
-import { V, R, FASES, leerRapida, aplicarLenta } from '../../front/src/Core/protocolo.js'
+import { V, R, FASES, leerRapida, aplicarLenta, aplicarRutas } from '../../front/src/Core/protocolo.js'
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const espera = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -40,7 +40,8 @@ class Cliente {
       if (m.stats) this.stats = m.stats
       if (m.espectadores != null) this.espectadores = m.espectadores
       for (const e of m.ev || []) this.ev.push(e)
-    } else if (m.k === 'hola') { this.hola = m; this.yo = m.yo; this.fila = m.fila; this.stats = m.stats; this.espectadores = m.espectadores; this.b = new Map(m.b.map((l) => [l.id, l])) }
+      if (m.rutas && this.activas) { const c = aplicarRutas(this.activas, m.rutas); this.rutasOn = (this.rutasOn || 0) + c.on.length; this.rutasOff = (this.rutasOff || 0) + c.off.length; this.minActivas = Math.min(this.minActivas, this.activas.size); this.maxActivas = Math.max(this.maxActivas, this.activas.size) }
+    } else if (m.k === 'hola') { this.hola = m; this.activas = Array.isArray(m.activas) ? new Set(m.activas) : null; this.minActivas = this.maxActivas = this.activas?.size ?? 0; this.yo = m.yo; this.fila = m.fila; this.stats = m.stats; this.espectadores = m.espectadores; this.b = new Map(m.b.map((l) => [l.id, l])) }
     if (m.k === 'hola' || m.k === 'ok' || m.k === 'error' || m.k === 'pong') { const q = m.q ?? (m.k === 'error' ? this.pend.keys().next().value : undefined); const p = this.pend.get(q); if (p) { m.q = q; this.pend.delete(q); p(m) } else this.sueltos.push(m) }
     this.avisar()
   }
@@ -87,6 +88,8 @@ async function pruebaHola(url) {
   ok(!JSON.stringify(h).includes(a.id), 'la bienvenida no contiene el id secreto')
   ok(h.b.length === 10 && h.b.every((l) => l.r.length === 26 && l.genome && l.name && 'ctrl' in l && 'dec' in l && 'auto' in l), `10 ballitas con parte lenta y rápida (${JSON.stringify(h).length} B)`)
   ok(h.reglas.maxSinDecidir === 3 && h.reglas.maxFila === 30 && h.reglas.maxNombre === 16, 'reglas 3 / 30 / 16')
+  ok(Array.isArray(h.activas) && h.activas.length >= 8 && h.activas.length <= 12 && h.activas.every((i) => Number.isInteger(i) && i >= 0 && i < 20), `rutas activas en la bienvenida: ${h.activas?.length} de 20 (${h.activas})`)
+  ok(h.b.every((l) => l.way == null || h.activas.includes(l.way)), 'ninguna ballita va por una ruta inactiva')
   await a.hasta(() => a.ies >= 10, 5000, '10 instantáneas')
   const n0 = a.n; const i0 = a.ies; const r0 = performance.now(); await espera(3000)
   const hz = (a.ies - i0) / ((performance.now() - r0) / 1000)
@@ -135,6 +138,9 @@ async function pruebaBasica(url) {
   r = await b.pide({ k: 'decidir', b: l.id, destino: 77 }); ok(r.error === 'destino', 'planeta inválido → destino')
   r = await b.pide({ k: 'decidir', b: l.id, carril: 9 }); ok(r.error === 'carril', 'carril 9 → carril')
   r = await b.pide({ k: 'decidir', b: l.id, ruta: { way: 999, r: 0 } }); ok(r.error === 'ruta', 'ruta inválida → ruta')
+  const inactiva = [...Array(20).keys()].find((i) => !b.activas.has(i))
+  r = await b.pide({ k: 'decidir', b: l.id, ruta: { way: inactiva, r: 0 } }); ok(r.error === 'ruta', `ruta inactiva (sentido ${inactiva}) → ruta`)
+  ok(b.activas.has(auto.way), 'la decisión por defecto es una ruta activa')
   r = await b.pide({ k: 'decidir', b: l.id, ruta: { way: auto.way, r: (auto.r + 1) % 3 }, carril: 4 })
   ok(r.k === 'ok' && r.dec.ruta.way === auto.way && Number.isInteger(r.dec.destino) && r.dec.carril === 4, `decidir ruta + carril → ok, dec = ${JSON.stringify(r.dec)} (la ruta fija el planeta)`)
   await espera(1200)
