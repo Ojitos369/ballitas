@@ -38,6 +38,9 @@ La meseta queda entre 418 y 499 MB. Que sube y baja ±40 MB según qué caminos 
 - Capturas tras 150 s a 8×, con caminos ya expulsados (`mem_general.jpg`, `mem_pov.jpg`): están todos los caminos y no hay errores en la consola. La tecla 3 abrió la vista de seguimiento al 50 %, no un POV de cerca.
 - Servidor de Node (`mem_servidor.mjs`, 30×, 10 clientes, `heapUsed` sin gc forzado): ver la sección «Servidor» abajo.
 
+## Servidor (mem_servidor.mjs: bundle a 30×, 10 clientes, 10 min, /salud sin gc forzado)
+`heapMB` por minuto: 99, 142, 73, 203, 223, 138, 271, 167, 92, 111, 116. Es el diente de sierra del gc, sin tendencia. Del minuto 5 al 10 baja de 138 a 116 MB (−22 MB). El RSS se queda en 466–472 MB del minuto 5 al 10 (+5 MB). Cumple la meta de ≤ +30 MB.
+
 ## No cumplido / pendiente
 - Meta ≤ 50 MB entre el min 3 y el 6: punto a punto da +58 MB (el min 3 cayó en un valle); la tendencia media da +20 MB.
 - Falta el modo remoto en el navegador (≤ 30 MB).
