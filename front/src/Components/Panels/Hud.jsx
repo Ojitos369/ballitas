@@ -12,13 +12,13 @@ export default function Hud({ sim, speed, setSpeed, selected, onSelect, follow, 
     <>
       <header className="barra">
         <h1>ballitas</h1>
-        <span className="dato">{vivas.length} vivas · gen {gen}</span>
+        <span className="dato">{vivas.length} vivas · gen {gen}{sim.estado === 'sin_servidor' ? ' · sin conexión: mundo local' : sim.estado === 'reconectando' ? ' · reconectando…' : sim.modo === 'remoto' ? ' · mundo compartido' : ''}</span>
         <ListaBallitas sim={sim} vivas={vivas} selected={selected} onSelect={onSelect} follow={follow} onFollow={onFollowBallita} />
-        <div className="velocidad" role="group" aria-label="Velocidad de la simulación">
+        {sim.puede?.velocidad !== false && <div className="velocidad" role="group" aria-label="Velocidad de la simulación">
           {SPEEDS.map(([v, l, a]) => (
             <button key={v} aria-label={a} aria-pressed={speed === v} onClick={() => setSpeed(v)}>{l}</button>
           ))}
-        </div>
+        </div>}
         <button
           className="cine-btn"
           aria-pressed={cine}
