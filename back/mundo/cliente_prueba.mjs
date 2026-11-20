@@ -252,7 +252,8 @@ async function pruebaCompleta() {
       f.cerrar()
     }
     ok(iguales, `quien llega tarde recibe en hola.activas el mismo conjunto que quien siguió los cambios (${[...c.activas].sort((x, y) => x - y)})`)
-    ok([...c.b.values()].every((l) => l.way == null || c.activas.has(l.way)), 'ninguna ballita va por una ruta inactiva')    console.log('  salud:', JSON.stringify(await salud(s.url)))
+    ok([...c.b.values()].every((l) => l.way == null || c.activas.has(l.way)), 'ninguna ballita va por una ruta inactiva')
+    console.log('  salud:', JSON.stringify(await salud(s.url)))
     b.cerrar(); c.cerrar()
   } finally { s.parar() }
 }
