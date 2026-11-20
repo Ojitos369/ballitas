@@ -1077,6 +1077,7 @@ const SIN_ROLL = 0.035 // (rad/u) ritmo máximo del giro de la normal (9.4° por
 const SIN_FLY = 120 // (u/s) velocidad de vuelo de un evento entre caminos lejanos
 function sinuarCaminos(world) {
   if (SINUOSO.off) return
+  const tt = performance.now(); const TT = world.sinuosoT = { rejilla: 0, marco: 0, intenta: 0, giro: 0, eventos: 0 }; let tq = tt; const lap = (k) => { const n = performance.now(); TT[k] += n - tq; tq = n }
   const st = world.sinuoso = { caminos: 0, completos: 0, reducidos: 0, nulos: 0, reintentos: 0, revertidos: 0 }
   const segs = world.ways.flatMap((w) => w.segments.filter((s) => !s.air && s.lanes && s._braid)); const wayOf = new Map(); for (const w of world.ways) for (const s of w.segments) wayOf.set(s, w)
   // rejilla de obstáculos (clave entera < 2^30): [x, y, z, tramo, camino, vértice] por punto; fijos = posiciones originales
@@ -1091,15 +1092,16 @@ function sinuarCaminos(world) {
   const tmp = new THREE.Vector3(); let airN = -1
   for (const w of world.ways) for (const s of w.segments) if (s.air || !s.lanes) { const n = Math.max(2, Math.ceil(s.length / 14)); airN--; for (let i = 0; i <= n; i++) { s.curve.getPoint(i / n, tmp); add(tmp.x, tmp.y, tmp.z, airN, 0, i, 1) } }
   rHi += 100
+  lap('rejilla')
   const movido = new Set() // tramo * 8 + camino ya procesado: sus puntos fijos dejan de contar (cuentan los finales)
   const nodes = world.nodes.map((n) => [n.pos.x, n.pos.y, n.pos.z, (NODE_R + 150) ** 2])
   // ¿choca el punto (x, y, z) del camino `ln` del tramo `sg`? `near`: distancia mínima exigida a sus hermanos ya movidos
   const choca = (x, y, z, sg) => {
     const r2 = x * x + y * y + z * z; if (r2 < rLo * rLo || r2 > rHi * rHi) return true
     for (const n of nodes) if ((x - n[0]) ** 2 + (y - n[1]) ** 2 + (z - n[2]) ** 2 < n[3]) return true
-    const cx = Math.floor(x / CELL) + 512; const cy = Math.floor(y / CELL) + 512; const cz = Math.floor(z / CELL) + 512; const C2 = SIN_CLEAR * SIN_CLEAR
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-      const b = grid.get(((cx + dx) * 1024 + cy + dy) * 1024 + cz + dz); if (!b) continue
+    const C2 = SIN_CLEAR * SIN_CLEAR; const x0 = Math.floor((x - SIN_CLEAR) / CELL) + 512; const x1 = Math.floor((x + SIN_CLEAR) / CELL) + 512; const y0 = Math.floor((y - SIN_CLEAR) / CELL) + 512; const y1 = Math.floor((y + SIN_CLEAR) / CELL) + 512; const z0 = Math.floor((z - SIN_CLEAR) / CELL) + 512; const z1 = Math.floor((z + SIN_CLEAR) / CELL) + 512
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) for (let cz = z0; cz <= z1; cz++) {
+      const b = grid.get((cx * 1024 + cy) * 1024 + cz); if (!b) continue
       for (let q = 0; q < b.length; q++) {
         const j = b[q]; const d2 = (x - OX[j]) ** 2 + (y - OY[j]) ** 2 + (z - OZ[j]) ** 2
         if (d2 >= C2) continue
@@ -1110,10 +1112,24 @@ function sinuarCaminos(world) {
     }
     return false
   }
+  // ¿hay alguna cinta ajena (ni el camino la ni el lb del tramo sg) a menos de r del punto? (misma rejilla; para los eventos)
+  const cerca = (x, y, z, r, sg, la, lb) => {
+    const x0 = Math.floor((x - r) / CELL) + 512; const x1 = Math.floor((x + r) / CELL) + 512; const y0 = Math.floor((y - r) / CELL) + 512; const y1 = Math.floor((y + r) / CELL) + 512; const z0 = Math.floor((z - r) / CELL) + 512; const z1 = Math.floor((z + r) / CELL) + 512; const r2 = r * r
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) for (let cz = z0; cz <= z1; cz++) {
+      const b = grid.get((cx * 1024 + cy) * 1024 + cz); if (!b) continue
+      for (let q = 0; q < b.length; q++) {
+        const j = b[q]; if ((x - OX[j]) ** 2 + (y - OY[j]) ** 2 + (z - OZ[j]) ** 2 >= r2) continue
+        if (OS[j] === sg && (OL[j] === la || OL[j] === lb)) continue
+        if (!OD[j] && movido.has(OS[j] * 8 + OL[j])) continue
+        return true
+      }
+    }
+    return false
+  }
   const WF = {}; const T = new THREE.Vector3(); const s0 = new THREE.Vector3(); const v1 = new THREE.Vector3(); const v2 = new THREE.Vector3()
   segs.forEach((s, sg) => {
     const br = s._braid; if (!br.row) return
-    const N = br.N; const L = s.length; const step = L / N; const nl = s.lanes.length
+    const N = br.N; const L = s.length; const step = L / N; const nl = s.lanes.length; tq = performance.now()
     const [da, db] = braidDelay(s); const [qa, qb] = braidRamps(s); const a0 = da + qa; const b0 = L - db - qb; const Lu = b0 - a0
     if (Lu < SIN_MIN) return
     const rng = mulberry32(77000 + wayOf.get(s).idx * 977 + wayOf.get(s).segments.indexOf(s) * 131)
@@ -1136,6 +1152,7 @@ function sinuarCaminos(world) {
       v2.copy(f.dir).applyAxisAngle(T, laneAngle(s, l0, i / N)) // normal común de la fila (peralte incluido; aún sin giro propio)
       v1.crossVectors(v2, T).normalize(); v1.toArray(RW, i * 3); v2.negate().toArray(U0, i * 3)
     }
+    lap('marco')
     const w2 = Math.max(2, Math.round(28 / step)); const rho = new Float32Array(N + 1)
     for (let i = 0; i <= N; i++) {
       const p = Math.max(0, i - w2) * 3; const q = Math.min(N, i + w2) * 3
@@ -1152,7 +1169,7 @@ function sinuarCaminos(world) {
     // estaciones del tramo abierto (peso base > 0) y de los centros de las rampas de entrada y salida
     const xA = a0 + rw / 2; const xB = b0 - rw / 2; const iA = clamp(Math.round(xA / step), 0, N); const iB = clamp(Math.round(xB / step), 0, N)
     const i0 = Math.max(0, Math.ceil(a0 / step)); const i1 = Math.min(N, Math.floor(b0 / step))
-    const C2 = SIN_CLEAR * SIN_CLEAR; const ks2 = []
+    const C2 = SIN_CLEAR * SIN_CLEAR; const ks2 = []; const LEJ2 = (SIN_ROLLD + 7 * step * 2) ** 2
     // Hermanos (caminos del mismo tramo ya colocados en este intento), en el MARCO COMÚN de la fila en la estación i: a
     // menos de SIN_CLEAR los dos conservan la normal de la fila (el giro propio se anula ahí, ver `giro`), así que basta
     // la cruz «caja lateral ∪ prisma de gálibo» medida por la lateral (RW) y la normal (U0) comunes.
@@ -1160,6 +1177,7 @@ function sinuarCaminos(world) {
       const q = i * 3; const j0 = Math.max(i0, i - 5); const j1 = Math.min(i1, i + 5)
       for (let b = 0; b < hechos.length; b++) {
         const Q = hechos[b]; const kb = ks2[b]
+        if ((Q[q] - x) ** 2 + (Q[q + 1] - y) ** 2 + (Q[q + 2] - z) ** 2 > LEJ2) continue // lejos en la misma estación: tampoco cabe a ±5
         for (let j = j0; j <= j1; j++) {
           if (ki < 0.02 && kb[j] < 0.02) continue // los dos en su sitio de la fila: el reparto ya la dio por buena
           const dx = Q[j * 3] - x; const dy = Q[j * 3 + 1] - y; const dz = Q[j * 3 + 2] - z
@@ -1217,8 +1235,9 @@ function sinuarCaminos(world) {
       }
       return res
     }
-    let res = null
+    tq = performance.now(); let res = null
     for (const f of [1, 0.6, 0.35]) { res = intenta(R * f); if (res) break; st.reintentos++ }
+    lap('intenta')
     if (!res) { st.caminos += nl; st.nulos += nl; st.revertidos++; return }
     // giro de la normal: la calzada mira al eje (dir = hacia fuera) y se mece con el tirabuzón. Se anula donde un hermano
     // queda a menos de SIN_CLEAR (ahí mandan la normal común y la cruz de `hermano`) y crece desde ahí a ritmo limitado.
@@ -1227,7 +1246,7 @@ function sinuarCaminos(world) {
       const M = new Float32Array(N + 1).fill(1e6); M[0] = 0; M[N] = 0
       for (let i = i0; i <= i1; i++) {
         const q = i * 3; const x = L.Q[q]; const y = L.Q[q + 1]; const z = L.Q[q + 2]; const j0 = Math.max(i0, i - 7); const j1 = Math.min(i1, i + 7)
-        cerca: for (const o of res) { if (o === L) continue; for (let j = j0; j <= j1; j++) if ((o.Q[j * 3] - x) ** 2 + (o.Q[j * 3 + 1] - y) ** 2 + (o.Q[j * 3 + 2] - z) ** 2 < SIN_ROLLD * SIN_ROLLD) { M[i] = 0; break cerca } }
+        cerca: for (const o of res) { if (o === L || (o.Q[q] - x) ** 2 + (o.Q[q + 1] - y) ** 2 + (o.Q[q + 2] - z) ** 2 > LEJ2) continue; for (let j = j0; j <= j1; j++) if ((o.Q[j * 3] - x) ** 2 + (o.Q[j * 3 + 1] - y) ** 2 + (o.Q[j * 3 + 2] - z) ** 2 < SIN_ROLLD * SIN_ROLLD) { M[i] = 0; break cerca } }
       }
       for (let i = 0; i <= N; i++) if (i < i0 || i > i1) M[i] = 0
       for (let i = 1; i <= N; i++) if (M[i] > M[i - 1] + lim) M[i] = M[i - 1] + lim
@@ -1244,29 +1263,22 @@ function sinuarCaminos(world) {
       br.P[L.id].set(L.Q); br.sroll[L.id] = rolls[j]; movido.add(sg * 8 + L.id)
       for (let i = 0; i <= N; i += 2) add(L.Q[i * 3], L.Q[i * 3 + 1], L.Q[i * 3 + 2], sg, L.id, i, 1)
     })
-    const hecho = true
+    lap('giro'); const hecho = true
     if (hecho) { br.len = []; br.curves = []; br.sin = true }
   })
-  ajustarEventos(world, segs, wayOf)
+  tq = performance.now(); ajustarEventos(world, segs, wayOf, cerca); lap('eventos'); TT.total = performance.now() - tt; for (const k in TT) TT[k] = Math.round(TT[k])
 }
 // Eventos de cambio de camino entre caminos lejanos: vía según distancia y desnivel, apex y duración proporcionales a
 // la distancia y trayectoria comprobada contra todas las cintas (si atraviesa alguna, prueba la siguiente vía; el portal
 // no vuela y siempre es válido).
 const ARCO_KINDS = ['salto', 'tirolina', 'geiser', 'erupcion', 'rampa']
-function ajustarEventos(world, segs, wayOf) {
-  const CELL = 24; const grid = new Map(); const PX = []; const PO = []
-  const key = (x, y, z) => ((Math.floor(x / CELL) + 512) * 1024 + (Math.floor(y / CELL) + 512)) * 1024 + (Math.floor(z / CELL) + 512)
-  segs.forEach((s, sg) => { for (const l of s.lanes) { const P = s._braid.P[l.id]; for (let i = 0; i <= s._braid.N; i++) { const k = key(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(PX.length / 3); PX.push(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); PO.push(sg * 8 + l.id) } } })
-  const EV = RIBBON_HALF + 3.2; const out = {}; const fA = {}; const fB = {}; const fC = {}
+function ajustarEventos(world, segs, wayOf, cerca) {
+  // la rejilla guarda un vértice de cada dos (~14 u): el radio cubre la flecha entre dos muestras
+  const EV = Math.hypot(RIBBON_HALF + 3.2, 7.5); const out = {}; const fA = {}; const fB = {}; const fC = {}
   const libre = (s, sw, sg) => {
-    const oa = sg * 8 + sw.from; const ob = sg * 8 + sw.to
     for (let q = 0; q <= 24; q++) {
       const r = switchPath(s, sw, q / 24, out); if (sw.via === 'portal' && r.vis < 1) continue
-      const p = r.pos; const cx = Math.floor(p.x / CELL) + 512; const cy = Math.floor(p.y / CELL) + 512; const cz = Math.floor(p.z / CELL) + 512
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const b = grid.get(((cx + dx) * 1024 + cy + dy) * 1024 + cz + dz); if (!b) continue
-        for (const j of b) { if (PO[j] === oa || PO[j] === ob) continue; if ((PX[j * 3] - p.x) ** 2 + (PX[j * 3 + 1] - p.y) ** 2 + (PX[j * 3 + 2] - p.z) ** 2 < EV * EV) return false }
-      }
+      if (cerca(r.pos.x, r.pos.y, r.pos.z, EV, sg, sw.from, sw.to)) return false
     }
     return true
   }
