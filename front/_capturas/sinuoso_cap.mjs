@@ -62,6 +62,6 @@ writeFileSync(lock, `sinuoso_cap ${new Date().toISOString()}`)
 const out = []; let srv = null
 try {
   srv = await servidor(rama)
-  for (const [vp, n] of [['desk', 3], ['movil', 2]]) out.push(await corrida(vp, n).catch((e) => ({ vp, error: String(e).slice(0, 300) })))
+  for (const [vp, n] of process.argv[7] === 'libre' ? [['desk', 0]] : [['desk', 3], ['movil', 2]]) out.push(await corrida(vp, n).catch((e) => ({ vp, error: String(e).slice(0, 300) })))
   writeFileSync(`${dir}/resumen.json`, JSON.stringify(out, null, 1))
 } finally { if (srv) parar(srv); try { rmSync(lock) } catch {} }

@@ -1,0 +1,158 @@
+[
+ {
+  "vp": "desk",
+  "ini": {
+   "n": 10,
+   "sinuoso": {
+    "caminos": 441,
+    "completos": 398,
+    "reducidos": 16,
+    "nulos": 27,
+    "reintentos": 18,
+    "revertidos": 6,
+    "eventos": 2070
+   },
+   "tramosSin": 107
+  },
+  "tomas": [
+   {
+    "img": "desk_pov1_w10_salida",
+    "a": {
+     "id": 3,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 10,
+     "lane": 2,
+     "t": 0.73,
+     "giro": null
+    },
+    "b": {
+     "id": 3,
+     "phase": "travel",
+     "kind": "caida",
+     "way": 10,
+     "lane": 2,
+     "t": 0.03,
+     "giro": null
+    },
+    "tris": 782830
+   },
+   {
+    "img": "desk_pov2_w11_salida",
+    "a": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 11,
+     "lane": 0,
+     "t": 0.48,
+     "giro": 2.2364630699157715
+    },
+    "b": {
+     "id": 1,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 11,
+     "lane": 0,
+     "t": 0.58,
+     "giro": 1.7776175737380981
+    },
+    "tris": 730588
+   },
+   {
+    "img": "desk_pov3_w16_salida",
+    "a": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 16,
+     "lane": 3,
+     "t": 0.71,
+     "giro": null
+    },
+    "b": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 16,
+     "lane": 3,
+     "t": 0.76,
+     "giro": null
+    },
+    "tris": 735226
+   }
+  ],
+  "errs": [
+   "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ],
+  "trisLibre": 213742
+ },
+ {
+  "vp": "movil",
+  "ini": {
+   "n": 10,
+   "sinuoso": {
+    "caminos": 441,
+    "completos": 398,
+    "reducidos": 16,
+    "nulos": 27,
+    "reintentos": 18,
+    "revertidos": 6,
+    "eventos": 2070
+   },
+   "tramosSin": 107
+  },
+  "tomas": [
+   {
+    "img": "movil_pov1_w15_salida",
+    "a": {
+     "id": 6,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 15,
+     "lane": 0,
+     "t": 0.47,
+     "giro": 0.7692646980285645
+    },
+    "b": {
+     "id": 6,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 15,
+     "lane": 0,
+     "t": 0.58,
+     "giro": 1.4956732988357544
+    },
+    "tris": 615354
+   },
+   {
+    "img": "movil_pov2_w16_salida",
+    "a": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 16,
+     "lane": 0,
+     "t": 0.47,
+     "giro": 0.7756476402282715
+    },
+    "b": {
+     "id": 4,
+     "phase": "travel",
+     "kind": "salida",
+     "way": 16,
+     "lane": 0,
+     "t": 0.56,
+     "giro": 1.5242362022399902
+    },
+    "tris": 569864
+   }
+  ],
+  "errs": [
+   "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+   "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ],
+  "trisLibre": 202068
+ }
+]

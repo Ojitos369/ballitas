@@ -147,9 +147,10 @@ La «torsión máx. de la normal» de `sinuoso.mjs` (54.3°) está en `salida @0
 Sonda `_capturas/sinuoso_cap.mjs` → `_capturas/sinuoso/` (13 archivos; `resumen.json` con la ballita, el tramo y el giro
 propio del camino en cada toma). Las abrí todas las que cito:
 - `desk_libre.jpg` / `movil_libre.jpg` (vista libre, 1400×900 y 412×915): los cinco planetas con sus rótulos y la red
-  completa; los caminos ya no son arcos limpios, se ven ondulados y con bucles a lo largo de todo el recorrido. Sin
-  pantalla negra ni piezas sueltas. El panel marca 0.7 FPS en esa toma (a los 14 s de cargar, aún levantando la escena);
-  ver la comparación con main más abajo.
+  completa, sin pantalla negra ni piezas sueltas. **Ojo: esta vista es idéntica a la de main** (`sinuoso_main/desk_libre.jpg`,
+  mismos 213 742 triángulos y mismo trazado): de lejos la escena dibuja el eje de cada ruta, no sus caminos, así que la
+  separación y los giros nuevos **solo se ven de cerca o en POV**. Cambiarlo toca `Scene.jsx`/`mundos/*` (prohibidos en
+  esta pieza). El panel marca 0.7 FPS en esa toma (a los 14 s de cargar); main marca 0.6 en la misma toma: no es de esta pieza.
 - `desk_pov2_w11_salida_a.jpg` (POV, camino 0, giro propio 2.24 rad): la calzada naranja sube ladeada hacia un rizo; a la
   derecha pasa otra cinta de la misma ruta, ancha y muy separada, con otra inclinación. Bordillos y terreno continuos.
 - `desk_pov2_w11_salida_b.jpg` (1.6 s después, giro 1.78 rad): la calzada queda en la esquina inferior derecha, girada
@@ -163,3 +164,28 @@ propio del camino en cada toma). Las abrí todas las que cito:
   `vite preview` local no sirve; no vienen de esta pieza).
 - La primera toma de escritorio (`desk_pov1_w10_salida`) cambió de tramo antes del disparo (la ballita ya salía del
   sinuoso): no la cuento.
+
+## FPS y triángulos (`_capturas/geo3.mjs`, A/B contra main en la misma sesión, 2 tandas, 60 s rotando ballitas en POV)
+Resultados en `_capturas/sinuoso_fps/resumen.json`.
+
+| | Rama t1 | Main t1 | Rama t2 | Main t2 | Media rama | Media main | Diferencia | Meta | ¿Cumple? |
+|---|---|---|---|---|---|---|---|---|---|
+| FPS escritorio (1400×900) | 51.9 | 53.4 | 54.0 | 52.2 | 52.95 | 52.8 | +0.3 % | ≥ −8 % | sí |
+| FPS móvil (412×915) | 58.5 | 61.9 | 63.0 | 60.7 | 60.75 | 61.3 | −0.9 % | ≥ −8 % | sí |
+| Triángulos escritorio | 946 999 | 826 438 | 897 902 | 794 423 | 922 450 | 810 430 | **+13.8 %** | ≤ +15 % | sí (justo) |
+| Triángulos móvil | 907 447 | 789 303 | 845 123 | 696 412 | 876 285 | 742 857 | **+18.0 %** | ≤ +15 % | **no** |
+
+El ruido entre tandas es grande (main móvil: 789 mil y 696 mil, ±6 %; tanda 1 móvil +15.0 %, tanda 2 +21.4 %). La subida
+es esperable: los caminos sinuosos son más largos y, al ir separados, entran más cintas distintas en el cuadro. Sin
+errores de página en las 8 corridas. Navegador y `vite preview` cerrados al terminar, candado borrado, puerto 4301 libre.
+
+## Cierre de la sesión 2
+- `pnpm test` final: **82/82** (dos corridas completas; «elecciones precalculadas» 2 638 y 2 515 ms dentro de la batería).
+- `npx vite build`: correcto. `tools/cunas.mjs 3`: 0 cuñas.
+- **Pendientes, por orden:** (1) rectas en horquilla, rizo y zona de puerto (ondular el eje antes de `buildBraid`);
+  (2) triángulos en móvil +18 % (bajar la densidad de `vida/decor.jsx` o el paso de la cinta en los tramos sinuosos);
+  (3) la vista libre lejana no muestra los caminos separados (dibuja el eje de la ruta);
+  (4) portales que aterrizan en calzada fundida (0-4 por semilla); (5) `sim.js` sin tocar (duración del vuelo acotada).
+- Sin push, sin merge a main, sin deploy. Nada escrito fuera del worktree salvo el candado (borrado) y el scratchpad.
+
+Conocimiento consultado: separacion_visible_en_marco_local
