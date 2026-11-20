@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Sim } from '../../Core/sim.js'
-import { iniciarBack } from '../../Core/api.js'
 import { cargarMundo } from '../../Core/cargarMundo.js'
+import { crearMundo } from '../../Core/mundo/index.js'
 import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
@@ -35,10 +34,14 @@ export default function Main() {
 
 // `vista` ('mapa' | 'camino' | 'ballita') es la fuente de verdad; follow/pov se derivan de ella y de `punto`.
 function MainScene() {
-  const simRef = useRef(null)
-  if (!simRef.current) simRef.current = new Sim()
-  const sim = simRef.current
-  useEffect(() => { iniciarBack(sim) }, [sim])
+  const [sim, setSim] = useState(null)
+  useEffect(() => { let vivo=true; crearMundo({semilla:369}).then(m=>{if(vivo)setSim(m)}); return ()=>{vivo=false} }, [])
+  useEffect(() => () => sim?.cerrar?.(), [sim])
+  if (!sim) return <div role="status" style={{position:'fixed',inset:0,display:'grid',placeItems:'center',background:'#0b1020',color:'#cfe3ff',font:'600 18px system-ui'}}>Conectando con el mundo…</div>
+  return <LoadedScene sim={sim} />
+}
+
+function LoadedScene({ sim }) {
   const progressRef = useRef(null)
   const [speed, setSpeed] = useState(1)
   const [selected, setSelected] = useState(null)
