@@ -29,9 +29,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"], hasBlob = typeof Blob < "u";
     hasBlob && BINARY_TYPES.push("blob");
@@ -51,9 +51,9 @@ var require_constants = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { websocketMask, websocketUnmask } = __require("http"), { EMPTY_BUFFER } = require_constants(), FastBuffer = Buffer[Symbol.species];
     function concat(list, totalLength) {
@@ -108,9 +108,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = Symbol("kDone"), kRun = Symbol("kRun"), Limiter = class {
       /**
@@ -149,9 +149,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib = __require("zlib"), bufferUtil = require_buffer_util(), Limiter = require_limiter(), { kStatusCode } = require_constants(), FastBuffer = Buffer[Symbol.species], TRAILER = Buffer.from([0, 0, 255, 255]), kPerMessageDeflate = Symbol("permessage-deflate"), kTotalLength = Symbol("total-length"), kCallback = Symbol("callback"), kBuffers = Symbol("buffers"), kError = Symbol("error"), zlibLimiter, PerMessageDeflate2 = class {
       /**
@@ -409,9 +409,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer"), { hasBlob } = require_constants(), tokenChars = [
       0,
@@ -601,9 +601,9 @@ var require_validation = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream"), PerMessageDeflate2 = require_permessage_deflate(), {
       BINARY_TYPES,
@@ -1102,9 +1102,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream"), { randomFillSync } = __require("crypto"), {
       types: { isUint8Array }
@@ -1396,9 +1396,9 @@ var require_sender = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants(), kCode = Symbol("kCode"), kData = Symbol("kData"), kError = Symbol("kError"), kMessage = Symbol("kMessage"), kReason = Symbol("kReason"), kTarget = Symbol("kTarget"), kType = Symbol("kType"), kWasClean = Symbol("kWasClean"), Event = class {
       /**
@@ -1591,9 +1591,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -1676,9 +1676,9 @@ var require_extension = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events"), https = __require("https"), http2 = __require("http"), net = __require("net"), querystring = __require("querystring"), tls = __require("tls"), { randomBytes: randomBytes2, createHash: createHash2 } = __require("crypto"), { Duplex, Readable } = __require("stream"), { URL: URL2 } = __require("url"), PerMessageDeflate2 = require_permessage_deflate(), Receiver2 = require_receiver(), Sender2 = require_sender(), { isBlob } = require_validation(), {
       BINARY_TYPES,
@@ -2284,9 +2284,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket(), { Duplex } = __require("stream");
     function emitClose(stream) {
@@ -2350,9 +2350,9 @@ var require_stream = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -2385,9 +2385,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events"), http2 = __require("http"), { Duplex } = __require("stream"), { createHash: createHash2 } = __require("crypto"), extension2 = require_extension(), PerMessageDeflate2 = require_permessage_deflate(), subprotocol2 = require_subprotocol(), WebSocket2 = require_websocket(), { CLOSE_TIMEOUT, GUID, kWebSocket } = require_constants(), keyRegex = /^[+/0-9A-Za-z]{22}==$/, RUNNING = 0, CLOSING = 1, CLOSED = 2, WebSocketServer2 = class extends EventEmitter {
       /**
@@ -2702,7 +2702,7 @@ var require_websocket_server = __commonJS({
   }
 });
 
-// back/mundo/servidor.mjs
+// ../back/mundo/servidor.mjs
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -2710,10 +2710,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { performance as performance2 } from "node:perf_hooks";
 
-// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/wrapper.mjs
+// node_modules/.pnpm/ws@8.23.0/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1), import_extension = __toESM(require_extension(), 1), import_permessage_deflate = __toESM(require_permessage_deflate(), 1), import_receiver = __toESM(require_receiver(), 1), import_sender = __toESM(require_sender(), 1), import_subprotocol = __toESM(require_subprotocol(), 1), import_websocket = __toESM(require_websocket(), 1), import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// front/node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.core.js
+// node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.core.js
 var NeverDepth = 0, AlwaysDepth = 1, LessDepth = 2, LessEqualDepth = 3, EqualDepth = 4, GreaterEqualDepth = 5, GreaterDepth = 6, NotEqualDepth = 7;
 var UVMapping = 300;
 var RepeatWrapping = 1e3, ClampToEdgeWrapping = 1001, MirroredRepeatWrapping = 1002;
@@ -9008,7 +9008,7 @@ typeof __THREE_DEVTOOLS__ < "u" && __THREE_DEVTOOLS__.dispatchEvent(new CustomEv
 } }));
 typeof window < "u" && (window.__THREE__ ? console.warn("WARNING: Multiple instances of Three.js being imported.") : window.__THREE__ = "180");
 
-// front/node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.module.js
+// node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.module.js
 var alphahash_fragment = `#ifdef USE_ALPHAHASH
 	if ( diffuseColor.a < getAlphaHashThreshold( vPosition ) ) discard;
 #endif`, alphahash_pars_fragment = `#ifdef USE_ALPHAHASH
@@ -13152,7 +13152,7 @@ var reversedFuncs = {
   [GreaterEqualDepth]: LessEqualDepth
 };
 
-// front/src/Core/world.js
+// src/Core/world.js
 var WORLD_SCALE = 2.8, TUBE_SCALE = 1.8, SIZE_K = 2.8 * 1.52, ANCHO_K = 1.52, AK = ANCHO_K, TRACK_K = 4.7, TK = TRACK_K, WS = WORLD_SCALE * TK, NODE_R = 8.5 * TK, BALL_R = 0.4, MIN_GAP_K = 1.5, Y = new Vector3(0, 1, 0), X = new Vector3(1, 0, 0), TAU = Math.PI * 2;
 var DIAG = { on: !1, rechazos: {} }, rej = (k) => (DIAG.on && (DIAG.rechazos[k] = (DIAG.rechazos[k] || 0) + 1), null);
 function mulberry32(a) {
@@ -15142,7 +15142,7 @@ function indexarColisiones(world, S = braidRibbons(world)) {
   return world.colision = { libre, cercano }, world.colision;
 }
 
-// front/src/Core/personality.js
+// src/Core/personality.js
 var TRAIT_LABEL = {
   valentia: ["Miedosa", "Valiente"],
   curiosidad: ["Rutinaria", "Curiosa"],
@@ -15215,8 +15215,8 @@ function moodOf(b) {
   return b.p < 18 && b.e < 18 ? "asustada" : b.p < 30 && b.e < 30 ? "mareada" : b.e < 30 ? "cansada" : b.p < 30 ? "preocupada" : b.p > 80 && b.e > 70 ? "euforica" : "feliz";
 }
 
-// front/src/Core/sim.js
-var POP = 10, TIME_SCALE = 4.5, TRAVEL_SLOW = 2.5 / TIME_SCALE, TRAITS = ["valentia", "curiosidad", "apetito", "sociabilidad", "animo", "velocidad"], GENES = ["prefs", "ways", "routes", "kinds"], DRAIN_E = 0.22, DRAIN_P = 0.25, MAX_SIN_DECIDIR = 3, MAX_FILA = 30, MAX_NOMBRE = 16, GRACIA_DESCONEXION = 60, MAX_CONTROL_POR_ESPECTADOR = 1, MAX_FILA_POR_ESPECTADOR = 1, limpiarNombre = (nombre) => String(nombre ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NOMBRE).trim(), TRAVEL_E_LEN = 55e-4 / TRACK_K, PPS_K = 0.35 / 2.5, MAP_SPEED_K = SIZE_K / 2.5 * 1.42 * 1.14, TUBE_SPEED_K = 2.4, GRAV2 = 24 * TRACK_K, FRIC = 0.14, VMAX = 48 * TRACK_K * MAP_SPEED_K, LANE_EASE = 3.5, RAIL_EASE = 6, G_WALL = 24 * TRACK_K, BOUNCE = 0.35, LAT_K = 30, LAT_C = 7, LAT_EDGE = 0.4, RACE_GAP = 2.5, WOW = ["canon", "trampolin", "rizo", "caida", "embudo", "geiser", "erupcion", "turbina", "hielo_resbaloso", "pantano", "portal", "cascada"], FALLBACK_VOICES = {
+// src/Core/sim.js
+var POP = 10, TIME_SCALE = 4.5, TRAVEL_SLOW = 2.5 / TIME_SCALE, TRAITS = ["valentia", "curiosidad", "apetito", "sociabilidad", "animo", "velocidad"], GENES = ["prefs", "ways", "routes", "kinds"], DRAIN_E = 0.22, DRAIN_P = 0.25, MAX_SIN_DECIDIR = 3, MAX_FILA = 30, MAX_NOMBRE = 16, GRACIA_DESCONEXION = 60, MAX_CONTROL_POR_ESPECTADOR = 1, MAX_FILA_POR_ESPECTADOR = 1, RUTAS_DINAMICAS = !0, MIN_SALIDAS = 2, RUTAS_FRAC_MIN = 0.4, RUTAS_FRAC_MAX = 0.6, T_SIN_USO = 90, T_APARECE = 30, limpiarNombre = (nombre) => String(nombre ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NOMBRE).trim(), TRAVEL_E_LEN = 55e-4 / TRACK_K, PPS_K = 0.35 / 2.5, MAP_SPEED_K = SIZE_K / 2.5 * 1.42 * 1.14, TUBE_SPEED_K = 2.4, GRAV2 = 24 * TRACK_K, FRIC = 0.14, VMAX = 48 * TRACK_K * MAP_SPEED_K, LANE_EASE = 3.5, RAIL_EASE = 6, G_WALL = 24 * TRACK_K, BOUNCE = 0.35, LAT_K = 30, LAT_C = 7, LAT_EDGE = 0.4, RACE_GAP = 2.5, WOW = ["canon", "trampolin", "rizo", "caida", "embudo", "geiser", "erupcion", "turbina", "hielo_resbaloso", "pantano", "portal", "cascada"], FALLBACK_VOICES = {
   geiser: ["\xA1Al chorro del g\xE9iser!", "\xA1Arriba voy!"],
   erupcion: ["\xA1Erupci\xF3n! \xA1A volar!", "\xA1El cr\xE1ter me lanza!"],
   turbina: ["\xA1Viento de lado!", "\xA1Qu\xE9 impulso!"],
@@ -15258,9 +15258,78 @@ function nombreUnico(rng, usados) {
   }
 }
 var Sim = class {
-  constructor({ rng = Math.random, pop = POP, seed, rngDialogos = Math.random } = {}) {
-    this.rng = rng, this.rngDialogos = rngDialogos, this.world = buildWorld(seed), this.seed = seed ?? 369, this.hooks = {}, this.fila = [], this.pop = pop, this.t = 0, this.nextId = 1, this.ballitas = [], this.pool = [], this.spawnQueue = [], this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }, this.feed = [], this.nombres = /* @__PURE__ */ new Set();
+  // rutas: false = todas activas siempre; true = constantes de arriba; objeto = las sustituye
+  //   { minSalidas, fracMin, fracMax, tSinUso, tAparece }
+  constructor({ rng = Math.random, pop = POP, seed, rngDialogos = Math.random, rutas = RUTAS_DINAMICAS } = {}) {
+    this.rng = rng, this.rngDialogos = rngDialogos, this.world = buildWorld(seed), this.seed = seed ?? 369, this.hooks = {}, this.fila = [], this.pop = pop, this.t = 0, this.nextId = 1, this.ballitas = [], this.pool = [], this.spawnQueue = [], this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }, this.feed = [], this.nombres = /* @__PURE__ */ new Set(), this.activas = null, this.rutasRev = 0, rutas && this.iniciarRutas(rutas === !0 ? {} : rutas);
     for (let i = 0; i < pop; i++) this.spawn();
+  }
+  // ───────────── rutas dinámicas: qué sentidos están activos (docs/mundo_compartido.md, sección 9) ─────────────
+  // Arranque determinista: MIN_SALIDAS salidas al azar por planeta (a planetas distintos) y, si falta para el centro
+  // del rango objetivo, más al azar.
+  iniciarRutas(cfg) {
+    let W = this.world.ways, N = W.length, c = this.rutasCfg = { minSalidas: MIN_SALIDAS, fracMin: RUTAS_FRAC_MIN, fracMax: RUTAS_FRAC_MAX, tSinUso: T_SIN_USO, tAparece: T_APARECE, ...cfg };
+    c.min = Math.ceil(c.fracMin * N), c.max = Math.max(c.min, Math.floor(c.fracMax * N)), this.activas = /* @__PURE__ */ new Set(), this.usoRuta = new Array(N).fill(0), this.tAparicion = 0;
+    for (let salen of this.world.waysFrom) {
+      let resto = [...salen], vistos = /* @__PURE__ */ new Set();
+      for (; vistos.size < c.minSalidas && resto.length; ) {
+        let w = resto.splice(Math.floor(this.rng() * resto.length), 1)[0];
+        vistos.has(w.to) || (vistos.add(w.to), this.activas.add(w.idx));
+      }
+    }
+    let meta = Math.round((c.min + c.max) / 2);
+    for (; this.activas.size < meta && this.activas.size < N; ) {
+      let ina = W.filter((w) => !this.activas.has(w.idx));
+      this.activas.add(ina[Math.floor(this.rng() * ina.length)].idx);
+    }
+  }
+  activa(way) {
+    return !this.activas || this.activas.has(way.idx);
+  }
+  // Sentidos activos que salen de `nodo` (todos si las rutas dinámicas están apagadas).
+  salidasActivas(nodo) {
+    let ws = this.world.waysFrom[nodo] ?? [];
+    if (!this.activas) return ws;
+    let act = ws.filter((w) => this.activas.has(w.idx));
+    return act.length ? act : ws;
+  }
+  // Planetas distintos a los que `nodo` puede SALIR por rutas activas, sin contar la ruta `sin` (las que llegan no cuentan).
+  salidasDistintas(nodo, sin = -1) {
+    let a = /* @__PURE__ */ new Set();
+    for (let w of this.world.waysFrom[nodo]) w.idx !== sin && this.activas.has(w.idx) && a.add(w.to);
+    return a.size;
+  }
+  // ¿Alguna ballita viva va por ella (rumbo al puerto o dentro: b.way, con su plannedRoute) o la tiene en sus
+  // decisiones pendientes (ruta decidida, o planeta decidido que se alcanza por ella)?
+  rutaEnUso(way) {
+    for (let b of this.ballitas)
+      if (!(b.phase === "dying" || b.phase === "gone")) {
+        if (b.way === way) return !0;
+        if (b.ctrl && (b.dec.ruta?.way === way.idx || b.dec.destino === way.to && this.origenSiguiente(b) === way.from))
+          return !0;
+      }
+    return !1;
+  }
+  puedeQuitarRuta(way) {
+    return !!this.activas && this.activas.has(way.idx) && !this.rutaEnUso(way) && this.salidasDistintas(way.from, way.idx) >= this.rutasCfg.minSalidas;
+  }
+  // Quita la ruta si las reglas lo permiten; si las activas bajan del mínimo del rango aparece otra al azar.
+  quitarRuta(way, motivo) {
+    return this.puedeQuitarRuta(way) ? (this.activas.delete(way.idx), this.rutasRev++, this.hooks.rutas?.({ on: [], off: [way.idx], motivo }), this.activas.size < this.rutasCfg.min && this.aparecerRuta("rango", way.idx), !0) : !1;
+  }
+  // Activa una inactiva al azar (rng de la sim), distinta de `sin` si hay otra.
+  aparecerRuta(motivo, sin = -1) {
+    let ina = this.world.ways.filter((w2) => !this.activas.has(w2.idx) && w2.idx !== sin);
+    if (ina.length || (ina = this.world.ways.filter((w2) => !this.activas.has(w2.idx))), !ina.length) return null;
+    let w = ina[Math.floor(this.rng() * ina.length)];
+    return this.activas.add(w.idx), this.usoRuta[w.idx] = this.t, this.tAparicion = this.t, this.rutasRev++, this.hooks.rutas?.({ on: [w.idx], off: [], motivo }), w;
+  }
+  tickRutas() {
+    let c = this.rutasCfg;
+    for (let b of this.ballitas) b.way && b.phase !== "dying" && b.phase !== "gone" && (this.usoRuta[b.way.idx] = this.t);
+    for (let i of this.activas)
+      if (this.t - this.usoRuta[i] > c.tSinUso && this.quitarRuta(this.world.ways[i], "sin_uso")) break;
+    this.t - this.tAparicion >= c.tAparece && (this.activas.size < c.max ? this.aparecerRuta("tiempo") : this.tAparicion = this.t);
   }
   genomeForNewborn() {
     let { pool, rng } = this;
@@ -15388,7 +15457,7 @@ var Sim = class {
   decidir(id, espectador, dec) {
     let b = this.viva(id);
     if (!b || !b.ctrl || b.ctrl !== espectador) return { ok: !1, error: "no_controlas" };
-    let ways = this.world.waysFrom[this.origenSiguiente(b)], n = { ...b.dec };
+    let ways = this.salidasActivas(this.origenSiguiente(b)), n = { ...b.dec };
     if (dec && "destino" in dec)
       if (dec.destino == null)
         delete n.destino, delete n.ruta;
@@ -15411,7 +15480,7 @@ var Sim = class {
   }
   // Sentidos y ruta que admite el siguiente viaje desde `nodo` según las decisiones `d` (lo que no vale se ignora).
   restringir(nodo, d) {
-    let ways = this.world.waysFrom[nodo], ruta = null, usado = [];
+    let ways = this.salidasActivas(nodo), ruta = null, usado = [];
     if (d.ruta) {
       let w = ways.find((x) => x.idx === d.ruta.way);
       w?.routes[d.ruta.r] && (ways = [w], ruta = w.routes[d.ruta.r], usado.push("destino", "ruta"));
@@ -15462,7 +15531,7 @@ var Sim = class {
     for (let i = this.ballitas.length - 1; i >= 0; i--)
       this.ballitas[i].phase === "gone" && this.ballitas.splice(i, 1);
     for (; this.ballitas.length + this.spawnQueue.length < this.pop; ) this.spawnQueue.push(this.t + 1.5);
-    this.spawnQueue = this.spawnQueue.filter((at2) => at2 <= this.t ? (this.spawn(), !1) : !0);
+    this.spawnQueue = this.spawnQueue.filter((at2) => at2 <= this.t ? (this.spawn(), !1) : !0), this.activas && this.tickRutas();
   }
   step(b, dt) {
     if (b.phase === "dying") {
@@ -15575,7 +15644,7 @@ var Sim = class {
   // su media). No consume la RNG ni toca a la ballita: la elección real sigue ocurriendo en goWay, al salir del nodo,
   // y puede diferir (energía, puntos y compañeras cambian hasta ese instante). Solo sirve para precargar en orden.
   probWays(b, node = b.node) {
-    let ways = this.world.waysFrom[node] ?? [];
+    let ways = this.salidasActivas(node);
     if (ways.length < 2) return ways.map((w) => w.idx);
     let peers = this.peerCounts(b), sc = /* @__PURE__ */ new Map();
     for (let way of ways) {
@@ -15605,7 +15674,9 @@ var Sim = class {
       destino: `${destNode.name} \xB7 ${best.nextDest.name}`,
       ruta: `${best.way.theme.name} \xB7 Ruta ${best.route.name}`,
       razon: usado.length ? "lo decidi\xF3 quien me controla" : best.razon
-    }, usado.length && (b.plan.manual = usado), this.walkTo(b, this.world.nodes[b.node].portTo[best.way.to].out, "toPort"), this.say(b, "camino", { c: best.way.theme.name, n: destNode.name });
+    }, usado.length && (b.plan.manual = usado);
+    let invalidas = [];
+    d.ruta && !usado.includes("ruta") && invalidas.push("ruta"), d.destino != null && !usado.includes("destino") && invalidas.push("destino"), invalidas.length && (b.plan.aviso = "la ruta decidida ya no est\xE1 disponible: eligi\xF3 sola", this.hooks.invalida?.(b, invalidas)), this.walkTo(b, this.world.nodes[b.node].portTo[best.way.to].out, "toPort"), this.say(b, "camino", { c: best.way.theme.name, n: destNode.name });
   }
   // ───────────── circuito: rodar por los tubos ─────────────
   eta(b, way) {
@@ -15738,7 +15809,7 @@ var Sim = class {
   }
   arrive(b) {
     let L = b.way, node = this.world.nodes[L.to];
-    b.ctrl && (b.viajeDecidido || Object.keys(b.dec).length > 0 ? b.sinDecidir = 0 : ++b.sinDecidir >= MAX_SIN_DECIDIR && this.dejar(b.id, b.ctrl, "inactivo")), b.viajeDecidido = !1, b.rutaFija = null, b.carrilFijo = null, b.node = L.to, b.vert = node.portTo[L.from].in, b.visited = [L.to, ...b.visited].slice(0, 3), b.speed = 0, b.roll = b.off = b.rail = 0, this.resetSurface(b), b.slope = 0, b.onLane = !0, b.sw = null, b.lane = 0, b.ang = 0, this.say(b, "llega", { n: node.name }), this.goDest(b);
+    b.ctrl && (b.viajeDecidido || Object.keys(b.dec).length > 0 ? b.sinDecidir = 0 : ++b.sinDecidir >= MAX_SIN_DECIDIR && this.dejar(b.id, b.ctrl, "inactivo")), b.viajeDecidido = !1, b.rutaFija = null, b.carrilFijo = null, b.node = L.to, b.vert = node.portTo[L.from].in, b.visited = [L.to, ...b.visited].slice(0, 3), b.speed = 0, b.roll = b.off = b.rail = 0, this.resetSurface(b), b.slope = 0, b.onLane = !0, b.sw = null, b.lane = 0, b.ang = 0, this.say(b, "llega", { n: node.name }), this.goDest(b), this.activas && this.quitarRuta(L, "terminada");
   }
   // Para el panel: lo que más le gusta (genes más altos).
   favorites(b) {
@@ -15756,7 +15827,7 @@ var Sim = class {
   }
 };
 
-// front/src/Core/protocolo.js
+// src/Core/protocolo.js
 var FASES = ["born", "toDest", "at", "toPort", "travel", "dying"], CLIENTE = ["hola", "formar", "salirFila", "tomar", "dejar", "decidir", "ping"];
 var B_AIRBORNE = 1, B_ONLANE = 2, B_VUELO = 4, B_FALLIDO = 8, r2 = (x) => Math.round(x * 100) / 100 || 0, r3 = (x) => Math.round(x * 1e3) / 1e3 || 0, r5 = (x) => Math.round(x * 1e5) / 1e5 || 0, v2 = (v) => [r2(v.x), r2(v.y), r2(v.z)], v3 = (v) => [r3(v.x), r3(v.y), r3(v.z)];
 function rapida(b) {
@@ -15837,7 +15908,20 @@ function difLenta(textos, ahora) {
   }
   return d;
 }
-var filaPublica = (fila, cortoDe) => fila.map((f) => ({ nombre: f.nombre, de: cortoDe(f.espectador), t: r2(f.t) })), instantanea = (n, t, ballitas) => ({ k: "i", n, t: r3(t), b: ballitas.map(rapida) }), UUID = /^[0-9a-zA-Z_-]{8,64}$/, entero = (x) => Number.isInteger(x);
+var filaPublica = (fila, cortoDe) => fila.map((f) => ({ nombre: f.nombre, de: cortoDe(f.espectador), t: r2(f.t) })), instantanea = (n, t, ballitas) => ({ k: "i", n, t: r3(t), b: ballitas.map(rapida) }), rutasActivas = (sim) => sim.activas ? [...sim.activas].sort((a, b) => a - b) : null;
+function acumularRutas(acc, cambio) {
+  let a = acc || { on: [], off: [] };
+  for (let i of cambio.on || []) {
+    let k = a.off.indexOf(i);
+    k >= 0 ? a.off.splice(k, 1) : a.on.includes(i) || a.on.push(i);
+  }
+  for (let i of cambio.off || []) {
+    let k = a.on.indexOf(i);
+    k >= 0 ? a.on.splice(k, 1) : a.off.includes(i) || a.off.push(i);
+  }
+  return a;
+}
+var UUID = /^[0-9a-zA-Z_-]{8,64}$/, entero = (x) => Number.isInteger(x);
 function validar(texto) {
   if (typeof texto != "string" || texto.length > 512) return { error: "tamano" };
   let m;
@@ -15881,7 +15965,7 @@ function validar(texto) {
   return mal();
 }
 
-// back/mundo/servidor.mjs
+// ../back/mundo/servidor.mjs
 var AQUI = path.dirname(fileURLToPath(import.meta.url)), ESTATICOS = /* @__PURE__ */ new Set(["name", "gen", "padres", "arch", "genome", "bornAt", "formadaPor"]), pct = (xs, q) => {
   let s = Float64Array.from(xs).sort();
   return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : 0;
@@ -15933,6 +16017,12 @@ async function crearServidor(o = {}) {
     b.ctrl === esp && eventos.push({ k: "entra", b: b.id, de: cortoDe(esp) });
   }, sim.hooks.libre = (b, motivo) => {
     eventos.push({ k: "libre", b: b.id, motivo }), autos.delete(b.id);
+  };
+  let rutasPend = null;
+  sim.hooks.rutas = (c) => {
+    rutasPend = acumularRutas(rutasPend, c);
+  }, sim.hooks.invalida = (b, que) => {
+    eventos.push({ k: "invalida", b: b.id, que });
   };
   let caidoHasta = 0, mundoBack = null;
   async function pedir(metodo, ruta, cuerpo) {
@@ -16013,7 +16103,8 @@ async function crearServidor(o = {}) {
       stats: sim.stats,
       feed: feedPublico(),
       espectadores: nConectados(),
-      reglas
+      reglas,
+      activas: rutasActivas(sim)
     };
   }
   function alHola(ws, c, m) {
@@ -16115,7 +16206,7 @@ async function crearServidor(o = {}) {
     let feed = JSON.stringify(feedPublico());
     feed !== ultimo.feed && (ultimo.feed = feed, d.feed = JSON.parse(feed), hay = !0);
     let esp = nConectados();
-    return esp !== ultimo.espectadores && (ultimo.espectadores = esp, d.espectadores = esp, hay = !0), eventos.length && (d.ev = eventos, eventos = [], hay = !0), hay ? d : null;
+    return esp !== ultimo.espectadores && (ultimo.espectadores = esp, d.espectadores = esp, hay = !0), eventos.length && (d.ev = eventos, eventos = [], hay = !0), rutasPend && ((rutasPend.on.length || rutasPend.off.length) && (d.rutas = rutasPend, hay = !0), rutasPend = null), hay ? d : null;
   }
   for (let b of sim.ballitas) {
     let tx = {};
@@ -16159,6 +16250,8 @@ async function crearServidor(o = {}) {
       conexiones: conexiones.size,
       espectadores: nConectados(),
       ballitas: sim.ballitas.length,
+      rutasActivas: sim.activas ? sim.activas.size : sim.world.ways.length,
+      rutas: sim.world.ways.length,
       fila: sim.fila.length,
       stats: sim.stats,
       tickMs: { n: nTick, media: +(ts.reduce((a, b) => a + b, 0) / Math.max(1, ts.length)).toFixed(4), p50: +pct(ts, 0.5).toFixed(4), p99: +pct(ts, 0.99).toFixed(4), max: +maxTick.toFixed(3) },

@@ -177,7 +177,9 @@ test('escala del mundo: constantes, radios relativos, 3 obstáculos/mitad y tiem
   }
 
   // Medir duración real de viaje por circuito y supervivencia energética
-  const sim = new Sim({ rng: mulberry32(19) })
+  // rutas: false = todas las rutas, como siempre midió esta prueba (la media de UNA semilla varía ±20 s según qué rutas
+  // toquen: 6 semillas dan 109-171 s sin rutas dinámicas y 120-177 s con ellas, medias 139,7 y 145,3 s)
+  const sim = new Sim({ rng: mulberry32(19), rutas: false })
   const entered = new Map()
   const durations = []
   for (let i = 0; i < 3000; i++) {

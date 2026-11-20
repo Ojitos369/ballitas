@@ -242,7 +242,17 @@ async function pruebaCompleta() {
     await c.hasta(() => c.nacidas.find((l) => l.name === 'Huerfana'), 120000, 'nace la huérfana')
     const h = c.nacidas.find((l) => l.name === 'Huerfana')
     ok(h.ctrl === null && h.formadaPor === d.yo.corto, 'la entrada en la fila sobrevive a la desconexión; nace sin controlador')
-    console.log('  salud:', JSON.stringify(await salud(s.url)))
+    // 6) rutas dinámicas: el conjunto que reconstruye un cliente con d.rutas es el del servidor
+    ok((c.rutasOn || 0) > 0 && (c.rutasOff || 0) > 0, `rutas dinámicas: ${c.rutasOn} apariciones y ${c.rutasOff} retiradas recibidas en d.rutas`)
+    ok(c.minActivas >= 10 && c.maxActivas <= 12, `activas siempre entre 10 y 12 de 20 (visto ${c.minActivas}..${c.maxActivas})`)
+    let iguales = false
+    for (let i = 0; i < 5 && !iguales; i++) {
+      const f = new Cliente(s.url, 'F'); const hf = await f.conectar(); await espera(150)
+      iguales = JSON.stringify([...f.activas].sort((x, y) => x - y)) === JSON.stringify([...c.activas].sort((x, y) => x - y)) && (await salud(s.url)).rutasActivas === f.activas.size && hf.activas.length >= 10
+      f.cerrar()
+    }
+    ok(iguales, `quien llega tarde recibe en hola.activas el mismo conjunto que quien siguió los cambios (${[...c.activas].sort((x, y) => x - y)})`)
+    ok([...c.b.values()].every((l) => l.way == null || c.activas.has(l.way)), 'ninguna ballita va por una ruta inactiva')    console.log('  salud:', JSON.stringify(await salud(s.url)))
     b.cerrar(); c.cerrar()
   } finally { s.parar() }
 }

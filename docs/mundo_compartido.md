@@ -183,9 +183,9 @@ Límites: 512 B por mensaje, 5 mensajes/s por conexión (exceso: `error: 'ritmo'
 
 | `k` | Campos |
 |---|---|
-| `hola` | `v`, `epoca: string` (cambia en cada arranque del servidor), `semilla: number`, `worldGen: number`, `picks: object[]`, `hz: 30`, `cada: 3` (ticks por instantánea), `n: number` (tick), `t: number` (segundos de sim), `yo: { corto: string }`, `b: Lenta[]` (cada una con `r: Rapida`), `fila: Fila[]`, `stats`, `feed`, `espectadores: number`, `reglas: { maxSinDecidir: 3, maxFila: 30, maxNombre: 16 }` |
+| `hola` | `v`, `epoca: string` (cambia en cada arranque del servidor), `semilla: number`, `worldGen: number`, `picks: object[]`, `hz: 30`, `cada: 3` (ticks por instantánea), `n: number` (tick), `t: number` (segundos de sim), `yo: { corto: string }`, `b: Lenta[]` (cada una con `r: Rapida`), `fila: Fila[]`, `stats`, `feed`, `espectadores: number`, `reglas: { maxSinDecidir: 3, maxFila: 30, maxNombre: 16 }`, `activas: number[] \| null` (rutas activas: índices de `world.ways`, ordenados; `null` si las rutas dinámicas están apagadas; sección 9) |
 | `i` | `n`, `t`, `b: Rapida[]` — 10 Hz |
-| `d` | `n`, y solo lo que cambió: `b?: Partial<Lenta>[]` (cada una con `id`), `nace?: Lenta[]` (con `r`), `fila?: Fila[]` (completa), `stats?`, `feed?`, `espectadores?`. Se envía **antes** de la `i` del mismo tick. |
+| `d` | `n`, y solo lo que cambió: `b?: Partial<Lenta>[]` (cada una con `id`), `nace?: Lenta[]` (con `r`), `fila?: Fila[]` (completa), `stats?`, `feed?`, `espectadores?`, `ev?` (eventos de control: `entra`, `libre` e `invalida { b, que: string[] }`), `rutas?: { on: number[], off: number[] }` (rutas que aparecen y desaparecen; sección 9). Se envía **antes** de la `i` del mismo tick. |
 | `ok` | `q`, y según el caso `puesto?: number`, `dec?: Dec` |
 | `error` | `q?`, `error: string` (código) |
 | `pong` | `c`, `n`, `t` |
@@ -262,7 +262,10 @@ Mundo = {
   dejar(b): Promise<{ ok, error? }>,
   decidir(b, dec: Partial<Dec con null>): Promise<{ ok, dec?, error? }>,
   opciones(b): { origen: idx, planetas: Planeta[], rutas: Ruta[], carriles: Carril[] },   // sección 3.5; pura
-  on(evento, fn): () => void, // 'cambio' (fila, control, estado), 'entra', 'libre'; devuelve la baja
+  activas: Set<idx de way> | null,                  // rutas activas (sección 9); null = todas. MISMO Set, mutado en sitio
+  rutasRev: number,                                 // sube con cada cambio de `activas` (el render lo sondea por cuadro)
+  on(evento, fn): () => void, // 'cambio' (fila, control, estado), 'entra', 'libre', 'rutas' ({ on, off }),
+                              // 'invalida' ({ b, que, mia }); devuelve la baja
   cerrar(): void,
 }
 ```
@@ -582,3 +585,66 @@ divergen. (2) Sin entradas externas, la simulación modificada da la misma huell
 reconstrucción (media y p99) frente a la verdad tick a tick, por frecuencia, en unidades del tamaño del objeto.
 (4) Bytes por instantánea y por segundo, crudos y comprimidos. (5) ms por tick y % de núcleo a la frecuencia elegida.
 (6) En navegador real: llegar tarde, recargar, reiniciar el servidor y pestaña en segundo plano.
+
+## 9. Rutas dinámicas (2026-11-20)
+
+Pedido: «las rutas deben ser cambiantes, aparecer unas y desaparecer otras, para no cargar todas al mismo tiempo.
+puede quedar solo una ruta de ida o vuelta, ambas o ninguna». La geometría de todo el mundo sigue precalculada en
+`world.js`; lo dinámico es qué subconjunto está **activo**.
+
+**Unidad.** Una «ruta» del pedido es un **sentido de circuito**: una entrada de `world.ways` (la ida o la vuelta entre
+dos planetas; 20 en total, 4 salen de cada planeta). No es una entrada de `world.routes`: esas son las alternativas
+A, B y C *dentro* de un sentido, comparten salida y llegada y la ballita puede cambiar entre ellas a mitad de camino.
+Un sentido inactivo deja fuera sus tres alternativas; `Paths.jsx` monta un `Way` por sentido, así que es también la
+unidad de carga.
+
+**Estado** (en `sim.js`): `sim.activas` (`Set` de `way.idx`, o `null` con la función apagada), `sim.rutasRev`
+(contador de cambios), `sim.usoRuta[idx]` (segundo de sim de la última vez que alguna ballita la tuvo tomada, o de su
+aparición). Constantes exportadas:
+
+| Constante | Valor | Qué hace |
+|---|---|---|
+| `RUTAS_DINAMICAS` | `true` | `false`: todas activas siempre; la sim da la **misma huella** que antes |
+| `MIN_SALIDAS` | 2 | planetas distintos a los que cada planeta debe poder **salir** por rutas activas |
+| `RUTAS_FRAC_MIN`, `RUTAS_FRAC_MAX` | 0,4 y 0,6 | rango objetivo de activas (8 a 12 de 20) |
+| `T_SIN_USO` | 90 s | tiempo de sim sin que nadie la tome para quitarla |
+| `T_APARECE` | 30 s | cada cuánto aparece una inactiva mientras no se llegue al máximo del rango |
+
+Todas se pueden sustituir por instancia: `new Sim({ rutas: false | true | { minSalidas, fracMin, fracMax, tSinUso,
+tAparece } })`.
+
+**Reglas.**
+
+1. *Arranque* (determinista, con la `rng` de la sim y antes de nacer ninguna ballita): `MIN_SALIDAS` salidas al azar
+   por planeta y, si hace falta, más al azar hasta el centro del rango.
+2. *Conexiones*: `salidasDistintas(planeta)` cuenta los planetas distintos alcanzables por rutas activas que **salen**
+   de él. Las que llegan no cuentan. Ninguna retirada puede dejarlo por debajo de `MIN_SALIDAS`.
+3. *En uso* (`rutaEnUso`): alguna ballita viva tiene `b.way` en ella (camina al puerto o va dentro, con su
+   `plannedRoute`), o un controlador la tiene en sus decisiones pendientes (`dec.ruta`, o `dec.destino` cuando ese
+   planeta se alcanza por ella desde el origen del siguiente viaje). Una ruta en uso nunca se quita.
+4. *Quitar* (`quitarRuta`, solo si 2 y 3 lo permiten): (a) lleva `T_SIN_USO` sin uso (se revisa en cada tick, como
+   mucho una retirada por tick); (b) una ballita la termina (`arrive`) y nadie más la tiene en sus planes.
+5. *Aparecer* (`aparecerRuta`, una inactiva al azar con la `rng` de la sim): cuando una retirada deja las activas por
+   debajo del mínimo del rango (nunca la que se acaba de quitar si hay otra), y además cada `T_APARECE` mientras haya
+   menos que el máximo, para que el mapa cambie aunque no se quite nada.
+6. *Elegir*: `goWay`, `predecir`, `probWays`, `opciones()` y `decidir` solo consideran rutas activas
+   (`salidasActivas(nodo)`). `decidir` responde `ruta` o `destino` si se pide una inactiva. Si una decisión ya
+   aceptada no vale al salir (la ruta ya no está, o no sale de ese planeta), decide la sim, `b.plan.aviso` lleva el
+   texto y se llama `hooks.invalida(b, ['ruta' | 'destino', …])`.
+
+Con 5 planetas y `MIN_SALIDAS = 2` el suelo real son 10 rutas (50 %), por encima del mínimo del rango (8): en la
+práctica el mundo oscila entre 10 y 12 activas, y lo que lo mueve es la aparición por tiempo seguida de la retirada
+de la que se termina. La aparición «por rango» queda cubierta por las pruebas con `minSalidas: 1` y actuará sola si
+se sube el número de planetas o se cambian las constantes.
+
+**Protocolo.** `hola.activas` (lista ordenada o `null`) y `d.rutas = { on, off }` con lo acumulado desde el `d`
+anterior (`acumularRutas`: lo que aparece y desaparece en el mismo intervalo no viaja). El cliente lo aplica con
+`aplicarRutas(set, cambio)`. La decisión que quedó inválida viaja como evento en `d.ev`:
+`{ k: 'invalida', b, que }`. `/salud` añade `rutasActivas` y `rutas`. No cambia `v`: un cliente viejo ignora los
+campos nuevos (y dibuja todas las rutas).
+
+**Cliente.** `mundo.activas`, `mundo.rutasRev` y los eventos `rutas` e `invalida` en los adaptadores local y remoto.
+`Paths.jsx` monta solo los sentidos activos (más los que se están recogiendo y el enfocado): los inactivos no crean
+geometría, materiales ni precarga de vida. La aparición y la retirada duran 1,2 s y son una escala del grupo del
+camino con pivote en su planeta de origen (crece desde él y se recoge hacia él), sin materiales ni programas nuevos.
+El rótulo de un circuito sin ningún sentido montado no se muestra. En local, `?rutas=0` apaga la función.
