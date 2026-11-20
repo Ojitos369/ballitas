@@ -20,8 +20,10 @@ const TALL_CULL_DIST = 96
 const MED_CULL_DIST = 58
 const ARCH_CULL_DIST = 104
 const OVERVIEW_DIST_SQ = 36 * 36 // > 36 u del tramo más cercano = vista general Camino -> LOD reducido
-const POOL_CAP = 128
-const ARCH_CAP = 48
+// Capacidad suficiente para el radio cercano de varios tramos; los objetos más lejanos
+// siguen filtrándose por distancia antes de escribirse en estos buffers.
+const POOL_CAP = 384
+const ARCH_CAP = 96
 const MOVE_RECOMPACT_SQ = 20 // recompila instancias visibles solo al moverse >= 4.5 u
 
 // ═══════════════════════════ ARCOS / TÚNELES TEMÁTICOS ═══════════════════════════

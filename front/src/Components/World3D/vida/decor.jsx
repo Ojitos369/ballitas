@@ -18,8 +18,6 @@ const SPACING = 2.8 * TRACK_K // ~13 u entre hitos/farolas/banderines de berma
 const FLORA_SPACING = 1.15 * TRACK_K // ~5.4 u entre matas de flora en ambas bermas
 const MAX_REBOTES_JUMP = 16
 const MAX_REBOTES_SIDE = 10
-const MAX_DECO_TOTAL = 150 // InstanceCuller recorta >= 48 a 60 u
-const MAX_FLORA_TOTAL = 200 // flora densa continua en bermas, recortada por InstanceCuller a 60 u
 
 function capStride(arr, max) {
   if (arr.length <= max) return arr
@@ -201,10 +199,12 @@ function* decorGen(way) {
 
   rebotesJump = capStride(rebotesJump, MAX_REBOTES_JUMP)
   const rebotes = [...rebotesJump, ...capStride(rebotesSide, MAX_REBOTES_SIDE)]
-  const decos = capStride(decoCands, MAX_DECO_TOTAL)
+  // No limitar por camino: los primeros tramos no deben consumir el cupo de los siguientes.
+  // InstanceCuller conserva el coste de dibujo acotado a las piezas cercanas.
+  const decos = decoCands
 
   const hito = []
-  const flora = capStride(floraCands, MAX_FLORA_TOTAL)
+  const flora = floraCands
   const farola = []
   const banderin = []
   for (const d of decos) {

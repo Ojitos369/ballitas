@@ -960,13 +960,18 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
   const nonAirSegs = useMemo(() => (way.segments ?? []).map((seg, si) => ({ seg, si })).filter((x) => !x.seg.air), [way])
   const waySphere = useMemo(() => getWayBoundingSphere(way, 18 * TRACK_K), [way])
   const meshes = useMemo(() => spec.layers.map((ly) => {
-    const m = new THREE.InstancedMesh(getGeo(ly.geo), pMat(ly.mat), ly.cap)
+    // La capacidad cubre el radio de recorte alargado hacia delante (280 u con K=2.8),
+    // con margen para dos lados y solape de tramos. `ly.cap` era global al cuadro y
+    // podía cortar la segunda mitad de una curva densa.
+    const cap = Math.max(ly.cap, Math.ceil(560 / ly.step * 2))
+    const m = new THREE.InstancedMesh(getGeo(ly.geo), pMat(ly.mat), cap)
     m.count = 0
     m.userData.noCull = true
+    m.userData.cap = cap
     m.boundingSphere = waySphere
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     const w = new THREE.Color('#ffffff')
-    for (let i = 0; i < ly.cap; i++) m.setColorAt(i, w)
+    for (let i = 0; i < cap; i++) m.setColorAt(i, w)
     if (ly.mat === 'ray' || ly.mat === 'motes' || ly.mat === 'bubbles') m.renderOrder = 3
     return m
   }), [spec, waySphere])
@@ -1058,7 +1063,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
         const sd = segCache.get(seg)
         if (!sd) continue
         const list = sd.layers[li]
-        for (let i = 0; i < list.length && n < ly.cap; i++) {
+        for (let i = 0; i < list.length && n < mesh.userData.cap; i++) {
           const it = list[i]
           tmp.d.copy(it.pos).sub(cam)
           const d2r = tmp.d.lengthSq()
@@ -1070,7 +1075,7 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
           pon(it, d2, tmp.d.x, tmp.d.y, tmp.d.z)
         }
       }
-      for (let j = 0; j < lejos.length && n < ly.cap; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
+      for (let j = 0; j < lejos.length && n < mesh.userData.cap; j += 5) pon(lejos[j], lejos[j + 1], lejos[j + 2], lejos[j + 3], lejos[j + 4])
       if (MIDE) publicaCrece(mesh, cm)
       mesh.count = n
       if (n) {
