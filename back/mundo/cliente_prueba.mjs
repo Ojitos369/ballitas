@@ -3,7 +3,8 @@
 //   node back/mundo/cliente_prueba.mjs basico [url]            contrato a velocidad real (~15 s): errores, tomar, decidir, dejar
 //   node back/mundo/cliente_prueba.mjs completo                arranca su propio servidor acelerado (30x) y comprueba además:
 //                                                              decisiones cumplidas, 3 rutas sin decidir, fila al morir otra, gracia
-//   node back/mundo/cliente_prueba.mjs carga [url] [n=50] [s=600]   n clientes escuchando a 10 Hz; mide CPU y memoria con /salud
+//   node back/mundo/cliente_prueba.mjs carga [url] [n=50] [s=600] [comprimido]   n clientes a 10 Hz; mide CPU y memoria con /salud.
+//       Sin «comprimido» los clientes no negocian permessage-deflate, igual que el relevo de FastAPI (camino de producción).
 // url por defecto: ws://127.0.0.1:8379
 import { spawn } from 'node:child_process'
 import { randomUUID, createHash } from 'node:crypto'
@@ -18,10 +19,10 @@ let fallos = 0; let pasos = 0
 const ok = (cond, texto) => { pasos++; if (cond) console.log(`  ✔ ${texto}`); else { fallos++; console.log(`  ✘ ${texto}`) } }
 
 class Cliente {
-  constructor(url, nombre, id = randomUUID()) { this.url = url; this.nombre = nombre; this.id = id; this.q = 0; this.pend = new Map(); this.b = new Map(); this.fila = []; this.ev = []; this.sueltos = []; this.oyentes = new Set(); this.recibidos = 0; this.bytes = 0; this.cierre = null }
+  constructor(url, nombre, id = randomUUID(), opciones = undefined) { this.opciones = opciones; this.url = url; this.nombre = nombre; this.id = id; this.q = 0; this.pend = new Map(); this.b = new Map(); this.fila = []; this.ev = []; this.sueltos = []; this.oyentes = new Set(); this.recibidos = 0; this.bytes = 0; this.cierre = null }
   conectar({ hola = true } = {}) {
     return new Promise((res, rej) => {
-      const ws = this.ws = new WebSocket(this.url)
+      const ws = this.ws = new WebSocket(this.url, this.opciones)
       ws.on('error', rej)
       ws.on('close', (codigo) => { this.cierre = codigo; this.avisar() })
       ws.on('message', (d) => this.recibe(d))
@@ -245,10 +246,10 @@ async function pruebaHolaAcelerado(url) {
 }
 
 // ───────────── carga ─────────────
-async function pruebaCarga(url, n, seg) {
-  console.log(`carga → ${url}: ${n} clientes durante ${seg} s`)
+async function pruebaCarga(url, n, seg, comprimir) {
+  console.log(`carga → ${url}: ${n} clientes durante ${seg} s, ${comprimir ? 'con' : 'sin'} permessage-deflate`)
   const cs = []
-  for (let i = 0; i < n; i++) { const c = new Cliente(url, `c${i}`); await c.conectar(); cs.push(c) }
+  for (let i = 0; i < n; i++) { const c = new Cliente(url, `c${i}`, undefined, { perMessageDeflate: comprimir }); await c.conectar(); cs.push(c) }
   const base = url.replace(/\/ws$/, ''); const directo = !/\/ws$/.test(url)
   const muestras = []; const s0 = directo ? await salud(base) : null; const t0 = performance.now()
   const cada = Math.max(5, Math.round(seg / 20))
@@ -278,7 +279,7 @@ try {
   if (modo === 'hola') await pruebaHola(url)
   else if (modo === 'basico') { await pruebaHola(url); await pruebaBasica(url) }
   else if (modo === 'completo') await pruebaCompleta()
-  else if (modo === 'carga') await pruebaCarga(url, Number(args[0] || 50), Number(args[1] || 600))
+  else if (modo === 'carga') await pruebaCarga(url, Number(args[0] || 50), Number(args[1] || 600), args[2] === 'comprimido')
   else throw new Error(`modo desconocido: ${modo}`)
 } catch (e) { fallos++; console.log(`  ✘ ${e.stack || e}`) }
 console.log(`${pasos - (fallos > pasos ? 0 : Math.min(fallos, pasos))}/${pasos} comprobaciones bien${fallos ? `, ${fallos} FALLOS` : ''}`)

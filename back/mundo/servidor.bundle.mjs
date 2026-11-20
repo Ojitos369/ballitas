@@ -29,9 +29,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"], hasBlob = typeof Blob < "u";
     hasBlob && BINARY_TYPES.push("blob");
@@ -51,9 +51,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { websocketMask, websocketUnmask } = __require("http"), { EMPTY_BUFFER } = require_constants(), FastBuffer = Buffer[Symbol.species];
     function concat(list, totalLength) {
@@ -108,9 +108,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = Symbol("kDone"), kRun = Symbol("kRun"), Limiter = class {
       /**
@@ -149,9 +149,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib = __require("zlib"), bufferUtil = require_buffer_util(), Limiter = require_limiter(), { kStatusCode } = require_constants(), FastBuffer = Buffer[Symbol.species], TRAILER = Buffer.from([0, 0, 255, 255]), kPerMessageDeflate = Symbol("permessage-deflate"), kTotalLength = Symbol("total-length"), kCallback = Symbol("callback"), kBuffers = Symbol("buffers"), kError = Symbol("error"), zlibLimiter, PerMessageDeflate2 = class {
       /**
@@ -409,9 +409,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer"), { hasBlob } = require_constants(), tokenChars = [
       0,
@@ -601,9 +601,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream"), PerMessageDeflate2 = require_permessage_deflate(), {
       BINARY_TYPES,
@@ -1102,9 +1102,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream"), { randomFillSync } = __require("crypto"), {
       types: { isUint8Array }
@@ -1396,9 +1396,9 @@ var require_sender = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants(), kCode = Symbol("kCode"), kData = Symbol("kData"), kError = Symbol("kError"), kMessage = Symbol("kMessage"), kReason = Symbol("kReason"), kTarget = Symbol("kTarget"), kType = Symbol("kType"), kWasClean = Symbol("kWasClean"), Event = class {
       /**
@@ -1591,9 +1591,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -1676,9 +1676,9 @@ var require_extension = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events"), https = __require("https"), http2 = __require("http"), net = __require("net"), querystring = __require("querystring"), tls = __require("tls"), { randomBytes: randomBytes2, createHash: createHash2 } = __require("crypto"), { Duplex, Readable } = __require("stream"), { URL } = __require("url"), PerMessageDeflate2 = require_permessage_deflate(), Receiver2 = require_receiver(), Sender2 = require_sender(), { isBlob } = require_validation(), {
       BINARY_TYPES,
@@ -2284,9 +2284,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket(), { Duplex } = __require("stream");
     function emitClose(stream) {
@@ -2350,9 +2350,9 @@ var require_stream = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -2385,9 +2385,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events"), http2 = __require("http"), { Duplex } = __require("stream"), { createHash: createHash2 } = __require("crypto"), extension2 = require_extension(), PerMessageDeflate2 = require_permessage_deflate(), subprotocol2 = require_subprotocol(), WebSocket2 = require_websocket(), { CLOSE_TIMEOUT, GUID, kWebSocket } = require_constants(), keyRegex = /^[+/0-9A-Za-z]{22}==$/, RUNNING = 0, CLOSING = 1, CLOSED = 2, WebSocketServer2 = class extends EventEmitter {
       /**
@@ -2702,7 +2702,7 @@ var require_websocket_server = __commonJS({
   }
 });
 
-// ../back/mundo/servidor.mjs
+// back/mundo/servidor.mjs
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -2710,10 +2710,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { performance as performance2 } from "node:perf_hooks";
 
-// node_modules/.pnpm/ws@8.23.0/node_modules/ws/wrapper.mjs
+// front/node_modules/.pnpm/ws@8.23.0/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1), import_extension = __toESM(require_extension(), 1), import_permessage_deflate = __toESM(require_permessage_deflate(), 1), import_receiver = __toESM(require_receiver(), 1), import_sender = __toESM(require_sender(), 1), import_subprotocol = __toESM(require_subprotocol(), 1), import_websocket = __toESM(require_websocket(), 1), import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.core.js
+// front/node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.core.js
 var NeverDepth = 0, AlwaysDepth = 1, LessDepth = 2, LessEqualDepth = 3, EqualDepth = 4, GreaterEqualDepth = 5, GreaterDepth = 6, NotEqualDepth = 7;
 var UVMapping = 300;
 var RepeatWrapping = 1e3, ClampToEdgeWrapping = 1001, MirroredRepeatWrapping = 1002;
@@ -9008,7 +9008,7 @@ typeof __THREE_DEVTOOLS__ < "u" && __THREE_DEVTOOLS__.dispatchEvent(new CustomEv
 } }));
 typeof window < "u" && (window.__THREE__ ? console.warn("WARNING: Multiple instances of Three.js being imported.") : window.__THREE__ = "180");
 
-// node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.module.js
+// front/node_modules/.pnpm/three@0.180.0/node_modules/three/build/three.module.js
 var alphahash_fragment = `#ifdef USE_ALPHAHASH
 	if ( diffuseColor.a < getAlphaHashThreshold( vPosition ) ) discard;
 #endif`, alphahash_pars_fragment = `#ifdef USE_ALPHAHASH
@@ -13152,7 +13152,7 @@ var reversedFuncs = {
   [GreaterEqualDepth]: LessEqualDepth
 };
 
-// src/Core/world.js
+// front/src/Core/world.js
 var WORLD_SCALE = 2.8, TUBE_SCALE = 1.8, SIZE_K = 2.8 * 1.52, ANCHO_K = 1.52, AK = ANCHO_K, TRACK_K = 4.7, TK = TRACK_K, WS = WORLD_SCALE * TK, NODE_R = 8.5 * TK, BALL_R = 0.4, MIN_GAP_K = 1.5, Y = new Vector3(0, 1, 0), X = new Vector3(1, 0, 0), TAU = Math.PI * 2;
 var DIAG = { on: !1, rechazos: {} }, rej = (k) => (DIAG.on && (DIAG.rechazos[k] = (DIAG.rechazos[k] || 0) + 1), null);
 function mulberry32(a) {
@@ -15095,7 +15095,7 @@ function indexarColisiones(world, S = braidRibbons(world)) {
   return world.colision = { libre, cercano }, world.colision;
 }
 
-// src/Core/personality.js
+// front/src/Core/personality.js
 var TRAIT_LABEL = {
   valentia: ["Miedosa", "Valiente"],
   curiosidad: ["Rutinaria", "Curiosa"],
@@ -15168,7 +15168,7 @@ function moodOf(b) {
   return b.p < 18 && b.e < 18 ? "asustada" : b.p < 30 && b.e < 30 ? "mareada" : b.e < 30 ? "cansada" : b.p < 30 ? "preocupada" : b.p > 80 && b.e > 70 ? "euforica" : "feliz";
 }
 
-// src/Core/sim.js
+// front/src/Core/sim.js
 var POP = 10, TIME_SCALE = 4.5, TRAVEL_SLOW = 2.5 / TIME_SCALE, TRAITS = ["valentia", "curiosidad", "apetito", "sociabilidad", "animo", "velocidad"], GENES = ["prefs", "ways", "routes", "kinds"], DRAIN_E = 0.22, DRAIN_P = 0.25, MAX_SIN_DECIDIR = 3, MAX_FILA = 30, MAX_NOMBRE = 16, GRACIA_DESCONEXION = 60, MAX_CONTROL_POR_ESPECTADOR = 1, MAX_FILA_POR_ESPECTADOR = 1, limpiarNombre = (nombre) => String(nombre ?? "").replace(/[^\p{L}\p{N} _-]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NOMBRE).trim(), TRAVEL_E_LEN = 55e-4 / TRACK_K, PPS_K = 0.35 / 2.5, MAP_SPEED_K = SIZE_K / 2.5 * 1.42 * 1.14, TUBE_SPEED_K = 2.4, GRAV2 = 24 * TRACK_K, FRIC = 0.14, VMAX = 48 * TRACK_K * MAP_SPEED_K, LANE_EASE = 3.5, RAIL_EASE = 6, G_WALL = 24 * TRACK_K, BOUNCE = 0.35, LAT_K = 30, LAT_C = 7, LAT_EDGE = 0.4, RACE_GAP = 2.5, WOW = ["canon", "trampolin", "rizo", "caida", "embudo", "geiser", "erupcion", "turbina", "hielo_resbaloso", "pantano", "portal", "cascada"], FALLBACK_VOICES = {
   geiser: ["\xA1Al chorro del g\xE9iser!", "\xA1Arriba voy!"],
   erupcion: ["\xA1Erupci\xF3n! \xA1A volar!", "\xA1El cr\xE1ter me lanza!"],
@@ -15211,8 +15211,8 @@ function nombreUnico(rng, usados) {
   }
 }
 var Sim = class {
-  constructor({ rng = Math.random, pop = POP, seed } = {}) {
-    this.rng = rng, this.world = buildWorld(seed), this.seed = seed ?? 369, this.hooks = {}, this.fila = [], this.pop = pop, this.t = 0, this.nextId = 1, this.ballitas = [], this.pool = [], this.spawnQueue = [], this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }, this.feed = [], this.nombres = /* @__PURE__ */ new Set();
+  constructor({ rng = Math.random, pop = POP, seed, rngDialogos = Math.random } = {}) {
+    this.rng = rng, this.rngDialogos = rngDialogos, this.world = buildWorld(seed), this.seed = seed ?? 369, this.hooks = {}, this.fila = [], this.pop = pop, this.t = 0, this.nextId = 1, this.ballitas = [], this.pool = [], this.spawnQueue = [], this.stats = { nacidas: 0, muertas: 0, mejorEdad: 0, genMax: 1 }, this.feed = [], this.nombres = /* @__PURE__ */ new Set();
     for (let i = 0; i < pop; i++) this.spawn();
   }
   genomeForNewborn() {
@@ -15709,7 +15709,7 @@ var Sim = class {
   }
 };
 
-// src/Core/protocolo.js
+// front/src/Core/protocolo.js
 var FASES = ["born", "toDest", "at", "toPort", "travel", "dying"], CLIENTE = ["hola", "formar", "salirFila", "tomar", "dejar", "decidir", "ping"];
 var B_AIRBORNE = 1, B_ONLANE = 2, B_VUELO = 4, B_FALLIDO = 8, r2 = (x) => Math.round(x * 100) / 100 || 0, r3 = (x) => Math.round(x * 1e3) / 1e3 || 0, r5 = (x) => Math.round(x * 1e5) / 1e5 || 0, v2 = (v) => [r2(v.x), r2(v.y), r2(v.z)], v3 = (v) => [r3(v.x), r3(v.y), r3(v.z)];
 function rapida(b) {
@@ -15834,7 +15834,7 @@ function validar(texto) {
   return mal();
 }
 
-// ../back/mundo/servidor.mjs
+// back/mundo/servidor.mjs
 var AQUI = path.dirname(fileURLToPath(import.meta.url)), ESTATICOS = /* @__PURE__ */ new Set(["name", "gen", "padres", "arch", "genome", "bornAt", "formadaPor"]), pct = (xs, q) => {
   let s = Float64Array.from(xs).sort();
   return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : 0;

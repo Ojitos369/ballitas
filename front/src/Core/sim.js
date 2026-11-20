@@ -153,8 +153,11 @@ export function nombreUnico(rng, usados) {
 }
 
 export class Sim {
-  constructor({ rng = Math.random, pop = POP, seed } = {}) {
+  constructor({ rng = Math.random, pop = POP, seed, rngDialogos = Math.random } = {}) {
     this.rng = rng
+    // Azar SOLO cosmético (globos de diálogo del render): nunca avanza la secuencia de la sim, así una sim con
+    // semilla sigue siendo determinista aunque se dibuje. Los consumidores de render deben usar este, no `rng`.
+    this.rngDialogos = rngDialogos
     this.world = buildWorld(seed)
     this.seed = seed ?? 369 // misma semilla por defecto que buildWorld; se registra en el back
     // { nace(b), muere(b), entra(b, espectador), libre(b, motivo), decide(b, dec) }: observadores opcionales; no afectan a la sim
