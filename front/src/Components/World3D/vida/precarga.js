@@ -13,7 +13,7 @@ import { estructurasModelos, estructurasPaso } from './estructuras.jsx'
 import { paisajePaso } from './paisaje.jsx'
 import { precargarKit } from '../Modelos.jsx'
 import { precargarModelos } from './modelos.js'
-import { ETAPAS_NOMBRES, etapaActual, marcarEtapa } from './etapas.js'
+import { ETAPAS_NOMBRES, etapaActual, marcarEtapa, tocarVida } from './etapas.js'
 import { prismaPaso } from './colocacion.js'
 import { PRISMA_STATS } from '../../../Core/world.js'
 
@@ -54,6 +54,7 @@ export const vidaCompleta = (way) => etapaActual(way) >= ETAPAS.length
 
 /** Avanza la precarga de `way` hasta que `agotado()` diga basta; true cuando está completa. */
 export function precargaPaso(way, agotado) {
+  tocarVida(way) // MEM: cuenta en la caché acotada desde la primera porción
   let k = etapaActual(way)
   while (k < ETAPAS.length) {
     const [nombre, fn] = ETAPAS[k]

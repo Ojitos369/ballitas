@@ -3,6 +3,7 @@
 // - Arcos / túneles temáticos sobre la calzada con amplio gálibo (>= 7 u) para las ballitas.
 // - Hileras continuas de hitos/edificios/árboles/cristales/mausoleos usando GLB existentes (models/ y models/ciudad/),
 //   construidos bajo demanda (máx. 1 tramo/cuadro) y agrupados en InstancedMesh de capacidad fija con culling por distancia.
+import { registrarOlvido, liberarGeos } from './etapas.js' // MEM: cachés por camino acotadas
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -346,6 +347,8 @@ const segDataCache = new WeakMap()
 
 const SEG_PASO_MS = 3 // presupuesto por cuadro del propio componente para un tramo cercano aún sin datos
 const segGens = new WeakMap() // seg -> generador a medias (la precarga y el propio componente lo comparten)
+// MEM: olvida estructuras por tramo (cintas incluidas, GPU liberada) de un camino lejano
+registrarOlvido((way) => { for (const s of way.segments ?? []) { liberarGeos(segDataCache.get(s)); segDataCache.delete(s); segGens.delete(s) } })
 const NUNCA = () => false
 const SIEMPRE = () => true
 /** Avanza los datos del tramo hasta que `agotado()` diga basta; true cuando quedaron en caché. */

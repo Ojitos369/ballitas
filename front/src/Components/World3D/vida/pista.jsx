@@ -17,7 +17,7 @@ import Eventos, { eventosWarmup } from './eventos.jsx'
 import KartPista from './kartPista.jsx'
 import Paisaje, { paisajeWarmup } from './paisaje.jsx'
 import Precompilado from '../Precompilado.jsx'
-import { useEtapa } from './etapas.js'
+import { useEtapa, registrarOlvido, liberarGeos } from './etapas.js'
 
 // Bandas de la sección en U (las mismas que TRACK_U de tools/assets/generate_textures.py).
 const TRACK_U = [0.16, 0.26, 0.74, 0.84]
@@ -382,6 +382,8 @@ function* pushLaneStrip(seg, lane, out, fr, ix) {
 
 const geoCache = new WeakMap()
 const pendiente = new WeakMap() // way -> { out, strips, k }: construcción a medias, repartida en huecos libres
+// MEM: al olvidar un camino lejano se libera su pista (GPU incluida); se reconstruye igual si vuelve a hacer falta
+registrarOlvido((way) => { liberarGeos(geoCache.get(way)); geoCache.delete(way); pendiente.delete(way) })
 
 /** Avanza la pista de `way` tira a tira hasta que `agotado()` diga basta; true cuando quedó en caché.
  *  Así el mapa la precalcula en huecos libres y montar la vista Ballita/Camino no la construye en un cuadro. */

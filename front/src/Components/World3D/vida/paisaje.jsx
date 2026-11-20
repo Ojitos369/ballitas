@@ -3,6 +3,7 @@
 // Todo se instancia en pools de capacidad fija, se construye por tramo bajo demanda (máx. 1 tramo/cuadro)
 // y la animación vive en el vertex shader (un solo uniform de tiempo): la CPU solo recompacta instancias
 // cercanas cuando la cámara se mueve.
+import { registrarOlvido, liberarGeos } from './etapas.js' // MEM: cachés por camino acotadas
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -807,6 +808,8 @@ export const PAISAJE = {
 
 // ═══════════════════════════ CONSTRUCCIÓN POR TRAMO ═══════════════════════════
 const segCache = new WeakMap()
+// MEM: olvida el paisaje por tramo (agua incluida, GPU liberada) de un camino lejano
+registrarOlvido((way) => { for (const s of way.segments ?? []) { liberarGeos(segCache.get(s)); segCache.delete(s); denseCache.delete(s) } })
 const F0 = {}
 const _cand = new THREE.Vector3()
 const _top = new THREE.Vector3()

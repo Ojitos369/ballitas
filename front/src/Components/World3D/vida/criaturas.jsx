@@ -1,6 +1,7 @@
 // Fauna viva que recorre TODO el camino (bandadas, peces, mariposas, luciérnagas, murciélagos,
 // medusas) + habitantes de berma. Todo instanciado con un único useFrame por camino que solo
 // actualiza el uniform de tiempo y las matrices de los ejemplares cercanos a la cámara.
+import { registrarOlvido, liberarGeos } from './etapas.js' // MEM: cachés por camino acotadas
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -272,6 +273,8 @@ export function criaturasWarmup() {
 
 // ═══════════════════════════ CONSTRUCCIÓN DE FLOTAS Y BERMA ═══════════════════════════
 const dataCache = new WeakMap()
+// MEM: olvida las flotas de un camino lejano
+registrarOlvido((way) => { liberarGeos(dataCache.get(way)); dataCache.delete(way) })
 const rr = (rng, [a, b]) => a + (b - a) * rng()
 
 function buildRoutes(way) {

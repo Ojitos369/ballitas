@@ -1,6 +1,7 @@
 // Rebotantes y decoración temática del bioma (kit GLB con texturas embebidas):
 // rebote_<tema> en los puntos de salto de switches y bordes de calzada, más deco_<tema>_hito,
 // deco_<tema>_flora, farola_pista y banderin colocados en la berma sin invadir otras pistas.
+import { registrarOlvido, liberarGeos } from './etapas.js' // MEM: cachés por camino acotadas
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -38,6 +39,8 @@ export function decorKit(way) {
 }
 
 const decorGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+// MEM: olvida la decoración de un camino lejano
+registrarOlvido((way) => { liberarGeos(decorCache.get(way)); decorCache.delete(way); decorGens.delete(way) })
 const NUNCA = () => false
 
 /** Avanza la decoración de `way` hasta que `agotado()` diga basta; true cuando quedó en caché. Mismo orden y

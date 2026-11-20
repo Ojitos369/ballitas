@@ -1,6 +1,7 @@
 // Colocación pura (sin JSX ni @react-three/fiber) de anillos, arcos, riberas, pórticos de unión y piezas de kart.
 // La usan tanto los componentes .jsx de vida/ como tools/overlap.mjs y Core/layout.test.js, garantizando que
 // el medidor evalúe exactamente los mismos volúmenes que se dibujan en 3D.
+import { registrarOlvido, liberarGeos } from './etapas.js' // MEM: cachés por camino acotadas
 import * as THREE from 'three'
 import * as WORLD from '../../../Core/world.js'
 import { colisionDe, colocar, mundoDe, nuevoLocal, registrarMundo } from '../colisionObjetos.js'
@@ -890,6 +891,8 @@ function capStride(arr, max) {
 const kartDataCache = new WeakMap()
 
 const kartGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+// MEM: olvida anillos, uniones, kart y colocación por tramo de un camino lejano (se recalculan con la misma semilla)
+registrarOlvido((way) => { for (const m of [ringsCache, unionesCache, kartDataCache, kartGens]) { liberarGeos(m.get(way)); m.delete(way) } for (const s of way.segments ?? []) { segStructPlacementCache.delete(s); segPlaceGens.delete(s) } })
 const NUNCA = () => false
 
 /** Avanza las piezas kart de `way` hasta que `agotado()` diga basta; true cuando quedaron en caché. */

@@ -2,6 +2,7 @@
 // carril (no en todo el ancho) con marcas de carril, la pieza del kit de su tipo, su trayectoria (puntos de la parábola,
 // caída o laberinto, haz del elevador, par de portales enlazados) y el anillo de aterrizaje en el camino destino.
 // Todo instanciado por camino, geometrías y materiales en caché de módulo, un solo useFrame por camino y LOD a detalle bajo.
+import { registrarOlvido, liberarGeos } from './etapas.js' // MEM: cachés por camino acotadas
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -64,6 +65,8 @@ const Q_RING = new THREE.Quaternion() // el anillo del kit está de pie en XY: e
 const wayCache = new WeakMap()
 
 const wayGens = new WeakMap() // way -> generador a medias (precarga por porciones, vida/precarga.js)
+// MEM: olvida los eventos de un camino lejano
+registrarOlvido((way) => { liberarGeos(wayCache.get(way)); wayCache.delete(way); wayGens.delete(way) })
 const NUNCA = () => false
 /** Avanza los eventos de `way` hasta que `agotado()` diga basta; true cuando quedaron en caché. Mismo orden que de un tirón. */
 export function eventosPaso(way, agotado) {

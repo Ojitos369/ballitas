@@ -10,6 +10,7 @@ import { applyLoadedImage } from './texUtils.js'
 import { VidaDeCamino, VIDA_BUS } from './vida/index.js'
 import { pistaWarmup } from './vida/pista.jsx'
 import { PRECARGA, precargaPaso, vidaCompleta, vidaMontable } from './vida/precarga.js'
+import { caminosConVida, olvidarVida, tocarVida } from './vida/etapas.js'
 import { fijarPreparadorKit } from './Modelos.jsx'
 import Precompilado, { enlazarPendientes, precompilar, primerDibujo } from './Precompilado.jsx'
 import Puertas from './puertas.jsx'
@@ -1450,6 +1451,10 @@ const PRECARGA_ENTRADA_MS = 6 // por cuadro, si falta el camino que la cámara y
 const PRECARGA_CUADRO_MS = 3 // por cuadro, para los caminos que vienen
 const FONDO_CUADRO_MS = 1.5 // por cuadro, el resto del mundo, solo si el cuadro deja margen
 const DESCARGA_S = 6 // un camino que deja de hacer falta se oculta ya y se desmonta pasado este tiempo (histéresis)
+// MEM: como mucho tantos caminos con su vida calculada en memoria (montados, cercanos y urgentes cuentan y nunca se
+// expulsan); el resto del mundo y las demás ballitas solo se precargan con hueco. Antes se guardaba todo el mundo.
+const VIDA_CACHE_MAX = 8
+const vidaLlena = () => caminosConVida().size >= VIDA_CACHE_MAX
 // Rutas dinámicas (sim.activas): solo se montan los caminos activos. Uno que aparece crece desde su planeta de origen
 // y uno que desaparece se recoge hacia él, en RUTA_APARECE_S; al terminar de recogerse se desmonta. Es una escala del
 // grupo del camino (sin materiales ni programas nuevos: ver «aparición gradual» en la base de conocimiento).
@@ -1531,11 +1536,16 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
     const cancel = (i) => (window.cancelIdleCallback ? window.cancelIdleCallback(i) : clearTimeout(i))
     const siguiente = () => {
       for (const w of urgentesRef.current) if (!vidaCompleta(w)) return w
+      let primera = true
       for (const b of sim?.ballitas ?? []) {
         const w = b.phase === 'dying' || b.phase === 'gone' ? null : (b.seg?.way ?? b.way)
-        if (w && !vidaCompleta(w)) return w
+        if (!w) continue
+        // MEM: la primera (tecla 3) siempre; las demás solo si cabe en la caché acotada (si no, se expulsarían en bucle)
+        if (!vidaCompleta(w) && (primera || !vidaLlena())) return w
+        primera = false
       }
-      // el resto del mundo: solo los caminos montados (las rutas inactivas no se precargan)
+      // el resto del mundo: solo los caminos montados (las rutas inactivas no se precargan) y con hueco en la caché
+      if (vidaLlena()) return undefined
       return world.ways.find((w) => rutasRef.current.montadas.has(w.idx) && !vidaCompleta(w))
     }
     const paso = (dl) => {
@@ -1711,6 +1721,22 @@ export default function Paths({ world, sim = null, focusWay = null, prefetchWays
       }
       if (nextMounted) mountedRef.current = nextMounted
       if (nextNear) nearRef.current = nextNear
+      // MEM: caché de vida acotada. Lo que se usa (urgentes, montados, en retiro, cercanos, camino de la primera
+      // ballita) se marca como reciente; si hay más de VIDA_CACHE_MAX caminos calculados se olvida el menos usado de los
+      // demás (uno por evaluación, para repartir el coste). Se recalcula igual si vuelve a hacer falta.
+      const usados = new Set(urg)
+      for (const id of mountedRef.current) usados.add(world.ways[id])
+      for (const id of retiro.keys()) usados.add(world.ways[id])
+      for (const id of nearRef.current) usados.add(world.ways[id])
+      const b0 = sim?.ballitas?.find((b) => b.phase !== 'dying' && b.phase !== 'gone')
+      if (b0) usados.add(b0.seg?.way ?? b0.way)
+      const cv = caminosConVida()
+      for (const w of usados) if (w && cv.has(w)) tocarVida(w)
+      if (cv.size > VIDA_CACHE_MAX) {
+        let peor = null; let tPeor = Infinity
+        for (const [w, tu] of cv) if (!usados.has(w) && tu < tPeor) { peor = w; tPeor = tu }
+        if (peor) olvidarVida(peor)
+      }
       // Transición: React reparte el render del montaje (pista, capas cercanas) en porciones
       // de ~5 ms entre cuadros en vez de un único cuadro largo en la primera entrada.
       if (nextMounted || nextNear || retiroCambio) {
