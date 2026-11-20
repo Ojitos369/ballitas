@@ -473,7 +473,7 @@ el montaje final (dos líneas en `Pages/Main/index.jsx`) y la prueba de punta a 
 - **Archivos**: `front/src/Core/sim.js`, `front/src/Core/sim.test.js`, `front/src/Core/protocolo.js` (+ prueba;
   codifica y decodifica `Rapida`/`Lenta`, constantes del protocolo), `back/mundo/*` (`servidor.mjs`, `empaquetar.mjs`),
   `back/apis/mundo_ws.py` y su alta en `back/apis/urls.py`, `back/requirements.txt`, `back/supervisord.conf`,
-  `back/dockerfile`, `back/migrate_view.py`, `front/package.json` (dependencia `ws`, guion `build:mundo`).
+  `back/dockerfile`, `migrate_view.py` (raíz del repo), `front/package.json` (dependencia `ws`, guion `build:mundo`).
 - **Expone**: secciones 2.2, 2.3 y 4. **Consume**: nada de las otras.
 - **Sin las otras**: se prueba con un cliente de consola (`back/mundo/cliente_prueba.mjs`) que conecta, forma, decide
   y comprueba las respuestas.
