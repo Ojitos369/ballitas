@@ -357,7 +357,8 @@ function sampleChain(segs, pinEnd) {
     const Ts = new Float32Array((n + 1) * 3); const Ds = new Float32Array((n + 1) * 3)
     for (let i = 0; i <= n; i++) {
       const t = s.curve.getUtoTmapping(i / n)
-      s.curve.getTangent(t, T)
+      // = s.curve.getTangent(t, T) de three (diferencia central de ±1e-4, mismos números) sin crear dos vectores por muestra
+      s.curve.getPoint(Math.max(0, t - 1e-4), FRAME_TMP); s.curve.getPoint(Math.min(1, t + 1e-4), T); T.sub(FRAME_TMP).normalize()
       if (!hasPrev) { canonDown(T, D); hasPrev = true }
       else { q.setFromUnitVectors(Tprev, T); D.applyQuaternion(q) }
       D.addScaledVector(T, -D.dot(T))
@@ -418,6 +419,7 @@ export function wallFrame(seg, angle, u, rho = seg.air ? 0 : seg.radius - BALL_R
   w.addScaledVector(T, -w.dot(T))
   if (w.lengthSq() < 1e-8) canonDown(T, w)
   w.normalize().applyAxisAngle(T, angle)
+  if (out.soloDir) return out // solo `dir` y `tangent` (surfAt, buildBraid): se ahorra el punto del eje (getPoint del spline, lo más caro)
   const axis = out.axis || (out.axis = new THREE.Vector3())
   const curveU = arcParamAt(fr, u)
   seg.curve.getPoint(curveU, axis)
@@ -583,10 +585,10 @@ function roadAt(seg, laneId, u, out) {
   const f = clamp(Number.isFinite(u) ? u : 0, 0, 1) * br.N; const i = Math.min(br.N - 1, Math.floor(f)); const k = f - i; const j = i * 3
   return out.set(P[j] + (P[j + 3] - P[j]) * k, P[j + 1] + (P[j + 4] - P[j + 1]) * k, P[j + 2] + (P[j + 5] - P[j + 2]) * k)
 }
-const LF_W = {}; const LF_P0 = new THREE.Vector3(); const LF_P1 = new THREE.Vector3()
+const LF_W = {}; const LF_D = { soloDir: true }; const LF_P0 = new THREE.Vector3(); const LF_P1 = new THREE.Vector3()
 // Punto de la superficie (relieve incluido) y normal cruda (`up`, sin ortogonalizar) del camino en `u`.
 function surfAt(seg, laneId, u, out, up) {
-  const d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_W).dir
+  const d = wallFrame(seg, laneAngle(seg, laneId, u), u, 0, LF_D).dir
   if (up) up.copy(d).negate()
   roadAt(seg, laneId, u, out)
   return seg.air ? out : out.addScaledVector(d, -laneRelief(seg, laneId, u))
@@ -957,7 +959,7 @@ function buildBraid(s) {
     }
     if (vote < 0) for (const b of B) b.negate() // la normal de la fila mira al centro de la curva en la mayor parte del tramo
     // ángulo (convención de wallFrame) cuya normal es B × T; desenrollado para que sea continuo
-    ang = new Float32Array(N + 1); const WF = {}; const up = new THREE.Vector3(); const cr = new THREE.Vector3(); const row = new THREE.Vector3()
+    ang = new Float32Array(N + 1); const WF = { soloDir: true }; const up = new THREE.Vector3(); const cr = new THREE.Vector3(); const row = new THREE.Vector3()
     for (let i = 0; i <= N; i++) {
       const T = V(Tn, i); const d0 = wallFrame(s, 0, i / N, 0, WF).dir
       up.crossVectors(B[i], T).normalize().negate() // -up: la dirección eje -> firme que debe dar wallFrame
@@ -989,7 +991,7 @@ function buildBraid(s) {
   } else {
     // fila paralela: carriles lado a lado a lo largo de la lateral de la calzada (T × up del suelo, ángulo 0), todos con
     // la misma normal; la apertura (env) escala el hueco de 0 (una sola calzada en las puntas) a ROW_GAP.
-    const gap = rowGap(nl); const half = ((nl - 1) / 2) * gap; const WF = {}; const row = new THREE.Vector3(); const T = new THREE.Vector3()
+    const gap = rowGap(nl); const half = ((nl - 1) / 2) * gap; const WF = { soloDir: true }; const row = new THREE.Vector3(); const T = new THREE.Vector3()
     for (let i = 0; i <= N; i++) {
       rad[i] = half * env[i]
       T.set(Tn[i * 3], Tn[i * 3 + 1], Tn[i * 3 + 2]); row.crossVectors(wallFrame(s, NO_ROW_BANK ? 0 : laneAngle(s, lanes[0].id, i / N), i / N, 0, WF).dir, T).normalize() // lateral CON el peralte común: los carriles quedan coplanares también donde el eje gira (eje ondulado); sin él se escalonaban (tramo:libre lateral)
