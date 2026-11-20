@@ -1,9 +1,9 @@
 import { Sim, nombreUnico } from '../sim.js'
 import { iniciarBack } from '../api.js'
 
-export function crearLocal({ semilla = 369 } = {}) {
+export function crearLocal({ semilla = 369, registrarBack = true } = {}) {
   const sim = new Sim({ seed: semilla })
-  iniciarBack(sim)
+  if (registrarBack) iniciarBack(sim)
   const listeners = new Map()
   const emit = (e, x) => listeners.get(e)?.forEach((fn) => fn(x))
   return Object.assign(sim, {
