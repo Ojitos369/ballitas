@@ -739,9 +739,11 @@ const RELIEF = {
 const RELIEF_BASE = 0.15 * TK // altura base del firme (así caben los badenes sin atravesar el cristal)
 const KICK_DROP = 0.9 * TK // largo (u) de la caída tras la cresta de una rampa: ahí la ballita despega
 
-// Curvatura suavizada, peralte y relieve de un tramo de tubo. Usa los marcos ya cacheados.
-function buildSurface(s, rng) {
-  s._curv = s._bank = s._relief = null
+// Curvatura suavizada y peralte del eje. Solo depende de los marcos del eje (sin azar): buildLanes lo llama ANTES de
+// buildBraid para que la fila paralela se tienda por la lateral ya peraltada (si se calcula después, la fila queda
+// fuera del plano de la calzada: escalón de ~4 u entre hermanos al final de la rampa de apertura sobre eje ondulado).
+function buildBank(s) {
+  s._curv = s._bank = null
   if (s.air) return
   ensureFrames(s)
   const { n, T, D } = s._fr; const ds = s.length / n
@@ -782,6 +784,13 @@ function buildSurface(s, rng) {
   }
   pinMag()
   s._bank = { x: bx, y: by }
+}
+// Relieve de un tramo (y, si falta, su curvatura y peralte).
+function buildSurface(s, rng) {
+  s._relief = null
+  if (s.air) { s._curv = s._bank = null; return }
+  if (!s._bank) buildBank(s) // buildLanes ya lo calcula antes de buildBraid
+  const role = s.route >= 0 ? ROLES[s.route] : 'shared'
   // relieve por carril: lomas, badenes, rampa antes de cada mecanismo y saltos en la ruta espectacular
   const R = RELIEF[role]; const L = s.length; const hMax = 0.45 * (s.radius - BALL_R)
   const nr = clamp(Math.ceil(L / (0.5 * TK)), 32, 8000) // tramos largos (mapa grande) siguen muestreados a ~0.5 u (× TK)
@@ -1027,6 +1036,7 @@ function buildLanes(way) {
   way.segments.forEach((s) => {
     const ids = Array.from({ length: laneCount }, (_, id) => id)
     s.lanes = ids.map((id) => ({ id, roll: id === 0 ? 'plano' : ROLL_KINDS[1 + ((id - 1 + way.idx) % (ROLL_KINDS.length - 1))], angle: 0, offset: 0, width, name: LANE_NAMES[id] || `camino ${id + 1}` }))
+    s._braid = null; buildBank(s) // peralte ANTES de la trenza (y sin trenza vieja: laneAngle da solo el peralte del eje)
     buildBraid(s)
     s.switches = []
     // tramo abierto de la trenza (los caminos separados): ahí van los eventos, uno por carril de cada camino
