@@ -142,3 +142,24 @@ La «torsión máx. de la normal» de `sinuoso.mjs` (54.3°) está en `salida @0
   ondular el EJE antes de `buildBraid` (que la fila se construya ya sobre el eje ondulado) y revalidar el reparto.
 - **Eventos inválidos en sinuosos: 0-4 por semilla** (no 0): portales cuyo aterrizaje cae donde los caminos ya van fundidos.
 - Sin tocar `sim.js`: la duración del vuelo sigue acotada por el `clamp` de sim.js (0.35×-1× de `sw.duration`).
+
+## Navegador (build de producción, `vite preview` en 4301, Edge con GPU; semilla 369)
+Sonda `_capturas/sinuoso_cap.mjs` → `_capturas/sinuoso/` (13 archivos; `resumen.json` con la ballita, el tramo y el giro
+propio del camino en cada toma). Las abrí todas las que cito:
+- `desk_libre.jpg` / `movil_libre.jpg` (vista libre, 1400×900 y 412×915): los cinco planetas con sus rótulos y la red
+  completa; los caminos ya no son arcos limpios, se ven ondulados y con bucles a lo largo de todo el recorrido. Sin
+  pantalla negra ni piezas sueltas. El panel marca 0.7 FPS en esa toma (a los 14 s de cargar, aún levantando la escena);
+  ver la comparación con main más abajo.
+- `desk_pov2_w11_salida_a.jpg` (POV, camino 0, giro propio 2.24 rad): la calzada naranja sube ladeada hacia un rizo; a la
+  derecha pasa otra cinta de la misma ruta, ancha y muy separada, con otra inclinación. Bordillos y terreno continuos.
+- `desk_pov2_w11_salida_b.jpg` (1.6 s después, giro 1.78 rad): la calzada queda en la esquina inferior derecha, girada
+  ~100° respecto del horizonte; al fondo se ven los demás caminos de la ruta como cintas separadas que serpentean por el
+  espacio hacia el rizo y el nodo. Es la imagen que pedía el usuario: separados y torciéndose.
+- `desk_pov3_w16_salida_b.jpg` (tema neón): la calzada magenta gira a la izquierda; los otros caminos cruzan lejos, por
+  arriba y por la izquierda, con sus propias curvas; el planeta Brasa a la derecha.
+- `movil_pov1_w15_salida_b.jpg` (412×915, giro 1.50 rad): calzada curvándose con el planeta arriba, sobre la cabeza
+  (el «abajo» ya no apunta al planeta). Sin cortes ni huecos en la cinta.
+- Consola: sin `pageerror`; dos «500 (Internal Server Error)» de recursos al cargar (peticiones al backend, que el
+  `vite preview` local no sirve; no vienen de esta pieza).
+- La primera toma de escritorio (`desk_pov1_w10_salida`) cambió de tramo antes del disparo (la ballita ya salía del
+  sinuoso): no la cuento.
