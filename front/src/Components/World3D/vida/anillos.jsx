@@ -41,11 +41,16 @@ function grapaMat(m) {
   if (!c) {
     c = m.clone()
     if (c.metalness != null) { c.metalness = Math.min(c.metalness, 0.2); c.roughness = Math.max(c.roughness ?? 0.5, 0.5) }
+    // «metal_oscuro» además trae una textura base casi negra: con metalness bajo seguía negra en captura (DET s2).
+    // Se sustituye por un tono acero lavanda claro que reciben las luces de la escena.
+    if (/oscuro/.test(m.name ?? '') && c.map) { c.map = null; c.color = new THREE.Color('#9a94c4') }
     markShared(c)
     _grapas.set(m, c)
   }
   return c
 }
+/** Materiales del kit del aro sin tinte (portales de eventos): el aro tal cual y las grapas satinadas. */
+export const anilloGrapasMats = (baseMat) => (Array.isArray(baseMat) ? [baseMat[0], ...baseMat.slice(1).map(grapaMat)] : baseMat)
 const ringMats = (baseMat) => (Array.isArray(baseMat) ? [ringCoreMat(baseMat[0]), ...baseMat.slice(1).map(grapaMat)] : ringCoreMat(baseMat))
 
 /** Calentado: el material del núcleo del anillo (derivado del kit) tal como lo usa la capa, para precompilarlo. */

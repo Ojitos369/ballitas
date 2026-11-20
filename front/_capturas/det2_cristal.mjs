@@ -70,7 +70,7 @@ try {
     const r = []; const sc = (() => { const d = window.__ballitasDebug; return d.scene ?? null })()
     if (!sc) return 'sin escena en __ballitasDebug'
     sc.traverse((o) => { if (o.isInstancedMesh && /anillo/.test(o.geometry?.name ?? '') && Array.isArray(o.material)) r.push(o.material.map((m) => [m.name, m.metalness, m.roughness])) })
-    return r.slice(0, 3)
+    const u = {}; for (const x of r) { const k = JSON.stringify(x.map((m) => [m[0], +(+m[1]).toFixed(2)])); u[k] = (u[k] ?? 0) + 1 } return u
   })
   writeFileSync(`${dir}/${etq}_cristal.json`, JSON.stringify(out, null, 1))
   console.log(JSON.stringify(out))

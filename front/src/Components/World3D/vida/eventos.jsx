@@ -11,6 +11,7 @@ import { FOCO } from '../mundos/foco.js'
 import { basisQuat } from './dyn.js'
 import { precargarKit, useKit } from '../Modelos.jsx'
 import { halfWidth, pal, surfFrame } from './pista.jsx'
+import { anilloGrapasMats } from './anillos.jsx'
 import { TRACK_K } from '../../../Core/world.js'
 
 const Z_AXIS = new THREE.Vector3(0, 0, 1)
@@ -254,7 +255,9 @@ function InstancedSel({ geo, mat, items, sel }) {
 function KitPieza({ nombre, items, sel }) {
   const kit = useKit(nombre)
   if (!kit || !items.length) return null
-  return <InstancedSel geo={kit.geometry} mat={kit.material} items={items} sel={sel} />
+  // el aro del portal: grapas satinadas (metal sin reflejo salía negro, ver anillos.jsx)
+  const mat = nombre === 'anillo_neon_lod' ? anilloGrapasMats(kit.material) : kit.material
+  return <InstancedSel geo={kit.geometry} mat={mat} items={items} sel={sel} />
 }
 
 // ═══════════════════════════ CAPA VIVA (un solo useFrame por camino) ═══════════════════════════
