@@ -126,7 +126,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
         arr[o + 8] *= rev; arr[o + 9] *= rev; arr[o + 10] *= rev
       }
       a.clearUpdateRanges(); a.needsUpdate = true
-      restore.push(mesh, n, [a])
+      restore.push(mesh, n, [a], n)
       s.revSitio = true
     }
 
@@ -164,13 +164,17 @@ export default function InstanceCuller({ active, radius = 60 }) {
         const giro = K > 1 && (s.fx * FWD.x + s.fy * FWD.y + s.fz * FWD.z < 0.985)
         const meshRadius = mesh.userData.cullRadius ?? radius
         const meshBorder = mesh.userData.cullBorder ?? BORDE
-        const dirty = s.n !== n || s.on !== on || s.K !== K || s.radius !== meshRadius || s.border !== meshBorder || giro || rev < 1 || s.rev < 1 || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
+        // LOD por distancia (DET): dentro de cullNear se dibuja todo; entre cullNear y cullRadius solo 1 de cada
+        // cullStride (las demás crecen/menguan en el borde de cullNear). La generación sigue completa por longitud.
+        const lodNear = on ? (mesh.userData.cullNear ?? 0) : 0
+        const lodStride = mesh.userData.cullStride ?? 1
+        const dirty = s.n !== n || s.on !== on || s.K !== K || s.radius !== meshRadius || s.border !== meshBorder || s.lodNear !== lodNear || giro || rev < 1 || s.rev < 1 || attrs.length !== s.vers.length || attrs.some((a, i) => a.version !== s.vers[i]) ||
           (cx - s.cam[0]) ** 2 + (cy - s.cam[1]) ** 2 + (cz - s.cam[2]) ** 2 > MOVE2
         if (!dirty) {
-          if (s.gpuCompact) { restore.push(mesh, n, null); mesh.count = s.near }
+          if (s.gpuCompact) { restore.push(mesh, n, null, 0); mesh.count = s.near }
           continue
         }
-        s.on = on; s.rev = rev; s.K = K; s.radius = meshRadius; s.border = meshBorder; s.fx = FWD.x; s.fy = FWD.y; s.fz = FWD.z
+        s.on = on; s.rev = rev; s.K = K; s.radius = meshRadius; s.border = meshBorder; s.lodNear = lodNear; s.fx = FWD.x; s.fy = FWD.y; s.fz = FWD.z
         // posición mundial de cada instancia: matrixWorld × traslación de su matriz
         const m = mesh.instanceMatrix.array; const w = mesh.matrixWorld.elements
         if (!s.idx || s.idx.length < n) { s.idx = new Int32Array(n); s.k = new Float32Array(n) }
@@ -178,6 +182,8 @@ export default function InstanceCuller({ active, radius = 60 }) {
         if (on) {
           const r2 = meshRadius * meshRadius
           const b2 = (meshRadius * meshBorder) ** 2; const d0 = meshRadius * meshBorder; const dd = meshRadius - d0
+          const lod = lodNear > 0 && lodStride > 1 && lodNear < meshRadius
+          const n2 = lodNear * lodNear; const nb0 = lodNear * BORDE; const nb2 = nb0 * nb0; const ndd = lodNear - nb0
           for (let i = 0; i < n; i++) {
             const o = i * 16; const x = m[o + 12]; const y = m[o + 13]; const z = m[o + 14]
             const dx = w[0] * x + w[4] * y + w[8] * z + w[12] - cx
@@ -186,6 +192,10 @@ export default function InstanceCuller({ active, radius = 60 }) {
             const d2 = K > 1 ? d2Delante(dx, dy, dz, FWD, K) : dx * dx + dy * dy + dz * dz
             if (d2 >= r2) continue
             let k = rev
+            if (lod && i % lodStride !== 0 && d2 > nb2) {
+              if (d2 >= n2) continue
+              const c = (Math.sqrt(d2) - nb0) / ndd; k *= 1 - c * c * (3 - 2 * c)
+            }
             if (d2 > b2 && dd > 0) { const c = (Math.sqrt(d2) - d0) / dd; k *= 1 - c * c * (3 - 2 * c) }
             if (k < 1) { escala = true; if (MIDE) creceDe(dx, dy, dz, FWD, k, cm) }
             s.k[near] = k
@@ -206,13 +216,16 @@ export default function InstanceCuller({ active, radius = 60 }) {
           if (s.gpuCompact) for (const a of attrs) { a.clearUpdateRanges(); a.needsUpdate = true }
           s.gpuCompact = false
         } else {
+          // Compactado en el sitio: idx es creciente (idx[j] >= j), así que la fuente de cada destino aún no se pisó.
+          // Solo se respalda (y luego restaura) el prefijo [0, near): con la generación completa por longitud n puede
+          // ser miles y copiar el buffer entero dos veces por cuadro era el grueso del coste de CPU.
           attrs.forEach((a, k) => {
-            const arr = a.array; const sz = a.itemSize; const len = n * sz
-            if (!s.backup[k] || s.backup[k].length < len) s.backup[k] = new arr.constructor(len)
+            const arr = a.array; const sz = a.itemSize; const len = near * sz
+            if (!s.backup[k] || s.backup[k].length < len) s.backup[k] = new arr.constructor(Math.max(len, 16))
             s.backup[k].set(arr.subarray(0, len))
             for (let j = 0; j < near; j++) {
               const src = s.idx[j]
-              if (src !== j) for (let c = 0; c < sz; c++) arr[j * sz + c] = s.backup[k][src * sz + c]
+              if (src !== j) for (let c = 0; c < sz; c++) arr[j * sz + c] = arr[src * sz + c]
             }
             if (k === 0 && escala) {
               // escala respecto al origen de la pieza: columnas 0-2 de la matriz × k (la traslación no cambia)
@@ -230,7 +243,7 @@ export default function InstanceCuller({ active, radius = 60 }) {
             a.needsUpdate = true
           })
           s.gpuCompact = true
-          restore.push(mesh, n, attrs)
+          restore.push(mesh, n, attrs, near)
           mesh.count = near
         }
         s.vers = attrs.map((a) => a.version)
@@ -250,12 +263,12 @@ export default function InstanceCuller({ active, radius = 60 }) {
 
     const after = () => {
       const t0 = CRONO ? performance.now() : 0
-      for (let i = 0; i < restore.length; i += 3) {
-        const mesh = restore[i]; const n = restore[i + 1]; const attrs = restore[i + 2]
+      for (let i = 0; i < restore.length; i += 4) {
+        const mesh = restore[i]; const n = restore[i + 1]; const attrs = restore[i + 2]; const cnt = restore[i + 3]
         mesh.count = n
         if (attrs) {
           const s = state.get(mesh)
-          attrs.forEach((a, k) => a.array.set(s.backup[k].subarray(0, n * a.itemSize)))
+          attrs.forEach((a, k) => a.array.set(s.backup[k].subarray(0, cnt * a.itemSize)))
         }
       }
       restore.length = 0

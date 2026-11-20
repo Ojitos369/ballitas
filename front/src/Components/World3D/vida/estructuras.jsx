@@ -395,7 +395,7 @@ export function estructurasModelos(way) {
 }
 
 // ═══════════════════════════ POOL DE INSTANCIAS FIJAS POR MODELO ═══════════════════════════
-function FixedPoolInst({ model, themeId, cat, tall, focused, waySphere, regPool }) {
+function FixedPoolInst({ model, themeId, cat, tall, waySphere, regPool }) {
   const isProcDead = model === 'proc:dead_tree'
   const glbGeo = useModelo(isProcDead ? null : model, null)
   const geo = isProcDead ? getDeadTreeGeo() : glbGeo
@@ -416,12 +416,12 @@ function FixedPoolInst({ model, themeId, cat, tall, focused, waySphere, regPool 
 
   useEffect(() => {
     if (!mesh) return undefined
-    regPool(model, mesh, focused ? 110 : tall ? TALL_CULL_DIST : MED_CULL_DIST, tall)
+    regPool(model, mesh, tall ? TALL_CULL_DIST : MED_CULL_DIST, tall)
     return () => {
       regPool(model, null)
       mesh.dispose()
     }
-  }, [mesh, model, tall, focused, regPool])
+  }, [mesh, model, tall, regPool])
 
   if (!mesh) return null
   return <primitive object={mesh} />
@@ -560,7 +560,7 @@ export default function Estructuras({ way, detail, focused, time }) {
     if (archMesh) {
       let ac = 0
       const rSq = (overview ? 105 : ARCH_CULL_DIST) ** 2
-      const rA = focused ? 110 : overview ? 105 : ARCH_CULL_DIST // los arcos crecen desde ese borde (kBorde)
+      const rA = overview ? 105 : ARCH_CULL_DIST // los arcos crecen desde ese borde (kBorde)
       const Ka = K // también en vista general: el camino siguiente se ve al fondo de la recta
       const cmA = [Infinity, Infinity]
       lejos.length = 0
@@ -575,14 +575,14 @@ export default function Estructuras({ way, detail, focused, time }) {
           if (d2 > rSq) continue
           // lo que solo entra por el alcance delantero va al final: si se llena el tope, queda fuera lo lejano
           if (d2r > rSq) { lejos.push(it, d2, deltaTmp.x, deltaTmp.y, deltaTmp.z); continue }
-          const kb = kBorde(d2, rA, focused ? 0.98 : 0.7)
+          const kb = kBorde(d2, rA)
           tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
           archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
           if (MIDE) creceDe(deltaTmp.x, deltaTmp.y, deltaTmp.z, camFwdTmp, kb, cmA)
         }
       }
       for (let j = 0; j < lejos.length && ac < ARCH_CAP; j += 5) {
-        const it = lejos[j]; const kb = kBorde(lejos[j + 1], rA, focused ? 0.98 : 0.7)
+        const it = lejos[j]; const kb = kBorde(lejos[j + 1], rA)
         tmpS.set(it.scale[0] * kb, it.scale[1] * kb, it.scale[2] * kb)
         archMesh.setMatrixAt(ac++, tmpM.compose(it.pos, it.quat, tmpS))
         if (MIDE) creceDe(lejos[j + 2], lejos[j + 3], lejos[j + 4], camFwdTmp, kb, cmA)
@@ -607,7 +607,7 @@ export default function Estructuras({ way, detail, focused, time }) {
       lejos.length = 0
       const cm = [Infinity, Infinity]
       const pon = (it, d2, dx, dy, dz) => {
-        const kb = kBorde(d2, rP, focused ? 0.98 : 0.7)
+        const kb = kBorde(d2, rP)
         tmpS.setScalar(it.scale * kb)
         mesh.setMatrixAt(count, tmpM.compose(it.pos, it.quat, tmpS))
         // Cada slot se reutiliza al recomponer la lista. Restablecer también los items
@@ -652,7 +652,6 @@ export default function Estructuras({ way, detail, focused, time }) {
           themeId={themeId}
           cat={pSpec.cat}
           tall={!!pSpec.tall}
-          focused={focused}
           waySphere={waySphere}
           regPool={regPool}
         />

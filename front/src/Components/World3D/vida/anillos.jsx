@@ -31,8 +31,25 @@ function ringCoreMat(baseMat) {
   return m
 }
 
+// Grapas del aro (materiales 1.. del kit: «metal_oscuro» metalness 0.8 y «metal_cian» 0.7). Con el entorno tenue de la
+// escena (environmentIntensity 0.45, fondo casi negro) un metal sin nada que reflejar se pinta NEGRO sobre el aro
+// encendido (DET, captura del Camino de Cristal). Causa real: metalness; se baja a satinado para que las luces las
+// iluminen como difuso. Mismo programa (metalness/roughness son uniformes): no añade compilaciones.
+const _grapas = new WeakMap()
+function grapaMat(m) {
+  let c = _grapas.get(m)
+  if (!c) {
+    c = m.clone()
+    if (c.metalness != null) { c.metalness = Math.min(c.metalness, 0.2); c.roughness = Math.max(c.roughness ?? 0.5, 0.5) }
+    markShared(c)
+    _grapas.set(m, c)
+  }
+  return c
+}
+const ringMats = (baseMat) => (Array.isArray(baseMat) ? [ringCoreMat(baseMat[0]), ...baseMat.slice(1).map(grapaMat)] : ringCoreMat(baseMat))
+
 /** Calentado: el material del núcleo del anillo (derivado del kit) tal como lo usa la capa, para precompilarlo. */
-export const anilloCoreWarmup = (baseMat) => (Array.isArray(baseMat) ? [ringCoreMat(baseMat[0]), ...baseMat.slice(1)] : ringCoreMat(baseMat))
+export const anilloCoreWarmup = ringMats
 
 let _lowGeoBase = null
 function lowRingBaseGeo() {
@@ -98,10 +115,7 @@ export default function Anillos({ way }) {
   const hiBundle = useMemo(() => {
     if (!kit || !data.rings.length) return null
     const geo = attachRingAttrs(kit.geometry, data.phases, data.tints)
-    const baseMat = kit.material
-    const mat = Array.isArray(baseMat)
-      ? [ringCoreMat(baseMat[0]), ...baseMat.slice(1)]
-      : ringCoreMat(baseMat)
+    const mat = ringMats(kit.material)
     const mesh = new THREE.InstancedMesh(geo, mat, data.rings.length)
     populateRingMesh(mesh, data.rings)
     mesh.boundingSphere = data.sphere

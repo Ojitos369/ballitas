@@ -1062,13 +1062,13 @@ function PaisajeTema({ way, detail, focused, time, spec }) {
     lastFwd.current.copy(tmp.f)
     spec.layers.forEach((ly, li) => {
       const mesh = meshes[li]
-      const drawRange = focused ? Math.max(110, ly.range) : ly.range
+      const drawRange = ly.range // como main: la capacidad ampliada ya evita cortes; ampliar el radio costaba FPS
       const r2 = drawRange * drawRange
       let n = 0
       lejos.length = 0
       const cm = [Infinity, Infinity]
       const pon = (it, d2, dx, dy, dz) => {
-        const kb = kBorde(d2, drawRange, focused ? 0.98 : 0.7)
+        const kb = kBorde(d2, drawRange)
         tmp.s.setScalar(it.scale * kb) // crece desde el borde de recorte
         mesh.setMatrixAt(n, tmp.m.compose(it.pos, it.quat, tmp.s))
         mesh.setColorAt(n, it.color)

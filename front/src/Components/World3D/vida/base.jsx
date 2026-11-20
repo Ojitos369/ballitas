@@ -408,15 +408,21 @@ const IDENT_Q = new THREE.Quaternion()
  * useInstanced(geo, mat, items) -> THREE.InstancedMesh (estable mientras geo/mat/longitud no cambien).
  * items: { pos, quat?, scale? (número | [x,y,z] | Vector3), color? }. Renderízalo con <primitive object={mesh} />.
  */
-export function useInstanced(geo, mat, items, { dynamic = false, cullRadius = null, cullBorder = null } = {}) {
+export function useInstanced(geo, mat, items, { dynamic = false, cullRadius = null, cullBorder = null, cullNear = null, cullStride = null } = {}) {
   const cap = Math.max(1, items?.length ?? 0)
   const mesh = useMemo(() => {
     const m = new THREE.InstancedMesh(geo, mat, cap)
     m.frustumCulled = !dynamic
-    if (cullRadius != null) m.userData.cullRadius = cullRadius
-    if (cullBorder != null) m.userData.cullBorder = cullBorder
     return m
-  }, [geo, mat, cap, dynamic, cullRadius, cullBorder])
+  }, [geo, mat, cap, dynamic])
+  // Parámetros de recorte/LOD que lee InstanceCuller: cambiar el foco no recrea la malla (ni su subida a la GPU).
+  useLayoutEffect(() => {
+    const u = mesh.userData
+    if (cullRadius != null) u.cullRadius = cullRadius; else delete u.cullRadius
+    if (cullBorder != null) u.cullBorder = cullBorder; else delete u.cullBorder
+    if (cullNear != null) u.cullNear = cullNear; else delete u.cullNear
+    if (cullStride != null) u.cullStride = cullStride; else delete u.cullStride
+  }, [mesh, cullRadius, cullBorder, cullNear, cullStride])
   useLayoutEffect(() => {
     const list = items ?? []
     mesh.count = list.length
@@ -433,8 +439,8 @@ export function useInstanced(geo, mat, items, { dynamic = false, cullRadius = nu
 }
 
 /** Atajo declarativo de useInstanced. */
-export function Instanced({ geo, mat, items, castShadow = false, receiveShadow = false, cullRadius = null, cullBorder = null }) {
-  const mesh = useInstanced(geo, mat, items, { cullRadius, cullBorder })
+export function Instanced({ geo, mat, items, castShadow = false, receiveShadow = false, cullRadius = null, cullBorder = null, cullNear = null, cullStride = null }) {
+  const mesh = useInstanced(geo, mat, items, { cullRadius, cullBorder, cullNear, cullStride })
   if (!items?.length) return null
   return <primitive object={mesh} castShadow={castShadow} receiveShadow={receiveShadow} />
 }

@@ -251,10 +251,21 @@ function* decorGen(way) {
   return out
 }
 
-function KitPieza({ nombre, items, focused }) {
+// Ruta enfocada: la generación es completa por longitud, pero lo DIBUJADO se acota por distancia a la cámara.
+// Hasta DRAW_NEAR (×K en el cono delantero) se dibuja todo; de ahí a DRAW_FAR solo 1 de cada `stride`
+// (la flora tiene ~2 matas por punto y paso ~19 u: 1/4 deja ~45 u; las piezas de berma se reparten entre tres
+// kits: 1/2 deja ~40 u entre piezas combinadas). Así no hay huecos de más de 150 u en ~300 u por delante.
+const DRAW_NEAR = 45
+const DRAW_FAR = 110
+
+function KitPieza({ nombre, items, focused, stride = 2 }) {
   const kit = useKit(nombre)
   if (!kit || !items.length) return null
-  return <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow cullRadius={focused ? 110 : null} cullBorder={focused ? 0.98 : null} />
+  return (
+    <Instanced geo={kit.geometry} mat={kit.material} items={items} receiveShadow
+      cullRadius={focused ? DRAW_FAR : null} cullBorder={focused ? 0.98 : null}
+      cullNear={focused ? DRAW_NEAR : null} cullStride={focused ? stride : null} />
+  )
 }
 
 export default function Decor({ way, focused }) {
@@ -291,7 +302,7 @@ export default function Decor({ way, focused }) {
     <group ref={solidRef}>
       <KitPieza nombre={names.rebote} items={rebotes} focused={focused} />
       <KitPieza nombre={names.hito} items={hito} focused={focused} />
-      <KitPieza nombre={names.flora} items={flora} focused={focused} />
+      <KitPieza nombre={names.flora} items={flora} focused={focused} stride={4} />
       <KitPieza nombre="farola_pista" items={farola} focused={focused} />
       <KitPieza nombre="banderin" items={banderin} focused={focused} />
     </group>
