@@ -635,7 +635,7 @@ function createTubeMat(id, focusU, detailU) {
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-        float focusGlow = mix(0.08, 1.0, uFocus);
+        float focusGlow = mix(0.65, 1.0, uFocus); // rutas no enfocadas: 50-80 % (pedido del usuario)
         float det = clamp(uDetail, 0.0, 1.0);
         vec3 tubeViewDir = length(vViewPosition) > 1e-5 ? normalize(vViewPosition) : vec3(0.0, 0.0, 1.0);
         vec3 tubeNorm = length(normal) > 1e-5 ? normalize(normal) : vec3(0.0, 1.0, 0.0);
@@ -764,9 +764,9 @@ vCoreUv = uv;
         float coreWaveB = 0.5 + 0.5 * sin(vCoreUv.x * 0.4 - uTime * 1.3);
         vec3 coreLit = outgoingLight * (0.82 + coreWaveA * 0.52 + coreWaveB * 0.18);
         float coreLum = dot(coreLit, vec3(0.299, 0.587, 0.114));
-        outgoingLight = mix(vec3(coreLum), coreLit, mix(0.25, 1.0, uFocus)) * mix(0.2, 1.0, uFocus);
+        outgoingLight = mix(vec3(coreLum), coreLit, mix(0.6, 1.0, uFocus)) * mix(0.65, 1.0, uFocus);
         float extA = 1.0 - clamp(uDetail, 0.0, 1.0);
-        diffuseColor.a *= mix(0.18, 1.0, uFocus) * extA;
+        diffuseColor.a *= mix(0.65, 1.0, uFocus) * extA;
         if (diffuseColor.a < 0.01) discard;
         #include <opaque_fragment>`
       )
@@ -776,7 +776,7 @@ vCoreUv = uv;
 }
 
 // lod: 'none' (siempre visible), 'interior' (uDetail), 'exterior' (1 - uDetail)
-function withWayFade(mat, focusU, detailU, { minAlpha = 0.16, minBright = 0.25, minSat = 0.25, lod = 'none', scaleLod = false } = {}) {
+function withWayFade(mat, focusU, detailU, { minAlpha = 0.65, minBright = 0.65, minSat = 0.6, lod = 'none', scaleLod = false } = {}) {
   mat.transparent = true
   const prevCompile = mat.onBeforeCompile
   const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : ''
@@ -915,22 +915,22 @@ function createWayMaterials(id, focusU, detailU) {
       clearcoat: 0.72,
       clearcoatRoughness: 0.16,
       envMapIntensity: 1.35,
-    })), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior' }),
+    })), focusU, detailU, { minAlpha: 0.65, minBright: 0.65, minSat: 0.6, lod: 'exterior' }),
     extFlora: withWayFade(L(new THREE.MeshStandardMaterial({
       normalMap: orgNorm,
       normalScale: new THREE.Vector2(0.24, 0.24),
       roughnessMap: orgRough,
       roughness: 0.72,
       metalness: 0.06,
-    })), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
-    extFloraGlow: createFresnelGlowMat(focusU, detailU, { minAlpha: 0.16, minBright: 0.2, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    })), focusU, detailU, { minAlpha: 0.65, minBright: 0.65, minSat: 0.6, lod: 'exterior', scaleLod: true }),
+    extFloraGlow: createFresnelGlowMat(focusU, detailU, { minAlpha: 0.65, minBright: 0.65, minSat: 0.6, lod: 'exterior', scaleLod: true }),
     extRuins: withWayFade(L(new THREE.MeshStandardMaterial({
       normalMap: orgNorm,
       normalScale: new THREE.Vector2(0.32, 0.32),
       roughnessMap: orgRough,
       roughness: 0.82,
       metalness: 0.18,
-    })), focusU, detailU, { minAlpha: 0.16, minBright: 0.28, minSat: 0.25, lod: 'exterior', scaleLod: true }),
+    })), focusU, detailU, { minAlpha: 0.65, minBright: 0.65, minSat: 0.6, lod: 'exterior', scaleLod: true }),
   }
 }
 
