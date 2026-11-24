@@ -248,7 +248,7 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 .bb[data-modo="siguiente"] .bb-btn[aria-pressed="true"], .bb[data-modo="siguiente"] .bb-btn.on { background: linear-gradient(rgba(50, 64, 120, 0.95), rgba(50, 64, 120, 0.95)) padding-box; }
 .bb-err { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: rgba(10, 14, 34, 0.9); border: 1px solid #ff8a8a; color: #ff8a8a; font-size: 12px; white-space: nowrap; }
 @keyframes bb-giro { to { --bb-a: 360deg; } }
-@keyframes bb-pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes bb-pulso { 0%, 100% { border-color: var(--bb-c); } 50% { border-color: color-mix(in srgb, var(--bb-c) 30%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .bb-btn, .bb[data-modo] .bb-btn { animation: none; } .bb[data-modo="actual"] .bb-btn { border-color: var(--bb-c); background: linear-gradient(rgba(14, 18, 38, 0.92), rgba(14, 18, 38, 0.92)) padding-box; } }
 /* con control, la barra de decisiones sube sobre la barra nueva; en pantallas angostas la ficha y el joystick también */
 body:has(.bb) .ctrl-barra-dec { bottom: 98px; }
