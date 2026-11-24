@@ -4,6 +4,7 @@ import { crearMundo } from '../../Core/mundo/index.js'
 import Scene from '../../Components/World3D/Scene.jsx'
 import Hud from '../../Components/Panels/Hud.jsx'
 import Detail from '../../Components/Panels/Detail.jsx'
+import BarraBallita from '../../Components/Panels/BarraBallita.jsx'
 import ViewTabs from '../../Components/Panels/ViewTabs.jsx'
 import Llegada from '../../Components/Panels/Llegada.jsx'
 import Control from '../../Components/Control/index.jsx'
@@ -47,6 +48,7 @@ function LoadedScene({ sim }) {
   const [speed, setSpeed] = useState(1)
   const [selected, setSelected] = useState(null)
   const [vista, setVista] = useState('mapa')
+  const [det, setDet] = useState(false) // ficha de detalle abierta con «Det.»
   const [focusWay, setFocusWay] = useState(null)
   const [routeIndex, setRouteIndex] = useState(0)
   const [seek, setSeek] = useState(null)
@@ -117,6 +119,7 @@ function LoadedScene({ sim }) {
   const select = (b) => {
     setSelected(b)
     if (!b) {
+      setDet(false)
       if (enBallita) setVista('mapa')
       else if (vista === 'mapa') setFocusWay(null)
     }
@@ -131,6 +134,7 @@ function LoadedScene({ sim }) {
     if (selected?.phase !== 'gone') return
     if (enBallita) setVista('mapa')
     setSelected(null)
+    setDet(false)
   })
   const exitPov = useCallback(() => setVista('mapa'), [])
   // Control se suscribe a eventos del mundo con este callback: debe ser estable entre renders.
@@ -151,10 +155,9 @@ function LoadedScene({ sim }) {
       <Control mundo={sim} selected={selected} onSelect={selectCtrl} />
       {enFoco && <Llegada b={enFoco} world={sim.world} />}
       {selected && vista !== 'camino' && (
-        <Detail b={selected} sim={sim} pov={pov}
-          onPov={() => (pov ? setVista('mapa') : followBallita(selected))}
-          onClose={() => select(null)} />
+        <BarraBallita b={selected} mundo={sim} pov={pov} detAbierto={det} onPov={followBallita} onDet={() => setDet((v) => !v)} onExitPov={exitPov} />
       )}
+      {selected && det && vista !== 'camino' && <Detail b={selected} sim={sim} pov={pov} onClose={() => setDet(false)} />}
     </div>
   )
 }

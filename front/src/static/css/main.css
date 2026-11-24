@@ -229,3 +229,30 @@ button { font: inherit; color: var(--fg); cursor: pointer; }
 [data-lado='izq'] > .globo-wrap::after { display: block; left: -4px; top: calc(50% - 4px); }
 [data-lado='der'] > .globo-wrap::after { display: block; right: -4px; top: calc(50% - 4px); }
 .bubble.globo.otra { font-size: 11px; max-width: 150px; opacity: 0.8; }
+
+/* barra inferior de la ballita seleccionada: POV/🛞, Det., Salir. Borde animado = camino actual (giro) o el que tomará (pulso discontinuo) */
+@property --bb-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.bb { z-index: 104; position: absolute; left: 50%; bottom: 42px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; justify-content: center; max-width: calc(100% - 16px); pointer-events: none; }
+.bb > * { pointer-events: auto; }
+.bb-btn { position: relative; min-width: 56px; min-height: 44px; padding: 0 14px; border: 2px solid transparent; border-radius: 14px; color: var(--fg); font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  background: linear-gradient(rgba(14, 18, 38, 0.92), rgba(14, 18, 38, 0.92)) padding-box, conic-gradient(from var(--bb-a), var(--bb-c) 0 30%, transparent 45% 55%, var(--bb-c) 75% 100%) border-box;
+  animation: bb-giro 2.4s linear infinite; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
+.bb-btn:hover { filter: brightness(1.2); }
+.bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.bb-btn[aria-pressed="true"], .bb-btn.on { background: linear-gradient(rgba(50, 64, 120, 0.95), rgba(50, 64, 120, 0.95)) padding-box, conic-gradient(from var(--bb-a), var(--bb-c) 0 30%, transparent 45% 55%, var(--bb-c) 75% 100%) border-box; }
+.bb-volante { font-size: 22px; padding: 0 12px; }
+.bb-volante.on { box-shadow: 0 0 14px var(--bb-c), 0 6px 18px rgba(0, 0, 0, 0.45); }
+/* el camino que tomará: trazo discontinuo que late, sin giro */
+.bb[data-modo="siguiente"] .bb-btn, .bb[data-modo="neutro"] .bb-btn { border-style: dashed; border-color: var(--bb-c); animation: bb-pulso 1.4s ease-in-out infinite;
+  background: linear-gradient(rgba(14, 18, 38, 0.92), rgba(14, 18, 38, 0.92)) padding-box; }
+.bb[data-modo="siguiente"] .bb-btn[aria-pressed="true"], .bb[data-modo="siguiente"] .bb-btn.on { background: linear-gradient(rgba(50, 64, 120, 0.95), rgba(50, 64, 120, 0.95)) padding-box; }
+.bb-err { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: rgba(10, 14, 34, 0.9); border: 1px solid #ff8a8a; color: #ff8a8a; font-size: 12px; white-space: nowrap; }
+@keyframes bb-giro { to { --bb-a: 360deg; } }
+@keyframes bb-pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .bb-btn, .bb[data-modo] .bb-btn { animation: none; } .bb[data-modo="actual"] .bb-btn { border-color: var(--bb-c); background: linear-gradient(rgba(14, 18, 38, 0.92), rgba(14, 18, 38, 0.92)) padding-box; } }
+/* con control, la barra de decisiones sube sobre la barra nueva; en pantallas angostas la ficha y el joystick también */
+body:has(.bb) .ctrl-barra-dec { bottom: 98px; }
+@media (max-width: 1000px) {
+  body:has(.bb) .tarjeta, body:has(.bb) .pov-joy-wrap { bottom: 98px; }
+  body:has(.bb):has(.ctrl-barra-dec) .tarjeta, body:has(.bb):has(.ctrl-barra-dec) .pov-joy-wrap { bottom: var(--ctrl-bar-top, 204px); }
+}

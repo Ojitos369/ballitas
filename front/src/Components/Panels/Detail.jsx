@@ -170,7 +170,7 @@ function estadoCorto(b, sim, lugar) {
   return lugar
 }
 
-export default function Detail({ b, sim, pov, onPov, onClose }) {
+export default function Detail({ b, sim, pov, onClose }) {
   const ida = b.phase === 'gone' || b.phase === 'dying'
   const lugar = ida ? '' : donde(b, sim)
   const idea = obtenerGlobo(b, sim) ?? b.thought ?? b.log?.[0]
@@ -216,7 +216,6 @@ export default function Detail({ b, sim, pov, onPov, onClose }) {
         <div className="cabecera">
           <span className="punto" style={{ background: bodyCss }} />
           <h2>{b.name}</h2>
-          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista: en el camino desde la ballita; en un planeta, cámara de seguimiento (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
           <button className="cerrar" onClick={toggleMin} aria-expanded={!min} aria-label={min ? 'Mostrar ficha' : 'Minimizar ficha'} title={min ? 'Mostrar ficha' : 'Minimizar ficha'}>{min ? '▴' : '▾'}</button>
           <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
@@ -241,9 +240,6 @@ export default function Detail({ b, sim, pov, onPov, onClose }) {
       <div className="cabecera">
         <span className="punto" style={{ background: bodyCss }} />
         <h2>{b.name}</h2>
-        {!ida && <>
-          <button className="seguir pov-btn" aria-pressed={pov} onClick={onPov} title="Punto de vista: en el camino desde la ballita; en un planeta, cámara de seguimiento (Esc para salir)">{pov ? '↩ POV' : '🎥 POV'}</button>
-        </>}
         <button className="cerrar" onClick={toggleMin} aria-expanded={!min} aria-label={min ? 'Mostrar ficha' : 'Minimizar ficha'} title={min ? 'Mostrar ficha' : 'Minimizar ficha'}>{min ? '▴' : '▾'}</button>
         <button className="cerrar" onClick={onClose} aria-label="Cerrar">×</button>
       </div>

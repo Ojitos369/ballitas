@@ -166,7 +166,6 @@ export default function PovPanel({
           <button type="button" className="pov-action" aria-label="Alejar (−)" title="Alejar (−)" onClick={() => zoomBy(-0.1)}>−</button>
           <span className="pov-status" role="status" aria-label="Nivel de zoom" title="Zoom: espalda → ojos → lente" style={{ alignSelf: 'center', minWidth: 34, textAlign: 'center' }}>🔍 {Math.round(zoom * 100)}%</span>
           <button type="button" className="pov-action" aria-label="Acercar (+)" title="Acercar (+)" onClick={() => zoomBy(0.1)}>+</button>
-          <button type="button" className="pov-action" aria-label="Salir de POV (Esc)" title="Salir de POV (Esc)" onClick={onExitPov}>✕</button>
           </>}
         </div>
 
